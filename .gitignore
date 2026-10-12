@@ -1,0 +1,19 @@
+node_modules
+dist
+*.local
+
+src-tauri/target
+src-tauri/gen
+
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+Thumbs.db
+*.log
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Test images made by tools/make-test-images.py
+/test-images/
