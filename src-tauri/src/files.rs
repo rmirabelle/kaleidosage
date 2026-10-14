@@ -7,13 +7,13 @@ use tauri::{
 
 const IMAGE_EXTENSIONS: [&str; 7] = ["png", "jpg", "jpeg", "webp", "gif", "bmp", "avif"];
 
-fn is_image_path(path: &Path) -> bool {
+pub(crate) fn is_image_path(path: &Path) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
         .is_some_and(|extension| IMAGE_EXTENSIONS.contains(&extension.to_ascii_lowercase().as_str()))
 }
 
-fn is_scene_path(path: &Path) -> bool {
+pub(crate) fn is_scene_path(path: &Path) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
         .is_some_and(|extension| extension.eq_ignore_ascii_case("ksage"))

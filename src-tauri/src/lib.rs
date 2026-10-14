@@ -1,4 +1,6 @@
+mod browse;
 mod files;
+mod screen;
 mod updater;
 
 use tauri::Manager;
@@ -33,12 +35,18 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            browse::list_browse_directory,
+            browse::browse_places,
+            browse::rename_browse_entry,
+            browse::delete_browse_entry,
+            browse::copy_browse_entry,
             files::read_image_file,
             files::save_snapshot,
             files::save_scene,
             files::read_scene,
             files::reveal_file,
             files::cursor_position,
+            screen::screen_color_at_cursor,
             files::log_frontend_error,
             updater::check_for_update,
             updater::download_and_run_installer,

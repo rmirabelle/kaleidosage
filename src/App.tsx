@@ -1,26 +1,29 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { open, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { ArrowsIn, SlidersHorizontal, X } from "@phosphor-icons/react";
+import { save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { ArrowsIn, ArrowsOut, Camera, FilmSlate, FloppyDisk, FolderOpen, Gauge, Info, SignOut, SlidersHorizontal, X } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AboutDialog } from "./components/AboutDialog";
+import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ControlPanel } from "./components/ControlPanel";
+import { SourcePanel } from "./components/SourcePanel";
+import { MenuBar, type Menu } from "./components/MenuBar";
+import { OpenDialog, type OpenKind } from "./components/OpenDialog";
 import { StatsOverlay } from "./components/StatsOverlay";
 import { TitleBar } from "./components/TitleBar";
 import { Toolbar } from "./components/Toolbar";
 import { Engine } from "./engine/engine";
-import { createParams, createPlayState, randomizeParams } from "./engine/params";
-import { SCENE_EXTENSION, applyScene, blobToSceneImage, sceneImageToBlob, serializeScene } from "./engine/scene";
+import { createParams, createPlayState, randomizeParams, resetEffects } from "./engine/params";
+import { SCENE_EXTENSION, applyScene, blobToSceneImage, sceneFingerprint, sceneImageToBlob, serializeScene } from "./engine/scene";
 import type { ImageSource } from "./engine/renderer";
 import {
-  IMAGE_EXTENSIONS,
-  fallbackImage,
+  makeThumbnail,
   loadImageBlob,
   loadImageFile,
   loadRandomImage,
   saveSnapshot
 } from "./lib/images";
-import { drawPattern, type Pattern } from "./lib/patterns";
+import { PATTERNS, drawPattern, type Pattern } from "./lib/patterns";
 import { checkForUpdate, getAppVersion, type UpdateInfo } from "./lib/updater";
 
 interface Status {
@@ -34,21 +37,74 @@ interface Status {
 
 const CURSOR_IDLE_MS = 2000;
 
+/** The image in one of the two slots: the first (A) or the second (B), which the picture can fade to. */
+export interface SlotImage {
+  source: ImageSource;
+  /** The original file bytes, for Save scene. Patterns have none; they are saved as PNG. */
+  blob?: Blob;
+  label: string;
+  thumbnail: string;
+  /** Set for a test pattern. */
+  patternId?: string;
+  /** For a pattern: the image the pattern replaced, so one click can bring it back. */
+  under?: SlotImage;
+  /** A number for each loaded image, so a change of image counts as an unsaved change. */
+  id: number;
+}
+
+let nextImageId = 1;
+
+/** The open Open dialog: what it opens, and for an image, which slot gets it. */
+interface OpenRequest {
+  kind: OpenKind;
+  slot: ImageSlot;
+}
+
+export type ImageSlot = 0 | 1;
+
+interface SetImageOptions {
+  message?: string;
+  /** The original file bytes, for Save scene. */
+  blob?: Blob;
+  /** The name shown for an original image in the Patterns list. */
+  name?: string;
+  /** Set for a test pattern; the original image is then kept. */
+  patternId?: string;
+  /** Set when a scene sets the image; the scene's own settings then stay as they are. */
+  fromScene?: boolean;
+}
+
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  /** The current image's original file bytes (or the built-in pattern), for Save scene. */
-  const imageSourceRef = useRef<Blob | HTMLCanvasElement | null>(null);
+  /** The first and second images. The ref has the latest pair at once; the state redraws the Source section. */
+  const imagesRef = useRef<[SlotImage | null, SlotImage | null]>([null, null]);
+  const [images, setImages] = useState<[SlotImage | null, SlotImage | null]>([null, null]);
   const [engine, setEngine] = useState<Engine | null>(null);
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
   const [statsOpen, setStatsOpen] = useState(false);
+  /** The slot that a random photo is downloading for; the dice on its button spin. */
+  const [randomLoading, setRandomLoading] = useState<ImageSlot | null>(null);
   const [paused, setPaused] = useState(false);
   const [revision, setRevision] = useState(0);
+  /** Counts the times Reset ran, so the Effects panel can close its groups. */
+  const [resetCount, setResetCount] = useState(0);
   const [status, setStatus] = useState<Status | null>(null);
   const [cursorIdle, setCursorIdle] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [openRequest, setOpenRequest] = useState<OpenRequest | null>(null);
+  /** The open scene file (null until a scene is opened or saved), and whether it has unsaved changes. */
+  const [scenePath, setScenePath] = useState<string | null>(null);
+  const scenePathRef = useRef<string | null>(null);
+  scenePathRef.current = scenePath;
+  const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false);
+  dirtyRef.current = dirty;
+  const savedFingerprintRef = useRef("");
+  const [closeAsked, setCloseAsked] = useState(false);
+  const [resetAsked, setResetAsked] = useState(false);
   const [appVersion, setAppVersion] = useState("");
   const [startupUpdate, setStartupUpdate] = useState<UpdateInfo | null>(null);
 
@@ -56,8 +112,8 @@ export default function App() {
     setStatus({ message, duration, action });
   }, []);
 
-  const showError = useCallback((message: string) => {
-    setStatus({ message, duration: 0, error: true });
+  const showError = useCallback((message: string, action?: Status["action"]) => {
+    setStatus({ message, duration: 0, error: true, action });
   }, []);
 
   useEffect(() => {
@@ -66,49 +122,107 @@ export default function App() {
     return () => window.clearTimeout(id);
   }, [status]);
 
-  const setImage = useCallback((source: ImageSource, message?: string, original?: Blob) => {
+  const setSlotImage = useCallback((slot: ImageSlot, image: SlotImage | null) => {
+    const next: [SlotImage | null, SlotImage | null] = [...imagesRef.current];
+    next[slot] = image;
+    imagesRef.current = next;
+    setImages(next);
+  }, []);
+
+  const setImage = useCallback((source: ImageSource, { message, blob, name, patternId, fromScene }: SetImageOptions = {}, slot: ImageSlot = 0) => {
     if (!engine) return;
     try {
-      engine.setImage(source);
-      imageSourceRef.current = original ?? (source instanceof HTMLCanvasElement ? source : null);
+      /**
+       * A new second image starts a full fade: dissolve by brightness, over the
+       * whole blend range, from image A. Replacing a second image keeps the settings.
+       */
+      if (slot === 1 && !imagesRef.current[1] && !fromScene) {
+        const blend = engine.params.imageBlend;
+        Object.assign(blend, { on: true, low: blend.min, high: blend.max });
+        engine.startRangeNow("imageBlend");
+        engine.state.blendMode = 1;
+        setRevision((value) => value + 1);
+      }
+      engine.setImage(source, slot);
+      /* A pattern keeps the image under it; a pattern over a pattern keeps the same image. */
+      const previous = imagesRef.current[slot];
+      const under = patternId && previous ? (previous.patternId ? previous.under : previous) : undefined;
+      const image: SlotImage = { source, blob, label: name ?? "Image", thumbnail: makeThumbnail(source), patternId, under, id: nextImageId++ };
+      setSlotImage(slot, image);
       if (message) showStatus(message);
     } catch (error) {
       showError(`Could not use that image. ${String(error)}`);
     }
-  }, [engine, showError, showStatus]);
+  }, [engine, setSlotImage, showError, showStatus]);
 
-  const randomImage = useCallback(async () => {
-    showStatus("Loading a random image…", 0);
+  const randomImage = useCallback(async (slot: ImageSlot = 0) => {
+    showStatus(slot === 0 ? "Loading a random image…" : "Loading a random second image…", 0);
+    setRandomLoading(slot);
     try {
       const loaded = await loadRandomImage();
-      setImage(loaded.image, "New image", loaded.blob);
-    } catch {
-      showError("Could not load a random image. Check the internet connection.");
+      setImage(loaded.image, { message: loaded.title, blob: loaded.blob, name: loaded.title }, slot);
+    } catch (error) {
+      const reason = error instanceof Error && error.message.startsWith("The image service") ? error.message : "Check the internet connection.";
+      showError(`Could not load a random image. ${reason}`, { label: "Retry", run: () => void randomImageRef.current(slot) });
+    } finally {
+      setRandomLoading(null);
     }
   }, [setImage, showError, showStatus]);
+  /** The Retry button calls the latest copy, so it uses the engine as it is now. */
+  const randomImageRef = useRef(randomImage);
+  randomImageRef.current = randomImage;
 
-  const openImage = useCallback(async () => {
-    if (!isTauri()) return;
-    const path = await open({ multiple: false, directory: false, filters: [{ name: "Images", extensions: IMAGE_EXTENSIONS }] });
-    if (typeof path !== "string") return;
+  const openImage = useCallback((slot: ImageSlot = 0) => {
+    if (isTauri()) setOpenRequest({ kind: "image", slot });
+  }, []);
+
+  /** Loads the image file picked in the Open dialog. */
+  const openImagePath = useCallback(async (path: string, slot: ImageSlot) => {
     try {
       const loaded = await loadImageFile(path);
-      setImage(loaded.image, path.split(/[\\/]/).pop(), loaded.blob);
+      const name = path.split(/[\\/]/).pop();
+      setImage(loaded.image, { message: name, blob: loaded.blob, name }, slot);
     } catch (error) {
       showError(`Could not open the image. ${String(error)}`);
     }
   }, [setImage, showError, showStatus]);
 
   /** Draws a test pattern at 4K. The status shows first, because drawing takes a moment. */
-  const loadPattern = useCallback((pattern: Pattern) => {
+  const loadPattern = useCallback((pattern: Pattern, slot: ImageSlot = 0) => {
     showStatus(`Drawing ${pattern.label.toLowerCase()}…`, 0);
-    requestAnimationFrame(() => setTimeout(() => setImage(drawPattern(pattern), pattern.label), 0));
+    const options = { message: pattern.label, name: pattern.label, patternId: pattern.id };
+    requestAnimationFrame(() => setTimeout(() => setImage(drawPattern(pattern), options, slot), 0));
   }, [setImage, showStatus]);
 
-  const loadBlob = useCallback(async (blob: Blob | null | undefined, name?: string) => {
+  const removeSecondImage = useCallback(() => {
+    if (!engine) return;
+    engine.clearSecondImage();
+    setSlotImage(1, null);
+  }, [engine, setSlotImage]);
+
+  /** Takes the pattern off a slot and shows the image that was under it again. */
+  const restoreUnderImage = useCallback((slot: ImageSlot) => {
+    const image = imagesRef.current[slot]?.under;
+    if (!engine || !image) return;
+    engine.setImage(image.source, slot);
+    setSlotImage(slot, image);
+    showStatus(image.label);
+  }, [engine, setSlotImage, showStatus]);
+
+  /** Puts the second image first and the first image second. */
+  const swapImages = useCallback(() => {
+    const [first, second] = imagesRef.current;
+    if (!engine || !first || !second) return;
+    engine.setImage(second.source, 0);
+    engine.setImage(first.source, 1);
+    setSlotImage(0, second);
+    setSlotImage(1, first);
+  }, [engine, setSlotImage]);
+
+  const loadBlob = useCallback(async (blob: Blob | null | undefined, name?: string, slot: ImageSlot = 0) => {
     if (!blob || !blob.type.startsWith("image/")) return;
     try {
-      setImage(await loadImageBlob(blob), name || "Image loaded", blob);
+      setImage(await loadImageBlob(blob), { message: name || "Image loaded", blob, name: name || "Pasted image" }, slot);
     } catch {
       showError("Could not read that image.");
     }
@@ -139,49 +253,102 @@ export default function App() {
     }
   }, [engine, showError, showStatus]);
 
-  const saveScene = useCallback(async () => {
-    if (!engine || !isTauri()) return;
-    const original = imageSourceRef.current;
-    const blob = original instanceof HTMLCanvasElement
-      ? await new Promise<Blob | null>((resolve) => original.toBlob(resolve, "image/png"))
-      : original;
-    if (!blob) {
-      showError("There is no image to save in the scene.");
-      return;
-    }
-    const path = await saveDialog({ defaultPath: "Scene.ksage", filters: [{ name: "Kaleido Sage scene", extensions: [SCENE_EXTENSION] }] });
-    if (!path) return;
-    try {
-      const contents = serializeScene(engine.params, engine.state, await blobToSceneImage(blob));
-      await invoke("save_scene", { path, contents });
-      showStatus(`Saved ${path.split(/[\\/]/).pop()}`);
-    } catch (error) {
-      showError(`Could not save the scene. ${String(error)}`);
-    }
-  }, [engine, showError, showStatus]);
+  /** The current scene's fingerprint (see sceneFingerprint). */
+  const fingerprint = useCallback(() => {
+    if (!engine) return "";
+    const [first, second] = imagesRef.current;
+    return sceneFingerprint(engine.params, engine.state, [first?.id ?? null, second?.id ?? null]);
+  }, [engine]);
+
+  /** The scene as it is now counts as saved: the asterisk goes away until the next change. */
+  const markClean = useCallback(() => {
+    savedFingerprintRef.current = fingerprint();
+    setDirty(false);
+  }, [fingerprint]);
+
+  /** About twice a second, compare the scene with its saved state. */
+  useEffect(() => {
+    if (!engine) return;
+    const id = window.setInterval(() => setDirty(fingerprint() !== savedFingerprintRef.current), 500);
+    return () => window.clearInterval(id);
+  }, [engine, fingerprint]);
 
   /**
-   * Reads the scene into fresh settings first, and uses them only when the
-   * file and its image are both good, so a bad file changes nothing.
+   * Save writes to the open scene file without asking; Save As (or a scene
+   * that was never saved) asks for a file name first. Returns true when the
+   * scene was saved.
    */
-  const openScene = useCallback(async () => {
-    if (!engine || !isTauri()) return;
-    const path = await open({ multiple: false, directory: false, filters: [{ name: "Kaleido Sage scene", extensions: [SCENE_EXTENSION] }] });
-    if (typeof path !== "string") return;
+  const saveScene = useCallback(async (saveAs = false): Promise<boolean> => {
+    if (!engine || !isTauri()) return false;
+    /** An image's file bytes; a drawn pattern is saved as PNG. */
+    const imageBlob = async (image: SlotImage | null) => {
+      if (!image) return null;
+      if (image.blob) return image.blob;
+      const source = image.source;
+      return source instanceof HTMLCanvasElement ? new Promise<Blob | null>((resolve) => source.toBlob(resolve, "image/png")) : null;
+    };
+    const [first, second] = imagesRef.current;
+    const blob = await imageBlob(first);
+    const blob2 = await imageBlob(second);
+    if (!blob) {
+      showError("There is no image to save in the scene.");
+      return false;
+    }
+    const current = scenePathRef.current;
+    const path = !saveAs && current
+      ? current
+      : await saveDialog({ defaultPath: current ?? "Scene.ksage", filters: [{ name: "Kaleido Sage scene", extensions: [SCENE_EXTENSION] }] });
+    if (!path) return false;
+    try {
+      /* The fingerprint is taken before the file is written, so a change made while it writes still shows as unsaved. */
+      const saved = fingerprint();
+      const image = await blobToSceneImage(blob);
+      const contents = serializeScene(engine.params, engine.state, blob2 ? { image, image2: await blobToSceneImage(blob2) } : { image });
+      await invoke("save_scene", { path, contents });
+      savedFingerprintRef.current = saved;
+      setDirty(fingerprint() !== saved);
+      setScenePath(path);
+      showStatus(`Saved ${path.split(/[\\/]/).pop()}`);
+      return true;
+    } catch (error) {
+      showError(`Could not save the scene. ${String(error)}`);
+      return false;
+    }
+  }, [engine, fingerprint, showError, showStatus]);
+
+  const openScene = useCallback(() => {
+    if (engine && isTauri()) setOpenRequest({ kind: "scene", slot: 0 });
+  }, [engine]);
+
+  /**
+   * Reads the scene picked in the Open dialog into fresh settings first, and
+   * uses them only when the file and its image are both good, so a bad file
+   * changes nothing.
+   */
+  const openScenePath = useCallback(async (path: string) => {
+    if (!engine) return;
     try {
       const text = await invoke<string>("read_scene", { path });
       const params = createParams();
       const state = createPlayState();
-      const blob = sceneImageToBlob(applyScene(text, params, state));
+      const images = applyScene(text, params, state);
+      const blob = sceneImageToBlob(images.image);
       const image = await loadImageBlob(blob);
+      const blob2 = images.image2 && sceneImageToBlob(images.image2);
+      const image2 = blob2 ? await loadImageBlob(blob2) : null;
       Object.assign(engine.params, params);
-      Object.assign(engine.state, state, { paused: engine.state.paused });
-      setImage(image, path.split(/[\\/]/).pop(), blob);
+      Object.assign(engine.state, state, { paused: engine.state.paused, locks: engine.state.locks });
+      const name = path.split(/[\\/]/).pop();
+      setImage(image, { message: name, blob, name });
+      if (image2 && blob2) setImage(image2, { blob: blob2, name: `${name} (second image)`, fromScene: true }, 1);
+      else removeSecondImage();
       setRevision((value) => value + 1);
+      setScenePath(path);
+      markClean();
     } catch (error) {
       showError(`Could not open the scene. ${error instanceof Error ? error.message : String(error)}`);
     }
-  }, [engine, setImage, showError]);
+  }, [engine, markClean, removeSecondImage, setImage, showError]);
 
   const randomize = useCallback(() => {
     if (!engine) return;
@@ -190,11 +357,19 @@ export default function App() {
     showStatus("New random settings");
   }, [engine, showStatus]);
 
+  const reset = useCallback(() => {
+    if (!engine) return;
+    resetEffects(engine.params, engine.state);
+    setRevision((value) => value + 1);
+    setResetCount((value) => value + 1);
+    showStatus("Every effect is off");
+  }, [engine, showStatus]);
+
   const stop = useCallback(() => {
     if (!engine) return;
     engine.rewind();
     setPaused(true);
-    showStatus("Stopped: every range is at its minimum");
+    showStatus("Stopped: every range is at its start");
   }, [engine, showStatus]);
 
   const togglePause = useCallback(() => {
@@ -219,29 +394,79 @@ export default function App() {
     else if (document.fullscreenElement) await document.exitFullscreen();
   }, []);
 
-  /** Start the engine with a placeholder pattern, then load a random photo. */
+  /**
+   * Start the engine with a placeholder pattern, then load a random photo.
+   * The engine is made only once and kept in a ref. Effects run again on a
+   * dev hot update (and twice in dev at start-up); a new engine there would
+   * have fresh settings while the panels still show the old ones, so ranges
+   * would look on and nothing would move.
+   */
+  const engineRef = useRef<Engine | null>(null);
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    let created: Engine;
-    try {
-      created = new Engine(canvas);
-    } catch (error) {
-      setFatalError(String(error instanceof Error ? error.message : error));
-      return;
+    let created = engineRef.current;
+    if (!created) {
+      try {
+        created = new Engine(canvas);
+      } catch (error) {
+        setFatalError(String(error instanceof Error ? error.message : error));
+        return;
+      }
+      engineRef.current = created;
+      /* The app starts on the large checkerboard, with every effect off. */
+      const pattern = PATTERNS.find((candidate) => candidate.id === "checker-large") ?? PATTERNS[0];
+      const source = drawPattern(pattern);
+      created.setImage(source);
+      resetEffects(created.params, created.state);
+      const image: SlotImage = { source, label: pattern.label, thumbnail: makeThumbnail(source), patternId: pattern.id, id: nextImageId++ };
+      setSlotImage(0, image);
     }
-    const placeholder = fallbackImage();
-    created.setImage(placeholder);
-    imageSourceRef.current = placeholder;
-    created.start();
-    setEngine(created);
-    return () => created.stop();
+    const running = created;
+    running.start();
+    setEngine(running);
+    /* Dev only: the engine can be looked at from the developer console. */
+    if (import.meta.env.DEV) (window as unknown as { kaleidoEngine?: Engine }).kaleidoEngine = running;
+    return () => running.stop();
   }, []);
 
+  /**
+   * The app starts on a test pattern; it does not load a photo.
+   * The start-up scene has nothing to save, so it starts without an
+   * asterisk. Only once: effects also run again on a dev hot update.
+   */
+  const startedRef = useRef(false);
   useEffect(() => {
-    /* Only once, when the engine is ready; randomImage changes with engine. */
-    if (engine) void randomImage();
+    if (!engine || startedRef.current) return;
+    startedRef.current = true;
+    markClean();
   }, [engine]);
+
+  /** While the Open dialog is open, the picture behind it holds still, so the dialog's live scene preview gets the GPU. */
+  const dialogOpen = openRequest !== null;
+  useEffect(() => {
+    if (!engine || !dialogOpen) return;
+    engine.stop();
+    return () => engine.start();
+  }, [dialogOpen, engine]);
+
+  /**
+   * Closing the window with unsaved changes asks first (Save, Don't save,
+   * Cancel). In a plain browser, the browser's own question shows instead.
+   */
+  useEffect(() => {
+    if (!isTauri()) {
+      const onBeforeUnload = (event: BeforeUnloadEvent) => { if (dirtyRef.current) event.preventDefault(); };
+      window.addEventListener("beforeunload", onBeforeUnload);
+      return () => window.removeEventListener("beforeunload", onBeforeUnload);
+    }
+    const unlisten = getCurrentWindow().onCloseRequested((event) => {
+      if (!dirtyRef.current) return;
+      event.preventDefault();
+      setCloseAsked(true);
+    });
+    return () => { void unlisten.then((stop) => stop()); };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -272,9 +497,10 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (aboutOpen || event.altKey || event.metaKey) return;
+      if (aboutOpen || openRequest || event.altKey || event.metaKey) return;
       if (event.ctrlKey) {
-        const sceneAction = { s: saveScene, o: openScene }[event.key.toLowerCase()];
+        const key = event.key.toLowerCase();
+        const sceneAction = { s: () => saveScene(event.shiftKey), o: openScene }[key];
         if (sceneAction) {
           event.preventDefault();
           void sceneAction();
@@ -282,7 +508,8 @@ export default function App() {
         return;
       }
       const target = event.target as HTMLElement | null;
-      if (target?.tagName === "SELECT") return;
+      /* Menus and text fields keep their own keys. */
+      if (target?.tagName === "SELECT" || (target instanceof HTMLInputElement && target.type === "text")) return;
       const key = event.key.toLowerCase();
       const run: Record<string, () => void> = {
         f: () => void toggleFullscreen(),
@@ -305,7 +532,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [aboutOpen, exitFullscreen, openImage, openScene, randomImage, randomize, savePng, saveScene, toggleFullscreen, togglePause]);
+  }, [aboutOpen, exitFullscreen, openImage, openRequest, openScene, randomImage, randomize, savePng, saveScene, toggleFullscreen, togglePause]);
 
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
@@ -331,6 +558,40 @@ export default function App() {
     };
   }, []);
 
+  const menus: Menu[] = [
+    {
+      id: "file",
+      label: "File",
+      items: [
+        { label: "Open Image…", icon: <FolderOpen size={15} />, shortcut: "O", run: () => void openImage() },
+        { label: "Open Scene…", icon: <FilmSlate size={15} />, shortcut: "Ctrl+O", run: () => void openScene() },
+        "separator",
+        { label: "Save Scene", icon: <FloppyDisk size={15} />, shortcut: "Ctrl+S", run: () => void saveScene() },
+        { label: "Save Scene As…", icon: <FloppyDisk size={15} />, shortcut: "Ctrl+Shift+S", run: () => void saveScene(true) },
+        { label: "Save PNG", icon: <Camera size={15} />, shortcut: "S", run: () => void savePng() },
+        "separator",
+        { label: "Exit", icon: <SignOut size={15} />, shortcut: "Alt+F4", run: () => void (isTauri() ? getCurrentWindow().close() : window.close()) }
+      ]
+    },
+    {
+      id: "view",
+      label: "View",
+      items: [
+        { label: panelOpen ? "Hide Settings" : "Show Settings", icon: <SlidersHorizontal size={15} />, shortcut: "H", run: () => setPanelOpen((open) => !open) },
+        { label: statsOpen ? "Hide Performance" : "Show Performance", icon: <Gauge size={15} />, shortcut: "P", run: () => setStatsOpen((open) => !open) },
+        "separator",
+        { label: "Full Screen", icon: <ArrowsOut size={15} />, shortcut: "F", run: () => void toggleFullscreen() }
+      ]
+    },
+    {
+      id: "help",
+      label: "Help",
+      items: [
+        { label: "About Kaleido Sage", icon: <Info size={15} />, run: () => setAboutOpen(true) }
+      ]
+    }
+  ];
+
   return (
     <div
       className={`app ${fullscreen ? "fullscreen" : ""}`}
@@ -340,17 +601,21 @@ export default function App() {
         event.preventDefault();
         setDragging(false);
         const file = event.dataTransfer.files[0];
-        void loadBlob(file, file?.name);
+        /* A drop on the second image's card loads the second image. */
+        const slot = (event.target as Element).closest?.("[data-image-slot='1']") ? 1 : 0;
+        void loadBlob(file, file?.name, slot);
       }}
     >
       {!fullscreen && (
         <>
-          <TitleBar updateAvailable={Boolean(startupUpdate)} onAbout={() => setAboutOpen(true)} />
+          <TitleBar
+            updateAvailable={Boolean(startupUpdate)}
+            onAbout={() => setAboutOpen(true)}
+            fileName={scenePath ? scenePath.split(/[\\/]/).pop() ?? "Untitled" : "Untitled"}
+            dirty={dirty}
+          />
+          <MenuBar menus={menus} />
           <Toolbar
-            onRandomImage={() => void randomImage()}
-            onOpenImage={() => void openImage()}
-            onPattern={loadPattern}
-            onSave={() => void savePng()}
             onOpenScene={() => void openScene()}
             onSaveScene={() => void saveScene()}
             statsOpen={statsOpen}
@@ -359,43 +624,106 @@ export default function App() {
           />
         </>
       )}
-      <main className={`stage ${cursorIdle ? "cursor-idle" : ""}`}>
-        <canvas ref={canvasRef} onDoubleClick={() => void toggleFullscreen()} />
+      <div className="workspace">
         {engine && panelOpen && (
-          <ControlPanel engine={engine} revision={revision} paused={paused} onRandomize={randomize} onTogglePause={togglePause} onStop={stop} />
+          <SourcePanel
+            key={revision}
+            engine={engine}
+            images={images}
+            randomLoading={randomLoading}
+            onOpenImage={(slot) => void openImage(slot)}
+            onRandomImage={(slot) => void randomImage(slot)}
+            onPatternImage={loadPattern}
+            onRemoveSecondImage={removeSecondImage}
+            onSwapImages={swapImages}
+            onRestoreImage={restoreUnderImage}
+          />
         )}
-        {engine && statsOpen && <StatsOverlay engine={engine} />}
-        {fullscreen && (
-          /* In full screen the title bar and toolbar are gone; these buttons show while the mouse moves. */
-          <div className={`fullscreen-controls ${cursorIdle && !panelOpen ? "hidden" : ""}`}>
-            <button
-              className={panelOpen ? "active" : ""}
-              onClick={() => setPanelOpen((open) => !open)}
-              title="Settings (H)"
-              aria-label="Settings"
-              aria-pressed={panelOpen}
-            >
-              <SlidersHorizontal size={18} />
-            </button>
-            <button onClick={() => void exitFullscreen()} title="Exit full screen (Esc)" aria-label="Exit full screen">
-              <ArrowsIn size={18} />
-            </button>
-          </div>
-        )}
-        {fatalError && <div className="fatal-error selectable">{fatalError}</div>}
-        {status && (
-          <div className={`status-toast ${status.error ? "error" : ""}`} role={status.error ? "alert" : "status"}>
-            <span className={status.error ? "selectable" : undefined}>{status.message}</span>
-            {status.action && <button onClick={status.action.run}>{status.action.label}</button>}
-            {status.error && (
-              <button className="status-close" onClick={() => setStatus(null)} aria-label="Close" title="Close">
-                <X size={13} weight="bold" />
+        <main className={`stage ${cursorIdle ? "cursor-idle" : ""}`}>
+          <canvas ref={canvasRef} onDoubleClick={() => void toggleFullscreen()} />
+          {engine && statsOpen && <StatsOverlay engine={engine} />}
+          {fullscreen && (
+            /* In full screen the title bar and toolbar are gone; these buttons show while the mouse moves. */
+            <div className={`fullscreen-controls ${cursorIdle && !panelOpen ? "hidden" : ""}`}>
+              <button
+                className={panelOpen ? "active" : ""}
+                onClick={() => setPanelOpen((open) => !open)}
+                title="Settings (H)"
+                aria-label="Settings"
+                aria-pressed={panelOpen}
+              >
+                <SlidersHorizontal size={18} />
               </button>
-            )}
-          </div>
+              <button onClick={() => void exitFullscreen()} title="Exit full screen (Esc)" aria-label="Exit full screen">
+                <ArrowsIn size={18} />
+              </button>
+            </div>
+          )}
+          {fatalError && <div className="fatal-error selectable">{fatalError}</div>}
+          {status && (
+            <div className={`status-toast ${status.error ? "error" : ""}`} role={status.error ? "alert" : "status"}>
+              <span className={status.error ? "selectable" : undefined}>{status.message}</span>
+              {status.action && <button onClick={status.action.run}>{status.action.label}</button>}
+              {status.error && (
+                <button className="status-close" onClick={() => setStatus(null)} aria-label="Close" title="Close">
+                  <X size={13} weight="bold" />
+                </button>
+              )}
+            </div>
+          )}
+          {dragging && <div className="drop-overlay">Drop the image here</div>}
+        </main>
+        {engine && panelOpen && (
+          <ControlPanel
+            engine={engine}
+            revision={revision}
+            resetCount={resetCount}
+            paused={paused}
+            onRandomize={randomize}
+            onTogglePause={togglePause}
+            onStop={stop}
+            onReset={() => setResetAsked(true)}
+          />
         )}
-        {dragging && <div className="drop-overlay">Drop the image here</div>}
-      </main>
+      </div>
+      {closeAsked && (
+        <ConfirmDialog
+          title="Save changes before closing?"
+          message={`${scenePath ? scenePath.split(/[\\/]/).pop() : "This scene"} has changes that are not saved.`}
+          confirmLabel="Save"
+          otherLabel="Don't save"
+          onConfirm={() => {
+            setCloseAsked(false);
+            void saveScene().then((saved) => { if (saved) void getCurrentWindow().destroy(); });
+          }}
+          onOther={() => void getCurrentWindow().destroy()}
+          onCancel={() => setCloseAsked(false)}
+        />
+      )}
+      {resetAsked && (
+        <ConfirmDialog
+          title="Clear all effects?"
+          message="Every effect control goes back to no effect, every range turns off, and every effect group is turned off. Locked groups stay as they are."
+          confirmLabel="Clear"
+          onConfirm={() => {
+            setResetAsked(false);
+            reset();
+          }}
+          onCancel={() => setResetAsked(false)}
+        />
+      )}
+      {openRequest && (
+        <OpenDialog
+          kind={openRequest.kind}
+          title={openRequest.kind === "scene" ? "Open Scene" : openRequest.slot === 1 ? "Open Second Image" : "Open Image"}
+          onCancel={() => setOpenRequest(null)}
+          onOpen={(path) => {
+            setOpenRequest(null);
+            if (openRequest.kind === "scene") void openScenePath(path);
+            else void openImagePath(path, openRequest.slot);
+          }}
+        />
+      )}
       {aboutOpen && (
         <AboutDialog version={appVersion} initialUpdateInfo={startupUpdate} onClose={() => setAboutOpen(false)} />
       )}

@@ -1,4 +1,4 @@
-export type PassName = "fold" | "blur" | "trails" | "finish";
+export type PassName = "fold" | "blur" | "trails" | "relief" | "finish";
 
 interface TimerExtension {
   TIME_ELAPSED_EXT: number;

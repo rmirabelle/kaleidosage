@@ -1,15 +1,19 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { DownloadSimple, Info } from "@phosphor-icons/react";
+import { DownloadSimple } from "@phosphor-icons/react";
 import { WindowControls } from "./WindowControls";
 
 interface Props {
   updateAvailable: boolean;
   onAbout: () => void;
+  /** The scene file's name, or "Untitled". */
+  fileName: string;
+  /** True when the scene has changes that are not saved; a red asterisk shows. */
+  dirty: boolean;
 }
 
-/** The window's title bar: the app name, the update button when an update is ready, and the window controls. */
-export function TitleBar({ updateAvailable, onAbout }: Props) {
+/** The window's title bar: the app name, the scene file name, the update button when an update is ready, and the window controls. */
+export function TitleBar({ updateAvailable, onAbout, fileName, dirty }: Props) {
   return (
     <header
       className="titlebar"
@@ -20,17 +24,16 @@ export function TitleBar({ updateAvailable, onAbout }: Props) {
         <img src="/icon.ico" alt="" />
         <span>Kaleido Sage</span>
       </div>
+      <div className="titlebar-file" data-tauri-drag-region title={dirty ? "This scene has changes that are not saved" : undefined}>
+        {fileName}
+        {dirty && <span className="titlebar-dirty">*</span>}
+      </div>
       {updateAvailable && (
         <button className="titlebar-update-button" onClick={onAbout} title="A new Kaleido Sage version is available">
           <DownloadSimple size={14} weight="bold" /> Update available
         </button>
       )}
       <div className="titlebar-spacer" data-tauri-drag-region />
-      <div className="titlebar-end">
-        <button className="titlebar-icon-button" onClick={onAbout} title="About Kaleido Sage" aria-label="About Kaleido Sage">
-          <Info size={15} />
-        </button>
-      </div>
       <WindowControls />
     </header>
   );

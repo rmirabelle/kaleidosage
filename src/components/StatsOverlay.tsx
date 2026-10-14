@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import type { Engine } from "../engine/engine";
 import type { PassName } from "../engine/gpuTimer";
 
-const PASS_LABELS: Record<PassName, string> = { fold: "Warp, map, fold", blur: "Blur", trails: "Trails", finish: "Final effects" };
+const PASS_LABELS: Record<PassName, string> = { fold: "Warp, map, fold", blur: "Blur", trails: "Trails", relief: "Relief", finish: "Final effects" };
 /** The display updates a few times per second, so the numbers can be read. */
 const UPDATE_MS = 250;
 
@@ -42,6 +42,7 @@ export function StatsOverlay({ engine }: { engine: Engine }) {
       lines.push(`Canvas   ${info.width} × ${info.height}`);
       lines.push(`Texture  ${info.textureWidth} × ${info.textureHeight} (with blur border)`);
       lines.push(`Blur     ${info.blurSamples} samples per pixel`);
+      lines.push(`Shape    ${info.shapeVersions} ${info.shapeVersions === 1 ? "version" : "versions"} per pixel (opacity, blend)`);
       textRef.current.textContent = lines.join("\n");
     });
     return () => {
