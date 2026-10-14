@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { Fragment, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { CaretRight, DotsSixVertical, LockSimple, LockSimpleOpen } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
 import type { GroupKey, ParamKey, PlayState } from "../engine/params";
@@ -13,8 +13,9 @@ interface Props {
   engine: Engine;
   /** Changes when the parameters change outside the panel (Randomize), so the controls reload. */
   revision: number;
-  /** Changes each time Reset runs; the shape and picture groups then close. */
-  resetCount: number;
+  /** The open group; only one group is open at a time. All groups start closed. */
+  openGroup: string | null;
+  onOpenGroup: (group: string | null) => void;
   paused: boolean;
   onRandomize: () => void;
   onTogglePause: () => void;
@@ -32,7 +33,7 @@ const KALEIDOSCOPE_KEYS: Record<FoldMode, ParamKey[]> = {
 const BLUR_KEYS: Record<BlurMask, ParamKey[]> = {
   0: ["blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY"],
   1: ["blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY"],
-  2: ["blurAmount", "blurMaskAngle", "blurMaskSoft", "blurMaskX", "blurMaskY"],
+  2: ["blurAmount", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle"],
   3: ["blurAmount", "blurMaskLevel", "blurMaskSoft"],
   4: ["blurAmount", "blurMaskLevel", "blurMaskSoft"],
   5: ["blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY"]
@@ -73,27 +74,13 @@ const MAP_MODES = [[1, "Power (z^n)"], [2, "Möbius"], [3, "Julia"], [4, "Log sp
 const TRAIL_MODES = [[1, "Mix (smoky)"], [2, "Lighten (glowing)"]] as const;
 
 /** The Effects panel, docked at the right: play buttons, then the effect groups. */
-export function ControlPanel({ engine, revision, resetCount, paused, onRandomize, onTogglePause, onStop, onReset }: Props) {
+export function ControlPanel({ engine, revision, openGroup, onOpenGroup, paused, onRandomize, onTogglePause, onStop, onReset }: Props) {
   const row = useParamRows(engine);
-  /** Only one group is open at a time. Opening a group closes the others; clicking the open group closes it. */
-  const [openGroup, setOpenGroup] = useState<string | null>(readOpenGroup);
+  /** Opening a group closes the others; clicking the open group closes it. */
   const accordion = (key: string) => ({
     open: openGroup === key,
-    onToggle: () => {
-      const next = openGroup === key ? null : key;
-      setOpenGroup(next);
-      writeOpenGroup(next);
-    }
+    onToggle: () => onOpenGroup(openGroup === key ? null : key)
   });
-
-  /* After Reset, every shape and picture group is closed. */
-  const lastResetRef = useRef(resetCount);
-  useEffect(() => {
-    if (resetCount === lastResetRef.current) return;
-    lastResetRef.current = resetCount;
-    setOpenGroup(null);
-    writeOpenGroup(null);
-  }, [resetCount]);
 
   /**
    * Turning Algorithm on sets Map mix and Opacity to full, with no range, so
@@ -226,8 +213,6 @@ export function ControlPanel({ engine, revision, resetCount, paused, onRandomize
   );
 }
 
-const OPEN_GROUP_KEY = "kaleidosage.openGroup";
-
 /** The drag grip of a group header. */
 interface Grip {
   onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
@@ -293,24 +278,6 @@ function StageList<K extends string>({ label, order, onReorder, render }: {
       </div>
     </>
   );
-}
-
-/** Reads which group was open, from this viewer's browser storage. All groups start closed. Storage can be missing or blocked. */
-function readOpenGroup(): string | null {
-  try {
-    return localStorage.getItem(OPEN_GROUP_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function writeOpenGroup(key: string | null) {
-  try {
-    if (key) localStorage.setItem(OPEN_GROUP_KEY, key);
-    else localStorage.removeItem(OPEN_GROUP_KEY);
-  } catch {
-    /* The open group is only a convenience. */
-  }
 }
 
 /**
@@ -478,10 +445,22 @@ function KaleidoscopeSection({ engine, row }: { engine: Engine; row: (key: Param
 /** The blur mask picker, and the sliders the picked mask uses. */
 function BlurSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
   const [mode, setMode] = useState<BlurMask>(engine.state.blurMask);
+  /** Picking Gradient sets a sharp vertical edge with a blur that shows. The sliders then reload to show the new values. */
+  const [revision, setRevision] = useState(0);
+  const pick = (next: BlurMask) => {
+    if (next === 2) {
+      const values = { blurAmount: 20, blurMaskAngle: 90, blurMaskSoft: 0 } as const;
+      for (const [key, value] of Object.entries(values) as [ParamKey, number][]) {
+        Object.assign(engine.params[key], { value, on: false });
+      }
+      setRevision((value) => value + 1);
+    }
+    setMode(next);
+  };
   return (
     <>
-      <ModeSelect engine={engine} stateKey="blurMask" options={BLUR_MASKS} onChange={setMode} />
-      {BLUR_KEYS[mode].map(row)}
+      <ModeSelect engine={engine} stateKey="blurMask" options={BLUR_MASKS} onChange={pick} />
+      <Fragment key={revision}>{BLUR_KEYS[mode].map(row)}</Fragment>
     </>
   );
 }

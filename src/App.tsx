@@ -89,8 +89,11 @@ export default function App() {
   const [randomLoading, setRandomLoading] = useState<ImageSlot | null>(null);
   const [paused, setPaused] = useState(false);
   const [revision, setRevision] = useState(0);
-  /** Counts the times Reset ran, so the Effects panel can close its groups. */
-  const [resetCount, setResetCount] = useState(0);
+  /**
+   * The open group of the Effects panel. It lives here, not in the panel,
+   * so it stays when the panel hides (full screen, H) and shows again.
+   */
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
   const [cursorIdle, setCursorIdle] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -376,7 +379,7 @@ export default function App() {
     if (!engine) return;
     resetEffects(engine.params, engine.state);
     setRevision((value) => value + 1);
-    setResetCount((value) => value + 1);
+    setOpenGroup(null);
     showStatus("Every effect is off");
   }, [engine, showStatus]);
 
@@ -692,7 +695,8 @@ export default function App() {
           <ControlPanel
             engine={engine}
             revision={revision}
-            resetCount={resetCount}
+            openGroup={openGroup}
+            onOpenGroup={setOpenGroup}
             paused={paused}
             onRandomize={randomize}
             onTogglePause={togglePause}
