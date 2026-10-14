@@ -101,8 +101,17 @@ function ParamRow({ engine, paramKey, readout, marker, onHold }: {
   };
 
   const toggleDrift = (on: boolean) => {
-    /* The end handle and the single value hand over to each other: value to range sets the end, range to value takes the end. */
-    if (on) {
+    /**
+     * The end handle and the single value hand over to each other: value to
+     * range sets the end, range to value takes the end. A control that goes
+     * below zero instead starts its range around 0, 10% of the slider's span
+     * on each side.
+     */
+    if (on && param.min < 0 && param.max > 0) {
+      const decimals = (String(param.step).split(".")[1] ?? "").length;
+      const distance = Number((Math.round((param.max - param.min) * 0.1 / param.step) * param.step).toFixed(decimals));
+      setHandles([Math.max(param.min, -distance), Math.min(param.max, distance)]);
+    } else if (on) {
       param.high = param.value;
       setRange([range[0], param.value]);
     } else {
@@ -162,9 +171,10 @@ function ParamRow({ engine, paramKey, readout, marker, onHold }: {
             </button>
             {/* Hidden, not removed, while the range is off, so the slider does not move. */}
             <button
-              className="panel-reverse"
-              title="Reverse the range"
+              className={`panel-reverse ${range[1] < range[0] ? "on" : ""}`}
+              title={range[1] < range[0] ? "Reversed: the value moves from the right handle to the left. Click to reverse." : "Reverse the range"}
               aria-label={`Reverse the ${param.label.toLowerCase()} range`}
+              aria-pressed={range[1] < range[0]}
               disabled={!drifting}
               onClick={() => {
                 const [low, high] = [range[1], range[0]];
@@ -173,6 +183,7 @@ function ParamRow({ engine, paramKey, readout, marker, onHold }: {
                 setRange([low, high]);
               }}
             >
+              {/* One icon either way; the button's lit state shows a reversed range. */}
               <ArrowsLeftRight size={13} />
             </button>
             <EaseMenu param={param} disabled={!drifting} />
@@ -180,7 +191,7 @@ function ParamRow({ engine, paramKey, readout, marker, onHold }: {
               className={`panel-custom ${custom ? "on" : ""}`}
               aria-pressed={custom}
               aria-label={`${param.label} own time`}
-              title={custom ? "Own time: this range ignores the shared cycle. Click to use the cycle again." : "Give this range its own time instead of the shared cycle"}
+              title={custom ? "Own time: this range ignores the loop length. Click to follow the loop length again." : "Give this range its own time instead of the loop length"}
               disabled={!drifting}
               onClick={toggleCustom}
             >

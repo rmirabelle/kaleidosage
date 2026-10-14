@@ -1,4 +1,7 @@
-import { ArrowCounterClockwise, ArrowsDownUp, Checkerboard, DiceFive, FolderOpen, Plus, X } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, ArrowsDownUp, Plus, X } from "@phosphor-icons/react";
+import { ColorFolder } from "./ColorFolder";
+import { ColorPattern } from "./ColorPattern";
+import { RedDice } from "./RedDice";
 import { isTauri } from "@tauri-apps/api/core";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -97,15 +100,15 @@ function ImageCard({ slot, image, loading, onOpen, onRandom, onPattern, onRemove
       </div>
       <div className="source-label" title={image?.label}>{image?.label ?? "Drop or pick an image"}</div>
       <div className="source-actions">
-        {isTauri() && (
-          <button onClick={onOpen} title="Open an image file" aria-label={`Open an image file as image ${letter}`}>
-            <FolderOpen size={18} />
-          </button>
-        )}
         <button onClick={onRandom} title="Load a random photo" aria-label={`Load a random photo as image ${letter}`}>
-          <DiceFive size={18} className={loading ? "spin" : undefined} />
+          <RedDice size={24} className={loading ? "spin" : undefined} />
         </button>
         <PatternMenu letter={letter} selected={image?.patternId} onPattern={onPattern} />
+        {isTauri() && (
+          <button onClick={onOpen} title="Open an image file" aria-label={`Open an image file as image ${letter}`}>
+            <ColorFolder size={25} />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -178,7 +181,7 @@ function PatternMenu({ letter, selected, onPattern }: {
         aria-haspopup="menu"
         aria-expanded={Boolean(position)}
       >
-        <Checkerboard size={18} />
+        <ColorPattern size={24} />
       </button>
       {position && createPortal(
         <div ref={menuRef} className="toolbar-dropdown source-pattern-menu" role="menu" aria-label={`Patterns for image ${letter}`} style={position}>

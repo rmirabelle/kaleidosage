@@ -5,7 +5,7 @@ export const PARAM_KEYS = [
   "imageBlend",
   "warpOpacity", "mapOpacity", "foldOpacity",
   "warpAmount", "warpScale", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle",
-  "mapMix", "mapScale", "mapPower", "mapPointX", "mapPointY", "mapSteps", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "tunnelTwist",
+  "mapMix", "mapScale", "mapPower", "mapPointX", "mapPointY", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "tunnelTwist",
   "segments", "tileSize", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl",
   "blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel",
   "trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint",
@@ -168,7 +168,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * handles. It also sets the speed of everything that moves (see
    * REFERENCE_CYCLE).
    */
-  cycle: { label: "Cycle", min: 5, max: 90, step: 1, value: REFERENCE_CYCLE, unit: " s" },
+  cycle: { label: "Loop length", min: 5, max: 90, step: 1, value: REFERENCE_CYCLE, unit: " s" },
   warpOpacity: opacitySpec,
   mapOpacity: opacitySpec,
   foldOpacity: opacitySpec,
@@ -190,6 +190,12 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   mapPointX: { label: "Point X", min: -1.5, max: 1.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   mapPointY: { label: "Point Y", min: -1.5, max: 1.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   mapSteps: { label: "Steps", min: 1, max: 12, step: 1, value: 4 },
+  /**
+   * Seamless spiral: how far the spiral twists. Negative twists the other
+   * way; 0 gives rings. Any value stays seamless (see the stretch in
+   * complexMap), so it can drift like the other ranges.
+   */
+  mapArms: { label: "Twist", min: -8, max: 8, step: 0.05, value: 2, drift: "wave", low: 1, high: 3, on: false },
   mapTwist: { label: "Twist", min: -80, max: 80, step: 1, value: 0, unit: "°", drift: "wave", low: 10, high: 50, on: false },
   /** Power, log spiral and tunnel fold the picture over an axis (so there is no seam); this turns that axis. */
   mapAngle: { label: "Axis angle", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
@@ -259,7 +265,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
  */
 export const NO_EFFECT: Partial<Record<ParamKey, number>> = {
   warpCenterX: 0, warpCenterY: 0,
-  mapScale: 1, mapPower: 1, mapPointX: 0, mapPointY: 0, mapTwist: 0, mapSpeed: 0, tunnelTwist: 0,
+  mapScale: 1, mapPower: 1, mapArms: 0, mapPointX: 0, mapPointY: 0, mapTwist: 0, mapSpeed: 0, tunnelTwist: 0,
   centerX: 0, centerY: 0, zoom: 1, panX: 0, panY: 0, twirl: 0,
   blurMaskX: 0, blurMaskY: 0,
   trailZoom: 1, trailTurn: 0, trailHue: 0, trailFlow: 0,
@@ -452,7 +458,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   /** The images are the user's choice; Randomize does not change the blend. */
   source: ["imageBlend"],
   warp: ["warpOpacity", "warpAmount", "warpScale", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle"],
-  map: ["mapOpacity", "mapMix", "mapScale", "mapPower", "mapPointX", "mapPointY", "mapSteps", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "tunnelTwist"],
+  map: ["mapOpacity", "mapMix", "mapScale", "mapPower", "mapPointX", "mapPointY", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "tunnelTwist"],
   kaleidoscope: ["foldOpacity", "segments", "tileSize", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl"],
   blur: ["blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel"],
   trails: ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"],
@@ -464,7 +470,7 @@ function randomizeAll(params: Params, state?: PlayState) {
   if (state) {
     state.overlayColor = hslToHex(rand(0, 360), rand(0.5, 1), rand(0.35, 0.6));
     state.groups.map = Math.random() < 0.75;
-    state.mapMode = (1 + Math.floor(Math.random() * 6)) as MapMode;
+    state.mapMode = (1 + Math.floor(Math.random() * 7)) as MapMode;
     state.groups.warp = Math.random() < 0.7;
     /* Noise is the most common warp; the other kinds share the rest. */
     state.warpType = (Math.random() < 0.4 ? 0 : 1 + Math.floor(Math.random() * 5)) as WarpType;

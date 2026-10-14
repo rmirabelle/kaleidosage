@@ -1,9 +1,10 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { ArrowsIn, ArrowsOut, Camera, FilmSlate, FloppyDisk, FolderOpen, Gauge, Info, SignOut, SlidersHorizontal, X } from "@phosphor-icons/react";
+import { ArrowsIn, ArrowsOut, Camera, FilmSlate, FloppyDisk, Gauge, Info, SignOut, SlidersHorizontal, X } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AboutDialog } from "./components/AboutDialog";
+import { ColorFolder } from "./components/ColorFolder";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ControlPanel } from "./components/ControlPanel";
 import { SourcePanel } from "./components/SourcePanel";
@@ -105,6 +106,17 @@ export default function App() {
   const savedFingerprintRef = useRef("");
   const [closeAsked, setCloseAsked] = useState(false);
   const [resetAsked, setResetAsked] = useState(false);
+  /**
+   * The open "Save changes?" question before an action that replaces the
+   * scene (opening a scene, installing an update): its title, the reason,
+   * and the answer, true to go on with the action.
+   */
+  const [saveQuestion, setSaveQuestion] = useState<{ title: string; reason: string; answer: (go: boolean) => void } | null>(null);
+  /** Asks to save unsaved changes first. Resolves true to go on (saved or not), false to stop. With no changes, it goes on at once. */
+  const askToSave = useCallback((title: string, reason: string) => new Promise<boolean>((resolve) => {
+    if (!dirtyRef.current) resolve(true);
+    else setSaveQuestion({ title, reason, answer: resolve });
+  }), []);
   const [appVersion, setAppVersion] = useState("");
   const [startupUpdate, setStartupUpdate] = useState<UpdateInfo | null>(null);
 
@@ -316,9 +328,12 @@ export default function App() {
     }
   }, [engine, fingerprint, showError, showStatus]);
 
-  const openScene = useCallback(() => {
-    if (engine && isTauri()) setOpenRequest({ kind: "scene", slot: 0 });
-  }, [engine]);
+  /* Opening a scene replaces this one, so unsaved changes are saved or given up first. */
+  const openScene = useCallback(async () => {
+    if (!engine || !isTauri()) return;
+    if (!(await askToSave("Save changes before opening a scene?", "Opening another scene replaces it."))) return;
+    setOpenRequest({ kind: "scene", slot: 0 });
+  }, [askToSave, engine]);
 
   /**
    * Reads the scene picked in the Open dialog into fresh settings first, and
@@ -563,7 +578,7 @@ export default function App() {
       id: "file",
       label: "File",
       items: [
-        { label: "Open Image…", icon: <FolderOpen size={15} />, shortcut: "O", run: () => void openImage() },
+        { label: "Open Image…", icon: <ColorFolder size={18} />, shortcut: "O", run: () => void openImage() },
         { label: "Open Scene…", icon: <FilmSlate size={15} />, shortcut: "Ctrl+O", run: () => void openScene() },
         "separator",
         { label: "Save Scene", icon: <FloppyDisk size={15} />, shortcut: "Ctrl+S", run: () => void saveScene() },
@@ -725,7 +740,34 @@ export default function App() {
         />
       )}
       {aboutOpen && (
-        <AboutDialog version={appVersion} initialUpdateInfo={startupUpdate} onClose={() => setAboutOpen(false)} />
+        <AboutDialog
+          version={appVersion}
+          initialUpdateInfo={startupUpdate}
+          onClose={() => setAboutOpen(false)}
+          beforeInstall={() => askToSave("Save changes before updating?", "Kaleido Sage closes to install the update.")}
+        />
+      )}
+      {/* After the About dialog, so this question shows over it. */}
+      {saveQuestion && (
+        <ConfirmDialog
+          title={saveQuestion.title}
+          message={`${scenePath ? scenePath.split(/[\\/]/).pop() : "This scene"} has changes that are not saved. ${saveQuestion.reason}`}
+          confirmLabel="Save"
+          otherLabel="Don't save"
+          onConfirm={() => {
+            const { answer } = saveQuestion;
+            setSaveQuestion(null);
+            void saveScene().then(answer);
+          }}
+          onOther={() => {
+            saveQuestion.answer(true);
+            setSaveQuestion(null);
+          }}
+          onCancel={() => {
+            saveQuestion.answer(false);
+            setSaveQuestion(null);
+          }}
+        />
       )}
     </div>
   );

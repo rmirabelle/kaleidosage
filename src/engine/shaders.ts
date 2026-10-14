@@ -50,6 +50,9 @@ uniform float u_mapScale;
 uniform float u_mapPower;
 uniform vec2 u_mapPoint;
 uniform int u_mapSteps;
+/* Seamless spiral: the twist, and the whole number of image copies one turn holds, 0 for a slant (see seamlessSpiral). */
+uniform float u_mapArms;
+uniform float u_spiralCopies;
 uniform float u_mapTwist;
 /* The direction of the axis that power, log spiral and tunnel fold over (see complexMap). */
 uniform vec2 u_mapAxis;
@@ -215,6 +218,28 @@ vec2 warpOffset(vec2 p) {
  * 6 = tunnel (a tube that the view flies through).
  * Map mix blends from the plain point (0) to the bent point (1).
  */
+/**
+ * A seamless spiral of twist k, from the point's log distance and angle
+ * (l). One full turn around the center moves the image by (k image repeats
+ * across, 1 up); an image repeat is 2 image widths across and 2 heights up,
+ * because the image is mirrored. That meets itself only for a whole k, so
+ * the image is changed a little to fit:
+ * - n copies (n not 0): the image is stretched across by k / n, so one
+ *   turn moves it by n of its stretched repeats.
+ * - n = 0: the image is slanted instead (each step up moves it across), so
+ *   one turn moves it straight up by one repeat. A slant has no limit at a
+ *   twist of 0, where it is plain rings, so the twist can pass through 0
+ *   and reverse with no jump.
+ */
+vec2 seamlessSpiral(vec2 l, float k, float n) {
+  float aspect = u_imgRes.x / u_imgRes.y;
+  vec2 repeat = vec2(2.0 * aspect * k, 2.0);
+  vec2 w = vec2(l.x * repeat.y + l.y * repeat.x, l.y * repeat.y - l.x * repeat.x) / TAU;
+  if (n != 0.0) w.x *= n / k;
+  else w.x -= aspect * k * w.y;
+  return w;
+}
+
 vec2 complexMap(vec2 p) {
   if (u_mapMode == 0) return p;
   vec2 z = p * u_mapScale;
@@ -262,6 +287,19 @@ vec2 complexMap(vec2 p) {
     float c = cos(u_mapTwist);
     float s = sin(u_mapTwist);
     w = mat2(c, s, -s, c) * l * 0.5;
+  } else if (u_mapMode == 7) {
+    /**
+     * Seamless spiral (see seamlessSpiral). Where the angle jumps from +PI
+     * to -PI, the picture meets itself, so there is no fold and no seam.
+     * The copy count stays fixed while the twist moves (the engine takes it
+     * from the middle of the twist's range, or uses 0 when the range comes
+     * near 0), so a moving twist only changes the stretch or the slant and
+     * never jumps. A stretch follows the twist's direction.
+     */
+    float k = u_mapArms;
+    float n = u_spiralCopies == 0.0 ? 0.0 : (k < 0.0 ? -1.0 : 1.0) * u_spiralCopies;
+    vec2 l = vec2(log(max(length(onAxis), 1e-6)), atan(onAxis.y, onAxis.x));
+    w = seamlessSpiral(l, n == 0.0 ? k : (abs(k) < 1e-4 ? 1e-4 : k), n);
   } else if (u_mapMode == 5) {
     w = csin(z * PI) / PI;
   } else if (u_mapMode == 6) {
@@ -303,9 +341,17 @@ vec3 sampleImage(sampler2D image, vec2 size, vec2 q, float g) {
  * Turns a point (rotation, and twirl, which turns more with distance), folds
  * it into mirrored wedges or tiles, and zooms it into image space.
  */
+/**
+ * Set by fold() between 0 and 0.5 radial segments: the point with no fold,
+ * and how much of its picture to mix in (see the crossfade in fold).
+ */
+vec2 foldAlt;
+float foldAltWeight;
+
 vec2 fold(vec2 p) {
   float r = length(p);
   float a = atan(p.y, p.x) + u_rotation + u_twirl * r;
+  foldAltWeight = 0.0;
   if (u_foldMode == 0) {
     /**
      * Radial: mirrored wedges around one center. A count between two whole
@@ -315,8 +361,18 @@ vec2 fold(vec2 p) {
      * picture keeps its full symmetry the whole way. "g" is the place across
      * a wedge (0 at its center line, 1 at its edges), and "s" is how much of
      * the wedge pattern shows: 1 at a whole number, 0 halfway.
+     *
+     * Between 0 and 1 this cannot work alone: with no fold, going once
+     * around the center goes once around the picture, and no fold or circle
+     * can do that, so a blend of angles must break somewhere. So from 0 to
+     * 0.5 the picture with no fold crossfades into the rings instead, and
+     * from 0.5 to 1 one segment grows out of the rings as above.
      */
-    if (u_segments >= 1.0) {
+    if (u_segments > 0.0 && u_segments < 0.5) {
+      foldAlt = vec2(cos(a), sin(a)) * r / u_zoom;
+      foldAltWeight = 0.5 + 0.5 * cos(PI * u_segments / 0.5);
+      a = PI;
+    } else if (u_segments >= 0.5) {
       float whole = floor(u_segments);
       float t = u_segments - whole;
       float seg = TAU / (t < 0.5 ? whole : whole + 1.0);
@@ -387,19 +443,58 @@ vec3 shapeColor(vec2 screen, int skip, float g0) {
   vec2 beforeFold = screen;
   bool folded = false;
   bool mapped = false;
+  /**
+   * The seamless spiral meets itself only if nothing moves the point after
+   * it (a fold or warp after it would not repeat the way it does), so it is
+   * always the last step to move the point, whatever the order in the list.
+   */
+  bool spiralLast = u_mapMode == 7 && (skip & 2) == 0;
+  /* During the radial crossfade (see fold), a second point, with no fold, goes through the later steps too. */
+  bool fading = false;
+  vec2 p2 = p;
+  float fade = 0.0;
   for (int i = 0; i < 3; i++) {
     int shapeStep = u_shapeOrder[i];
     if ((skip & (1 << shapeStep)) != 0) continue;
     if (shapeStep == 0) {
-      if (u_warpMode != 0) p += warpOffset(p);
+      if (u_warpMode != 0) {
+        p += warpOffset(p);
+        if (fading) p2 += warpOffset(p2);
+      }
     } else if (shapeStep == 1) {
+      if (spiralLast) continue;
       p = complexMap(p);
+      if (fading) p2 = complexMap(p2);
       mapped = true;
     } else {
       beforeFold = p;
       p = fold(p);
       folded = true;
+      if (foldAltWeight > 0.0) {
+        fading = true;
+        p2 = foldAlt;
+        fade = foldAltWeight;
+      }
     }
+  }
+  /**
+   * The spiral's own jump would show in the measured detail as a thin blur
+   * line, so the detail is measured on the point before the spiral, then
+   * multiplied by how much the spiral stretches it there (its size divided
+   * by the distance from the center, mixed by the map mix).
+   */
+  vec2 beforeSpiral = p;
+  float stretch = 1.0;
+  if (spiralLast) {
+    p = complexMap(p);
+    if (fading) p2 = complexMap(p2);
+    mapped = true;
+    /* The spiral's size, larger where the stretch squeezes the image or the slant tilts it. */
+    float aspect = u_imgRes.x / u_imgRes.y;
+    float twist = abs(u_mapArms);
+    float squeeze = u_spiralCopies == 0.0 ? sqrt(1.0 + aspect * aspect * twist * twist) : max(1.0, u_spiralCopies / max(twist, 0.5));
+    float spiralSize = length(vec2(2.0 * aspect * twist, 2.0)) / TAU * squeeze;
+    stretch = mix(1.0, spiralSize / max(length(beforeSpiral), 1e-4), u_mapMix);
   }
   /**
    * Texture detail follows how much the steps stretch the screen; with a
@@ -407,9 +502,10 @@ vec3 shapeColor(vec2 screen, int skip, float g0) {
    * jump. It is capped, so the jumps at a map's cut lines and poles do not
    * blur seams. Explicit gradients avoid seams at the fold.
    */
-  vec2 measured = folded ? beforeFold : p;
-  float g = min(max(length(dFdx(measured)), length(dFdy(measured))), g0 * 4.0) / (folded ? u_zoom : 1.0);
+  vec2 measured = folded ? beforeFold : (spiralLast ? beforeSpiral : p);
+  float g = min(max(length(dFdx(measured)), length(dFdy(measured))), g0 * 4.0) / (folded ? u_zoom : 1.0) * stretch;
   vec3 color = sourceColor(p, g);
+  if (fading) color = mix(color, sourceColor(p2, g), fade);
   /* The far end of the tunnel (the center) fades to black, which makes it look deep. */
   if (mapped && u_mapMode == 6) color *= mix(1.0, smoothstep(0.0, 0.7, length(screen)), u_mapFog * u_mapMix);
   return color;

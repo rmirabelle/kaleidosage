@@ -1,4 +1,5 @@
-import { ArrowsOut, FilmSlate, FloppyDisk, Gauge } from "@phosphor-icons/react";
+import { ColorFolder } from "./ColorFolder";
+import { ColorDisk, ColorFullScreen, ColorGauge } from "./ToolbarIcons";
 
 interface Props {
   onOpenScene: () => void;
@@ -9,25 +10,32 @@ interface Props {
 }
 
 /**
- * The app toolbar under the menu bar: Open Scene and Save Scene at the left,
- * view buttons at the right. Images are picked in the Source panel.
+ * The app toolbar under the menu bar, styled like the Designer toolbar:
+ * button groups with color icons, Open Scene and Save Scene at the left,
+ * the view buttons at the right. Images are picked in the Source panel.
  */
 export function Toolbar(props: Props) {
   return (
     <nav className="toolbar">
-      <button className="toolbar-button" onClick={props.onOpenScene} title="Open a scene (Ctrl+O)"><FilmSlate size={15} /> Open Scene</button>
-      <button className="toolbar-button" onClick={props.onSaveScene} title="Save the scene (Ctrl+S)"><FloppyDisk size={15} /> Save Scene</button>
+      <div className="panel-buttons">
+        <button className="panel-button" onClick={props.onOpenScene} title="Open a scene (Ctrl+O)"><ColorFolder size={17} /> Open Scene</button>
+        <button className="panel-button" onClick={props.onSaveScene} title="Save the scene (Ctrl+S)"><ColorDisk size={16} /> Save Scene</button>
+      </div>
       <div className="toolbar-spacer" />
-      <button
-        className={`toolbar-button icon ${props.statsOpen ? "active" : ""}`}
-        onClick={props.onToggleStats}
-        title="Performance: frame rate and GPU time (P)"
-        aria-label="Performance"
-        aria-pressed={props.statsOpen}
-      >
-        <Gauge size={16} />
-      </button>
-      <button className="toolbar-button icon" onClick={props.onFullscreen} title="Full screen (F)" aria-label="Full screen"><ArrowsOut size={16} /></button>
+      <div className="panel-buttons">
+        <button
+          className={`panel-button icon ${props.statsOpen ? "active" : ""}`}
+          onClick={props.onToggleStats}
+          title="Performance: frame rate and GPU time (P)"
+          aria-label="Performance"
+          aria-pressed={props.statsOpen}
+        >
+          <ColorGauge size={17} />
+        </button>
+        <button className="panel-button icon" onClick={props.onFullscreen} title="Full screen (F)" aria-label="Full screen">
+          <ColorFullScreen size={16} />
+        </button>
+      </div>
     </nav>
   );
 }

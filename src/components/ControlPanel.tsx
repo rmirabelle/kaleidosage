@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { CaretRight, DiceFive, DotsSixVertical, Eraser, LockSimple, LockSimpleOpen, Pause, Play, Stop } from "@phosphor-icons/react";
+import { CaretRight, DotsSixVertical, LockSimple, LockSimpleOpen } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
 import type { GroupKey, ParamKey, PlayState } from "../engine/params";
 import type { BlurMask, FoldMode, MapMode, PictureStep, ShapeStep, WarpType } from "../engine/renderer";
 import { Dropdown } from "./Dropdown";
+import { MediaIcon } from "./MediaIcon";
+import { PowerIcon } from "./PowerIcon";
+import { RedDice } from "./RedDice";
 import { useParamRows } from "./useParamRows";
 
 interface Props {
@@ -22,8 +25,8 @@ interface Props {
 /** Radial mode uses segments; the tile modes use a tile size instead. */
 const KALEIDOSCOPE_KEYS: Record<FoldMode, ParamKey[]> = {
   0: ["segments", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl"],
-  1: ["tileSize", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl"],
-  2: ["tileSize", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl"]
+  1: ["tileSize", "panX", "panY", "centerX", "centerY", "rotation", "zoom", "twirl"],
+  2: ["tileSize", "panX", "panY", "centerX", "centerY", "rotation", "zoom", "twirl"]
 };
 /** The sliders each blur mask uses; the others are hidden. */
 const BLUR_KEYS: Record<BlurMask, ParamKey[]> = {
@@ -55,7 +58,8 @@ const MAP_KEYS: Record<MapMode, ParamKey[]> = {
   3: ["mapPointX", "mapPointY", "mapSteps", "mapScale", "mapMix"],
   4: ["mapTwist", "mapAngle", "mapScale", "mapMix"],
   5: ["mapScale", "mapMix"],
-  6: ["mapSpeed", "tunnelTwist", "mapAngle", "mapFog", "mapScale", "mapMix"]
+  6: ["mapSpeed", "tunnelTwist", "mapAngle", "mapFog", "mapScale", "mapMix"],
+  7: ["mapArms", "mapAngle", "mapScale", "mapMix"]
 };
 const TRAIL_KEYS: ParamKey[] = ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"];
 const RELIEF_KEYS: ParamKey[] = ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"];
@@ -65,7 +69,7 @@ const LAYER_BLENDS = [
   [0, "Normal"], [1, "Screen"], [2, "Multiply"], [3, "Overlay"], [4, "Difference"], [5, "Lighten"], [6, "Darken"], [7, "Add"]
 ] as const;
 const FOLD_MODES = [[0, "Radial"], [1, "Triangle tiles"], [2, "Hexagon tiles"]] as const;
-const MAP_MODES = [[1, "Power (z^n)"], [2, "Möbius"], [3, "Julia"], [4, "Log spiral"], [5, "Sine"], [6, "Tunnel"]] as const;
+const MAP_MODES = [[1, "Power (z^n)"], [2, "Möbius"], [3, "Julia"], [4, "Log spiral"], [5, "Sine"], [6, "Tunnel"], [7, "Seamless spiral"]] as const;
 const TRAIL_MODES = [[1, "Mix (smoky)"], [2, "Lighten (glowing)"]] as const;
 
 /** The Effects panel, docked at the right: play buttons, then the effect groups. */
@@ -97,7 +101,7 @@ export function ControlPanel({ engine, revision, resetCount, paused, onRandomize
    */
   const [mapRevision, setMapRevision] = useState(0);
 
-  /* Turning Blur on with no blur sets a blur that shows, so the check box visibly does something. */
+  /* Turning Blur on with no blur sets a blur that shows, so the power button visibly does something. */
   const [blurRevision, setBlurRevision] = useState(0);
   const enableBlur = () => {
     const blur = engine.params.blurAmount;
@@ -158,54 +162,66 @@ export function ControlPanel({ engine, revision, resetCount, paused, onRandomize
 
   return (
     <aside className="side-panel control-panel" key={revision}>
-      <div className="side-panel-header">
-        <h2 className="side-panel-title">Effects</h2>
+      <div className="side-panel-header panel-header-bar">
+        <h2 className="side-panel-title">Designer</h2>
       </div>
-      {/* Randomize and Clear at the ends; Play or Pause and Stop as icons between them. */}
-      <div className="panel-buttons">
-        <button className="panel-button" onClick={onRandomize}><DiceFive size={15} /> Randomize</button>
-        <button
-          className="panel-button icon"
-          onClick={onTogglePause}
-          title={paused ? "Play (Space)" : "Pause (Space)"}
-          aria-label={paused ? "Play" : "Pause"}
-        >
-          {paused ? <Play size={15} weight="fill" /> : <Pause size={15} weight="fill" />}
-        </button>
-        <button className="panel-button icon" onClick={onStop} title="Stop: pause, and go back to the start" aria-label="Stop">
-          <Stop size={15} weight="fill" />
-        </button>
-        <button
-          className="panel-button"
-          onClick={onReset}
-          title="Turn every effect off and set its controls back to no effect. Locked groups stay as they are."
-        >
-          <Eraser size={15} /> Clear
-        </button>
+      {/* Two toolbars: Random all and Clear all at the left; Stop and Play or Pause as icons at the right. Stop is off while paused. */}
+      <div className="panel-toolbars">
+        <div className="panel-buttons">
+          <button className="panel-button" onClick={onRandomize}><RedDice size={16} /> Random all</button>
+          <button
+            className="panel-button text-only"
+            onClick={onReset}
+            title="Turn every effect off and set its controls back to no effect. Locked groups stay as they are."
+          >
+            Clear all
+          </button>
+        </div>
+        <div className="panel-buttons">
+          <button
+            className="panel-button icon"
+            onClick={onStop}
+            disabled={paused}
+            title="Stop: pause, and go back to the start"
+            aria-label="Stop"
+          >
+            <MediaIcon kind="stop" size={17} />
+          </button>
+          <button
+            className="panel-button icon"
+            onClick={onTogglePause}
+            title={paused ? "Play (Space)" : "Pause (Space)"}
+            aria-label={paused ? "Play" : "Pause"}
+          >
+            {paused ? <MediaIcon kind="play" size={17} /> : <MediaIcon kind="pause" size={17} />}
+          </button>
+        </div>
       </div>
 
       {/* The cycle: first and always in view, because its timing affects every effect below. */}
       <div className="panel-root-row">{row("cycle")}</div>
 
-      <StageList
-        label="Shape"
-        order={shapeOrder}
-        onReorder={(next) => {
-          engine.state.shapeOrder = next;
-          setShapeOrder(next);
-        }}
-        render={(key, grip) => shapeGroups[key](grip)}
-      />
-      <StageList
-        label="Picture"
-        order={pictureOrder}
-        onReorder={(next) => {
-          engine.state.pictureOrder = next;
-          setPictureOrder(next);
-        }}
-        render={(key, grip) => pictureGroups[key](grip)}
-      />
-
+      {/* Only the effect groups scroll; the title, the toolbars and the cycle stay in view. */}
+      <div className="panel-scroll">
+        <StageList
+          label="Shape FX"
+          order={shapeOrder}
+          onReorder={(next) => {
+            engine.state.shapeOrder = next;
+            setShapeOrder(next);
+          }}
+          render={(key, grip) => shapeGroups[key](grip)}
+        />
+        <StageList
+          label="Picture FX"
+          order={pictureOrder}
+          onReorder={(next) => {
+            engine.state.pictureOrder = next;
+            setPictureOrder(next);
+          }}
+          render={(key, grip) => pictureGroups[key](grip)}
+        />
+      </div>
     </aside>
   );
 }
@@ -299,7 +315,7 @@ function writeOpenGroup(key: string | null) {
 
 /**
  * A titled group of settings that opens and closes with a slide. With an
- * engine and a group key, its check box turns the whole group's effect on
+ * engine and a group key, its power button turns the whole group's effect on
  * or off. A group that is off keeps its settings, shown dimmed, so turning
  * it on again restores them. Closed contents stay in the page, so they can
  * slide, but "inert" keeps the keyboard out of them.
@@ -308,7 +324,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, children 
   engine?: Engine;
   group?: GroupKey;
   title: string;
-  /** Called when the group's check box turns the group on. */
+  /** Called when the group's power button turns the group on. */
   onEnable?: () => void;
   /** Set for a group that can be dragged to a new place in its stage. */
   grip?: Grip;
@@ -322,10 +338,23 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, children 
   return (
     <section className={`panel-group ${enabled ? "" : "disabled"} ${open ? "open" : ""}`}>
       <header className="panel-group-header">
-        {grip && (
-          <span className={`panel-group-grip ${grip.dragging ? "dragging" : ""}`} onPointerDown={grip.onPointerDown} title="Drag to change the order">
-            <DotsSixVertical size={14} weight="bold" />
-          </span>
+        {engine && group && (
+          <button
+            type="button"
+            role="switch"
+            className="panel-group-toggle"
+            aria-checked={enabled}
+            aria-label={`${title} on`}
+            title={enabled ? `${title} is on. Click to turn it off.` : `${title} is off. Click to turn it on.`}
+            onClick={() => {
+              const next = !enabled;
+              engine.state.groups[group] = next;
+              setEnabled(next);
+              if (next) onEnable?.();
+            }}
+          >
+            <PowerIcon on={enabled} size={18} />
+          </button>
         )}
         <button className="panel-group-title" onClick={onToggle} aria-expanded={open}>
           <CaretRight size={12} weight="bold" className="panel-group-caret" />
@@ -344,18 +373,10 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, children 
             {locked ? <LockSimple size={13} weight="fill" /> : <LockSimpleOpen size={13} />}
           </button>
         )}
-        {engine && group && (
-          <input
-            type="checkbox"
-            className="panel-group-toggle"
-            checked={enabled}
-            aria-label={`${title} on`}
-            onChange={(event) => {
-              engine.state.groups[group] = event.target.checked;
-              setEnabled(event.target.checked);
-              if (event.target.checked) onEnable?.();
-            }}
-          />
+        {grip && (
+          <span className={`panel-group-grip ${grip.dragging ? "dragging" : ""}`} onPointerDown={grip.onPointerDown} title="Drag to change the order">
+            <DotsSixVertical size={14} weight="bold" />
+          </span>
         )}
       </header>
       <div className="panel-group-body" inert={!open}>

@@ -29,6 +29,7 @@ import { createParams, createPlayState, type GroupKey, type Params, type PlaySta
 import type { ImageSource } from "../engine/renderer";
 import { applyScene, sceneImageToBlob } from "../engine/scene";
 import { loadImageBlob, loadImageFile } from "../lib/images";
+import { ColorFolder } from "./ColorFolder";
 
 /** The kind of file the dialog opens: an image, or a scene (.ksage). */
 export type OpenKind = "image" | "scene";
@@ -1196,7 +1197,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
             disabled={!selected}
             onClick={() => { if (selected) activate(selected); }}
           >
-            <FolderOpen size={17} weight="bold" /> Open
+            <ColorFolder size={19} /> Open
           </button>
         </footer>
       </div>

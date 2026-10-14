@@ -125,35 +125,17 @@ button { border: 0; }
 .menubar-divider { height: 1px; margin: 4px 7px; background: #3a3f4d; }
 
 /* The toolbar under the menu bar. */
+/* The main toolbar: the Designer toolbar's button groups, with 4px padding on a dark strip. */
 .toolbar {
-  height: 40px;
-  flex: 0 0 40px;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 0 8px;
-  border-bottom: 1px solid rgba(57, 61, 77, .85);
-  background: #22252f;
+  gap: 8px;
+  padding: 4px;
+  border-bottom: 1px solid var(--border);
+  background: #1d2029;
 }
-.toolbar-button {
-  height: 28px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 9px;
-  border-radius: 5px;
-  color: #d8dbe2;
-  background: transparent;
-  font-size: 12px;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.toolbar-button:hover { color: #fff; background: rgba(255,255,255,.08); }
-.toolbar-button svg { color: var(--secondary); }
-.toolbar-button.active { color: #fff; background: rgba(75,118,247,.25); }
-.toolbar-button.icon { width: 32px; padding: 0; justify-content: center; }
 .toolbar-spacer { flex: 1; }
-.toolbar-caret { color: var(--muted) !important; margin-left: -2px; }
 
 /* The Patterns drop-down list. */
 .toolbar-menu { position: relative; }
@@ -229,7 +211,34 @@ button { border: 0; }
 .side-panel-header { display: flex; align-items: center; justify-content: space-between; }
 .side-panel-action { display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 7px; border-radius: 5px; color: var(--muted); background: transparent; font-size: 11px; cursor: pointer; }
 .side-panel-action:hover { color: #f1f2f4; background: rgba(255,255,255,.08); }
-.control-panel { flex: 0 0 300px; border-left: 1px solid var(--border); }
+/* The Effects panel does not scroll as a whole: its top stays, and only .panel-scroll under it scrolls. */
+.control-panel { flex: 0 0 300px; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; border-left: 1px solid var(--border); }
+.control-panel > :not(.panel-scroll) { flex: 0 0 auto; }
+/* The Designer header: a bar across the full panel width, a little lighter, with a line under it. */
+.panel-header-bar { margin: 0 -14px; padding: 0 14px; border-bottom: 1px solid var(--border); background: #252832; }
+.panel-header-bar .side-panel-title { padding: 9px 2px 8px; }
+/**
+ * It reaches the panel's edges, so its scroll bar sits at the panel's right
+ * edge. The scroll bar is very thin, and its space is always kept (taken
+ * from the right padding), so the groups keep their width when it appears.
+ */
+.panel-scroll {
+  flex: 1;
+  min-height: 0;
+  margin: 0 -14px;
+  padding: 0 10px 12px 14px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  /* A line across the full panel width divides the fixed top from the scrolling groups. */
+  border-top: 1px solid var(--border);
+  /* The side panel's scroll bar color is passed down; "auto" here lets the thin style below take effect. */
+  scrollbar-color: auto;
+  scrollbar-width: auto;
+}
+.panel-scroll::-webkit-scrollbar { width: 4px; }
+.panel-scroll::-webkit-scrollbar-track { background: transparent; }
+.panel-scroll::-webkit-scrollbar-thumb { border-radius: 2px; background: #474c5e; }
+.panel-scroll::-webkit-scrollbar-thumb:hover { background: #626a7d; }
 .source-panel { flex: 0 0 248px; border-right: 1px solid var(--border); }
 /* The source controls sit in one well, like an open effect group. */
 .source-well { overflow: hidden; border: 1px solid #2b2f3a; border-radius: 7px; background: #1b1e25; }
@@ -249,14 +258,17 @@ button { border: 0; }
 .panel-group:not(.open):hover { border-color: #626a7d; background: #393e4b; }
 /* Open, the header keeps the closed look; only the body below it is darker. */
 .panel-group.open { border-color: #474c5e; background: #30343f; }
-.panel-group-header { display: flex; align-items: center; gap: 6px; padding: 0 8px 0 0; }
-/* The drag grip at the left of a group header; the title then needs no left padding of its own. */
-.panel-group-grip { display: grid; place-items: center; width: 20px; height: 30px; margin-left: 3px; color: #5d6272; cursor: grab; touch-action: none; }
+/* A group header: the power button, the title, the padlock, then the drag grip at the right. */
+.panel-group-header { display: flex; align-items: center; gap: 6px; padding: 0 4px 0 6px; }
+.panel-group-grip { display: grid; place-items: center; width: 20px; height: 30px; color: #5d6272; cursor: grab; touch-action: none; }
 .panel-group-grip:hover { color: #c3c7d0; }
 .panel-group-grip.dragging { color: #f1f2f4; cursor: grabbing; }
-.panel-group-grip + .panel-group-title { padding-left: 0; }
+/* After the power button, the title needs no left padding of its own. */
+.panel-group-toggle + .panel-group-title { padding-left: 0; }
 /* The two stages of groups, each under a small label. */
-.stage-label { margin: 10px 2px 0; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.stage-label { margin: 10px 2px 12px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+/* The labels' bottom margin merges with the first group's 6px top margin, so it must be larger to add space. A stage after another (Picture after Shape) gets more space above it. */
+.stage-list + .stage-label { margin-top: 20px; }
 .stage-item.dragging > .panel-group { border-color: var(--accent); box-shadow: 0 6px 18px rgba(0,0,0,.45); }
 .panel-group.open .panel-group-header { border-bottom: 1px solid #474c5e; }
 .panel-group-title {
@@ -290,7 +302,11 @@ button { border: 0; }
 .panel-group-inner { min-height: 0; overflow: hidden; }
 /* A dark gray line across the full width of the group divides each control from the next. */
 .panel-group-inner > * + * { border-top: 1px solid #343843; }
-.panel-group-toggle { margin: 0; accent-color: var(--accent); cursor: pointer; }
+/* The group's power button: on (green) or off (gray). */
+.panel-group-toggle { display: grid; place-items: center; width: 24px; height: 22px; margin: 0; padding: 0; border-radius: 5px; background: transparent; cursor: pointer; }
+.panel-group-toggle:hover { background: rgba(255,255,255,.08); }
+/* On: a soft green glow that fades out around the icon. */
+.panel-group-toggle[aria-checked="true"] svg { filter: drop-shadow(0 0 2px rgba(61,220,110,.9)) drop-shadow(0 0 5px rgba(61,220,110,.45)); }
 /* The padlock: a locked group keeps its settings when Randomize runs. */
 .panel-group-lock { display: grid; place-items: center; width: 22px; height: 20px; border-radius: 4px; color: #5d6272; background: transparent; cursor: pointer; }
 .panel-group-lock:hover { color: #c3c7d0; background: rgba(255,255,255,.07); }
@@ -299,7 +315,15 @@ button { border: 0; }
 .panel-group.disabled .panel-group-inner { opacity: .45; }
 .panel-row { padding: 11px 14px 10px; }
 /* A control outside any group (the cycle): it lines up with the buttons above it. */
-.panel-root-row > .panel-row { padding: 0 2px 4px; }
+.panel-root-row > .panel-row { padding: 0 2px 10px; }
+.panel-root-row .panel-row-name { color: #a2a7b5; }
+/* Loop length on one line: the name, then the slider, then the value. The row's inner boxes step aside so their parts line up in one grid. */
+.panel-root-row > .panel-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 10px; }
+.panel-root-row .panel-row-top, .panel-root-row .panel-row-control { display: contents; }
+.panel-root-row .panel-row-name { order: 1; }
+.panel-root-row .panel-row-control > .slider { order: 2; margin-top: 0; }
+.panel-root-row .panel-row-value { order: 3; }
+.panel-root-row .panel-drift-space { display: none; }
 /* A row with only a menu: the menu nearly fills the row. */
 .panel-select-row { padding: 6px; }
 /* A layer's blend mode: the name at the left, the menu filling the rest of the row. */
@@ -408,6 +432,9 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .panel-drift.on:hover { border-color: var(--accent-hover); background: var(--accent-hover); }
 .panel-reverse { display: grid; place-items: center; width: 22px; height: 18px; border-radius: 4px; color: var(--muted); background: transparent; cursor: pointer; }
 .panel-reverse:hover { color: #f1f2f4; background: rgba(255,255,255,.08); }
+/* Reversed: a bright purple face (the color of a reversed range's bar) with a white arrow. */
+.panel-reverse.on { color: #ffffff; background: #9b5cf0; }
+.panel-reverse.on:hover { color: #ffffff; background: #ad74ff; }
 .panel-reverse:disabled { visibility: hidden; }
 /* The easing button: a small drawing of the range's curve. Hidden while the range is off. */
 .panel-ease { display: grid; place-items: center; width: 22px; height: 18px; padding: 0; border-radius: 4px; color: var(--muted); background: transparent; cursor: pointer; }
@@ -528,24 +555,50 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .dropdown-button.open .dropdown-caret { transform: rotate(180deg); }
 .toolbar-dropdown.dropdown-list { position: fixed; z-index: 100; min-width: 0; max-height: calc(100vh - 16px); overflow-y: auto; }
 .dropdown-list .toolbar-dropdown-item.active:not(.selected) { color: #fff; background: rgba(75,118,247,.3); }
-.panel-buttons { display: grid; grid-template-columns: 1fr auto auto 1fr; gap: 6px; margin: 0 0 12px; }
-/* Play or Pause and Stop: square icon buttons between the two text buttons. */
-.panel-button.icon { width: 34px; padding: 0; justify-content: center; }
+/**
+ * The Effects toolbar: one strip of cells with no gaps, divided by thin
+ * lines inside it. Each button fills its cell, with no border of its own.
+ * The buttons set the strip's width.
+ */
+/* The toolbar row under the header: full panel width, 4px padding, a line under it; Random and Clear at the left, Stop and Play at the right. */
+.panel-toolbars { display: flex; justify-content: space-between; gap: 8px; margin: 0 -14px 12px; padding: 4px; border-bottom: 1px solid var(--border); }
+.panel-buttons {
+  display: flex;
+  width: fit-content;
+  overflow: hidden;
+  border: 1px solid #474c5e;
+  border-radius: 0;
+  background: #30343f;
+}
 .panel-button {
-  min-height: 30px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 0 8px;
-  border: 1px solid #474c5e;
-  border-radius: 6px;
+  /* More room after the text than before the icon, whose drawing already has some space around it. */
+  padding: 0 12px 0 8px;
+  border: 0;
+  border-radius: 0;
   color: #d8dbe2;
-  background: #30343f;
+  background: transparent;
   font-size: 11px;
   cursor: pointer;
 }
-.panel-button:hover { border-color: #626a7d; color: #f4f4f5; background: #393e4b; }
+/* The inside lines between cells. */
+.panel-button + .panel-button { border-left: 1px solid #474c5e; }
+/* A button with text and no icon: the same space on both sides. */
+.panel-button.text-only { padding: 0 12px; }
+/* Play or Pause and Stop: square icon cells. */
+.panel-button.icon { width: 34px; padding: 0; }
+.panel-button:hover:not(:disabled) { color: #f4f4f5; background: #3b404d; }
+.panel-button:active:not(:disabled) { background: #444a58; }
+/* A toggle button that is on (Performance). */
+.panel-button.active { color: #fff; background: rgba(75,118,247,.3); }
+/* A disabled button dims only its own content; the dividing line belongs to the toolbar and keeps its color. */
+.panel-button:disabled { cursor: default; color: rgba(216,219,226,.4); }
+/* A color icon goes gray as well as dim, so a disabled button does not look lit. */
+.panel-button:disabled > svg { opacity: .45; filter: grayscale(1); }
 .panel-button svg { color: var(--secondary); }
 
 .status-toast {
@@ -754,7 +807,7 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .source-remove:hover { background: rgba(200,50,50,.85); }
 .source-label { margin-top: 5px; overflow: hidden; color: #c3c7d0; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .source-actions { display: flex; gap: 4px; margin-top: 4px; }
-.source-actions button { position: relative; display: grid; place-items: center; width: 34px; height: 30px; border-radius: 5px; color: var(--muted); background: transparent; cursor: pointer; }
+.source-actions button { position: relative; display: grid; place-items: center; width: 38px; height: 34px; border-radius: 5px; color: var(--muted); background: transparent; cursor: pointer; }
 .source-actions button:hover, .source-actions button.active { color: #f1f2f4; background: rgba(255,255,255,.08); }
 /* The per-image pattern list: the toolbar's dropdown look, placed on the page body next to its button. */
 .toolbar-dropdown.source-pattern-menu { position: fixed; z-index: 100; max-height: calc(100vh - 16px); overflow-y: auto; }

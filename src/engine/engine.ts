@@ -65,6 +65,21 @@ export class Engine {
     return REFERENCE_CYCLE / Math.max(1e-3, this.params.cycle.value);
   }
 
+  /**
+   * The seamless spiral's copy count: the whole number nearest the middle
+   * of the twist's range (or the twist itself, with no range). It stays the
+   * same while the twist moves inside its range, so the spiral only
+   * stretches and never jumps. A twist that comes within 0.5 of 0 gets 0:
+   * the spiral then slants the image instead, which can pass through 0.
+   */
+  get spiralCopies() {
+    const twist = this.params.mapArms;
+    const [low, high] = twist.on ? [twist.low ?? twist.min, twist.high ?? twist.max] : [twist.value, twist.value];
+    const nearest = Math.min(Math.abs(low), Math.abs(high));
+    if (low * high <= 0 || nearest < 0.5) return 0;
+    return Math.max(1, Math.round(Math.abs((low + high) / 2)));
+  }
+
   live(key: ParamKey) {
     return liveValue(this.params[key], this.state);
   }
@@ -162,6 +177,8 @@ export class Engine {
       mapPointX: this.live("mapPointX"),
       mapPointY: this.live("mapPointY"),
       mapSteps: this.params.mapSteps.value,
+      mapArms: this.live("mapArms"),
+      spiralCopies: this.spiralCopies,
       mapTwist: this.live("mapTwist") * DEGREES,
       mapAngle: this.live("mapAngle") * DEGREES,
       mapTravel: this.state.mapTravel,

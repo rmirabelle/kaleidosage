@@ -142,7 +142,7 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   state.warpMode = mode(saved.warpMode, [1, 2] as const) ?? state.warpMode;
   /* Scenes from before the warp types had only the noise warp. */
   state.warpType = mode(saved.warpType, [0, 1, 2, 3, 4, 5] as const) ?? 0;
-  state.mapMode = mode(saved.mapMode, [1, 2, 3, 4, 5, 6] as const) ?? state.mapMode;
+  state.mapMode = mode(saved.mapMode, [1, 2, 3, 4, 5, 6, 7] as const) ?? state.mapMode;
   /* Scenes from before the tile modes have no fold mode; they were radial. */
   state.foldMode = mode(saved.foldMode, [0, 1, 2] as const) ?? 0;
   /**

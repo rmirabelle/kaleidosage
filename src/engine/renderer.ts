@@ -6,7 +6,7 @@ export type BlurMask = 0 | 1 | 2 | 3 | 4 | 5;
 /** 0 = no trails, 1 = mix, 2 = lighten. */
 export type TrailMode = 0 | 1 | 2;
 /** 0 = none, 1 = power, 2 = Mobius, 3 = Julia, 4 = log spiral, 5 = sine, 6 = tunnel. */
-export type MapMode = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+export type MapMode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 /** 0 = no warp, 1 = warp the screen (breaks the symmetry), 2 = warp the image (keeps it). */
 export type WarpMode = 0 | 1 | 2;
 /** 0 = radial wedges around one center, 1 = triangle tiles, 2 = hexagon tiles. */
@@ -56,6 +56,9 @@ export interface FrameValues {
   mapPointX: number;
   mapPointY: number;
   mapSteps: number;
+  /** Seamless spiral: the twist (negative turns the other way; 0 gives rings), and the whole number of image copies one turn holds. */
+  mapArms: number;
+  spiralCopies: number;
   mapTwist: number;
   /** The angle (radians) of the axis that power, log spiral and tunnel fold over. */
   mapAngle: number;
@@ -311,6 +314,8 @@ export class KaleidoRenderer {
     gl.uniform1f(k.uniforms.u_mapPower, v.mapPower);
     gl.uniform2f(k.uniforms.u_mapPoint, v.mapPointX, v.mapPointY);
     gl.uniform1i(k.uniforms.u_mapSteps, Math.round(v.mapSteps));
+    gl.uniform1f(k.uniforms.u_mapArms, v.mapArms);
+    gl.uniform1f(k.uniforms.u_spiralCopies, v.spiralCopies);
     gl.uniform1f(k.uniforms.u_mapTwist, v.mapTwist);
     gl.uniform2f(k.uniforms.u_mapAxis, Math.cos(v.mapAngle), Math.sin(v.mapAngle));
     gl.uniform1f(k.uniforms.u_mapTravel, v.mapTravel);

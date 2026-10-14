@@ -16,6 +16,8 @@ interface Props {
   version: string;
   initialUpdateInfo: UpdateInfo | null;
   onClose: () => void;
+  /** Asked before the update downloads, because the install closes the app. False stops the update. */
+  beforeInstall?: () => Promise<boolean>;
 }
 
 type CheckState =
@@ -26,7 +28,7 @@ type CheckState =
   | { kind: "downloading"; info: UpdateInfo; downloaded: number; total: number }
   | { kind: "error"; message: string };
 
-export function AboutDialog({ version, initialUpdateInfo, onClose }: Props) {
+export function AboutDialog({ version, initialUpdateInfo, onClose, beforeInstall }: Props) {
   const [state, setState] = useState<CheckState>(
     initialUpdateInfo ? { kind: "available", info: initialUpdateInfo } : { kind: "idle" }
   );
@@ -66,6 +68,8 @@ export function AboutDialog({ version, initialUpdateInfo, onClose }: Props) {
   const download = async () => {
     if (state.kind !== "available") return;
     const info = state.info;
+    /* The install closes the app, so unsaved changes are saved or given up first. */
+    if (beforeInstall && !(await beforeInstall())) return;
     setState({ kind: "downloading", info, downloaded: 0, total: 0 });
     try {
       await invoke("download_and_run_installer", {
