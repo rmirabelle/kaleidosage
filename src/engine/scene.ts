@@ -4,13 +4,11 @@ import { isShapeStep, type FxStep } from "./renderer";
 export const SCENE_EXTENSION = "ksage";
 /** 2: ranges share one cycle, and a custom range keeps its own seconds. 1: each range had its own rate, and a speed. */
 const SCENE_VERSION = 2;
-const GROUP_KEYS: GroupKey[] = ["warp", "map", "kaleidoscope", "blur", "trails", "branches", "smear", "contours", "relief", "finish"];
+const GROUP_KEYS: GroupKey[] = ["warp", "map", "kaleidoscope", "blur", "trails", "smear", "contours", "relief", "camera", "finish"];
 
-/** The image (or video) inside a scene file: its original file bytes, as base64, and its type ("image/..." or "video/..."). */
-export interface SceneImage {
-  type: string;
-  data: string;
-}
+/** Still images and legacy videos use base64. New videos refer to an embedded archive entry. */
+export type SceneImage = { type: string; data: string; video?: never }
+  | { type: string; video: string; data?: never };
 
 /**
  * The images a scene holds: the first one always, the second one when the
@@ -41,7 +39,7 @@ export function serializeScene(params: Params, state: PlayState, { image, image2
     const { value, low, high, on, ease, custom, seconds, startTime } = params[key];
     savedParams[key] = { value, low, high, on, ease, custom, seconds, startTime };
   }
-  const { groups, blendMode, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, videoCrossfade, time, clock, warpTime, mapTravel, fxOrder, layerBlend } = state;
+  const { groups, blendMode, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, videoCrossfade, time, clock, warpTime, mapTravel, cameraX, cameraY, fxOrder, layerBlend } = state;
   /**
    * "effects" is the effect list. Earlier versions of the app read two full
    * orders of their own, so they get the list's order inside each kind,
@@ -49,13 +47,12 @@ export function serializeScene(params: Params, state: PlayState, { image, image2
    */
   const fullOrder = [...fxOrder, ...defaultFxOrder().filter((step) => !fxOrder.includes(step))];
   const shapeStack = fullOrder.filter((step) => isShapeStep(step));
-  /* Those versions refuse an order with a step they do not know, so the steps added since are left out. */
-  const pictureOrder = fullOrder.filter((step) => !isShapeStep(step) && step !== "branches");
+  const pictureOrder = fullOrder.filter((step) => !isShapeStep(step));
   const scene: SceneFile = {
     app: "KaleidoSage",
     version: SCENE_VERSION,
     params: savedParams,
-    state: { groups: { ...groups }, blendMode, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, videoCrossfade, time, clock, warpTime, mapTravel, effects: [...fxOrder], shapeStack, pictureOrder, layerBlend: { ...layerBlend } },
+    state: { groups: { ...groups }, blendMode, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, videoCrossfade, time, clock, warpTime, mapTravel, cameraX, cameraY, effects: [...fxOrder], shapeStack, pictureOrder, layerBlend: { ...layerBlend } },
     image,
     ...(image2 ? { image2 } : {})
   };
@@ -80,10 +77,10 @@ function oldRateSeconds(param: Param, rate: number) {
 
 /** A saved image, if it has an image type and data. */
 function sceneImage(value: unknown): SceneImage | undefined {
-  if (!isRecord(value) || typeof value.type !== "string" || !/^(image|video)\//.test(value.type) || typeof value.data !== "string" || !value.data) {
-    return undefined;
-  }
-  return { type: value.type, data: value.data };
+  if (!isRecord(value) || typeof value.type !== "string" || !/^(image|video)\//.test(value.type)) return undefined;
+  if (typeof value.data === "string" && value.data) return { type: value.type, data: value.data };
+  if (value.type.startsWith("video/") && typeof value.video === "string" && value.video) return { type: value.type, video: value.video };
+  return undefined;
 }
 
 /**
@@ -200,7 +197,8 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   const shapeOrder = order(saved.shapeStack, defaultShapeOrder())
     ?? (earlier && [...earlier].reverse())
     ?? (saved.warpMode === 2 ? ["warp", "kaleidoscope", "map"] : defaultShapeOrder());
-  const effects = saved.effects;
+  /* A step the app no longer has (such as the old branches effect) is dropped from the list. */
+  const effects = Array.isArray(saved.effects) ? saved.effects.filter((step) => defaultFxOrder().includes(step)) : undefined;
   if (Array.isArray(effects) && effects.every((step) => defaultFxOrder().includes(step)) && new Set(effects).size === effects.length) {
     state.fxOrder = [...effects] as FxStep[];
   } else {
@@ -222,12 +220,17 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   if (isNumber(saved.time)) state.time = Math.max(0, saved.time);
   if (isNumber(saved.warpTime)) state.warpTime = Math.max(0, saved.warpTime);
   if (isNumber(saved.mapTravel)) state.mapTravel = saved.mapTravel;
+  if (isNumber(saved.cameraX)) state.cameraX = saved.cameraX;
+  if (isNumber(saved.cameraY)) state.cameraY = saved.cameraY;
   if (typeof saved.overlayColor === "string" && /^#[0-9a-f]{6}$/i.test(saved.overlayColor)) state.overlayColor = saved.overlayColor;
   if (typeof saved.trailColor === "string" && /^#[0-9a-f]{6}$/i.test(saved.trailColor)) state.trailColor = saved.trailColor;
+  if (typeof saved.skyColor === "string" && /^#[0-9a-f]{6}$/i.test(saved.skyColor)) state.skyColor = saved.skyColor;
   if (typeof saved.videoCrossfade === "boolean") state.videoCrossfade = saved.videoCrossfade;
   state.smearShape = mode(saved.smearShape, [0, 1, 2, 3, 4] as const) ?? state.smearShape;
   if (CONTOUR_TONES.includes(saved.contourTone as ContourTone)) state.contourTone = saved.contourTone as ContourTone;
   state.contourBlend = mode(saved.contourBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? state.contourBlend;
+  state.cameraBlend = mode(saved.cameraBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? state.cameraBlend;
+  state.cameraRepeat = mode(saved.cameraRepeat, [0, 1, 2] as const) ?? state.cameraRepeat;
 
   return image2 ? { image, image2 } : { image };
 }
@@ -243,8 +246,8 @@ export function sceneFingerprint(params: Params, state: PlayState, imageIds: [nu
     const { value, low, high, on, ease, custom, seconds } = params[key];
     return [value, low, high, on, ease ?? null, custom ?? false, custom ? seconds : null];
   });
-  const { groups, blendMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, videoCrossfade, fxOrder, layerBlend } = state;
-  return JSON.stringify([settings, groups, blendMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, videoCrossfade, fxOrder, layerBlend, imageIds]);
+  const { groups, blendMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, videoCrossfade, fxOrder, layerBlend } = state;
+  return JSON.stringify([settings, groups, blendMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, videoCrossfade, fxOrder, layerBlend, imageIds]);
 }
 
 /** Uint8Array.fromBase64 and toBase64, in newer browsers; much faster for a large video. */
@@ -265,6 +268,7 @@ export async function blobToSceneImage(blob: Blob): Promise<SceneImage> {
 }
 
 export function sceneImageToBlob(image: SceneImage): Blob {
+  if (image.data === undefined) throw new Error("Embedded videos must be opened as streams.");
   const fast = (Uint8Array as unknown as Base64Constructor).fromBase64;
   if (fast) return new Blob([fast(image.data) as Uint8Array<ArrayBuffer>], { type: image.type });
   const binary = atob(image.data);

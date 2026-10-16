@@ -6,7 +6,7 @@ const LIMIT = 200;
 
 type SavedParam = Pick<Param, "value" | "low" | "high" | "on" | "ease" | "custom" | "seconds" | "startTime">;
 type SavedState = Pick<PlayState, "groups" | "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode"
-  | "overlayColor" | "trailColor" | "smearShape" | "contourTone" | "contourBlend" | "videoCrossfade" | "fxOrder" | "layerBlend">;
+  | "overlayColor" | "trailColor" | "smearShape" | "contourTone" | "contourBlend" | "cameraBlend" | "skyColor" | "cameraRepeat" | "videoCrossfade" | "fxOrder" | "layerBlend">;
 
 /** The settings at one step, and their fingerprint, to tell whether two steps differ. */
 interface Snapshot {
@@ -37,6 +37,9 @@ function take(params: Params, state: PlayState): Snapshot {
       smearShape: state.smearShape,
       contourTone: state.contourTone,
       contourBlend: state.contourBlend,
+      cameraBlend: state.cameraBlend,
+      skyColor: state.skyColor,
+      cameraRepeat: state.cameraRepeat,
       videoCrossfade: state.videoCrossfade,
       fxOrder: [...state.fxOrder],
       layerBlend: { ...state.layerBlend }

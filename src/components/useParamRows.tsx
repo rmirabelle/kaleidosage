@@ -152,6 +152,7 @@ function ParamRow({ engine, paramKey, readout, marker, onHold }: {
       <div className="panel-row-control">
         {paramKey === "overlayOpacity" && <ColorSwatch engine={engine} stateKey="overlayColor" label="Overlay color" />}
         {paramKey === "trailTint" && <ColorSwatch engine={engine} stateKey="trailColor" label="Trail color" />}
+        {paramKey === "cameraSky" && <ColorSwatch engine={engine} stateKey="skyColor" label="Sky color" />}
         {paramKey === "contourHue" && <ToneChips tone={tone} onChange={pickTone} />}
         {toned ? (
           /* A click on the dimmed slider goes back to the hue. */
@@ -274,8 +275,8 @@ function ToneChips({ tone, onChange }: { tone: ContourTone; onChange: (tone: Con
   );
 }
 
-/** A color of the play state (the overlay color or the trail color): a swatch that opens the color picker. */
-function ColorSwatch({ engine, stateKey, label }: { engine: Engine; stateKey: "overlayColor" | "trailColor"; label: string }) {
+/** A color of the play state (the overlay, trail or sky color): a swatch that opens the color picker. */
+function ColorSwatch({ engine, stateKey, label }: { engine: Engine; stateKey: "overlayColor" | "trailColor" | "skyColor"; label: string }) {
   const [color, setColor] = useState(engine.state[stateKey]);
   return (
     <ColorPicker

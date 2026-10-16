@@ -13,8 +13,8 @@ pub(crate) fn is_image_path(path: &Path) -> bool {
         .is_some_and(|extension| IMAGE_EXTENSIONS.contains(&extension.to_ascii_lowercase().as_str()))
 }
 
-/// Experimental: videos the webview can play, used as an image source.
-const VIDEO_EXTENSIONS: [&str; 3] = ["mp4", "m4v", "webm"];
+/// Accepted video containers; decoding support is determined by the webview.
+const VIDEO_EXTENSIONS: [&str; 5] = ["mp4", "m4v", "webm", "mov", "avi"];
 
 pub(crate) fn is_video_path(path: &Path) -> bool {
     path.extension()
@@ -33,7 +33,7 @@ pub(crate) fn is_scene_path(path: &Path) -> bool {
  * any characters fits in a request header. None for a broken escape or for
  * text that is not UTF-8.
  */
-fn percent_decode(text: &str) -> Option<String> {
+pub(crate) fn percent_decode(text: &str) -> Option<String> {
     let bytes = text.as_bytes();
     let mut decoded = Vec::with_capacity(bytes.len());
     let mut index = 0;
@@ -65,19 +65,6 @@ pub async fn read_image_file(path: String) -> Result<Response, String> {
     let file = Path::new(&path);
     if !is_image_path(file) {
         return Err(format!("{path} is not a supported image"));
-    }
-    tokio::fs::read(file)
-        .await
-        .map(Response::new)
-        .map_err(|error| format!("Could not read {path}: {error}"))
-}
-
-/** Reads a video file the user picked, and returns its raw bytes to the webview. */
-#[tauri::command]
-pub async fn read_video_file(path: String) -> Result<Response, String> {
-    let file = Path::new(&path);
-    if !is_video_path(file) {
-        return Err(format!("{path} is not a supported video"));
     }
     tokio::fs::read(file)
         .await
@@ -119,38 +106,6 @@ pub async fn default_export_folder(app: AppHandle) -> Result<String, String> {
         .await
         .map_err(|error| format!("Could not create {}: {error}", folder.display()))?;
     Ok(folder.to_string_lossy().into_owned())
-}
-
-/** Writes a scene (.ksage, JSON text) to the path the user picked. The text is the raw request body, and the "path" header holds the path, percent-encoded. */
-#[tauri::command]
-pub async fn save_scene(request: Request<'_>) -> Result<(), String> {
-    let InvokeBody::Raw(bytes) = request.body() else {
-        return Err("The scene data is missing".into());
-    };
-    let path = request
-        .headers()
-        .get("path")
-        .and_then(|value| value.to_str().ok())
-        .and_then(percent_decode)
-        .ok_or_else(|| "The scene path is invalid".to_string())?;
-    if !is_scene_path(Path::new(&path)) {
-        return Err(format!("{path} is not a .ksage file"));
-    }
-    tokio::fs::write(&path, bytes)
-        .await
-        .map_err(|error| format!("Could not save {path}: {error}"))
-}
-
-/** Reads a scene (.ksage, JSON text) the user picked, as raw bytes: a scene with a video can be large. */
-#[tauri::command]
-pub async fn read_scene(path: String) -> Result<Response, String> {
-    if !is_scene_path(Path::new(&path)) {
-        return Err(format!("{path} is not a .ksage file"));
-    }
-    tokio::fs::read(&path)
-        .await
-        .map(Response::new)
-        .map_err(|error| format!("Could not read {path}: {error}"))
 }
 
 /** Opens the folder of an existing file in File Explorer, with the file selected. */
@@ -210,7 +165,11 @@ mod tests {
         assert!(!is_image_path(Path::new("no-extension")));
         assert!(is_video_path(Path::new(r"C:\Videos\Clip.MP4")));
         assert!(is_video_path(Path::new("clip.webm")));
-        assert!(!is_video_path(Path::new("clip.mov")));
+        assert!(is_video_path(Path::new("clip.mov")));
+        assert!(is_video_path(Path::new("clip.MOV")));
+        assert!(is_video_path(Path::new("clip.avi")));
+        assert!(is_video_path(Path::new("clip.AVI")));
+        assert!(!is_video_path(Path::new("clip.mkv")));
     }
 
     #[test]

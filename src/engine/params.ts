@@ -1,4 +1,4 @@
-import type { BlendMode, BlurMask, FoldMode, FxStep, LayerBlend, MapMode, PictureStep, ShapeStep, SmearShape, TrailMode, WarpMode, WarpType } from "./renderer";
+import type { BlendMode, BlurMask, CameraRepeat, FoldMode, FxStep, LayerBlend, MapMode, PictureStep, ShapeStep, SmearShape, TrailMode, WarpMode, WarpType } from "./renderer";
 
 export const PARAM_KEYS = [
   "cycle",
@@ -9,10 +9,10 @@ export const PARAM_KEYS = [
   "segments", "tileSize", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl",
   "blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel",
   "trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint",
-  "branchOpacity", "branchCount", "branchSize", "branchSpread", "branchTurn", "branchJoint", "branchTrunk", "branchWidth", "branchTaper", "branchHide", "branchBackground", "branchFade", "branchHue", "branchBaseX", "branchBaseY",
   "smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade",
   "contourHue", "contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady",
   "reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine",
+  "cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth",
   "sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel"
 ] as const;
 export type ParamKey = typeof PARAM_KEYS[number];
@@ -152,7 +152,7 @@ export type Params = Record<ParamKey, Param>;
 export type ContourTone = "hue" | "black" | "white";
 export const CONTOUR_TONES: readonly ContourTone[] = ["hue", "black", "white"];
 
-export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "branches" | "smear" | "contours" | "relief" | "finish";
+export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "camera" | "finish";
 
 export interface PlayState {
   /** Which groups are on. A group that is off has no effect, but keeps its settings. */
@@ -168,6 +168,9 @@ export interface PlayState {
   warpTime: number;
   /** How far the view has flown into the tunnel; it grows with time × tunnel speed. */
   mapTravel: number;
+  /** Where the camera's aim point is on the land (screen heights); it moves with time × camera speed, the way the camera looks. */
+  cameraX: number;
+  cameraY: number;
   mapMode: MapMode;
   /** Radial wedges, or triangle or hexagon tiles. */
   foldMode: FoldMode;
@@ -197,6 +200,11 @@ export interface PlayState {
   /** The contour lines' color: the Color slider's hue, or black or white. And how the lines combine with the picture under them. */
   contourTone: ContourTone;
   contourBlend: LayerBlend;
+  /** How the camera's raised land combines with the flat floor under it (see CAMERA_SHADER), and the color of its sky and fog, as "#rrggbb". */
+  cameraBlend: LayerBlend;
+  skyColor: string;
+  /** How the camera's land goes on past the picture: mirrored, repeated as it is, or not at all. */
+  cameraRepeat: CameraRepeat;
   /**
    * A source video crossfades its end into its start (see video.ts). Off,
    * the video starts again at the start of each loop, with a jump.
@@ -310,35 +318,6 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * each 1/60 s, so the trails take that color and get darker as they age.
    */
   trailTint: { label: "Trail tint", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.6, on: false },
-  /**
-   * Branches (a fractal tree made of the picture, see BRANCH_SHADER): how
-   * much the tree shows (0 = no effect), how many branches, their size as a
-   * part of the whole tree, the angle their directions spread over, the turn
-   * of all of them at each joint, where on the trunk they grow from (1 = its
-   * top), the trunk's height (screen heights) and width (a part of its
-   * height), how much the trunk narrows to its branches' width at its top
-   * (1 = all the way, so each branch starts as wide as its trunk ends), how many levels of trunks from the root are hidden (the tree
-   * keeps their branches), how much of the picture shows behind the tree,
-   * how much each level fades, the hue turn of each level, and the base
-   * point (the bottom of the trunk). The start values are a tree that
-   * grows well: a tall, thin, fully tapered trunk with two branches whose
-   * size, spread, turn and branch point move, so it curls and grows.
-   */
-  branchOpacity: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.7, high: 1, on: false },
-  branchCount: { label: "Branches", min: 1, max: 4, step: 1, value: 2 },
-  branchSize: { label: "Branch size", min: 0.2, max: 0.9, step: 0.01, value: 0.78, drift: "wave", low: 0.4, high: 0.8, on: true },
-  branchSpread: { label: "Spread", min: 0, max: 180, step: 1, value: 91, unit: "°", drift: "wave", low: 0, high: 130, on: true },
-  branchTurn: { label: "Turn", min: -90, max: 90, step: 1, value: 0, unit: "°", drift: "wave", low: -90, high: -50, on: true },
-  branchJoint: { label: "Branch point", min: 0.2, max: 1.2, step: 0.01, value: 0.65, drift: "wave", low: 0.2, high: 1.2, on: true },
-  branchHide: { label: "Hidden levels", min: 0, max: 4, step: 1, value: 1 },
-  branchTrunk: { label: "Trunk height", min: 0.05, max: 0.8, step: 0.01, value: 0.8, drift: "wave", low: 0.24, high: 0.32, on: false },
-  branchTaper: { label: "Taper", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0.6, high: 1, on: false },
-  branchWidth: { label: "Trunk width", min: 0.05, max: 1.5, step: 0.01, value: 0.05, drift: "wave", low: 0.15, high: 0.35, on: false },
-  branchBackground: { label: "Background", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.4, on: false },
-  branchFade: { label: "Fade per level", min: 0, max: 0.5, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.15, on: false },
-  branchHue: { label: "Hue per level", min: -60, max: 60, step: 1, value: -60, unit: "°", drift: "wave", low: -15, high: 15, on: false },
-  branchBaseX: { label: "Base X", min: -1, max: 1, step: 0.01, value: -0.3, drift: "wave", low: -0.2, high: 0.2, on: false },
-  branchBaseY: { label: "Base Y", min: -1, max: 1, step: 0.01, value: -0.5, drift: "wave", low: -0.5, high: -0.35, on: false },
   trailHue: { label: "Trail hue", min: -10, max: 10, step: 0.1, value: 0, unit: "°", drift: "wave", low: -3, high: 3, on: false },
   /**
    * Time smear: each pixel shows the picture from up to "Delay" seconds
@@ -378,6 +357,30 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   reliefSize: { label: "Relief size", min: 0.5, max: 6, step: 0.1, value: 1.5, unit: "px", drift: "wave", low: 1, high: 3, on: false },
   lightAngle: { label: "Light angle", min: 0, max: 360, step: 1, value: 135, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   shine: { label: "Shine", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.1, high: 0.5, on: false },
+  /**
+   * Camera (see CAMERA_SHADER): how much the raised land shows over the
+   * same camera's view of the flat picture, the land's height at white (below 0, dark areas rise), the
+   * camera's tilt from straight down and its turn around the center, its
+   * speed over the land (screen heights per second, the way it looks;
+   * below 0 flies backward), its distance (screen heights) and lens angle, the sun's direction and
+   * height, the shadows' darkness, the fog, how much the sky and fog take
+   * state.skyColor (0 = the picture's mean color), the shine of the land,
+   * and how blurred the height is.
+   */
+  cameraAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
+  cameraHeight: { label: "Height", min: -1, max: 1, step: 0.01, value: 0.25, drift: "wave", low: 0.1, high: 0.4, on: false },
+  cameraTilt: { label: "Tilt", min: 0, max: 85, step: 1, value: 50, unit: "°", drift: "wave", low: 20, high: 70, on: false },
+  cameraTurn: { label: "Turn", min: 0, max: 360, step: 1, value: 270, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  cameraSpeed: { label: "Speed", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: 0.1, high: 0.5, on: false },
+  cameraDistance: { label: "Distance", min: 0.3, max: 5, step: 0.01, value: 1.6, drift: "wave", low: 1, high: 3, on: false },
+  cameraLens: { label: "Lens", min: 20, max: 120, step: 1, value: 60, unit: "°", drift: "wave", low: 40, high: 90, on: false },
+  cameraLightTurn: { label: "Sun angle", min: 0, max: 360, step: 1, value: 135, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  cameraLightHeight: { label: "Sun height", min: 5, max: 90, step: 1, value: 40, unit: "°", drift: "wave", low: 15, high: 60, on: false },
+  cameraShadow: { label: "Shadows", min: 0, max: 1, step: 0.01, value: 0.7, drift: "wave", low: 0.3, high: 1, on: false },
+  cameraFog: { label: "Fog", min: 0, max: 1, step: 0.01, value: 0.2, drift: "wave", low: 0, high: 0.5, on: false },
+  cameraSky: { label: "Sky", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.2, high: 0.8, on: false },
+  cameraShine: { label: "Shine", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.1, high: 0.5, on: false },
+  cameraSmooth: { label: "Smooth", min: 0, max: 6, step: 0.1, value: 2.5, drift: "wave", low: 1, high: 4, on: false },
   sharpen: { label: "Sharpen", min: 0, max: 3, step: 0.01, value: 0, drift: "wave", low: 0.2, high: 1, on: false },
   sharpenRadius: { label: "Sharpen radius", min: 0.5, max: 4, step: 0.1, value: 1, unit: "px", drift: "wave", low: 0.8, high: 2.5, on: false },
   /** Color overlay: the opacity of state.overlayColor, blended over the whole picture. */
@@ -394,7 +397,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
  * handles snap to it, and Ctrl + drag on a range handle mirrors around it.
  */
 export const NO_EFFECT: Partial<Record<ParamKey, number>> = {
-  warpCenterX: 0, warpCenterY: 0,
+  warpCenterX: 0, warpCenterY: 0, cameraHeight: 0, cameraSpeed: 0,
   mapScale: 1, mapPower: 1, mapArms: 0, mapPointX: 0, mapPointY: 0, mapTwist: 0, mapSpeed: 0, tunnelTwist: 0,
   centerX: 0, centerY: 0, zoom: 1, panX: 0, panY: 0, twirl: 0,
   blurMaskX: 0, blurMaskY: 0,
@@ -411,9 +414,9 @@ export function createParams(): Params {
   return params;
 }
 
-/** The start-up orders: the fold, then the map bends the folded picture, then the warp; and blur, trails, branches, time smear, contours, relief, final effects. */
+/** The start-up orders: the fold, then the map bends the folded picture, then the warp; and blur, trails, time smear, contours, relief, camera, final effects. */
 export const defaultShapeOrder = (): ShapeStep[] => ["kaleidoscope", "map", "warp"];
-export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "branches", "smear", "contours", "relief", "finish"];
+export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "camera", "finish"];
 export const defaultFxOrder = (): FxStep[] => [...defaultShapeOrder(), ...defaultPictureOrder()];
 
 /**
@@ -450,7 +453,6 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
     case "warp": return used("warpAmount");
     case "blur": return used("blurAmount");
     case "trails": return used("trailAmount");
-    case "branches": return used("branchOpacity");
     case "smear": return used("smearAmount");
     case "contours": return used("contourOpacity");
     case "relief": return used("reliefAmount");
@@ -462,9 +464,9 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
 export function createPlayState(): PlayState {
   return {
     /* No effect is in the list at start-up, so every effect group is off. */
-    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, branches: false, smear: false, contours: false, relief: false, finish: false },
-    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, branches: false, smear: false, contours: false, relief: false, finish: false },
-    blendMode: 0, warpMode: 1, warpType: 0, warpTime: 0, mapTravel: 0, mapMode: 1, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, camera: false, finish: false },
+    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, camera: false, finish: false },
+    blendMode: 0, warpMode: 1, warpType: 0, warpTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 1, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -635,7 +637,8 @@ export function randomizeParams(params: Params, state?: PlayState) {
     warpType: state.warpType,
     mapMode: state.mapMode,
     foldMode: state.foldMode,
-    overlayColor: state.overlayColor
+    overlayColor: state.overlayColor,
+    skyColor: state.skyColor
   };
   randomizeAll(params, state);
   for (const [key, saved] of kept) Object.assign(params[key], saved);
@@ -648,6 +651,7 @@ export function randomizeParams(params: Params, state?: PlayState) {
     if (state.locks.map) state.mapMode = keptState.mapMode;
     if (state.locks.kaleidoscope) state.foldMode = keptState.foldMode;
     if (state.locks.finish) state.overlayColor = keptState.overlayColor;
+    if (state.locks.camera) state.skyColor = keptState.skyColor;
   }
 }
 
@@ -683,6 +687,11 @@ export function resetEffects(params: Params, state: PlayState) {
     state.contourTone = fresh.contourTone;
     state.contourBlend = fresh.contourBlend;
   }
+  if (!state.locks.camera) {
+    state.cameraBlend = fresh.cameraBlend;
+    state.skyColor = fresh.skyColor;
+    state.cameraRepeat = fresh.cameraRepeat;
+  }
   if (!state.locks.finish) state.overlayColor = fresh.overlayColor;
   for (const step of ["warp", "map", "kaleidoscope"] as const) if (!state.locks[step]) state.layerBlend[step] = 0;
   /* The unlocked effects leave the list (their groups are off now); the locked ones stay, in their order. */
@@ -700,21 +709,22 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   kaleidoscope: ["foldOpacity", "segments", "tileSize", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl"],
   blur: ["blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel"],
   trails: ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"],
-  branches: ["branchOpacity", "branchCount", "branchSize", "branchSpread", "branchTurn", "branchJoint", "branchTrunk", "branchWidth", "branchTaper", "branchHide", "branchBackground", "branchFade", "branchHue", "branchBaseX", "branchBaseY"],
   smear: ["smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade"],
   contours: ["contourHue", "contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady"],
   relief: ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"],
+  camera: ["cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth"],
   finish: ["sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel"]
 };
 
 /** The chance that Randomize puts each effect in the list. Blur looks the least good, so Randomize leaves it out. */
 const EFFECT_CHANCE: Record<FxStep, number> = {
-  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, branches: 0.2, smear: 0.2, contours: 0.25, relief: 0.4, finish: 0.4
+  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.25, relief: 0.4, camera: 0.3, finish: 0.4
 };
 
 function randomizeAll(params: Params, state?: PlayState) {
   if (state) {
     state.overlayColor = hslToHex(rand(0, 360), rand(0.5, 1), rand(0.35, 0.6));
+    state.skyColor = hslToHex(Math.random() < 0.6 ? rand(190, 250) : rand(0, 360), rand(0.3, 0.8), rand(0.45, 0.8));
     state.mapMode = (1 + Math.floor(Math.random() * 7)) as MapMode;
     /* Noise is the most common warp; the other kinds share the rest. */
     state.warpType = (Math.random() < 0.4 ? 0 : 1 + Math.floor(Math.random() * 5)) as WarpType;
@@ -806,21 +816,6 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("trailFlow", Math.random() < 0.5 ? 0 : (Math.random() < 0.5 ? -1 : 1) * rand(2, 10), rand(1, 4));
   set("trailSwirl", rand(0, 1), rand(0, 0.3));
   set("trailTint", Math.random() < 0.6 ? 0 : rand(0.1, 0.5), rand(0, 0.15));
-  set("branchOpacity", rand(0.8, 1), rand(0, 0.1));
-  set("branchCount", Math.random() < 0.6 ? 2 : Math.round(rand(1, 4)));
-  set("branchSize", rand(0.6, 0.78), rand(0.01, 0.05));
-  set("branchSpread", rand(30, 120), rand(5, 25));
-  set("branchTurn", Math.random() < 0.5 ? 0 : rand(-40, 40), rand(0, 15));
-  set("branchJoint", Math.random() < 0.6 ? 1 : rand(0.6, 1), rand(0, 0.1));
-  set("branchTrunk", rand(0.2, 0.32), rand(0.01, 0.04));
-  set("branchWidth", rand(0.12, 0.5), rand(0, 0.08));
-  set("branchTaper", Math.random() < 0.7 ? 1 : rand(0.4, 1), rand(0, 0.1));
-  set("branchHide", Math.random() < 0.6 ? 1 : Math.round(rand(0, 2)));
-  set("branchBackground", Math.random() < 0.6 ? 0 : rand(0.1, 0.5), rand(0, 0.1));
-  set("branchFade", Math.random() < 0.6 ? 0 : rand(0.03, 0.2), rand(0, 0.05));
-  set("branchHue", Math.random() < 0.5 ? 0 : rand(-20, 20), rand(0, 8));
-  set("branchBaseX", rand(-0.1, 0.1), rand(0, 0.1));
-  set("branchBaseY", rand(-0.5, -0.3), rand(0, 0.05));
   if (state) state.trailColor = hslToHex(rand(0, 360), rand(0.6, 1), rand(0.3, 0.55));
   set("tileSize", rand(0.25, 0.9), rand(0.05, 0.2));
   set("trailHue", Math.random() < 0.3 ? rand(-3, 3) : 0, rand(0.5, 3));
@@ -839,19 +834,35 @@ function randomizeAll(params: Params, state?: PlayState) {
     const tone = Math.random();
     state.contourTone = tone < 0.6 ? "hue" : tone < 0.8 ? "white" : "black";
     state.contourBlend = (Math.random() < 0.6 ? 0 : Math.floor(Math.random() * 8)) as LayerBlend;
+    state.cameraBlend = (Math.random() < 0.6 ? 0 : Math.floor(Math.random() * 8)) as LayerBlend;
+    state.cameraRepeat = (Math.random() < 0.7 ? 0 : Math.random() < 0.7 ? 1 : 2) as CameraRepeat;
   }
   set("reliefAmount", rand(0.3, 1), rand(0.1, 0.3));
   set("reliefDepth", rand(3, 12), rand(0, 3));
   set("reliefSize", rand(1, 3), rand(0, 0.8));
   setAngle("lightAngle", 0.5);
   set("shine", Math.random() < 0.5 ? 0 : rand(0.1, 0.6), rand(0, 0.2));
+  set("cameraAmount", 1, rand(0, 0.1));
+  set("cameraHeight", (Math.random() < 0.8 ? 1 : -1) * rand(0.1, 0.5), rand(0.02, 0.15));
+  set("cameraTilt", rand(20, 75), rand(5, 20));
+  setAngle("cameraTurn", 0.6);
+  set("cameraSpeed", Math.random() < 0.5 ? 0 : (Math.random() < 0.8 ? 1 : -1) * rand(0.1, 0.6), rand(0, 0.3));
+  set("cameraDistance", rand(0.8, 3), rand(0.1, 0.8));
+  set("cameraLens", rand(40, 100), rand(0, 20));
+  setAngle("cameraLightTurn", 0.3);
+  set("cameraLightHeight", rand(15, 70), rand(0, 20));
+  set("cameraShadow", rand(0.3, 1), rand(0, 0.2));
+  set("cameraFog", Math.random() < 0.5 ? rand(0, 0.1) : rand(0.1, 0.6), rand(0, 0.15));
+  set("cameraSky", rand(0, 1), rand(0, 0.2));
+  set("cameraShine", Math.random() < 0.5 ? 0 : rand(0.1, 0.6), rand(0, 0.2));
+  set("cameraSmooth", rand(1.5, 4), rand(0, 1));
   set("sharpen", rand(0, 1.2), rand(0, 0.3));
   set("sharpenRadius", rand(0.7, 2.5), rand(0, 0.8));
   set("exposure", Math.random() < 0.6 ? 0 : rand(-1, 0.3), rand(0, 0.5));
   set("overlayOpacity", Math.random() < 0.75 ? 0 : rand(0.1, 0.4), rand(0, 0.15));
   set("blackLevel", Math.random() < 0.6 ? 0 : rand(0.02, 0.25), rand(0, 0.1));
   /** Every range starts off; Randomize turns on the ones that move the picture most. */
-  const moving: ParamKey[] = ["warpAmount", "warpMarble", "mapPower", "mapPointX", "mapPointY", "mapTwist", "mapSpeed", "lightAngle",
+  const moving: ParamKey[] = ["warpAmount", "warpMarble", "mapPower", "mapPointX", "mapPointY", "mapTwist", "mapSpeed", "lightAngle", "cameraTurn",
     "centerX", "centerY", "rotation", "zoom", "panX", "panY"];
   for (const key of PARAM_KEYS) {
     const userOwned = GROUP_PARAMS.source.includes(key) || GROUP_PARAMS.animation.includes(key) || OPACITY_KEYS.includes(key);

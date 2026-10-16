@@ -27,10 +27,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Engine } from "../engine/engine";
 import { createParams, createPlayState, type GroupKey, type Params, type PlayState } from "../engine/params";
 import { sourceSize, type ImageSource } from "../engine/renderer";
-import { applyScene, sceneImageToBlob } from "../engine/scene";
+import { applyScene } from "../engine/scene";
 import { loadImageFile } from "../lib/images";
-import { isVideoPath, videoFirstFrame } from "../lib/videos";
-import { loadSceneSource, readScene } from "../lib/scenes";
+import { isVideoPath, loadVideoFile } from "../lib/videos";
+import { loadSceneMedia, readScene } from "../lib/scenes";
 import { ColorFolder } from "./ColorFolder";
 
 /** The kind of file the dialog opens: an image, or a scene (.ksage). */
@@ -108,7 +108,14 @@ interface ScenePreviewData {
   effects: string[];
 }
 
-type PreviewData = ImagePreviewData | ScenePreviewData;
+interface VideoPreviewData {
+  kind: "video";
+  url: string;
+  width: number;
+  height: number;
+}
+
+type PreviewData = ImagePreviewData | ScenePreviewData | VideoPreviewData;
 
 type PreviewState =
   | { status: "idle" }
@@ -132,21 +139,21 @@ const EFFECT_GROUPS: [GroupKey, string][] = [
   ["kaleidoscope", "Kaleidoscope"],
   ["blur", "Blur"],
   ["trails", "Trails"],
-  ["branches", "Branches"],
   ["smear", "Time smear"],
   ["contours", "Contours"],
   ["relief", "Relief"],
+  ["camera", "Camera"],
   ["finish", "Final effects"]
 ];
 
 const IMAGE_TYPES: Record<string, string> = {
   png: "PNG image", jpg: "JPEG image", jpeg: "JPEG image", webp: "WebP image",
   gif: "GIF image", bmp: "BMP image", avif: "AVIF image",
-  mp4: "MP4 video", m4v: "MP4 video", webm: "WebM video"
+  mp4: "MP4 video", m4v: "MP4 video", webm: "WebM video", mov: "MOV video", avi: "AVI video"
 };
 
 const TEXT: Record<OpenKind, { hint: string; empty: string; startPlace: PlaceKind }> = {
-  image: { hint: "Choose a PNG, JPEG, WebP, GIF, BMP or AVIF image, or an MP4 or WebM video.", empty: "This folder has no images.", startPlace: "pictures" },
+  image: { hint: "Choose a PNG, JPEG, WebP, GIF, BMP or AVIF image, or an MP4, M4V, WebM, MOV or AVI video.", empty: "This folder has no images.", startPlace: "pictures" },
   scene: { hint: "Choose a Kaleido Sage scene (.ksage).", empty: "This folder has no scenes.", startPlace: "documents" }
 };
 
@@ -304,10 +311,14 @@ function shrink(image: HTMLImageElement): HTMLCanvasElement {
   return canvas;
 }
 
-async function buildImagePreview(path: string): Promise<ImagePreviewData> {
+async function buildImagePreview(path: string): Promise<ImagePreviewData | VideoPreviewData> {
   if (isVideoPath(path)) {
-    const { canvas, width, height } = await videoFirstFrame(path, PREVIEW_MAX_EDGE);
-    return { kind: "image", imageUrl: canvas.toDataURL("image/png"), width, height };
+    const { video } = await loadVideoFile(path);
+    const data: VideoPreviewData = { kind: "video", url: video.src, width: video.videoWidth, height: video.videoHeight };
+    URL.revokeObjectURL(video.src);
+    video.removeAttribute("src");
+    video.load();
+    return data;
   }
   /* The image's own blob URL is already revoked, so the preview is drawn from a canvas copy. */
   const { image } = await loadImageFile(path);
@@ -325,8 +336,8 @@ async function buildScenePreview(path: string): Promise<ScenePreviewData> {
   const params = createParams();
   const state = createPlayState();
   const images = applyScene(text, params, state);
-  const image = await loadSceneSource(sceneImageToBlob(images.image));
-  const image2 = images.image2 ? await loadSceneSource(sceneImageToBlob(images.image2)) : null;
+  const { source: image } = await loadSceneMedia(images.image);
+  const image2 = images.image2 ? (await loadSceneMedia(images.image2)).source : null;
   const [width, height] = sourceSize(image);
   /* A video plays as it is; a still image is made smaller for the preview. */
   const small = (source: ImageSource) => source instanceof HTMLImageElement ? shrink(source) : source;
@@ -344,6 +355,22 @@ async function buildScenePreview(path: string): Promise<ScenePreviewData> {
 
 const buildPreview = (entry: BrowseEntry): Promise<PreviewData> =>
   entry.kind === "scene" ? buildScenePreview(entry.path) : buildImagePreview(entry.path);
+
+/** Native controls provide play/pause, seeking, and time for the selected video. */
+function VideoPreview({ video }: { video: VideoPreviewData }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const player = ref.current;
+    if (!player) return;
+    player.src = video.url;
+    return () => {
+      player.pause();
+      player.removeAttribute("src");
+      player.load();
+    };
+  }, [video]);
+  return <video ref={ref} className="open-preview-video" crossOrigin="anonymous" controls muted loop playsInline preload="auto" aria-label="Video preview" />;
+}
 
 /**
  * Plays the selected scene in a small engine of its own. The canvas stays
@@ -788,10 +815,14 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
     }
     const request = ++previewRequest.current;
     setPreview({ status: "loading" });
+    let cancelled = false;
     void buildPreview(selected)
       .then((data) => {
+        if (cancelled) return;
         const cache = previewCache.current;
-        cache.set(selected.path, data);
+        // Keep only the selected video preview; the native conversion cache
+        // already avoids re-encoding when this file is selected again.
+        if (data.kind !== "video") cache.set(selected.path, data);
         while (cache.size > PREVIEW_CACHE_LIMIT) {
           const oldest = cache.keys().next().value;
           if (oldest === undefined) break;
@@ -800,10 +831,11 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
         if (request === previewRequest.current) setPreview({ status: "ready", data });
       })
       .catch((error) => {
-        if (request === previewRequest.current) {
+        if (!cancelled && request === previewRequest.current) {
           setPreview({ status: "error", message: error instanceof Error ? error.message : String(error) });
         }
       });
+    return () => { cancelled = true; };
   }, [selected]);
 
   useEffect(() => {
@@ -1145,6 +1177,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
               {ready?.kind === "image" && (
                 <img src={ready.imageUrl} alt={selected ? `Preview of ${selected.name}` : "Preview"} />
               )}
+              {ready?.kind === "video" && <VideoPreview video={ready} />}
               <ScenePreview scene={playingScene} />
             </div>
             {selected && (

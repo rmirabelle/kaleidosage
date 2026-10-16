@@ -1,5 +1,5 @@
 /** "refold" is a shape pass after a picture step; with several in one frame, it shows about their average. */
-export type PassName = "fold" | "refold" | "blur" | "trails" | "branches" | "smear" | "contours" | "relief" | "finish";
+export type PassName = "fold" | "refold" | "blur" | "trails" | "smear" | "contours" | "relief" | "camera" | "finish";
 
 interface TimerExtension {
   TIME_ELAPSED_EXT: number;

@@ -1,5 +1,5 @@
 import { GpuTimer } from "./gpuTimer";
-import { BLUR_SHADER, BRANCH_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, OVERLAY_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, CAMERA_FIELD_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MAX_SHADER, OVERLAY_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 
 /** The blur mask: circle with a sharp or a blurred center, gradient, bright areas, dark areas, noise. */
 export type BlurMask = 0 | 1 | 2 | 3 | 4 | 5;
@@ -17,7 +17,7 @@ export type ShapeStep = "warp" | "map" | "kaleidoscope";
 /** The kind of warp: noise, ripple, waves, swirl, bulge and pinch, cells. */
 export type WarpType = 0 | 1 | 2 | 3 | 4 | 5;
 /** The steps that change the drawn picture. The user sets their order. */
-export type PictureStep = "blur" | "trails" | "branches" | "smear" | "contours" | "relief" | "finish";
+export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "camera" | "finish";
 /**
  * Any effect step. The user sets one order for all of them. Shape steps
  * that are next to each other run in one pass; a shape step after a
@@ -25,7 +25,7 @@ export type PictureStep = "blur" | "trails" | "branches" | "smear" | "contours" 
  */
 export type FxStep = ShapeStep | PictureStep;
 export const SHAPE_STEPS: readonly ShapeStep[] = ["warp", "map", "kaleidoscope"];
-export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "branches", "smear", "contours", "relief", "finish"];
+export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "camera", "finish"];
 export const isShapeStep = (step: FxStep): step is ShapeStep => (SHAPE_STEPS as readonly FxStep[]).includes(step);
 /** The time smear's pattern: 0 linear, 1 rings, 2 sweep, 3 brightness, 4 noise (see SMEAR_SHADER). */
 export type SmearShape = 0 | 1 | 2 | 3 | 4;
@@ -33,6 +33,8 @@ export type SmearShape = 0 | 1 | 2 | 3 | 4;
 const SHAPE_CODES: Record<ShapeStep, number> = { warp: 0, map: 1, kaleidoscope: 2 };
 /** 0 normal, 1 screen, 2 multiply, 3 overlay, 4 difference, 5 lighten, 6 darken, 7 add. */
 export type LayerBlend = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+/** How the camera's land goes on past the picture: 0 mirrored, 1 repeated as it is, 2 not at all (sky around the picture). */
+export type CameraRepeat = 0 | 1 | 2;
 /** How the two images fade: 0 = crossfade, 1 = dissolve by brightness (light areas change first). */
 export type BlendMode = 0 | 1;
 
@@ -116,32 +118,6 @@ export interface FrameValues {
    * a change made while stopped still shows instead of freezing in the trails.
    */
   fadeScale: number;
-  /**
-   * Branches (see BRANCH_SHADER): how many branches (1 to 4), their size,
-   * the angle their directions spread over and the turn of all of them
-   * (radians), where they grow from (a part of the trunk's height), the
-   * trunk's height (screen heights) and width (a part of its height), how
-   * much the tree shows (0 = off), how much of the picture shows behind
-   * it, how much each level fades, the hue turn per level (radians), and
-   * the base point (the bottom of the trunk).
-   */
-  branchCount: number;
-  branchSize: number;
-  branchSpread: number;
-  branchTurn: number;
-  branchJoint: number;
-  branchTrunk: number;
-  branchWidth: number;
-  /** How much the trunk narrows to its branches' width at its top: 0 none, 1 all the way. */
-  branchTaper: number;
-  /** How many levels of trunks, from the root, do not show (see BRANCH_SHADER). */
-  branchHide: number;
-  branchOpacity: number;
-  branchBackground: number;
-  branchFade: number;
-  branchHue: number;
-  branchBaseX: number;
-  branchBaseY: number;
   /** Unsharp-mask strength (0 = off) and its radius in pixels. */
   sharpen: number;
   sharpenRadius: number;
@@ -181,6 +157,35 @@ export interface FrameValues {
   reliefSize: number;
   lightAngle: number;
   shine: number;
+  /**
+   * Camera (see CAMERA_SHADER): whether the camera is on (then its view
+   * always shows, even of a flat floor), how much of the raised land shows
+   * over the floor, the land's height, the camera's tilt and turn (radians), distance and lens
+   * angle (radians), the sun's turn and height (radians), the shadows,
+   * the fog, how much the sky and fog take the sky color, that color, the
+   * shine of the land, and the blur of the height (a mip level).
+   */
+  cameraOn: boolean;
+  /** How the raised land combines with the flat floor (see blendLayer), and how the land goes on past the picture. */
+  cameraBlend: LayerBlend;
+  cameraRepeat: CameraRepeat;
+  camera: number;
+  cameraHeight: number;
+  cameraTilt: number;
+  cameraTurn: number;
+  /** Where the aim point is on the land (screen heights). */
+  cameraX: number;
+  cameraY: number;
+  cameraDistance: number;
+  cameraLens: number;
+  cameraLightTurn: number;
+  cameraLightHeight: number;
+  cameraShadow: number;
+  cameraFog: number;
+  cameraSky: number;
+  skyColor: [number, number, number];
+  cameraShine: number;
+  cameraSmooth: number;
   /** 0 shows the first image, 1 the second; between, they fade into each other. */
   imageBlend: number;
   /**
@@ -283,14 +288,26 @@ export class KaleidoRenderer {
   private readonly frameTexture: WebGLTexture;
   private readonly framebuffer: WebGLFramebuffer;
   private readonly trails: Program;
-  private readonly branches: Program;
   private readonly copy: Program;
   private readonly finish: Program;
   private readonly relief: Program;
+  private readonly camera: Program;
+  private readonly cameraField: Program;
+  private readonly maxPass: Program;
   private readonly contours: Program;
   private readonly contourField: Program;
   /** The contour brightness of the last frame and of this frame; they change roles each frame (see drawContours). */
   private readonly fieldTargets: [Target, Target];
+  /** The camera's height field, and its pyramid of highest points with one mip level per square size (see drawCamera). */
+  private readonly heightTarget: Target;
+  private maxTexture: WebGLTexture | null = null;
+  /** Separate output for reductions: never sample a texture while drawing into it. */
+  private maxReduction: WebGLTexture | null = null;
+  private readonly maxFramebuffer: WebGLFramebuffer;
+  private maxLevels = 0;
+  /** The pyramid's side: a power of two that covers the picture, so every level's squares cover it whole. */
+  private maxSide = 0;
+  private readonly maxFormat: number;
   private fieldIndex = 0;
   private contoursWereOn = false;
   private readonly smear: Program;
@@ -342,13 +359,20 @@ export class KaleidoRenderer {
     const gl = canvas.getContext("webgl2", { antialias: false, alpha: false });
     if (!gl) throw new Error("WebGL 2 is not available on this computer.");
     this.gl = gl;
+    /* A lost context (the graphics driver gave up, often on a frame that took too long) leaves the picture blank; say so in the console. */
+    canvas.addEventListener("webglcontextlost", (event) => {
+      event.preventDefault();
+      console.error("The WebGL context was lost. The picture stops until the app is restarted.");
+    });
     this.kaleido = this.createProgram(KALEIDO_SHADER);
     this.blur = this.createProgram(BLUR_SHADER);
     this.trails = this.createProgram(TRAILS_SHADER);
-    this.branches = this.createProgram(BRANCH_SHADER);
     this.copy = this.createProgram(COPY_SHADER);
     this.finish = this.createProgram(FINISH_SHADER);
     this.relief = this.createProgram(RELIEF_SHADER);
+    this.camera = this.createProgram(CAMERA_SHADER);
+    this.cameraField = this.createProgram(CAMERA_FIELD_SHADER);
+    this.maxPass = this.createProgram(MAX_SHADER);
     this.contours = this.createProgram(CONTOUR_SHADER);
     this.contourField = this.createProgram(CONTOUR_FIELD_SHADER);
     this.smear = this.createProgram(SMEAR_SHADER);
@@ -379,6 +403,9 @@ export class KaleidoRenderer {
     this.scratch = this.createTarget();
     this.trailTargets = [this.createTarget(), this.createTarget()];
     this.fieldTargets = [this.createTarget(), this.createTarget()];
+    this.heightTarget = this.createTarget();
+    this.maxFramebuffer = gl.createFramebuffer()!;
+    this.maxFormat = this.trailFormat.internal === gl.RGBA16F ? gl.R16F : gl.R8;
     this.timer = new GpuTimer(gl);
   }
 
@@ -521,10 +548,11 @@ export class KaleidoRenderer {
       ...v.shapeActive,
       blur: v.blur > 0,
       trails: v.trailMode !== 0,
-      branches: v.branchOpacity > 0,
       smear: v.smear > 0,
       contours: v.contours > 0,
       relief: v.relief > 0,
+      /* The camera's view always shows while it is on: at opacity 0 it is the flat floor, seen by the camera. */
+      camera: v.cameraOn,
       finish: v.sharpen > 0 || v.exposure !== 0 || v.blackLevel > 0 || v.overlayOpacity > 0
     };
     /**
@@ -600,7 +628,7 @@ export class KaleidoRenderer {
         const target = last ? null : scratchFor(source);
         if (step === "blur") this.drawBlur(v, source, padded, target, true);
         else if (step === "relief") this.drawRelief(v, source, target, width, height);
-        else if (step === "branches") this.drawBranches(v, source, target, width, height);
+        else if (step === "camera") this.drawCamera(v, source, target, width, height);
         else if (step === "contours") this.drawContours(v, source, target, width, height);
         else if (step === "smear") this.drawSmear(v, source, target, width, height);
         else this.drawFinish(v, source, target, width, height);
@@ -748,6 +776,124 @@ export class KaleidoRenderer {
     gl.uniform1f(r.uniforms.u_lightAngle, v.lightAngle);
     gl.uniform1f(r.uniforms.u_shine, v.shine);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /**
+   * Camera: the picture as a landscape under a virtual camera (see
+   * CAMERA_SHADER), in three steps. First the height field: the picture's
+   * brightness from a smaller copy (mip level Smooth), read with smooth
+   * cubic curves (CAMERA_FIELD_SHADER). Then the pyramid of highest points
+   * (MAX_SHADER): level 0 is the field widened by a pixel, and each next
+   * level holds the highest point of squares twice as large, so the rays
+   * can skip land they cannot hit. Then the view, which reads the field,
+   * the pyramid, and the picture for color. The picture gets mip levels
+   * here and loses them again after, because the picture textures are
+   * also read without them.
+   */
+  private drawCamera(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+    const gl = this.gl;
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+
+    const f = this.cameraField;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.heightTarget.framebuffer);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(f.program);
+    gl.uniform1i(f.uniforms.u_tex, 0);
+    gl.uniform1f(f.uniforms.u_smooth, Math.max(0, v.cameraSmooth));
+    gl.uniform1f(f.uniforms.u_sign, v.cameraHeight < 0 ? -1 : 1);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    const m = this.maxPass;
+    const pyramid = this.maxTexture!;
+    gl.useProgram(m.program);
+    gl.uniform1i(m.uniforms.u_src, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.maxFramebuffer);
+    for (let level = 0; level < this.maxLevels; level++) {
+      const side = this.maxSide >> level;
+      gl.bindTexture(gl.TEXTURE_2D, level === 0 ? this.heightTarget.texture : pyramid);
+      /* Keep the sampled pyramid's base at zero. Reading and writing different
+       * mips of the same texture with a changing base produced invalid bounds
+       * on ANGLE/D3D11; reduce into a separate texture, then copy the result. */
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D,
+        level === 0 ? pyramid : this.maxReduction, 0);
+      gl.viewport(0, 0, side, side);
+      gl.uniform1i(m.uniforms.u_step, level === 0 ? 1 : 2);
+      gl.uniform1i(m.uniforms.u_level, Math.max(0, level - 1));
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      if (level > 0) gl.copyTexSubImage2D(gl.TEXTURE_2D, level, 0, 0, 0, 0, side, side);
+    }
+
+    const c = this.camera;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(c.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.uniform1i(c.uniforms.u_tex, 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.heightTarget.texture);
+    gl.uniform1i(c.uniforms.u_fine, 1);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, pyramid);
+    gl.uniform1i(c.uniforms.u_max, 2);
+    gl.uniform1i(c.uniforms.u_levels, this.maxLevels);
+    /* Enough for a ray that runs along a wall of a grid picture seen straight along the grid (Turn 0°, 90°, 180°, 270°). */
+    gl.uniform1i(c.uniforms.u_visits, 1024);
+    gl.uniform2f(c.uniforms.u_res, width, height);
+    gl.uniform1f(c.uniforms.u_amount, Math.min(1, Math.max(0, v.camera)));
+    gl.uniform1i(c.uniforms.u_blend, v.cameraBlend);
+    gl.uniform1i(c.uniforms.u_repeat, v.cameraRepeat);
+    gl.uniform1f(c.uniforms.u_height, v.cameraHeight);
+    gl.uniform1f(c.uniforms.u_tilt, v.cameraTilt);
+    gl.uniform1f(c.uniforms.u_turn, v.cameraTurn);
+    gl.uniform2f(c.uniforms.u_offset, v.cameraX, v.cameraY);
+    gl.uniform1f(c.uniforms.u_distance, Math.max(0.1, v.cameraDistance));
+    gl.uniform1f(c.uniforms.u_lens, v.cameraLens);
+    gl.uniform1f(c.uniforms.u_lightTurn, v.cameraLightTurn);
+    gl.uniform1f(c.uniforms.u_lightHeight, v.cameraLightHeight);
+    gl.uniform1f(c.uniforms.u_shadow, Math.min(1, Math.max(0, v.cameraShadow)));
+    gl.uniform1f(c.uniforms.u_fog, Math.max(0, v.cameraFog));
+    gl.uniform1f(c.uniforms.u_sky, Math.min(1, Math.max(0, v.cameraSky)));
+    gl.uniform3f(c.uniforms.u_skyColor, ...v.skyColor);
+    gl.uniform1f(c.uniforms.u_shine, Math.max(0, v.cameraShine));
+    gl.uniform1f(c.uniforms.u_smooth, Math.max(0, v.cameraSmooth));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  }
+
+  /**
+   * The pyramid of highest points: a square texture whose side is the power
+   * of two at or above the picture's larger side, with fixed storage for
+   * every level so the levels can be drawn to. Each level then halves
+   * exactly, and its squares cover the whole picture. A new size needs a
+   * new texture.
+   */
+  private allocateMax(width: number, height: number) {
+    const gl = this.gl;
+    const side = 2 ** Math.ceil(Math.log2(Math.max(2, width, height)));
+    if (this.maxTexture && side === this.maxSide) return;
+    if (this.maxTexture) gl.deleteTexture(this.maxTexture);
+    if (this.maxReduction) gl.deleteTexture(this.maxReduction);
+    this.maxSide = side;
+    this.maxLevels = Math.log2(side) + 1;
+    const texture = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texStorage2D(gl.TEXTURE_2D, this.maxLevels, this.maxFormat, side, side);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    this.maxTexture = texture;
+    this.maxReduction = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_2D, this.maxReduction);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, this.maxFormat, side / 2, side / 2);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
   }
 
   /**
@@ -1126,68 +1272,12 @@ export class KaleidoRenderer {
     return next.texture;
   }
 
-  /**
-   * Branches: a fractal tree whose trunk is the picture (see BRANCH_SHADER).
-   * It needs no earlier frame. The trunk at each level reads the smaller
-   * version of the picture (mip level) that matches its size, so the deep
-   * levels do not shimmer.
-   */
-  private drawBranches(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
-    const gl = this.gl;
-    const b = this.branches;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
-    gl.viewport(0, 0, width, height);
-    gl.useProgram(b.program);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, source);
-    gl.generateMipmap(gl.TEXTURE_2D);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-    const scale = Math.min(0.95, Math.max(0.05, v.branchSize));
-    const trunk = Math.max(0.02, v.branchTrunk);
-    const trunkWidth = Math.max(0.01, v.branchWidth);
-    const joint = Math.max(0, v.branchJoint);
-    /**
-     * The tree's size around the base point: the farthest trunk corner, or
-     * the farthest a branch reaches (the joint + scale × that size),
-     * whichever is more. Points farther out cannot be in the tree.
-     */
-    const trunkRadius = trunk * Math.hypot(trunkWidth / 2, 1);
-    const radius = Math.max(trunkRadius, (joint * trunk) / (1 - scale)) * 1.001;
-    /* Levels stop where a trunk is lower than a pixel. */
-    const depth = Math.min(16, Math.max(0, Math.ceil(Math.log(1 / (trunk * height)) / Math.log(scale))));
-    gl.uniform1i(b.uniforms.u_tex, 0);
-    gl.uniform2f(b.uniforms.u_res, width, height);
-    gl.uniform1i(b.uniforms.u_count, Math.max(1, Math.min(4, Math.round(v.branchCount))));
-    gl.uniform1f(b.uniforms.u_scale, scale);
-    gl.uniform1f(b.uniforms.u_spread, v.branchSpread);
-    gl.uniform1f(b.uniforms.u_turn, v.branchTurn);
-    gl.uniform1f(b.uniforms.u_trunk, trunk);
-    gl.uniform1f(b.uniforms.u_width, trunkWidth);
-    gl.uniform1f(b.uniforms.u_joint, joint);
-    gl.uniform1f(b.uniforms.u_taper, Math.min(1, Math.max(0, v.branchTaper)));
-    /* The picture's height on the trunk: the trunk's height, or more when the trunk is wider than the picture at that height. */
-    const fit = Math.max(trunk, (trunk * trunkWidth) / (width / height));
-    gl.uniform1f(b.uniforms.u_fit, fit);
-    gl.uniform1f(b.uniforms.u_opacity, Math.min(1, Math.max(0, v.branchOpacity)));
-    gl.uniform1f(b.uniforms.u_background, Math.min(1, Math.max(0, v.branchBackground)));
-    gl.uniform1f(b.uniforms.u_fade, Math.min(1, Math.max(0, v.branchFade)));
-    gl.uniform1f(b.uniforms.u_hue, v.branchHue);
-    gl.uniform2f(b.uniforms.u_base, v.branchBaseX, v.branchBaseY);
-    gl.uniform1f(b.uniforms.u_radius, radius);
-    gl.uniform1i(b.uniforms.u_depth, depth);
-    gl.uniform1i(b.uniforms.u_hide, Math.max(0, Math.round(v.branchHide)));
-    gl.uniform1f(b.uniforms.u_lod, Math.max(0, Math.log2(1 / fit)));
-    gl.uniform1f(b.uniforms.u_lodStep, Math.log2(1 / scale));
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-    /* The picture textures are also drawn to and read without mip levels, so they go back to plain reads. */
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  }
-
   /** Sizes the trail textures to the canvas. A new size starts the trails again. */
   private ensureTrailTargets(width: number, height: number) {
     if (width === this.trailSize[0] && height === this.trailSize[1]) return;
     this.trailSize = [width, height];
-    for (const target of [this.current, this.scratch, ...this.trailTargets, ...this.fieldTargets]) this.allocate(target, width, height);
+    for (const target of [this.current, this.scratch, ...this.trailTargets, ...this.fieldTargets, this.heightTarget]) this.allocate(target, width, height);
+    this.allocateMax(width, height);
     this.contoursWereOn = false;
     this.trailsWereOn = false;
   }

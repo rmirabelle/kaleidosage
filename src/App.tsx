@@ -18,8 +18,8 @@ import { Toolbar } from "./components/Toolbar";
 import { Engine } from "./engine/engine";
 import { createParams, createPlayState, nudgeParams, randomizeParams, resetEffects } from "./engine/params";
 import { SettingsHistory } from "./engine/history";
-import { SCENE_EXTENSION, applyScene, blobToSceneImage, sceneFingerprint, sceneImageToBlob, serializeScene } from "./engine/scene";
-import { loadSceneSource, readScene, writeScene } from "./lib/scenes";
+import { SCENE_EXTENSION, applyScene, blobToSceneImage, sceneFingerprint, serializeScene, type SceneImage } from "./engine/scene";
+import { loadSceneMedia, readScene, writeScene } from "./lib/scenes";
 import type { ImageSource } from "./engine/renderer";
 import {
   makeThumbnail,
@@ -30,7 +30,7 @@ import {
 import { chooseExportPath, fileNameOf, writeExport } from "./lib/exports";
 import { PATTERNS, drawPattern, type Pattern } from "./lib/patterns";
 import { revealMainWindow } from "./lib/splash";
-import { isVideoPath, isVideoType, loadVideoBlob, loadVideoFile } from "./lib/videos";
+import { isVideoPath, isVideoType, loadVideoBlob, loadVideoFile, stageVideoBlob, type VideoFile } from "./lib/videos";
 import { checkForUpdate, getAppVersion, type UpdateInfo } from "./lib/updater";
 import { encodeVideo, videoSize, type VideoOptions } from "./lib/videoExport";
 
@@ -50,6 +50,8 @@ export interface SlotImage {
   source: ImageSource;
   /** The original file bytes, for Save scene. Patterns have none; they are saved as PNG. */
   blob?: Blob;
+  /** Native stream handle; the video is embedded when saving. */
+  videoFile?: VideoFile;
   label: string;
   thumbnail: string;
   /** Set for a test pattern. */
@@ -74,6 +76,8 @@ interface SetImageOptions {
   message?: string;
   /** The original file bytes, for Save scene. */
   blob?: Blob;
+  /** Native stream handle; the video is embedded when saving. */
+  videoFile?: VideoFile;
   /** The name shown for an original image in the Patterns list. */
   name?: string;
   /** Set for a test pattern; the original image is then kept. */
@@ -88,6 +92,9 @@ export default function App() {
   const imagesRef = useRef<[SlotImage | null, SlotImage | null]>([null, null]);
   const [images, setImages] = useState<[SlotImage | null, SlotImage | null]>([null, null]);
   const [engine, setEngine] = useState<Engine | null>(null);
+  /** Loads started by a closed scene must not reopen it when they finish. */
+  const sceneGenerationRef = useRef(0);
+  const [sceneGeneration, setSceneGeneration] = useState(0);
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
@@ -127,11 +134,6 @@ export default function App() {
    * and the answer, true to go on with the action.
    */
   const [saveQuestion, setSaveQuestion] = useState<{ title: string; reason: string; answer: (go: boolean) => void } | null>(null);
-  /** Asks to save unsaved changes first. Resolves true to go on (saved or not), false to stop. With no changes, it goes on at once. */
-  const askToSave = useCallback((title: string, reason: string) => new Promise<boolean>((resolve) => {
-    if (!dirtyRef.current) resolve(true);
-    else setSaveQuestion({ title, reason, answer: resolve });
-  }), []);
   const [appVersion, setAppVersion] = useState("");
   const [startupUpdate, setStartupUpdate] = useState<UpdateInfo | null>(null);
   /** The start screen shows until a new scene starts or an image or scene opens. */
@@ -158,8 +160,8 @@ export default function App() {
     setImages(next);
   }, []);
 
-  const setImage = useCallback((source: ImageSource, { message, blob, name, patternId, fromScene }: SetImageOptions = {}, slot: ImageSlot = 0) => {
-    if (!engine) return;
+  const setImage = useCallback((source: ImageSource, { message, blob, videoFile, name, patternId, fromScene }: SetImageOptions = {}, slot: ImageSlot = 0) => {
+    if (!engine || sceneGeneration !== sceneGenerationRef.current) return;
     try {
       /**
        * A new second image starts a full fade: dissolve by brightness, over the
@@ -176,14 +178,14 @@ export default function App() {
       /* A pattern keeps the image under it; a pattern over a pattern keeps the same image. */
       const previous = imagesRef.current[slot];
       const under = patternId && previous ? (previous.patternId ? previous.under : previous) : undefined;
-      const image: SlotImage = { source, blob, label: name ?? "Image", thumbnail: makeThumbnail(source), patternId, under, id: nextImageId++ };
+      const image: SlotImage = { source, blob, videoFile, label: name ?? "Image", thumbnail: makeThumbnail(source), patternId, under, id: nextImageId++ };
       setSlotImage(slot, image);
       setStartScreen(false);
       if (message) showStatus(message);
     } catch (error) {
       showError(`Could not use that image. ${String(error)}`);
     }
-  }, [engine, setSlotImage, showError, showStatus]);
+  }, [engine, sceneGeneration, setSlotImage, showError, showStatus]);
 
   const randomImage = useCallback(async (slot: ImageSlot = 0) => {
     showStatus(slot === 0 ? "Loading a random image…" : "Loading a random second image…", 0);
@@ -213,7 +215,7 @@ export default function App() {
       if (isVideoPath(path)) {
         showStatus(`Loading ${name}…`, 0);
         const loaded = await loadVideoFile(path);
-        setImage(loaded.video, { message: name, blob: loaded.blob, name }, slot);
+        setImage(loaded.video, { message: name, videoFile: loaded.videoFile, name }, slot);
         return;
       }
       const loaded = await loadImageFile(path);
@@ -358,9 +360,16 @@ export default function App() {
     return sceneFingerprint(engine.params, engine.state, [first?.id ?? null, second?.id ?? null]);
   }, [engine]);
 
+  /** Read current settings here; the title bar's dirty indicator updates on a timer. */
+  const askToSave = useCallback((title: string, reason: string) => new Promise<boolean>((resolve) => {
+    if (fingerprint() === savedFingerprintRef.current) resolve(true);
+    else setSaveQuestion({ title, reason, answer: resolve });
+  }), [fingerprint]);
+
   /** The scene as it is now counts as saved: the asterisk goes away until the next change. */
   const markClean = useCallback(() => {
     savedFingerprintRef.current = fingerprint();
+    dirtyRef.current = false;
     setDirty(false);
   }, [fingerprint]);
 
@@ -378,20 +387,21 @@ export default function App() {
    */
   const saveScene = useCallback(async (saveAs = false): Promise<boolean> => {
     if (!engine || !isTauri()) return false;
-    /** An image's file bytes; a drawn pattern is saved as PNG. */
-    const imageBlob = async (image: SlotImage | null) => {
-      if (!image) return null;
-      if (image.blob) return image.blob;
-      const source = image.source;
-      return source instanceof HTMLCanvasElement ? new Promise<Blob | null>((resolve) => source.toBlob(resolve, "image/png")) : null;
-    };
     const [first, second] = imagesRef.current;
-    const blob = await imageBlob(first);
-    const blob2 = await imageBlob(second);
-    if (!blob) {
+    if (!first) {
       showError("There is no image to save in the scene.");
       return false;
     }
+    const sceneMedia = async (image: SlotImage): Promise<SceneImage> => {
+      if (!image.videoFile && image.blob && isVideoType(image.blob.type)) {
+        image.videoFile = await stageVideoBlob(image.blob);
+      }
+      if (image.videoFile) return { type: image.videoFile.mime, video: image.videoFile.id };
+      const blob = image.blob ?? (image.source instanceof HTMLCanvasElement
+        ? await new Promise<Blob | null>((resolve) => (image.source as HTMLCanvasElement).toBlob(resolve, "image/png")) : null);
+      if (!blob) throw new Error("There is no image to save in the scene.");
+      return blobToSceneImage(blob);
+    };
     const current = scenePathRef.current;
     const path = !saveAs && current
       ? current
@@ -400,9 +410,12 @@ export default function App() {
     try {
       /* The fingerprint is taken before the file is written, so a change made while it writes still shows as unsaved. */
       const saved = fingerprint();
-      const image = await blobToSceneImage(blob);
-      const contents = serializeScene(engine.params, engine.state, blob2 ? { image, image2: await blobToSceneImage(blob2) } : { image });
-      await writeScene(path, contents);
+      // Capture settings before copying media, so edits during Save remain dirty.
+      const scene = JSON.parse(serializeScene(engine.params, engine.state, { image: { type: "image/png", data: "pending" } }));
+      showStatus("Saving scene and embedding media…", 0);
+      scene.image = await sceneMedia(first);
+      if (second) scene.image2 = await sceneMedia(second);
+      await writeScene(path, JSON.stringify(scene));
       savedFingerprintRef.current = saved;
       setDirty(fingerprint() !== saved);
       setScenePath(path);
@@ -428,20 +441,20 @@ export default function App() {
    */
   const openScenePath = useCallback(async (path: string) => {
     if (!engine) return;
+    const generation = sceneGenerationRef.current;
     try {
       const text = await readScene(path);
       const params = createParams();
       const state = createPlayState();
       const images = applyScene(text, params, state);
-      const blob = sceneImageToBlob(images.image);
-      const image = await loadSceneSource(blob);
-      const blob2 = images.image2 && sceneImageToBlob(images.image2);
-      const image2 = blob2 ? await loadSceneSource(blob2) : null;
+      const image = await loadSceneMedia(images.image);
+      const image2 = images.image2 ? await loadSceneMedia(images.image2) : null;
+      if (generation !== sceneGenerationRef.current) return;
       Object.assign(engine.params, params);
       Object.assign(engine.state, state, { paused: engine.state.paused, locks: engine.state.locks });
       const name = path.split(/[\\/]/).pop();
-      setImage(image, { message: name, blob, name });
-      if (image2 && blob2) setImage(image2, { blob: blob2, name: `${name} (second image)`, fromScene: true }, 1);
+      setImage(image.source, { message: name, blob: image.blob, videoFile: image.videoFile, name });
+      if (image2) setImage(image2.source, { blob: image2.blob, videoFile: image2.videoFile, name: `${name} (second image)`, fromScene: true }, 1);
       else removeSecondImage();
       setRevision((value) => value + 1);
       setScenePath(path);
@@ -541,6 +554,45 @@ export default function App() {
     if (isTauri()) await getCurrentWindow().setFullscreen(false);
     else if (document.fullscreenElement) await document.exitFullscreen();
   }, []);
+
+  const closingSceneRef = useRef(false);
+  const closeScene = useCallback(async () => {
+    if (!engine || startScreen || closingSceneRef.current) return;
+    closingSceneRef.current = true;
+    try {
+      if (!(await askToSave("Save changes before closing the scene?", "Closing returns to the start screen."))) return;
+      if (fullscreen) await exitFullscreen();
+      const pattern = PATTERNS.find((candidate) => candidate.id === "checker-large") ?? PATTERNS[0];
+      const source = drawPattern(pattern);
+      sceneGenerationRef.current++;
+      setSceneGeneration(sceneGenerationRef.current);
+      engine.stop();
+      engine.bypassedGroups.clear();
+      engine.soloGroup = null;
+      Object.assign(engine.params, createParams());
+      Object.assign(engine.state, createPlayState());
+      resetEffects(engine.params, engine.state);
+      engine.setImage(source);
+      engine.clearSecondImage();
+      engine.resetTrails();
+      setSlotImage(0, { source, label: pattern.label, thumbnail: makeThumbnail(source), patternId: pattern.id, id: nextImageId++ });
+      setSlotImage(1, null);
+      scenePathRef.current = null;
+      setScenePath(null);
+      setPaused(false);
+      setOpenGroup(null);
+      setRandomLoading(null);
+      setStatus(null);
+      setStartScreen(true);
+      setRevision(value => value + 1);
+      historyRef.current?.clear();
+      markClean();
+    } catch (error) {
+      showError(`Could not close the scene. ${String(error)}`);
+    } finally {
+      closingSceneRef.current = false;
+    }
+  }, [askToSave, engine, exitFullscreen, fullscreen, markClean, setSlotImage, showError, startScreen]);
 
   /**
    * Start the engine with a placeholder pattern, then load a random photo.
@@ -674,7 +726,7 @@ export default function App() {
           historyAction();
           return;
         }
-        const sceneAction = { s: () => saveScene(event.shiftKey), o: openScene }[key];
+        const sceneAction = { s: () => saveScene(event.shiftKey), o: openScene, w: closeScene }[key];
         if (sceneAction) {
           event.preventDefault();
           void sceneAction();
@@ -691,7 +743,7 @@ export default function App() {
         escape: () => void exitFullscreen(),
         h: () => setPanelOpen((open) => !open),
         p: () => setStatsOpen((open) => !open),
-        " ": togglePause,
+        " ": event.shiftKey ? stop : togglePause,
         r: () => void randomImage(),
         o: () => void openImage(),
         x: randomize,
@@ -707,7 +759,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [aboutOpen, exitFullscreen, nudge, openImage, openRequest, videoDialogOpen, openScene, randomImage, randomize, redo, savePng, saveScene, startScreen, toggleFullscreen, togglePause, undo]);
+  }, [aboutOpen, closeScene, exitFullscreen, nudge, openImage, openRequest, videoDialogOpen, openScene, randomImage, randomize, redo, savePng, saveScene, startScreen, stop, toggleFullscreen, togglePause, undo]);
 
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
@@ -741,10 +793,12 @@ export default function App() {
         { label: "Open Image…", icon: <ColorFolder size={18} />, shortcut: "O", run: () => void openImage() },
         { label: "Open Scene…", icon: <FilmSlate size={15} />, shortcut: "Ctrl+O", run: () => void openScene() },
         "separator",
-        { label: "Save Scene", icon: <FloppyDisk size={15} />, shortcut: "Ctrl+S", run: () => void saveScene() },
+        { label: "Save Scene", disabled: startScreen, icon: <FloppyDisk size={15} />, shortcut: "Ctrl+S", run: () => void saveScene() },
         { label: "Save Scene As…", icon: <FloppyDisk size={15} />, shortcut: "Ctrl+Shift+S", run: () => void saveScene(true) },
-        { label: "Save PNG", icon: <Camera size={15} />, shortcut: "S", run: () => void savePng() },
+        { label: "Save PNG", disabled: startScreen, icon: <Camera size={15} />, shortcut: "S", run: () => void savePng() },
         { label: "Export Video…", icon: <FilmStrip size={15} />, run: openVideoDialog },
+        "separator",
+        { label: "Close Scene", icon: <X size={15} />, shortcut: "Ctrl+W", disabled: startScreen, run: () => void closeScene() },
         "separator",
         { label: "Exit", icon: <SignOut size={15} />, shortcut: "Alt+F4", run: () => void (isTauri() ? getCurrentWindow().close() : window.close()) }
       ]
@@ -753,8 +807,8 @@ export default function App() {
       id: "edit",
       label: "Edit",
       items: [
-        { label: "Undo", icon: <ArrowCounterClockwise size={15} />, shortcut: "Ctrl+Z", run: undo },
-        { label: "Redo", icon: <ArrowClockwise size={15} />, shortcut: "Ctrl+Y", run: redo }
+        { label: "Undo", disabled: startScreen, icon: <ArrowCounterClockwise size={15} />, shortcut: "Ctrl+Z", run: undo },
+        { label: "Redo", disabled: startScreen, icon: <ArrowClockwise size={15} />, shortcut: "Ctrl+Y", run: redo }
       ]
     },
     {
@@ -811,7 +865,7 @@ export default function App() {
       )}
       <div className="workspace">
         {startScreen && <StartScreen onNewScene={() => setStartScreen(false)} onOpenScene={() => void openScene()} />}
-        {engine && panelOpen && (
+        {engine && !startScreen && panelOpen && (
           <SourcePanel
             key={revision}
             engine={engine}
@@ -866,7 +920,7 @@ export default function App() {
           )}
           {dragging && <div className="drop-overlay">Drop the image here</div>}
         </main>
-        {engine && panelOpen && (
+        {engine && !startScreen && panelOpen && (
           <ControlPanel
             /* A change outside the panel (Randomize, Undo, a new scene) makes a new panel, so all of its state reloads. */
             key={`controls-${revision}`}

@@ -1,9 +1,9 @@
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
 
-/** Experimental: videos the Open Image dialog lists with the images. The webview plays H.264 MP4 and WebM. */
-export const VIDEO_EXTENSIONS = ["mp4", "m4v", "webm"];
+/** Video containers accepted by the picker. Playback depends on the webview's available decoders. */
+export const VIDEO_EXTENSIONS = ["mp4", "m4v", "webm", "mov", "avi"];
 
-const VIDEO_TYPES: Record<string, string> = { mp4: "video/mp4", m4v: "video/mp4", webm: "video/webm" };
+export interface VideoFile { id: string; mime: string }
 
 const extension = (path: string) => path.split(".").pop()?.toLowerCase() ?? "";
 
@@ -11,17 +11,29 @@ export const isVideoPath = (path: string) => VIDEO_EXTENSIONS.includes(extension
 
 /** A muted, looping video, ready once its first frame can be drawn. The engine starts it. */
 export function loadVideoBlob(blob: Blob): Promise<HTMLVideoElement> {
-  const url = URL.createObjectURL(blob);
+  return loadVideoUrl(URL.createObjectURL(blob));
+}
+
+function loadVideoUrl(url: string): Promise<HTMLVideoElement> {
   const video = document.createElement("video");
+  video.crossOrigin = "anonymous";
   video.muted = true;
   video.loop = true;
   video.playsInline = true;
   video.preload = "auto";
   return new Promise((resolve, reject) => {
-    video.onloadeddata = () => resolve(video);
+    video.onloadeddata = () => {
+      video.onloadeddata = null;
+      video.onerror = null;
+      resolve(video);
+    };
     video.onerror = () => {
+      video.onloadeddata = null;
+      video.onerror = null;
       URL.revokeObjectURL(url);
-      reject(new Error("The video could not be played. Kaleido Sage plays H.264 MP4 and WebM videos."));
+      video.removeAttribute("src");
+      video.load();
+      reject(new Error("The embedded video player could not decode this file. Windows Media Player may support it through a different decoder."));
     };
     video.src = url;
   });
@@ -30,14 +42,35 @@ export function loadVideoBlob(blob: Blob): Promise<HTMLVideoElement> {
 /** True for the type of a video file ("video/..."), as a scene stores it. */
 export const isVideoType = (type: string) => type.startsWith("video/");
 
-/**
- * Reads the whole video file into memory, so a very large video takes a
- * moment. The file bytes come back too, for Save scene.
- */
-export async function loadVideoFile(path: string): Promise<{ video: HTMLVideoElement; blob: Blob }> {
-  const bytes = await invoke<ArrayBuffer>("read_video_file", { path });
-  const blob = new Blob([bytes], { type: VIDEO_TYPES[extension(path)] ?? "video/mp4" });
-  return { video: await loadVideoBlob(blob), blob };
+/** Opens a registered disk stream without transferring the video's bytes through IPC. */
+export async function loadVideoId(videoFile: VideoFile): Promise<{ video: HTMLVideoElement; videoFile: VideoFile }> {
+  try {
+    return { video: await loadVideoUrl(convertFileSrc(videoFile.id, "video")), videoFile };
+  } catch (error) {
+    if (!isTauri()) throw error;
+    const compatible = await invoke<VideoFile>("compatible_video", { id: videoFile.id });
+    return { video: await loadVideoUrl(convertFileSrc(compatible.id, "video")), videoFile: compatible };
+  }
+}
+
+export async function loadVideoFile(path: string) {
+  return loadVideoId(await invoke<VideoFile>("open_video_file", { path }));
+}
+
+/** Browser File/Blob imports are staged in small chunks when a scene is saved. */
+export async function stageVideoBlob(blob: Blob): Promise<VideoFile> {
+  const id = await invoke<string>("begin_video_upload", { mime: blob.type });
+  try {
+    const chunk = 2 * 1024 * 1024;
+    for (let offset = 0; offset < blob.size; offset += chunk) {
+      const bytes = await blob.slice(offset, offset + chunk).arrayBuffer();
+      await invoke("append_video_upload", bytes, { headers: { "video-id": id, offset: String(offset) } });
+    }
+    return await invoke<VideoFile>("finish_video_upload", { id, discard: false });
+  } catch (error) {
+    await invoke("finish_video_upload", { id, discard: true }).catch(() => {});
+    throw error;
+  }
 }
 
 /** The first frame of a video file, at most maxEdge pixels on its longest side, and the video's size. */

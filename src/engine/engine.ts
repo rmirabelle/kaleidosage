@@ -1,4 +1,4 @@
-import { PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, hexToRgb, liveValue, rangeClock, startRangeAt, type ParamKey } from "./params";
+import { PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, hexToRgb, liveValue, rangeClock, startRangeAt, type GroupKey, type ParamKey } from "./params";
 import { KaleidoRenderer, type ImageSource } from "./renderer";
 import { copyVideo, cueVideo, releaseVideo, seekVideo, syncVideo, videoLoopPlan, videoLoopTime } from "./video";
 
@@ -18,6 +18,10 @@ if (import.meta.hot) import.meta.hot.accept(() => window.location.reload());
 export class Engine {
   readonly params = createParams();
   readonly state = createPlayState();
+  /** Momentary comparison only: never serialized, saved, or added to Undo history. */
+  readonly bypassedGroups = new Set<GroupKey>();
+  /** Temporarily isolate one effect, without changing its saved enable state. */
+  soloGroup: GroupKey | null = null;
   private readonly renderer: KaleidoRenderer;
   private readonly frameListeners = new Set<() => void>();
   private snapshotWaiters: ((blob: Blob | null) => void)[] = [];
@@ -225,6 +229,8 @@ export class Engine {
     for (const key of PARAM_KEYS) if (this.params[key].drift) startRangeAt(this.params[key], 0);
     this.state.warpTime = 0;
     this.state.mapTravel = 0;
+    this.state.cameraX = 0;
+    this.state.cameraY = 0;
     this.renderer.resetTrails();
   }
 
@@ -272,6 +278,11 @@ export class Engine {
     this.state.warpTime += animated * (this.live("warpFlow") + this.warpFlowOffset);
     /* Tunnel speed is a speed too, so the distance flown is added up the same way. */
     this.state.mapTravel += animated * this.live("mapSpeed");
+    /* Camera speed too: the aim point flies over the land the way the camera looks (see CAMERA_SHADER: the eye is on the Turn side of the aim point). */
+    const heading = this.live("cameraTurn") * DEGREES;
+    const flight = animated * this.live("cameraSpeed");
+    this.state.cameraX -= Math.cos(heading) * flight;
+    this.state.cameraY -= Math.sin(heading) * flight;
     return animated;
   }
 
@@ -310,7 +321,13 @@ export class Engine {
   /** Draws the picture for the current time. "animated" and "elapsed" are the times since the last frame (see step). */
   draw(animated: number, elapsed: number) {
     /** A group that is off gets neutral values, so it has no effect. */
-    const on = this.state.groups;
+    const on = { ...this.state.groups };
+    for (const group of this.bypassedGroups) on[group] = false;
+    if (this.soloGroup) {
+      for (const group of Object.keys(on) as GroupKey[]) {
+        if (group !== this.soloGroup) on[group] = false;
+      }
+    }
     const kaleidoscope = (key: ParamKey, neutral: number) => on.kaleidoscope ? this.live(key) : neutral;
     this.renderer.render({
       fxOrder: this.state.fxOrder,
@@ -380,21 +397,6 @@ export class Engine {
       trailSwirl: this.live("trailSwirl"),
       trailTint: this.live("trailTint"),
       trailColor: hexToRgb(this.state.trailColor),
-      branchCount: this.params.branchCount.value,
-      branchSize: this.live("branchSize"),
-      branchSpread: this.live("branchSpread") * DEGREES,
-      branchTurn: this.live("branchTurn") * DEGREES,
-      branchJoint: this.live("branchJoint"),
-      branchTrunk: this.live("branchTrunk"),
-      branchWidth: this.live("branchWidth"),
-      branchTaper: this.live("branchTaper"),
-      branchHide: this.params.branchHide.value,
-      branchBackground: this.live("branchBackground"),
-      branchFade: this.live("branchFade"),
-      branchOpacity: on.branches ? this.live("branchOpacity") : 0,
-      branchHue: this.live("branchHue") * DEGREES,
-      branchBaseX: this.live("branchBaseX"),
-      branchBaseY: this.live("branchBaseY"),
       frameScale: animated * 60,
       fadeScale: (animated > 0 ? animated : elapsed) * 60,
       sharpen: on.finish ? this.live("sharpen") : 0,
@@ -408,6 +410,25 @@ export class Engine {
       reliefSize: this.live("reliefSize"),
       lightAngle: this.live("lightAngle") * DEGREES,
       shine: this.live("shine"),
+      cameraOn: on.camera,
+      cameraBlend: this.state.cameraBlend,
+      cameraRepeat: this.state.cameraRepeat,
+      camera: this.live("cameraAmount"),
+      cameraHeight: this.live("cameraHeight"),
+      cameraTilt: this.live("cameraTilt") * DEGREES,
+      cameraTurn: this.live("cameraTurn") * DEGREES,
+      cameraX: this.state.cameraX,
+      cameraY: this.state.cameraY,
+      cameraDistance: this.live("cameraDistance"),
+      cameraLens: this.live("cameraLens") * DEGREES,
+      cameraLightTurn: this.live("cameraLightTurn") * DEGREES,
+      cameraLightHeight: this.live("cameraLightHeight") * DEGREES,
+      cameraShadow: this.live("cameraShadow"),
+      cameraFog: this.live("cameraFog"),
+      cameraSky: this.live("cameraSky"),
+      skyColor: hexToRgb(this.state.skyColor),
+      cameraShine: this.live("cameraShine"),
+      cameraSmooth: this.live("cameraSmooth"),
       smear: on.smear ? this.live("smearAmount") : 0,
       smearDelay: this.live("smearDelay"),
       smearShape: this.state.smearShape,

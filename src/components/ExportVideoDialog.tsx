@@ -171,7 +171,7 @@ export function ExportVideoDialog({ engine, size, onCancel, onExport }: Props) {
             <p className="video-note">
               The last frame leads into the first, so the video can repeat with no jump.
               {changes.customRanges > 0 && ` Ranges with their own time change a little, so they repeat in the video.`}
-              {changes.crossfade && ` A flowing noise or cell warp, or a flying tunnel, never repeats, so the last second crossfades into the first.`}
+              {changes.crossfade && ` A flowing noise or cell warp, a flying tunnel, or a flying camera never repeats, so the last second crossfades into the first.`}
             </p>
           )}
         </div>

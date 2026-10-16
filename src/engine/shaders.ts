@@ -663,120 +663,6 @@ void main() {
 }`;
 
 /**
- * Branches: a fractal tree made of the picture. The trunk is a strip of the
- * picture, u_trunk high and u_width × u_trunk wide, standing on the base
- * point u_base. The branches grow from the joint, u_joint × u_trunk up the
- * trunk. Each of the 1 to 4 branches is a smaller copy (u_scale) of the
- * whole tree, turned around the joint to its own angle (the angles spread
- * evenly over u_spread, all turned by u_turn). So each branch has a trunk
- * and branches of its own, joined at its own joint, without end. The trunk
- * shows the middle of the picture, at the picture's own proportions, as
- * large as it must be to cover the whole trunk: u_fit screen heights for
- * the picture's height. So a trunk wider than the picture never reads past
- * the picture's edges.
- * The trunk narrows toward its top, by u_taper: at 1 its top is as wide as
- * the bottom of the branches that grow from it (u_scale × its bottom), so
- * each branch starts as wide as the trunk under it ends. The picture
- * narrows with it.
- *
- * Each pixel undoes the branch moves, level by level, and takes its color
- * from the first trunk it lands on, so the edges stay sharp. A search keeps
- * the points still to test on a stack; a point that cannot be in the tree
- * (farther from the base point than u_radius, the tree's size) is dropped.
- * A trunk covers the branches that grow from it, and a later branch covers
- * an earlier one. The search stops at u_depth levels, where a trunk is
- * smaller than a pixel. The trunks of the first u_hide levels do not show:
- * the search goes on through them to the branches, so the tree keeps its
- * shape without its root. Where no trunk is, the picture shows, darkened to
- * u_background. u_opacity is how much the tree shows; each level shows
- * u_fade less and turns its colors u_hue more. Points and lengths are in
- * screen heights from the screen center.
- */
-export const BRANCH_SHADER = `#version 300 es
-precision highp float;
-in vec2 v_uv;
-out vec4 o;
-uniform sampler2D u_tex;
-uniform vec2 u_res;
-uniform int u_count;
-uniform float u_scale;
-uniform float u_spread;
-uniform float u_turn;
-uniform float u_trunk;
-uniform float u_width;
-uniform float u_joint;
-uniform float u_taper;
-uniform float u_fit;
-uniform float u_opacity;
-uniform float u_background;
-uniform float u_fade;
-uniform float u_hue;
-uniform vec2 u_base;
-uniform float u_radius;
-uniform int u_depth;
-uniform int u_hide;
-/* The detail level (mip level) the trunk reads at level 0; each level down reads one step smaller (u_lodStep). */
-uniform float u_lod;
-uniform float u_lodStep;
-
-const int STACK = 48;
-
-vec2 turn(vec2 v, float a) { return vec2(v.x * cos(a) - v.y * sin(a), v.x * sin(a) + v.y * cos(a)); }
-
-vec3 hueShift(vec3 c, float h) {
-  const vec3 k = vec3(0.57735);
-  float ca = cos(h);
-  return c * ca + cross(k, c) * sin(h) + k * dot(k, c) * (1.0 - ca);
-}
-
-void main() {
-  float aspect = u_res.x / u_res.y;
-  vec3 back = texture(u_tex, v_uv).rgb * u_background;
-  float angles[4];
-  for (int i = 0; i < 4; i++) {
-    angles[i] = u_turn + (u_count > 1 ? u_spread * (float(i) / float(u_count - 1) - 0.5) : 0.0);
-  }
-  float halfWidth = u_width * u_trunk * 0.5;
-  float topWidth = mix(1.0, u_scale, u_taper);
-  vec2 joint = vec2(0.0, u_joint * u_trunk);
-  /* Points from the base point, in screen heights. */
-  vec2 points[STACK];
-  int levels[STACK];
-  points[0] = (v_uv - 0.5) * vec2(aspect, 1.0) - u_base;
-  levels[0] = 0;
-  int top = 1;
-  vec3 color = back;
-  for (int visit = 0; visit < 200; visit++) {
-    if (top == 0) break;
-    top--;
-    vec2 point = points[top];
-    int level = levels[top];
-    /* The trunk's half width at this height: from halfWidth at the bottom to topWidth × halfWidth at the top. */
-    float height = point.y / u_trunk;
-    float narrow = mix(1.0, topWidth, clamp(height, 0.0, 1.0));
-    if (level >= u_hide && abs(point.x) <= halfWidth * narrow && height >= 0.0 && height <= 1.0) {
-      /* The picture's middle covers the trunk, at the picture's proportions; it narrows with the trunk. */
-      vec2 uv = vec2(0.5 + point.x / narrow / (u_fit * aspect), 0.5 + (point.y - u_trunk * 0.5) / u_fit);
-      float depth = float(level);
-      vec3 trunk = hueShift(textureLod(u_tex, uv, u_lod + depth * u_lodStep).rgb, u_hue * depth);
-      color = mix(back, trunk, u_opacity * pow(1.0 - u_fade, depth));
-      break;
-    }
-    if (level >= u_depth) continue;
-    /* Pushed first is tested last, so the last branch is tested first and covers the others. */
-    for (int i = 0; i < 4; i++) {
-      if (i >= u_count || top >= STACK) break;
-      vec2 inside = turn(point - joint, -angles[i]) / u_scale;
-      if (dot(inside, inside) > u_radius * u_radius) continue;
-      points[top] = inside;
-      levels[top] = level + 1;
-      top++;
-    }
-  }
-  o = vec4(clamp(color, 0.0, 1.0), 1.0);
-}`;
-
-/**
  * Pass 3: feedback trails. The previous output is zoomed, turned and
  * hue-shifted around the screen center, then combined with the new frame.
  * Mode 1 = mix (smoky trails), 2 = lighten (glowing trails). Where the
@@ -927,25 +813,8 @@ void main() {
   o = vec4(clamp(mix(color, lit, u_relief), 0.0, 1.0), 1.0);
 }`;
 
-/**
- * Contour brightness: the picture's brightness, blurred, and eased over
- * time. The blur reads a smaller copy of the picture (mip level u_smooth)
- * with smooth cubic curves between its pixels, so the contour lines bend
- * smoothly instead of following the small copy's square pixels. Each
- * frame keeps u_keep of the last brightness (Steady), so the lines glide
- * instead of jumping with every small change in the picture.
- */
-export const CONTOUR_FIELD_SHADER = `#version 300 es
-precision highp float;
-in vec2 v_uv;
-out vec4 o;
-uniform sampler2D u_tex;
-uniform sampler2D u_previous;
-uniform float u_smooth;
-uniform float u_keep;
-
-float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
-
+/** Cubic B-spline sampling of one mip level of u_tex, from four filtered reads: smooth curves between its pixels. */
+const CUBIC_GLSL = `
 vec4 bspline(float t) {
   vec4 n = vec4(1.0, 2.0, 3.0, 4.0) - t;
   vec4 s = n * n * n;
@@ -975,7 +844,377 @@ vec3 cubicAt(vec2 uv, int level) {
   float sy = s.z / (s.z + s.w);
   return mix(mix(e, d, sx), mix(b, a, sx), sy);
 }
+`;
 
+/**
+ * Camera: the picture becomes a landscape seen through a virtual camera.
+ * Brightness is height (u_height screen heights at white; below 0, dark
+ * areas rise instead), read from u_fine: the picture's brightness, blurred
+ * and smoothed by the renderer (see drawCamera), in the picture's pixels.
+ * Past the picture's edge the land goes on by u_repeat: mirrored (seamless
+ * for every picture), repeated as it is, or not at all, so the picture
+ * stands alone with sky around it. The camera circles its aim point, at u_offset from the
+ * picture's center (the engine flies it over the land): u_tilt from
+ * straight down, u_turn around it, u_distance away, with a lens of u_lens
+ * vertical angle.
+ *
+ * Each pixel's ray walks over the land with the help of u_max: a pyramid
+ * of the land's highest point in ever larger squares of pixels (see
+ * MAX_SHADER). At each visit the ray looks up the square it is in at the
+ * current level. If the ray is above the square's highest point, it can
+ * skip to where it leaves the square (or sinks to that height) and try a
+ * larger square next. If not, it tries a smaller square at the same
+ * place, down to one pixel, where the exact crossing is found by closing
+ * in. So no step can jump over a ridge, however thin, and the walls of a
+ * sharp edge come out clean.
+ *
+ * The hit point is lit by a sun at u_lightTurn and u_lightHeight, with
+ * shadows (u_shadow, found by the same walk toward the sun), a glossy
+ * shine (u_shine), and fog (u_fog) toward the fog color: the picture's
+ * mean color, taken toward u_skyColor by u_sky. The sky, where a ray
+ * misses the land, has that color too. Under it lies a second layer: the
+ * same camera's view of the picture as a flat floor, with the same light
+ * and fog. The raised land (with its sky) is combined with that floor by
+ * u_blend (see blendLayer) and shows over it at u_amount, so the land
+ * seems to rise out of it.
+ */
+export const CAMERA_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+/* The exact height (read between pixels) and the pyramid of highest points (read by pixel and level). */
+uniform sampler2D u_fine;
+uniform sampler2D u_max;
+uniform int u_levels;
+uniform vec2 u_res;
+uniform float u_amount;
+uniform int u_blend;
+uniform int u_repeat;
+uniform float u_height;
+uniform float u_tilt;
+uniform float u_turn;
+uniform vec2 u_offset;
+uniform float u_distance;
+uniform float u_lens;
+uniform float u_lightTurn;
+uniform float u_lightHeight;
+uniform float u_shadow;
+uniform float u_fog;
+uniform float u_sky;
+uniform vec3 u_skyColor;
+uniform float u_shine;
+/* The blur of the height (a mip level): how wide the slope of a sharp edge is. */
+uniform float u_smooth;
+
+/**
+ * The most squares one ray may visit, from the renderer. A fixed count
+ * would let the graphics driver unroll the walk into one enormous program
+ * that takes an age to build, or fails.
+ */
+uniform int u_visits;
+const float FAR = 12.0;
+
+float aspect;
+
+vec3 blendLayer(vec3 base, vec3 top, int mode) {
+  if (mode == 1) return 1.0 - (1.0 - base) * (1.0 - top);
+  if (mode == 2) return base * top;
+  if (mode == 3) return mix(2.0 * base * top, 1.0 - 2.0 * (1.0 - base) * (1.0 - top), step(0.5, base));
+  if (mode == 4) return abs(base - top);
+  if (mode == 5) return max(base, top);
+  if (mode == 6) return min(base, top);
+  if (mode == 7) return min(base + top, 1.0);
+  return top;
+}
+
+/* A point of the land (screen heights, the picture's center at 0) in the picture's pixels, before the mirrored repeat. */
+vec2 pixelsAt(vec2 p) { return vec2((p.x / aspect + 0.5) * u_res.x, (p.y + 0.5) * u_res.y); }
+
+/**
+ * The repeat: "at" (pixels, any distance) becomes "q", a pixel position
+ * inside the picture, and "flip" says for each axis whether a step
+ * forward in the world goes forward (1) or back (-1) inside it. With no
+ * repeat, a point past the picture's edge gives false.
+ */
+bool wrapPixels(vec2 at, out vec2 q, out vec2 flip) {
+  flip = vec2(1.0);
+  if (u_repeat == 2) {
+    q = at;
+    return all(greaterThanEqual(at, vec2(0.0))) && all(lessThanEqual(at, u_res));
+  }
+  if (u_repeat == 1) {
+    q = mod(at, u_res);
+    return true;
+  }
+  vec2 period = 2.0 * u_res;
+  q = mod(at, period);
+  if (q.x > u_res.x) { q.x = period.x - q.x; flip.x = -1.0; }
+  if (q.y > u_res.y) { q.y = period.y - q.y; flip.y = -1.0; }
+  return true;
+}
+
+/* The exact height of the land at a point; far below everything past the picture's edge with no repeat. */
+float heightAt(vec2 p) {
+  vec2 q, flip;
+  if (!wrapPixels(pixelsAt(p), q, flip)) return -1e6;
+  /* An explicit level: the walk's loop reads this, and a plain texture() read there has no defined level. */
+  return textureLod(u_fine, q / u_res, 0.0).r * abs(u_height);
+}
+
+/* The picture's color at a point on the land seen from "t" away: the blur level comes from the distance, so a cliff's edge gets no dark line. */
+vec3 colorAt(vec2 p, float t) {
+  vec2 q, flip;
+  wrapPixels(pixelsAt(p), q, flip);
+  float lod = max(0.0, log2(t * 2.0 * tan(u_lens * 0.5)));
+  return textureLod(u_tex, q / u_res, lod).rgb;
+}
+
+/**
+ * Walks the ray from "t" until it meets the land (true, with the crossing
+ * in "tHit") or leaves (false). See the note at the top. A ray that runs
+ * close along a wall must visit small squares all the way, so it can use
+ * up its visits: then "giveUp" is the answer, with "tHit" where the ray
+ * got to. The view gives true, so such a ray shows the land under that
+ * point and not a hole of sky; a shadow ray gives false, so it stays lit.
+ */
+bool march(vec3 eye, vec3 dir, float t, int visits, bool giveUp, out float tHit) {
+  float top = abs(u_height);
+  int level = u_levels - 1;
+  /* The ray's speed over the picture's pixels, and a small push past a square's edge so the next visit is inside the next square. */
+  vec2 speed = vec2(dir.x / aspect * u_res.x, dir.y * u_res.y);
+  float push = min(0.02 / max(length(speed), 1e-6), 1e-3);
+  tHit = 0.0;
+  float tEnd = FAR;
+  if (u_repeat == 2) {
+    /**
+     * No repeat: the walk starts where the ray enters the picture and ends
+     * where it leaves, or never starts. The picture is a rectangle, so a ray
+     * that leaves it does not come back. This check stays out of the loop:
+     * inside it, Direct3D fails to build the shader and the picture is lost.
+     */
+    vec2 at = pixelsAt((eye + dir * t).xy);
+    vec2 toLow = (vec2(0.0) - at) / speed;
+    vec2 toHigh = (u_res - at) / speed;
+    vec2 near = min(toLow, toHigh);
+    vec2 far = max(toLow, toHigh);
+    if (abs(speed.x) < 1e-9) { near.x = -1e9; far.x = 1e9; if (at.x < 0.0 || at.x > u_res.x) return false; }
+    if (abs(speed.y) < 1e-9) { near.y = -1e9; far.y = 1e9; if (at.y < 0.0 || at.y > u_res.y) return false; }
+    float enter = max(near.x, near.y);
+    float leave = min(far.x, far.y);
+    if (leave < enter || leave < 0.0) return false;
+    tEnd = min(FAR, t + leave);
+    t += max(enter, 0.0) + push;
+  }
+  /**
+   * After a move, the square the ray left (at the level it was at), so the
+   * next visit can climb only to the larger squares the ray entered anew.
+   * A larger square that still holds the square it left was too high for
+   * the ray already (the reason the walk came down), so a climb into it
+   * would only cost a visit to come down again.
+   */
+  ivec2 left = ivec2(0);
+  bool moved = false;
+  for (int i = 0; i < visits; i++) {
+    if (t > tEnd) return false;
+    vec3 p = eye + dir * t;
+    if (p.z > top && dir.z >= 0.0) return false;
+    vec2 q, flip;
+    wrapPixels(pixelsAt(p.xy), q, flip);
+    if (moved) {
+      for (int k = 0; k < 16; k++) {
+        if (level >= u_levels - 1 || ivec2(floor(q / exp2(float(level + 1)))) == left / 2) break;
+        level++;
+        left /= 2;
+      }
+      moved = false;
+    }
+    float size = exp2(float(level));
+    ivec2 count = textureSize(u_max, level);
+    ivec2 cell = clamp(ivec2(floor(q / size)), ivec2(0), count - 1);
+    float highest = texelFetch(u_max, cell, level).r * top;
+    /* Where the ray leaves this square, along its flipped direction inside the picture. */
+    vec2 along = speed * flip;
+    vec2 low = vec2(cell) * size;
+    vec2 high = min(low + size, u_res);
+    vec2 edge = mix(low, high, step(0.0, along));
+    vec2 toEdge = (edge - q) / along;
+    if (abs(along.x) < 1e-9) toEdge.x = 1e9;
+    if (abs(along.y) < 1e-9) toEdge.y = 1e9;
+    float tExit = t + max(min(toEdge.x, toEdge.y), 0.0);
+    if (p.z <= highest) {
+      if (level > 0) {
+        level--;
+        continue;
+      }
+      /* One pixel: the land crosses the ray between here and the exit, or it does not. */
+      if (p.z - heightAt(p.xy) <= 0.0) {
+        tHit = t;
+        return true;
+      }
+      vec3 exitPoint = eye + dir * tExit;
+      if (exitPoint.z - heightAt(exitPoint.xy) <= 0.0) {
+        float above = t;
+        float below = tExit;
+        for (int k = 0; k < 8; k++) {
+          float mid = 0.5 * (above + below);
+          vec3 m = eye + dir * mid;
+          if (m.z - heightAt(m.xy) <= 0.0) below = mid; else above = mid;
+        }
+        tHit = below;
+        return true;
+      }
+      t = tExit + push;
+      left = cell;
+      moved = true;
+      continue;
+    }
+    /* Above everything in the square: skip to its edge, or to where the ray sinks to its highest point. */
+    float tSink = dir.z < 0.0 ? t + (p.z - highest) / -dir.z : 1e9;
+    t = min(tExit, tSink) + push;
+    left = cell;
+    moved = true;
+  }
+  tHit = t;
+  return giveUp;
+}
+
+void main() {
+  aspect = u_res.x / u_res.y;
+  float top = abs(u_height);
+  /* The camera: on a circle around its aim point, looking at it. */
+  vec3 aim = vec3(u_offset, top * 0.5);
+  vec3 eye = aim + u_distance * vec3(sin(u_tilt) * cos(u_turn), sin(u_tilt) * sin(u_turn), cos(u_tilt));
+  eye.z = max(eye.z, top + 0.02);
+  vec3 forward = normalize(aim - eye);
+  /* The orbit angle also defines right when Tilt is zero (forward is vertical). */
+  vec3 right = vec3(-sin(u_turn), cos(u_turn), 0.0);
+  vec3 up = cross(right, forward);
+  vec2 screen = (v_uv - 0.5) * vec2(2.0 * aspect, 2.0);
+  vec3 dir = normalize(forward + tan(u_lens * 0.5) * (screen.x * right + screen.y * up));
+
+  vec3 fog = mix(textureLod(u_tex, vec2(0.5), 12.0).rgb * 0.5, u_skyColor, u_sky);
+  vec3 sun = vec3(cos(u_lightTurn) * cos(u_lightHeight), sin(u_lightTurn) * cos(u_lightHeight), sin(u_lightHeight));
+  /* The sky: the fog color, a little lighter toward the horizon. */
+  vec3 sky = fog * (1.0 + 0.6 * max(0.0, 1.0 - dir.z * 4.0));
+  /* The floor layer: the same ray meets the flat picture at height 0, lit by the sun from straight up. */
+  vec3 floor_ = sky;
+  if (dir.z < 0.0) {
+    float tf = eye.z / -dir.z;
+    vec2 q, flip;
+    if (wrapPixels(pixelsAt((eye + dir * tf).xy), q, flip)) {
+      vec3 ground = colorAt((eye + dir * tf).xy, tf);
+      floor_ = mix(ground * (0.3 + 0.7 * sun.z), fog, 1.0 - exp(-tf * u_fog * 0.5));
+    }
+  }
+
+  /* The land: the walk starts where the ray first comes under the highest possible land. */
+  vec3 color = sky;
+  float t;
+  if (dir.z < 0.0 && march(eye, dir, (eye.z - top) / -dir.z, u_visits, true, t)) {
+    vec3 p = eye + dir * t;
+    float e = 1.0 / u_res.y;
+    vec3 normal = normalize(vec3(heightAt(p.xy - vec2(e, 0.0)) - heightAt(p.xy + vec2(e, 0.0)), heightAt(p.xy - vec2(0.0, e)) - heightAt(p.xy + vec2(0.0, e)), 2.0 * e));
+    float diffuse = max(dot(normal, sun), 0.0);
+    float lit = 1.0;
+    if (u_shadow > 0.0 && diffuse > 0.0) {
+      float tShadow;
+      if (march(p + normal * (2.0 * e), sun, 0.0, u_visits / 2, false, tShadow)) lit = 1.0 - u_shadow;
+    }
+    float light = 0.3 + 0.7 * diffuse * lit;
+    /**
+     * The color comes from a little uphill of the hit point (as far as the
+     * blur of the height spreads an edge), so the slope of a sharp edge
+     * takes the color of its top, not a mix of both sides.
+     */
+    vec3 ground = colorAt(p.xy - normal.xy * 2.0 * exp2(u_smooth) / u_res.y, t);
+    /* Shine: a glossy highlight where the land faces halfway between the sun and the camera. */
+    vec3 halfway = normalize(sun - dir);
+    float gloss = pow(max(dot(normal, halfway), 0.0), 40.0) * lit;
+    color = mix(ground * light + u_shine * gloss, fog, 1.0 - exp(-t * u_fog * 0.5));
+  }
+  o = vec4(clamp(mix(floor_, blendLayer(floor_, clamp(color, 0.0, 1.0), u_blend), u_amount), 0.0, 1.0), 1.0);
+}`;
+
+/**
+ * The camera's height field: the picture's brightness from a smaller copy
+ * (mip level u_smooth), read with smooth cubic curves, so the land is
+ * smooth and not made of the small copy's square pixels. u_sign below 0
+ * turns it over, so dark areas rise.
+ */
+export const CAMERA_FIELD_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform float u_smooth;
+uniform float u_sign;
+
+float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+${CUBIC_GLSL}
+void main() {
+  int level = int(floor(u_smooth));
+  float between = u_smooth - float(level);
+  vec3 color = cubicAt(v_uv, level);
+  if (between > 0.0) color = mix(color, cubicAt(v_uv, level + 1), between);
+  float bright = clamp(luma(color), 0.0, 1.0);
+  o = vec4(u_sign < 0.0 ? 1.0 - bright : bright, 0.0, 0.0, 1.0);
+}`;
+
+/**
+ * One level of the camera's pyramid of highest points. With u_step 1 each
+ * pixel of the output is the highest of the 3 × 3 block of u_src centered
+ * on it, so level 0 of the pyramid is the height field widened by one
+ * pixel each way (the land between two pixels can be as high as either).
+ * With u_step 2 it is the highest of the 2 × 2 block at twice the pixel in
+ * the level before, so each level holds the highest point of squares twice
+ * as large. Pixels past the field's edge repeat its edge. The reads use
+ * u_level of u_src. The renderer leaves the base level at zero and uses
+ * a separate reduction target, so sampling never aliases the output.
+ */
+export const MAX_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+out vec4 o;
+uniform sampler2D u_src;
+uniform int u_step;
+uniform int u_level;
+
+void main() {
+  ivec2 size = textureSize(u_src, u_level);
+  ivec2 base = ivec2(gl_FragCoord.xy) * u_step - (u_step == 1 ? 1 : 0);
+  int span = u_step == 1 ? 3 : 2;
+  float highest = 0.0;
+  for (int dy = 0; dy < span; dy++) {
+    for (int dx = 0; dx < span; dx++) {
+      ivec2 at = clamp(base + ivec2(dx, dy), ivec2(0), size - 1);
+      highest = max(highest, texelFetch(u_src, at, u_level).r);
+    }
+  }
+  o = vec4(highest, 0.0, 0.0, 1.0);
+}`;
+
+/**
+ * Contour brightness: the picture's brightness, blurred, and eased over
+ * time. The blur reads a smaller copy of the picture (mip level u_smooth)
+ * with smooth cubic curves between its pixels, so the contour lines bend
+ * smoothly instead of following the small copy's square pixels. Each
+ * frame keeps u_keep of the last brightness (Steady), so the lines glide
+ * instead of jumping with every small change in the picture.
+ */
+export const CONTOUR_FIELD_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform sampler2D u_previous;
+uniform float u_smooth;
+uniform float u_keep;
+
+float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+
+${CUBIC_GLSL}
 void main() {
   int level = int(floor(u_smooth));
   float between = u_smooth - float(level);

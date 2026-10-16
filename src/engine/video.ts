@@ -87,6 +87,7 @@ export function seekVideo(video: HTMLVideoElement, target: number) {
 export function copyVideo(video: HTMLVideoElement) {
   return new Promise<HTMLVideoElement>((resolve, reject) => {
     const copy = document.createElement("video");
+    copy.crossOrigin = video.crossOrigin;
     copy.muted = true;
     copy.playsInline = true;
     copy.preload = "auto";

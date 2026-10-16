@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { CaretRight, DotsSixVertical, LockSimple, LockSimpleOpen, X } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
 import { addEffect, createParams, removeEffect, type GroupKey, type ParamKey, type PlayState } from "../engine/params";
@@ -66,7 +66,6 @@ const MAP_KEYS: Record<MapMode, ParamKey[]> = {
   7: ["mapArms", "mapAngle", "mapScale", "mapMix"]
 };
 const TRAIL_KEYS: ParamKey[] = ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"];
-const BRANCH_KEYS: ParamKey[] = ["branchOpacity", "branchCount", "branchSize", "branchSpread", "branchTurn", "branchJoint", "branchTrunk", "branchWidth", "branchTaper", "branchHide", "branchBackground", "branchFade", "branchHue", "branchBaseX", "branchBaseY"];
 /** The sliders each time smear pattern uses; Angle only turns the Linear and Sweep patterns. */
 const SMEAR_KEYS: Record<SmearShape, ParamKey[]> = {
   0: ["smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade"],
@@ -78,6 +77,7 @@ const SMEAR_KEYS: Record<SmearShape, ParamKey[]> = {
 const SMEAR_SHAPES = [[0, "Linear"], [1, "Rings"], [2, "Sweep"], [3, "Brightness"], [4, "Noise"]] as const;
 const CONTOUR_KEYS: ParamKey[] = ["contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady"];
 const RELIEF_KEYS: ParamKey[] = ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"];
+const CAMERA_KEYS: ParamKey[] = ["cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth"];
 const FINISH_KEYS: ParamKey[] = ["sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel"];
 
 const LAYER_BLENDS = [
@@ -86,6 +86,8 @@ const LAYER_BLENDS = [
 const FOLD_MODES = [[0, "Radial"], [1, "Triangle tiles"], [2, "Hexagon tiles"]] as const;
 const MAP_MODES = [[1, "Power (z^n)"], [2, "Möbius"], [3, "Julia"], [4, "Log spiral"], [5, "Sine"], [6, "Tunnel"], [7, "Seamless spiral"]] as const;
 const TRAIL_MODES = [[1, "Mix (smoky)"], [2, "Lighten (glowing)"]] as const;
+/** How the camera's land goes on past the picture. Mirror is seamless for every picture; Tile is seamless only for a picture that tiles. */
+const CAMERA_REPEATS = [[0, "Mirror"], [1, "Tile"], [2, "None"]] as const;
 
 /** The Effects panel, docked at the right: play buttons, then the effect groups. */
 export function ControlPanel({ engine, openGroup, onOpenGroup, paused, onRandomize, onNudge, onTogglePause, onStop, onReset, hasVideo }: Props) {
@@ -178,9 +180,9 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, paused, onRandomi
     const enable: Partial<Record<FxStep, () => void>> = {
       warp: enableWarp, map: enableMap, kaleidoscope: enableKaleidoscope, blur: enableBlur, contours: enableContours,
       trails: () => start("trailAmount", 0.85),
-      branches: () => start("branchOpacity", 1),
       smear: () => start("smearAmount", 1),
-      relief: () => start("reliefAmount", 0.6)
+      relief: () => start("reliefAmount", 0.6),
+      camera: () => start("cameraAmount", 1)
     };
     enable[step]?.();
     addEffect(engine.state, step);
@@ -219,11 +221,6 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, paused, onRandomi
         {TRAIL_KEYS.map(row)}
       </Group>
     ),
-    branches: (grip) => (
-      <Group engine={engine} group="branches" title="Branches" grip={grip} {...accordion("branches")}>
-        {BRANCH_KEYS.map(row)}
-      </Group>
-    ),
     smear: (grip) => (
       <Group engine={engine} group="smear" title="Time smear" grip={grip} {...accordion("smear")}>
         <SmearSection engine={engine} row={row} />
@@ -241,6 +238,13 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, paused, onRandomi
     relief: (grip) => (
       <Group engine={engine} group="relief" title="Relief" grip={grip} {...accordion("relief")}>
         {RELIEF_KEYS.map(row)}
+      </Group>
+    ),
+    camera: (grip) => (
+      <Group engine={engine} group="camera" title="Camera" grip={grip} {...accordion("camera")}>
+        <CameraBlend engine={engine} />
+        <CameraRepeatRow engine={engine} />
+        {CAMERA_KEYS.map(row)}
       </Group>
     ),
     finish: (grip) => (
@@ -279,7 +283,8 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, paused, onRandomi
             className="panel-button icon"
             onClick={onStop}
             disabled={paused}
-            title="Stop: pause, and go back to the start"
+            title="Stop (Shift+Space): pause, and go back to the start"
+            aria-keyshortcuts="Shift+Space"
             aria-label="Stop"
           >
             <MediaIcon kind="stop" size={17} />
@@ -342,7 +347,7 @@ interface Grip {
 /** The effects in the Add effect menu, in menu order, with the names their groups show. */
 const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
   ["kaleidoscope", "Kaleidoscope"], ["map", "Algorithm"], ["warp", "Warp"], ["blur", "Blur"], ["trails", "Trails"],
-  ["branches", "Branches"], ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["finish", "Final effects"]
+  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["camera", "Camera"], ["finish", "Final effects"]
 ];
 
 /**
@@ -428,16 +433,77 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, children 
 }) {
   const [enabled, setEnabled] = useState(engine && group ? engine.state.groups[group] : true);
   const [locked, setLocked] = useState(engine && group ? engine.state.locks[group] : false);
+  const [bypassed, setBypassed] = useState(false);
+  const [solo, setSolo] = useState(false);
+  const bypassPointer = useRef<number | null>(null);
+  const suppressClick = useRef(false);
+  const releaseBypass = useCallback(() => {
+    if (engine && group) {
+      engine.bypassedGroups.delete(group);
+      if (engine.soloGroup === group) engine.soloGroup = null;
+    }
+    bypassPointer.current = null;
+    setBypassed(false);
+    setSolo(false);
+  }, [engine, group]);
+
+  useEffect(() => {
+    const release = (event: PointerEvent) => {
+      if (event.pointerId === bypassPointer.current) releaseBypass();
+    };
+    const hidden = () => { if (document.hidden) releaseBypass(); };
+    window.addEventListener("pointerup", release, true);
+    window.addEventListener("pointercancel", release, true);
+    window.addEventListener("blur", releaseBypass);
+    document.addEventListener("visibilitychange", hidden);
+    return () => {
+      window.removeEventListener("pointerup", release, true);
+      window.removeEventListener("pointercancel", release, true);
+      window.removeEventListener("blur", releaseBypass);
+      document.removeEventListener("visibilitychange", hidden);
+      if (engine && group) {
+        engine.bypassedGroups.delete(group);
+        if (engine.soloGroup === group) engine.soloGroup = null;
+      }
+    };
+  }, [engine, group, releaseBypass]);
+  const showing = enabled && !bypassed;
 
   return (
-    <section className={`panel-group ${enabled ? "" : "disabled"} ${open ? "open" : ""}`}>
-      <header className="panel-group-header">
+    <section className={`panel-group ${showing ? "" : "disabled"} ${open ? "open" : ""}`}>
+      <header
+        className="panel-group-header"
+        title={engine && group ? "Ctrl+hold to bypass; Ctrl+Shift+hold to solo this effect" : undefined}
+        onPointerDownCapture={(event) => {
+          suppressClick.current = false;
+          if (!engine || !group || !event.ctrlKey || event.button !== 0) return;
+          event.preventDefault();
+          event.stopPropagation();
+          suppressClick.current = true;
+          bypassPointer.current = event.pointerId;
+          if (event.shiftKey) {
+            engine.soloGroup = group;
+            setSolo(true);
+          } else {
+            engine.bypassedGroups.add(group);
+            setBypassed(true);
+          }
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onLostPointerCapture={releaseBypass}
+        onClickCapture={(event) => {
+          if (!suppressClick.current) return;
+          event.preventDefault();
+          event.stopPropagation();
+          suppressClick.current = false;
+        }}
+      >
         {engine && group && (
           <button
             type="button"
             role="switch"
             className="panel-group-toggle"
-            aria-checked={enabled}
+            aria-checked={showing}
             aria-label={`${title} on`}
             title={enabled ? `${title} is on. Click to turn it off.` : `${title} is off. Click to turn it on.`}
             onClick={() => {
@@ -447,12 +513,12 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, children 
               if (next) onEnable?.();
             }}
           >
-            <PowerIcon on={enabled} size={18} />
+            <PowerIcon on={showing} size={18} />
           </button>
         )}
         <button className="panel-group-title" onClick={onToggle} aria-expanded={open}>
           <CaretRight size={12} weight="bold" className="panel-group-caret" />
-          {title}
+          {title}{solo && <span className="panel-group-solo">Solo</span>}
         </button>
         {engine && group && (
           <button
@@ -490,7 +556,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, children 
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, onChange }: {
@@ -570,6 +636,44 @@ function ContourBlend({ engine }: { engine: Engine }) {
         onChange={(next) => {
           engine.state.contourBlend = next;
           setBlend(next);
+        }}
+      />
+    </div>
+  );
+}
+
+/** How the camera's raised land combines with the flat floor under it. */
+function CameraBlend({ engine }: { engine: Engine }) {
+  const [blend, setBlend] = useState(engine.state.cameraBlend);
+  return (
+    <div className="panel-select-row panel-layer-blend">
+      <span className="panel-row-name">Blend</span>
+      <Dropdown
+        value={blend}
+        options={LAYER_BLENDS}
+        label="Camera blend mode"
+        onChange={(next) => {
+          engine.state.cameraBlend = next;
+          setBlend(next);
+        }}
+      />
+    </div>
+  );
+}
+
+/** How the camera's land goes on past the picture's edge. */
+function CameraRepeatRow({ engine }: { engine: Engine }) {
+  const [repeat, setRepeat] = useState(engine.state.cameraRepeat);
+  return (
+    <div className="panel-select-row panel-layer-blend">
+      <span className="panel-row-name">Repeat</span>
+      <Dropdown
+        value={repeat}
+        options={CAMERA_REPEATS}
+        label="How the land goes on past the picture"
+        onChange={(next) => {
+          engine.state.cameraRepeat = next;
+          setRepeat(next);
         }}
       />
     </div>

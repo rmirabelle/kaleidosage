@@ -2,6 +2,9 @@ mod browse;
 mod files;
 mod screen;
 mod updater;
+mod video_import;
+mod video_stream;
+mod scene_archive;
 
 use std::time::Duration;
 use tauri::Manager;
@@ -45,6 +48,13 @@ pub fn run() {
         | tauri_plugin_window_state::StateFlags::MAXIMIZED;
 
     tauri::Builder::default()
+        .manage(video_stream::Videos::default())
+        .manage(video_stream::Uploads::default())
+        .register_asynchronous_uri_scheme_protocol("video", |ctx, request, responder| {
+            let id = request.uri().path().trim_start_matches('/');
+            let source = ctx.app_handle().state::<video_stream::Videos>().get(id);
+            tauri::async_runtime::spawn_blocking(move || responder.respond(video_stream::response(request, source)));
+        })
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             restore_main_window(app);
         }))
@@ -67,11 +77,15 @@ pub fn run() {
             browse::delete_browse_entry,
             browse::copy_browse_entry,
             files::read_image_file,
-            files::read_video_file,
+            video_stream::open_video_file,
+            video_stream::begin_video_upload,
+            video_stream::append_video_upload,
+            video_stream::finish_video_upload,
+            video_import::compatible_video,
             files::save_export,
             files::default_export_folder,
-            files::save_scene,
-            files::read_scene,
+            scene_archive::save_scene,
+            scene_archive::read_scene,
             files::reveal_file,
             files::cursor_position,
             screen::screen_color_at_cursor,

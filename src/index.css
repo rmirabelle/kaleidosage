@@ -308,6 +308,7 @@ button { border: 0; }
   text-transform: uppercase;
   cursor: pointer;
 }
+.panel-group-solo { margin-left: auto; color: #f5ce69; font-size: 9px; font-weight: 700; text-transform: uppercase; }
 .panel-group-title:hover, .panel-group.open .panel-group-title { color: #f1f2f4; }
 .panel-group-caret { transition: transform .22s ease; }
 .panel-group.open .panel-group-caret { transform: rotate(90deg); }
@@ -1337,6 +1338,14 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
   object-fit: contain;
   border-radius: 4px;
   box-shadow: 0 6px 24px rgba(0,0,0,.5);
+}
+.open-preview-video {
+  width: 100%;
+  max-height: 100%;
+  min-width: 0;
+  object-fit: contain;
+  border-radius: 4px;
+  background: #000;
 }
 .open-preview-placeholder {
   display: flex;

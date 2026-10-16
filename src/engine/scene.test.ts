@@ -6,6 +6,13 @@ const IMAGE = { type: "image/png", data: "iVBORw0KGgo=" };
 const IMAGE2 = { type: "image/jpeg", data: "/9j/4AAQ" };
 
 describe("scene files", () => {
+  it("round-trips embedded video handles for both slots without base64", () => {
+    const images = { image: { type: "video/mp4", video: "1" }, image2: { type: "video/webm", video: "2" } };
+    const saved = serializeScene(createParams(), createPlayState(), images);
+    expect(applyScene(saved, createParams(), createPlayState())).toEqual(images);
+    expect(() => sceneImageToBlob(images.image)).toThrow("opened as streams");
+  });
+
   it("restore every parameter and the play state", () => {
     const params = createParams();
     const state = createPlayState();
@@ -87,7 +94,7 @@ describe("scene files", () => {
     /* Earlier versions of the app read a full order inside each kind: the list's order first. */
     const savedState = JSON.parse(text).state;
     expect(savedState.shapeStack).toEqual(["warp", "map", "kaleidoscope"]);
-    expect(savedState.pictureOrder).toEqual(["relief", "blur", "trails", "smear", "contours", "finish"]);
+    expect(savedState.pictureOrder).toEqual(["relief", "blur", "trails", "smear", "contours", "camera", "finish"]);
 
     /* Scenes from before the effect list: every effect that is on and changes the picture, in their order. */
     const showing = { warpAmount: { value: 0.3 }, blurAmount: { value: 10 }, trailAmount: { value: 0.5 }, smearAmount: { value: 1 }, contourOpacity: { value: 1 }, reliefAmount: { value: 1 }, sharpen: { value: 1 } };

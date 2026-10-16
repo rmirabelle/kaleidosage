@@ -17,7 +17,7 @@ import { getAppVersion } from "./updater";
  *   can fade out.
  * - Seamless loop: the last frame leads into the first. Custom range times
  *   and the warp flow change a little so they repeat in the video; a noise
- *   or cell warp that flows, or a tunnel that flies, never repeats, so the
+ *   or cell warp that flows, a tunnel that flies, or a camera that flies, never repeats, so the
  *   last moment of the video crossfades into the moment before the first frame.
  */
 
@@ -352,6 +352,8 @@ export async function encodeVideo(
     state.clock = 0;
     state.warpTime = 0;
     state.mapTravel = 0;
+    state.cameraX = 0;
+    state.cameraY = 0;
     if (seamless) {
       /* A source video crossfades its end into its start, so it never jumps. */
       state.videoCrossfade = true;

@@ -5,10 +5,11 @@ import type { WarpType } from "./renderer";
  * Loop math for video export. Every range on the shared cycle goes from its
  * start handle to its end handle in one cycle and back in the next, so the
  * picture repeats after two cycles (after one when only full turns move).
- * Three things do not follow the cycle: ranges with their own time, the warp
- * flow and the tunnel travel. A seamless video changes the first two
- * slightly so they repeat too; the tunnel and the noise and cell warps never
- * repeat, so their video crossfades its last moment into its first.
+ * Four things do not follow the cycle: ranges with their own time, the warp
+ * flow, the tunnel travel and the camera flight. A seamless video changes
+ * the first two slightly so they repeat too; the tunnel, the camera and the
+ * noise and cell warps never repeat, so their video crossfades its last
+ * moment into its first.
  */
 
 /**
@@ -78,11 +79,12 @@ export function fittedCustomSeconds(params: Params, videoSeconds: number) {
   return fitted;
 }
 
-/** True when something moves on and never comes back: a noise or cell warp that flows, or a tunnel that flies. */
+/** True when something moves on and never comes back: a noise or cell warp that flows, a tunnel that flies, or a camera that flies. */
 export function needsSeamFade(params: Params, state: PlayState) {
   const warp = state.groups.warp && WARP_PERIODS[state.warpType] === null && everNonZero(params.warpFlow);
   const tunnel = state.groups.map && state.mapMode === 6 && everNonZero(params.mapSpeed);
-  return warp || tunnel;
+  const camera = state.groups.camera && everNonZero(params.cameraSpeed);
+  return warp || tunnel || camera;
 }
 
 /**
