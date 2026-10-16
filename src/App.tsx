@@ -1,31 +1,38 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { ArrowsIn, ArrowsOut, Camera, FilmSlate, FloppyDisk, Gauge, Info, SignOut, SlidersHorizontal, X } from "@phosphor-icons/react";
+import { ArrowClockwise, ArrowCounterClockwise, ArrowsIn, ArrowsOut, Camera, FilmSlate, FilmStrip, FloppyDisk, Gauge, Info, SignOut, SlidersHorizontal, X } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AboutDialog } from "./components/AboutDialog";
 import { ColorFolder } from "./components/ColorFolder";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ControlPanel } from "./components/ControlPanel";
+import { ExportVideoDialog } from "./components/ExportVideoDialog";
 import { SourcePanel } from "./components/SourcePanel";
+import { StartScreen } from "./components/StartScreen";
 import { MenuBar, type Menu } from "./components/MenuBar";
 import { OpenDialog, type OpenKind } from "./components/OpenDialog";
 import { StatsOverlay } from "./components/StatsOverlay";
 import { TitleBar } from "./components/TitleBar";
 import { Toolbar } from "./components/Toolbar";
 import { Engine } from "./engine/engine";
-import { createParams, createPlayState, randomizeParams, resetEffects } from "./engine/params";
+import { createParams, createPlayState, nudgeParams, randomizeParams, resetEffects } from "./engine/params";
+import { SettingsHistory } from "./engine/history";
 import { SCENE_EXTENSION, applyScene, blobToSceneImage, sceneFingerprint, sceneImageToBlob, serializeScene } from "./engine/scene";
+import { loadSceneSource, readScene, writeScene } from "./lib/scenes";
 import type { ImageSource } from "./engine/renderer";
 import {
   makeThumbnail,
   loadImageBlob,
   loadImageFile,
-  loadRandomImage,
-  saveSnapshot
+  loadRandomImage
 } from "./lib/images";
+import { chooseExportPath, fileNameOf, writeExport } from "./lib/exports";
 import { PATTERNS, drawPattern, type Pattern } from "./lib/patterns";
+import { revealMainWindow } from "./lib/splash";
+import { isVideoPath, isVideoType, loadVideoBlob, loadVideoFile } from "./lib/videos";
 import { checkForUpdate, getAppVersion, type UpdateInfo } from "./lib/updater";
+import { encodeVideo, videoSize, type VideoOptions } from "./lib/videoExport";
 
 interface Status {
   message: string;
@@ -99,6 +106,11 @@ export default function App() {
   const [dragging, setDragging] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [openRequest, setOpenRequest] = useState<OpenRequest | null>(null);
+  const [videoDialogOpen, setVideoDialogOpen] = useState(false);
+  /** The video being made in the background: its file, progress from 0 to 1, and the controller that stops it. */
+  const [videoJob, setVideoJob] = useState<{ path: string; progress: number; controller: AbortController } | null>(null);
+  const videoJobRef = useRef(videoJob);
+  videoJobRef.current = videoJob;
   /** The open scene file (null until a scene is opened or saved), and whether it has unsaved changes. */
   const [scenePath, setScenePath] = useState<string | null>(null);
   const scenePathRef = useRef<string | null>(null);
@@ -122,6 +134,8 @@ export default function App() {
   }), []);
   const [appVersion, setAppVersion] = useState("");
   const [startupUpdate, setStartupUpdate] = useState<UpdateInfo | null>(null);
+  /** The start screen shows until a new scene starts or an image or scene opens. */
+  const [startScreen, setStartScreen] = useState(true);
 
   const showStatus = useCallback((message: string, duration = 2500, action?: Status["action"]) => {
     setStatus({ message, duration, action });
@@ -164,6 +178,7 @@ export default function App() {
       const under = patternId && previous ? (previous.patternId ? previous.under : previous) : undefined;
       const image: SlotImage = { source, blob, label: name ?? "Image", thumbnail: makeThumbnail(source), patternId, under, id: nextImageId++ };
       setSlotImage(slot, image);
+      setStartScreen(false);
       if (message) showStatus(message);
     } catch (error) {
       showError(`Could not use that image. ${String(error)}`);
@@ -194,8 +209,14 @@ export default function App() {
   /** Loads the image file picked in the Open dialog. */
   const openImagePath = useCallback(async (path: string, slot: ImageSlot) => {
     try {
-      const loaded = await loadImageFile(path);
       const name = path.split(/[\\/]/).pop();
+      if (isVideoPath(path)) {
+        showStatus(`Loading ${name}…`, 0);
+        const loaded = await loadVideoFile(path);
+        setImage(loaded.video, { message: name, blob: loaded.blob, name }, slot);
+        return;
+      }
+      const loaded = await loadImageFile(path);
       setImage(loaded.image, { message: name, blob: loaded.blob, name }, slot);
     } catch (error) {
       showError(`Could not open the image. ${String(error)}`);
@@ -235,14 +256,24 @@ export default function App() {
   }, [engine, setSlotImage]);
 
   const loadBlob = useCallback(async (blob: Blob | null | undefined, name?: string, slot: ImageSlot = 0) => {
-    if (!blob || !blob.type.startsWith("image/")) return;
+    if (!blob) return;
     try {
-      setImage(await loadImageBlob(blob), { message: name || "Image loaded", blob, name: name || "Pasted image" }, slot);
-    } catch {
-      showError("Could not read that image.");
+      if (isVideoType(blob.type)) setImage(await loadVideoBlob(blob), { message: name || "Video loaded", blob, name: name || "Video" }, slot);
+      else if (blob.type.startsWith("image/")) setImage(await loadImageBlob(blob), { message: name || "Image loaded", blob, name: name || "Pasted image" }, slot);
+    } catch (error) {
+      showError(blob.type.startsWith("video/") ? String(error instanceof Error ? error.message : error) : "Could not read that image.");
     }
   }, [setImage, showError, showStatus]);
 
+  /** A status message with a Show button that opens the saved file's folder. */
+  const showSaved = useCallback((path: string, duration: number) => {
+    showStatus(`Saved ${fileNameOf(path)}`, duration, {
+      label: "Show",
+      run: () => void invoke("reveal_file", { path }).catch((error) => showError(String(error)))
+    });
+  }, [showError, showStatus]);
+
+  /** Captures the picture at once, then asks where to save it. */
   const savePng = useCallback(async () => {
     if (!engine) return;
     const blob = await engine.snapshot();
@@ -258,15 +289,67 @@ export default function App() {
       return;
     }
     try {
-      const path = await saveSnapshot(blob);
-      showStatus("Saved to Pictures\\Kaleido Sage", 5000, {
-        label: "Show",
-        run: () => void invoke("reveal_file", { path }).catch((error) => showError(String(error)))
-      });
+      const path = await chooseExportPath("png");
+      if (!path) return;
+      await writeExport(path, blob);
+      showSaved(path, 5000);
     } catch (error) {
       showError(`Could not save the PNG. ${String(error)}`);
     }
-  }, [engine, showError, showStatus]);
+  }, [engine, showError, showSaved]);
+
+  /** The video size: the picture's shape on the screen, inside 1080p. */
+  const exportSize = () => {
+    const canvas = canvasRef.current;
+    return videoSize(canvas && canvas.clientHeight > 0 ? canvas.clientWidth / canvas.clientHeight : 16 / 9);
+  };
+
+  const openVideoDialog = useCallback(() => {
+    if (!engine) return;
+    if (videoJobRef.current) showStatus("A video is still being made. Stop it or wait for it first.", 4000);
+    else setVideoDialogOpen(true);
+  }, [engine, showStatus]);
+
+  /**
+   * Asks where to save the video, then makes it in the background: frames
+   * are rendered off the screen in short slices, so the app stays usable.
+   * The video uses the settings as they were when the export started.
+   */
+  const exportVideo = useCallback(async (options: VideoOptions) => {
+    setVideoDialogOpen(false);
+    if (!engine || videoJobRef.current) return;
+    const title = options.style === "title" ? options.title : "";
+    const path = isTauri() ? await chooseExportPath("mp4", title) : "kaleido.mp4";
+    if (!path) return;
+    const controller = new AbortController();
+    const size = exportSize();
+    const job = { path, progress: 0, controller };
+    setVideoJob(job);
+    let shown = 0;
+    const progress = (fraction: number) => {
+      const percent = Math.floor(fraction * 100);
+      if (percent === shown) return;
+      shown = percent;
+      setVideoJob((current) => current?.controller === controller ? { ...current, progress: fraction } : current);
+    };
+    try {
+      const blob = await encodeVideo(engine, size, options, progress, controller.signal);
+      if (isTauri()) {
+        await writeExport(path, blob);
+        showSaved(path, 8000);
+      } else {
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = path;
+        link.click();
+      }
+    } catch (error) {
+      if (controller.signal.aborted) showStatus("Video export stopped");
+      else showError(`Could not make the video. ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setVideoJob((current) => current?.controller === controller ? null : current);
+    }
+  }, [engine, showError, showSaved, showStatus]);
 
   /** The current scene's fingerprint (see sceneFingerprint). */
   const fingerprint = useCallback(() => {
@@ -319,7 +402,7 @@ export default function App() {
       const saved = fingerprint();
       const image = await blobToSceneImage(blob);
       const contents = serializeScene(engine.params, engine.state, blob2 ? { image, image2: await blobToSceneImage(blob2) } : { image });
-      await invoke("save_scene", { path, contents });
+      await writeScene(path, contents);
       savedFingerprintRef.current = saved;
       setDirty(fingerprint() !== saved);
       setScenePath(path);
@@ -346,14 +429,14 @@ export default function App() {
   const openScenePath = useCallback(async (path: string) => {
     if (!engine) return;
     try {
-      const text = await invoke<string>("read_scene", { path });
+      const text = await readScene(path);
       const params = createParams();
       const state = createPlayState();
       const images = applyScene(text, params, state);
       const blob = sceneImageToBlob(images.image);
-      const image = await loadImageBlob(blob);
+      const image = await loadSceneSource(blob);
       const blob2 = images.image2 && sceneImageToBlob(images.image2);
-      const image2 = blob2 ? await loadImageBlob(blob2) : null;
+      const image2 = blob2 ? await loadSceneSource(blob2) : null;
       Object.assign(engine.params, params);
       Object.assign(engine.state, state, { paused: engine.state.paused, locks: engine.state.locks });
       const name = path.split(/[\\/]/).pop();
@@ -363,6 +446,7 @@ export default function App() {
       setRevision((value) => value + 1);
       setScenePath(path);
       markClean();
+      historyRef.current?.clear();
     } catch (error) {
       showError(`Could not open the scene. ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -375,6 +459,14 @@ export default function App() {
     showStatus("New random settings");
   }, [engine, showStatus]);
 
+  /** Nudge: every unlocked value moves a little, up or down at random. */
+  const nudge = useCallback(() => {
+    if (!engine) return;
+    nudgeParams(engine.params, engine.state);
+    setRevision((value) => value + 1);
+    showStatus("Nudged every unlocked setting");
+  }, [engine, showStatus]);
+
   const reset = useCallback(() => {
     if (!engine) return;
     resetEffects(engine.params, engine.state);
@@ -382,6 +474,44 @@ export default function App() {
     setOpenGroup(null);
     showStatus("Every effect is off");
   }, [engine, showStatus]);
+
+  /**
+   * Undo and redo for the settings. A change counts as a step when it is
+   * complete: about four times a second, but never while a mouse button is
+   * down, so a whole slider drag is one step.
+   */
+  const historyRef = useRef<SettingsHistory | null>(null);
+  useEffect(() => {
+    if (!engine) return;
+    const history = new SettingsHistory(engine.params, engine.state);
+    historyRef.current = history;
+    let pointerDown = false;
+    const down = () => { pointerDown = true; };
+    const up = () => { pointerDown = false; };
+    window.addEventListener("pointerdown", down, true);
+    window.addEventListener("pointerup", up, true);
+    window.addEventListener("pointercancel", up, true);
+    window.addEventListener("blur", up);
+    const id = window.setInterval(() => { if (!pointerDown) history.commit(); }, 250);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("pointerup", up, true);
+      window.removeEventListener("pointercancel", up, true);
+      window.removeEventListener("blur", up);
+      historyRef.current = null;
+    };
+  }, [engine]);
+
+  const undo = useCallback(() => {
+    if (historyRef.current?.undo()) setRevision((value) => value + 1);
+    else showStatus("Nothing to undo");
+  }, [showStatus]);
+
+  const redo = useCallback(() => {
+    if (historyRef.current?.redo()) setRevision((value) => value + 1);
+    else showStatus("Nothing to redo");
+  }, [showStatus]);
 
   const stop = useCallback(() => {
     if (!engine) return;
@@ -460,13 +590,22 @@ export default function App() {
     markClean();
   }, [engine]);
 
-  /** While the Open dialog is open, the picture behind it holds still, so the dialog's live scene preview gets the GPU. */
-  const dialogOpen = openRequest !== null;
+  /** Once the engine runs (or failed to start), the main window replaces the splash. */
   useEffect(() => {
-    if (!engine || !dialogOpen) return;
+    if (engine || fatalError) void revealMainWindow();
+  }, [engine, fatalError]);
+
+  /**
+   * While the Open dialog is open, the picture behind it holds still, so the
+   * dialog's live scene preview gets the GPU. It also holds still under the
+   * start screen, where nobody can see it, and under the Export Video dialog.
+   */
+  const holdStill = openRequest !== null || startScreen || videoDialogOpen;
+  useEffect(() => {
+    if (!engine || !holdStill) return;
     engine.stop();
     return () => engine.start();
-  }, [dialogOpen, engine]);
+  }, [holdStill, engine]);
 
   /**
    * Closing the window with unsaved changes asks first (Save, Don't save,
@@ -515,9 +654,26 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (aboutOpen || openRequest || event.altKey || event.metaKey) return;
+      if (aboutOpen || openRequest || videoDialogOpen || event.altKey || event.metaKey) return;
+      /* The start screen takes only Ctrl+O; the other keys act on a scene that is not shown yet. */
+      if (startScreen) {
+        if (event.ctrlKey && event.key.toLowerCase() === "o") {
+          event.preventDefault();
+          void openScene();
+        }
+        return;
+      }
       if (event.ctrlKey) {
         const key = event.key.toLowerCase();
+        const target = event.target as HTMLElement | null;
+        /* Text fields keep their own undo. */
+        const typing = target instanceof HTMLInputElement && target.type === "text";
+        const historyAction = { z: event.shiftKey ? redo : undo, y: redo }[key];
+        if (historyAction && !typing) {
+          event.preventDefault();
+          historyAction();
+          return;
+        }
         const sceneAction = { s: () => saveScene(event.shiftKey), o: openScene }[key];
         if (sceneAction) {
           event.preventDefault();
@@ -539,6 +695,7 @@ export default function App() {
         r: () => void randomImage(),
         o: () => void openImage(),
         x: randomize,
+        n: nudge,
         s: () => void savePng()
       };
       const action = run[key];
@@ -550,7 +707,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [aboutOpen, exitFullscreen, openImage, openRequest, openScene, randomImage, randomize, savePng, saveScene, toggleFullscreen, togglePause]);
+  }, [aboutOpen, exitFullscreen, nudge, openImage, openRequest, videoDialogOpen, openScene, randomImage, randomize, redo, savePng, saveScene, startScreen, toggleFullscreen, togglePause, undo]);
 
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
@@ -587,8 +744,17 @@ export default function App() {
         { label: "Save Scene", icon: <FloppyDisk size={15} />, shortcut: "Ctrl+S", run: () => void saveScene() },
         { label: "Save Scene As…", icon: <FloppyDisk size={15} />, shortcut: "Ctrl+Shift+S", run: () => void saveScene(true) },
         { label: "Save PNG", icon: <Camera size={15} />, shortcut: "S", run: () => void savePng() },
+        { label: "Export Video…", icon: <FilmStrip size={15} />, run: openVideoDialog },
         "separator",
         { label: "Exit", icon: <SignOut size={15} />, shortcut: "Alt+F4", run: () => void (isTauri() ? getCurrentWindow().close() : window.close()) }
+      ]
+    },
+    {
+      id: "edit",
+      label: "Edit",
+      items: [
+        { label: "Undo", icon: <ArrowCounterClockwise size={15} />, shortcut: "Ctrl+Z", run: undo },
+        { label: "Redo", icon: <ArrowClockwise size={15} />, shortcut: "Ctrl+Y", run: redo }
       ]
     },
     {
@@ -633,16 +799,18 @@ export default function App() {
             dirty={dirty}
           />
           <MenuBar menus={menus} />
-          <Toolbar
-            onOpenScene={() => void openScene()}
-            onSaveScene={() => void saveScene()}
-            statsOpen={statsOpen}
-            onToggleStats={() => setStatsOpen((open) => !open)}
-            onFullscreen={() => void toggleFullscreen()}
-          />
+          {!startScreen && (
+            <Toolbar
+              onSaveScene={() => void saveScene()}
+              statsOpen={statsOpen}
+              onToggleStats={() => setStatsOpen((open) => !open)}
+              onFullscreen={() => void toggleFullscreen()}
+            />
+          )}
         </>
       )}
       <div className="workspace">
+        {startScreen && <StartScreen onNewScene={() => setStartScreen(false)} onOpenScene={() => void openScene()} />}
         {engine && panelOpen && (
           <SourcePanel
             key={revision}
@@ -689,19 +857,29 @@ export default function App() {
               )}
             </div>
           )}
+          {videoJob && (
+            <div className="export-job" role="status">
+              <span className="export-job-label">Making {fileNameOf(videoJob.path)}… {Math.floor(videoJob.progress * 100)}%</span>
+              <span className="export-job-bar"><i style={{ width: `${videoJob.progress * 100}%` }} /></span>
+              <button onClick={() => videoJob.controller.abort()}>Stop</button>
+            </div>
+          )}
           {dragging && <div className="drop-overlay">Drop the image here</div>}
         </main>
         {engine && panelOpen && (
           <ControlPanel
+            /* A change outside the panel (Randomize, Undo, a new scene) makes a new panel, so all of its state reloads. */
+            key={`controls-${revision}`}
             engine={engine}
-            revision={revision}
             openGroup={openGroup}
             onOpenGroup={setOpenGroup}
             paused={paused}
             onRandomize={randomize}
+            onNudge={nudge}
             onTogglePause={togglePause}
             onStop={stop}
             onReset={() => setResetAsked(true)}
+            hasVideo={images.some((image) => image?.source instanceof HTMLVideoElement)}
           />
         )}
       </div>
@@ -722,7 +900,7 @@ export default function App() {
       {resetAsked && (
         <ConfirmDialog
           title="Clear all effects?"
-          message="Every effect control goes back to no effect, every range turns off, and every effect group is turned off. Locked groups stay as they are."
+          message="Every effect leaves the list, its controls go back to no effect, and every range turns off. Locked groups stay as they are."
           confirmLabel="Clear"
           onConfirm={() => {
             setResetAsked(false);
@@ -741,6 +919,14 @@ export default function App() {
             if (openRequest.kind === "scene") void openScenePath(path);
             else void openImagePath(path, openRequest.slot);
           }}
+        />
+      )}
+      {videoDialogOpen && engine && (
+        <ExportVideoDialog
+          engine={engine}
+          size={exportSize()}
+          onCancel={() => setVideoDialogOpen(false)}
+          onExport={(options) => void exportVideo(options)}
         />
       )}
       {aboutOpen && (

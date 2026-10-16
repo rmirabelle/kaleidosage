@@ -1,8 +1,9 @@
 import { Fragment, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { CaretRight, DotsSixVertical, LockSimple, LockSimpleOpen } from "@phosphor-icons/react";
+import { CaretRight, DotsSixVertical, LockSimple, LockSimpleOpen, X } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
-import type { GroupKey, ParamKey, PlayState } from "../engine/params";
-import type { BlurMask, FoldMode, MapMode, PictureStep, ShapeStep, WarpType } from "../engine/renderer";
+import { addEffect, createParams, removeEffect, type GroupKey, type ParamKey, type PlayState } from "../engine/params";
+import type { BlurMask, FoldMode, FxStep, MapMode, ShapeStep, SmearShape, WarpType } from "../engine/renderer";
+import { AddEffectMenu } from "./AddEffectMenu";
 import { Dropdown } from "./Dropdown";
 import { MediaIcon } from "./MediaIcon";
 import { PowerIcon } from "./PowerIcon";
@@ -11,16 +12,18 @@ import { useParamRows } from "./useParamRows";
 
 interface Props {
   engine: Engine;
-  /** Changes when the parameters change outside the panel (Randomize), so the controls reload. */
-  revision: number;
   /** The open group; only one group is open at a time. All groups start closed. */
   openGroup: string | null;
   onOpenGroup: (group: string | null) => void;
   paused: boolean;
   onRandomize: () => void;
+  /** Moves every unlocked value a little (see nudgeParams). */
+  onNudge: () => void;
   onTogglePause: () => void;
   onStop: () => void;
   onReset: () => void;
+  /** True when a source is a video; only then does the video crossfade choice show. */
+  hasVideo: boolean;
 }
 
 /** Radial mode uses segments; the tile modes use a tile size instead. */
@@ -48,7 +51,7 @@ const WARP_KEYS: Record<WarpType, ParamKey[]> = {
   2: ["warpAmount", "warpScale", "warpAngle", "warpFlow"],
   3: ["warpAmount", "warpScale", "warpFlow", "warpCenterX", "warpCenterY"],
   4: ["warpAmount", "warpScale", "warpFlow", "warpCenterX", "warpCenterY"],
-  5: ["warpAmount", "warpScale", "warpFlow"]
+  5: ["warpAmount", "warpCellSize", "warpCellAngle", "warpFlow"]
 };
 const WARP_TYPES = [[0, "Noise"], [1, "Ripple"], [2, "Waves"], [3, "Swirl"], [4, "Bulge and pinch"], [5, "Cells"]] as const;
 /** The sliders each complex map uses; the others are hidden. */
@@ -63,6 +66,17 @@ const MAP_KEYS: Record<MapMode, ParamKey[]> = {
   7: ["mapArms", "mapAngle", "mapScale", "mapMix"]
 };
 const TRAIL_KEYS: ParamKey[] = ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"];
+const BRANCH_KEYS: ParamKey[] = ["branchOpacity", "branchCount", "branchSize", "branchSpread", "branchTurn", "branchJoint", "branchTrunk", "branchWidth", "branchTaper", "branchHide", "branchBackground", "branchFade", "branchHue", "branchBaseX", "branchBaseY"];
+/** The sliders each time smear pattern uses; Angle only turns the Linear and Sweep patterns. */
+const SMEAR_KEYS: Record<SmearShape, ParamKey[]> = {
+  0: ["smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade"],
+  1: ["smearAmount", "smearDelay", "smearBands", "smearRestart", "smearFade"],
+  2: ["smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade"],
+  3: ["smearAmount", "smearDelay", "smearBands", "smearRestart", "smearFade"],
+  4: ["smearAmount", "smearDelay", "smearBands", "smearRestart", "smearFade"]
+};
+const SMEAR_SHAPES = [[0, "Linear"], [1, "Rings"], [2, "Sweep"], [3, "Brightness"], [4, "Noise"]] as const;
+const CONTOUR_KEYS: ParamKey[] = ["contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady"];
 const RELIEF_KEYS: ParamKey[] = ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"];
 const FINISH_KEYS: ParamKey[] = ["sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel"];
 
@@ -74,8 +88,9 @@ const MAP_MODES = [[1, "Power (z^n)"], [2, "Möbius"], [3, "Julia"], [4, "Log sp
 const TRAIL_MODES = [[1, "Mix (smoky)"], [2, "Lighten (glowing)"]] as const;
 
 /** The Effects panel, docked at the right: play buttons, then the effect groups. */
-export function ControlPanel({ engine, revision, openGroup, onOpenGroup, paused, onRandomize, onTogglePause, onStop, onReset }: Props) {
+export function ControlPanel({ engine, openGroup, onOpenGroup, paused, onRandomize, onNudge, onTogglePause, onStop, onReset, hasVideo }: Props) {
   const row = useParamRows(engine);
+  const [videoCrossfade, setVideoCrossfade] = useState(engine.state.videoCrossfade);
   /** Opening a group closes the others; clicking the open group closes it. */
   const accordion = (key: string) => ({
     open: openGroup === key,
@@ -96,6 +111,48 @@ export function ControlPanel({ engine, revision, openGroup, onOpenGroup, paused,
     blur.value = 20;
     setBlurRevision((value) => value + 1);
   };
+  /**
+   * Turning the Kaleidoscope on starts Pan X and Pan Y looping, so the
+   * picture moves at once. When either pan already loops, both stay as they
+   * are. A pan whose range has no width gets the default range.
+   */
+  const [kaleidoscopeRevision, setKaleidoscopeRevision] = useState(0);
+  const enableKaleidoscope = () => {
+    if (engine.params.panX.on || engine.params.panY.on) return;
+    const defaults = createParams();
+    for (const key of ["panX", "panY"] as const) {
+      const pan = engine.params[key];
+      const { low, high } = pan.low !== pan.high ? pan : defaults[key];
+      Object.assign(pan, { low, high, on: true });
+    }
+    setKaleidoscopeRevision((value) => value + 1);
+  };
+  /**
+   * Turning Contours on with no lines showing sets lines that show: black,
+   * fully opaque, 16 levels, 1.5 px wide. Contours that already show stay as they are.
+   */
+  const [contourRevision, setContourRevision] = useState(0);
+  const enableContours = () => {
+    const opacity = engine.params.contourOpacity;
+    if (opacity.value > 0 || opacity.on) return;
+    engine.state.contourTone = "black";
+    Object.assign(opacity, { value: 1, on: false });
+    Object.assign(engine.params.contourLines, { value: 16, on: false });
+    Object.assign(engine.params.contourWidth, { value: 1.5, on: false });
+    setContourRevision((value) => value + 1);
+  };
+  /**
+   * Turning a Noise warp on with no warp showing sets a warp that shows:
+   * strength 0.5 and size 2. A warp that already shows stays as it is.
+   */
+  const [warpRevision, setWarpRevision] = useState(0);
+  const enableWarp = () => {
+    const strength = engine.params.warpAmount;
+    if (engine.state.warpType !== 0 || strength.value > 0 || strength.on) return;
+    Object.assign(strength, { value: 0.5, on: false });
+    Object.assign(engine.params.warpScale, { value: 2, on: false });
+    setWarpRevision((value) => value + 1);
+  };
   const enableMap = () => {
     for (const key of ["mapMix", "mapOpacity"] as const) {
       Object.assign(engine.params[key], { value: engine.params[key].max, on: false });
@@ -103,13 +160,42 @@ export function ControlPanel({ engine, revision, openGroup, onOpenGroup, paused,
     setMapRevision((value) => value + 1);
   };
 
-  /** The groups run in these orders; dragging a group by its grip changes the order inside its stage. */
-  const [shapeOrder, setShapeOrder] = useState(engine.state.shapeOrder);
-  const [pictureOrder, setPictureOrder] = useState(engine.state.pictureOrder);
-  const shapeGroups: Record<ShapeStep, (grip: Grip) => ReactNode> = {
+  /**
+   * The effects in the list run in this order; dragging a group by its grip
+   * moves it to any place in the list. Only added effects are in the list.
+   */
+  const [fxOrder, setFxOrder] = useState(engine.state.fxOrder);
+  /**
+   * Adds an effect at the end of the list and opens it. It starts with
+   * settings that show, the same as its power button gives, so adding it
+   * visibly does something; an effect with settings of its own keeps them.
+   */
+  const add = (step: FxStep) => {
+    const start = (key: ParamKey, value: number) => {
+      const param = engine.params[key];
+      if (param.value === 0 && !param.on) param.value = value;
+    };
+    const enable: Partial<Record<FxStep, () => void>> = {
+      warp: enableWarp, map: enableMap, kaleidoscope: enableKaleidoscope, blur: enableBlur, contours: enableContours,
+      trails: () => start("trailAmount", 0.85),
+      branches: () => start("branchOpacity", 1),
+      smear: () => start("smearAmount", 1),
+      relief: () => start("reliefAmount", 0.6)
+    };
+    enable[step]?.();
+    addEffect(engine.state, step);
+    setFxOrder(engine.state.fxOrder);
+    onOpenGroup(step);
+  };
+  const remove = (step: FxStep) => {
+    removeEffect(engine.state, step);
+    setFxOrder(engine.state.fxOrder);
+    if (openGroup === step) onOpenGroup(null);
+  };
+  const groups: Record<FxStep, (grip: Grip) => ReactNode> = {
     warp: (grip) => (
-      <Group engine={engine} group="warp" title="Warp" grip={grip} {...accordion("warp")}>
-        <WarpSection engine={engine} row={row} />
+      <Group engine={engine} group="warp" title="Warp" grip={grip} onEnable={enableWarp} {...accordion("warp")}>
+        <WarpSection key={warpRevision} engine={engine} row={row} />
       </Group>
     ),
     map: (grip) => (
@@ -118,12 +204,10 @@ export function ControlPanel({ engine, revision, openGroup, onOpenGroup, paused,
       </Group>
     ),
     kaleidoscope: (grip) => (
-      <Group engine={engine} group="kaleidoscope" title="Kaleidoscope" grip={grip} {...accordion("kaleidoscope")}>
-        <KaleidoscopeSection engine={engine} row={row} />
+      <Group engine={engine} group="kaleidoscope" title="Kaleidoscope" grip={grip} onEnable={enableKaleidoscope} {...accordion("kaleidoscope")}>
+        <KaleidoscopeSection key={kaleidoscopeRevision} engine={engine} row={row} />
       </Group>
-    )
-  };
-  const pictureGroups: Record<PictureStep, (grip: Grip) => ReactNode> = {
+    ),
     blur: (grip) => (
       <Group engine={engine} group="blur" title="Blur" grip={grip} onEnable={enableBlur} {...accordion("blur")}>
         <BlurSection key={blurRevision} engine={engine} row={row} />
@@ -133,6 +217,25 @@ export function ControlPanel({ engine, revision, openGroup, onOpenGroup, paused,
       <Group engine={engine} group="trails" title="Trails" grip={grip} {...accordion("trails")}>
         <ModeSelect engine={engine} stateKey="trailMode" options={TRAIL_MODES} />
         {TRAIL_KEYS.map(row)}
+      </Group>
+    ),
+    branches: (grip) => (
+      <Group engine={engine} group="branches" title="Branches" grip={grip} {...accordion("branches")}>
+        {BRANCH_KEYS.map(row)}
+      </Group>
+    ),
+    smear: (grip) => (
+      <Group engine={engine} group="smear" title="Time smear" grip={grip} {...accordion("smear")}>
+        <SmearSection engine={engine} row={row} />
+      </Group>
+    ),
+    contours: (grip) => (
+      <Group engine={engine} group="contours" title="Contours" grip={grip} onEnable={enableContours} {...accordion("contours")}>
+        <Fragment key={contourRevision}>
+          {row("contourHue")}
+          <ContourBlend engine={engine} />
+          {CONTOUR_KEYS.map(row)}
+        </Fragment>
       </Group>
     ),
     relief: (grip) => (
@@ -148,7 +251,7 @@ export function ControlPanel({ engine, revision, openGroup, onOpenGroup, paused,
   };
 
   return (
-    <aside className="side-panel control-panel" key={revision}>
+    <aside className="side-panel control-panel">
       <div className="side-panel-header panel-header-bar">
         <h2 className="side-panel-title">Designer</h2>
       </div>
@@ -158,8 +261,15 @@ export function ControlPanel({ engine, revision, openGroup, onOpenGroup, paused,
           <button className="panel-button" onClick={onRandomize}><RedDice size={16} /> Random all</button>
           <button
             className="panel-button text-only"
+            onClick={onNudge}
+            title="Nudge (N): move every unlocked value a little, up or down at random. Values at 0 stay at 0."
+          >
+            Nudge
+          </button>
+          <button
+            className="panel-button text-only"
             onClick={onReset}
-            title="Turn every effect off and set its controls back to no effect. Locked groups stay as they are."
+            title="Remove every effect from the list and set its controls back to no effect. Locked groups stay as they are."
           >
             Clear all
           </button>
@@ -186,48 +296,65 @@ export function ControlPanel({ engine, revision, openGroup, onOpenGroup, paused,
       </div>
 
       {/* The cycle: first and always in view, because its timing affects every effect below. */}
-      <div className="panel-root-row">{row("cycle")}</div>
+      <div className="panel-root-row">
+        {row("cycle")}
+        {hasVideo && (
+          <label className="panel-check-row" title="A source video fades its end into its start, so it never jumps. Off, the video starts again at the start of each loop. A seamless video export always crossfades.">
+            <input
+              type="checkbox"
+              checked={videoCrossfade}
+              onChange={(event) => {
+                engine.state.videoCrossfade = event.target.checked;
+                setVideoCrossfade(event.target.checked);
+              }}
+            />
+            Crossfade the video's loop
+          </label>
+        )}
+      </div>
 
       {/* Only the effect groups scroll; the title, the toolbars and the cycle stay in view. */}
       <div className="panel-scroll">
         <StageList
-          label="Shape FX"
-          order={shapeOrder}
+          label="Effects"
+          order={fxOrder}
           onReorder={(next) => {
-            engine.state.shapeOrder = next;
-            setShapeOrder(next);
+            engine.state.fxOrder = next;
+            setFxOrder(next);
           }}
-          render={(key, grip) => shapeGroups[key](grip)}
+          onRemove={remove}
+          render={(key, grip) => groups[key](grip)}
         />
-        <StageList
-          label="Picture FX"
-          order={pictureOrder}
-          onReorder={(next) => {
-            engine.state.pictureOrder = next;
-            setPictureOrder(next);
-          }}
-          render={(key, grip) => pictureGroups[key](grip)}
-        />
+        {fxOrder.length === 0 && <p className="stage-empty">No effects yet. Add one to start.</p>}
+        <AddEffectMenu options={EFFECT_NAMES.filter(([step]) => !fxOrder.includes(step))} onAdd={add} />
       </div>
     </aside>
   );
 }
 
-/** The drag grip of a group header. */
+/** The controls a group header gets from the list: the drag grip, and the button that takes the group out of the list. */
 interface Grip {
   onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
   dragging: boolean;
+  onRemove?: () => void;
 }
+
+/** The effects in the Add effect menu, in menu order, with the names their groups show. */
+const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
+  ["kaleidoscope", "Kaleidoscope"], ["map", "Algorithm"], ["warp", "Warp"], ["blur", "Blur"], ["trails", "Trails"],
+  ["branches", "Branches"], ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["finish", "Final effects"]
+];
 
 /**
  * One stage of groups under a small label. A group is dragged by its grip:
  * while the mouse moves, the group takes the place whose middle the pointer
  * has passed, and the new order is sent at once, so the picture changes live.
  */
-function StageList<K extends string>({ label, order, onReorder, render }: {
+function StageList<K extends string>({ label, order, onReorder, onRemove, render }: {
   label: string;
   order: K[];
   onReorder: (order: K[]) => void;
+  onRemove?: (key: K) => void;
   render: (key: K, grip: Grip) => ReactNode;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
@@ -272,7 +399,7 @@ function StageList<K extends string>({ label, order, onReorder, render }: {
       <div ref={listRef} className="stage-list">
         {order.map((key) => (
           <div key={key} data-key={key} className={`stage-item ${dragging === key ? "dragging" : ""}`}>
-            {render(key, { onPointerDown: startDrag(key), dragging: dragging === key })}
+            {render(key, { onPointerDown: startDrag(key), dragging: dragging === key, onRemove: onRemove && (() => onRemove(key)) })}
           </div>
         ))}
       </div>
@@ -340,6 +467,16 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, children 
             {locked ? <LockSimple size={13} weight="fill" /> : <LockSimpleOpen size={13} />}
           </button>
         )}
+        {grip?.onRemove && (
+          <button
+            className="panel-group-remove"
+            aria-label={`Remove ${title.toLowerCase()}`}
+            title={`Remove ${title.toLowerCase()} from the list. Its settings stay for when you add it again.`}
+            onClick={grip.onRemove}
+          >
+            <X size={13} weight="bold" />
+          </button>
+        )}
         {grip && (
           <span className={`panel-group-grip ${grip.dragging ? "dragging" : ""}`} onPointerDown={grip.onPointerDown} title="Drag to change the order">
             <DotsSixVertical size={14} weight="bold" />
@@ -353,7 +490,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, children 
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, onChange }: {
@@ -409,6 +546,36 @@ const OPACITY_KEY: Record<ShapeStep, ParamKey> = { warp: "warpOpacity", map: "ma
  * the picture without the step. It works the same wherever the group is in
  * the Shape list.
  */
+/** The time smear's pattern picker, and the sliders for the picked pattern. */
+function SmearSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
+  const [shape, setShape] = useState<SmearShape>(engine.state.smearShape);
+  return (
+    <>
+      <ModeSelect engine={engine} stateKey="smearShape" options={SMEAR_SHAPES} onChange={setShape} />
+      {SMEAR_KEYS[shape].map(row)}
+    </>
+  );
+}
+
+/** How the contour lines combine with the picture under them. */
+function ContourBlend({ engine }: { engine: Engine }) {
+  const [blend, setBlend] = useState(engine.state.contourBlend);
+  return (
+    <div className="panel-select-row panel-layer-blend">
+      <span className="panel-row-name">Blend</span>
+      <Dropdown
+        value={blend}
+        options={LAYER_BLENDS}
+        label="Contour blend mode"
+        onChange={(next) => {
+          engine.state.contourBlend = next;
+          setBlend(next);
+        }}
+      />
+    </div>
+  );
+}
+
 function LayerRows({ engine, step, row }: { engine: Engine; step: ShapeStep; row: (key: ParamKey) => ReactNode }) {
   const [blend, setBlend] = useState(engine.state.layerBlend[step]);
   return (

@@ -1,8 +1,6 @@
-import { ColorFolder } from "./ColorFolder";
 import { ColorDisk, ColorFullScreen, ColorGauge } from "./ToolbarIcons";
 
 interface Props {
-  onOpenScene: () => void;
   onSaveScene: () => void;
   statsOpen: boolean;
   onToggleStats: () => void;
@@ -11,14 +9,14 @@ interface Props {
 
 /**
  * The app toolbar under the menu bar, styled like the Designer toolbar:
- * button groups with color icons, Open Scene and Save Scene at the left,
- * the view buttons at the right. Images are picked in the Source panel.
+ * button groups with color icons, Save Scene at the left, the view buttons
+ * at the right. Scenes open from the start screen or the File menu; images
+ * are picked in the Source panel.
  */
 export function Toolbar(props: Props) {
   return (
     <nav className="toolbar">
       <div className="panel-buttons">
-        <button className="panel-button" onClick={props.onOpenScene} title="Open a scene (Ctrl+O)"><ColorFolder size={17} /> Open Scene</button>
         <button className="panel-button" onClick={props.onSaveScene} title="Save the scene (Ctrl+S)"><ColorDisk size={16} /> Save Scene</button>
       </div>
       <div className="toolbar-spacer" />

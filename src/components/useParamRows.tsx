@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowsLeftRight, BracketsSquare, Timer } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
-import { MAX_CUSTOM_SECONDS, NO_EFFECT, defaultValue, formatValue, fullRange, setCustomTime, type ParamKey } from "../engine/params";
+import { MAX_CUSTOM_SECONDS, NO_EFFECT, SLIDER_STEPS, defaultValue, formatValue, fromSlider, fullRange, setCustomTime, toSlider, type ContourTone, type Param, type ParamKey } from "../engine/params";
 import { ColorPicker } from "./ColorPicker";
 import { EaseMenu } from "./EaseMenu";
 import { RangeSlider, Slider, rangePosition } from "./Slider";
@@ -31,7 +31,8 @@ export function useParamRows(engine: Engine) {
     }
     for (const [key, element] of markers.current) {
       const param = engine.params[key];
-      element.style.left = rangePosition(engine.live(key), param.min, param.max);
+      const [min, max] = sliderLimits(param);
+      element.style.left = rangePosition(toSlider(param, engine.live(key)), min, max);
     }
   }), [engine]);
 
@@ -56,6 +57,14 @@ export function useParamRows(engine: Engine) {
   );
 }
 
+/** The slider's ends and step: the parameter's own, or positions for a log slider (see toSlider). */
+function sliderLimits(param: Param): [number, number, number] {
+  return param.scale === "log" ? [0, SLIDER_STEPS, 1] : [param.min, param.max, param.step];
+}
+
+/** Hue sliders show the fully saturated colors along their track. */
+const HUE_KEYS: ParamKey[] = ["contourHue"];
+
 /**
  * One parameter. With drift off, one handle sets the value. With drift on,
  * two handles set where the drift starts and ends, and a thin line shows the
@@ -76,8 +85,19 @@ function ParamRow({ engine, paramKey, readout, marker, onHold }: {
   /** A custom range has its own time (seconds from start to end) instead of the shared cycle. */
   const [custom, setCustom] = useState(param.custom ?? false);
   const [seconds, setSeconds] = useState(Math.round(param.seconds ?? engine.params.cycle.value));
+  /** For the contour Color: black or white lines instead of the hue. Then the slider is off and has no range. */
+  const [tone, setTone] = useState<ContourTone>(engine.state.contourTone);
+  const toned = paramKey === "contourHue" && tone !== "hue";
+  const pickTone = (next: ContourTone) => {
+    engine.state.contourTone = next;
+    setTone(next);
+  };
   /** The zero point, when it is inside the slider: a tick mark, and what Ctrl + drag mirrors around. */
   const noEffect = NO_EFFECT[paramKey];
+  /** The sliders work in slider positions; a log slider's positions are not its values (see toSlider). */
+  const [sliderMin, sliderMax, sliderStep] = sliderLimits(param);
+  const at = (number: number) => toSlider(param, number);
+  const detent = noEffect === undefined ? undefined : at(noEffect);
 
   const setHandles = ([low, high]: [number, number]) => {
     param.low = low;
@@ -123,7 +143,7 @@ function ParamRow({ engine, paramKey, readout, marker, onHold }: {
   };
 
   return (
-    <div className="panel-row">
+    <div className={`panel-row ${HUE_KEYS.includes(paramKey) ? "hue-track" : ""}`}>
       <div className="panel-row-top">
         {/* Double-click on the name: back to the default value, or the full range. */}
         <span className="panel-row-name" onDoubleClick={reset}>{param.label}</span>
@@ -132,33 +152,43 @@ function ParamRow({ engine, paramKey, readout, marker, onHold }: {
       <div className="panel-row-control">
         {paramKey === "overlayOpacity" && <ColorSwatch engine={engine} stateKey="overlayColor" label="Overlay color" />}
         {paramKey === "trailTint" && <ColorSwatch engine={engine} stateKey="trailColor" label="Trail color" />}
-        {drifting ? (
+        {paramKey === "contourHue" && <ToneChips tone={tone} onChange={pickTone} />}
+        {toned ? (
+          /* A click on the dimmed slider goes back to the hue. */
+          <div className="slider-off" title="Click to use the Color slider again" onPointerDown={() => pickTone("hue")}>
+            <Slider label={param.label} min={sliderMin} max={sliderMax} step={sliderStep} value={at(value)} onChange={() => {}} />
+          </div>
+        ) : drifting ? (
           <RangeSlider
             label={param.label}
-            min={param.min}
-            max={param.max}
-            step={param.step}
-            low={range[0]}
-            high={range[1]}
+            min={sliderMin}
+            max={sliderMax}
+            step={sliderStep}
+            low={at(range[0])}
+            high={at(range[1])}
             markerRef={marker}
-            onHold={onHold}
-            detent={noEffect}
-            onChange={(low, high) => setHandles([low, high])}
+            onHold={(held) => onHold(held === null ? null : fromSlider(param, held))}
+            detent={detent}
+            onChange={(low, high) => setHandles([fromSlider(param, low), fromSlider(param, high)])}
           />
         ) : (
           <Slider
             label={param.label}
-            min={param.min}
-            max={param.max}
-            step={param.step}
-            value={value}
-            detent={noEffect}
-            onChange={(next) => { param.value = next; setValue(next); }}
+            min={sliderMin}
+            max={sliderMax}
+            step={sliderStep}
+            value={at(value)}
+            detent={detent}
+            onChange={(position) => {
+              const next = fromSlider(param, position);
+              param.value = next;
+              setValue(next);
+            }}
           />
         )}
 
         {/* The range and reverse buttons, after the slider. A value without a range gets an empty space, so every slider lines up. */}
-        {param.drift ? (
+        {param.drift && !toned ? (
           <div className="panel-row-tools">
             <button
               className={`panel-drift ${drifting ? "on" : ""}`}
@@ -218,6 +248,28 @@ function ParamRow({ engine, paramKey, readout, marker, onHold }: {
           <span className="panel-time-value" title="Seconds from the start handle to the end handle">{seconds} s</span>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Two small chips before the contour Color slider: black and white. A
+ * click picks that color for the lines; a click on the picked chip goes
+ * back to the slider's hue.
+ */
+function ToneChips({ tone, onChange }: { tone: ContourTone; onChange: (tone: ContourTone) => void }) {
+  return (
+    <div className="tone-chips">
+      {(["black", "white"] as const).map((chip) => (
+        <button
+          key={chip}
+          className={`tone-chip ${chip} ${tone === chip ? "on" : ""}`}
+          aria-pressed={tone === chip}
+          aria-label={`${chip === "black" ? "Black" : "White"} lines`}
+          title={tone === chip ? `The lines are ${chip}. Click to use the Color slider again.` : `Make the lines ${chip}`}
+          onClick={() => onChange(tone === chip ? "hue" : chip)}
+        />
+      ))}
     </div>
   );
 }

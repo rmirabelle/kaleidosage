@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Component, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { revealMainWindow } from "./lib/splash";
 import "./index.css";
 
 /**
@@ -61,6 +62,7 @@ class CrashScreen extends Component<{ children: ReactNode }, { error: Error | nu
 
   componentDidCatch(error: Error, info: { componentStack?: string | null }) {
     crashed = true;
+    void revealMainWindow();
     logError(`${error.stack ?? error.message}\nComponent stack:${info.componentStack ?? ""}`);
   }
 

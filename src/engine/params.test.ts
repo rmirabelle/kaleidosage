@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GROUP_PARAMS, PARAM_KEYS, createParams, createPlayState, defaultValue, fullRange, hexToRgb, hslToHex, liveValue, NO_EFFECT, randomizeParams, resetEffects, setCustomTime, startRangeAt } from "./params";
+import { GROUP_PARAMS, PARAM_KEYS, createParams, createPlayState, defaultValue, fullRange, NUDGE, hexToRgb, hslToHex, liveValue, NO_EFFECT, nudgeParams, randomizeParams, resetEffects, setCustomTime, startRangeAt, withKindOrder, addEffect, removeEffect, toSlider, fromSlider, SLIDER_STEPS } from "./params";
 
 /** A play state at this many seconds, on both clocks: animation time (the shared cycle) and real time (custom ranges). */
 const at = (time: number) => ({ ...createPlayState(), time, clock: time });
@@ -71,6 +71,54 @@ describe("liveValue", () => {
       expect(value).toBeGreaterThanOrEqual(1 - 1e-9);
       expect(value).toBeLessThanOrEqual(2 + 1e-9);
     }
+  });
+
+  it("steps between the handles early, at the half, or late", () => {
+    const params = createParams();
+    /* Two seconds from start to end: the trip out runs from 10 to 12, the trip back from 12 to 14. */
+    Object.assign(params.zoom, { on: true, low: 1, high: 2, custom: true, seconds: 2, ease: "early" });
+    startRangeAt(params.zoom, 10);
+    expect(liveValue(params.zoom, at(10.4))).toBe(1);
+    expect(liveValue(params.zoom, at(10.6))).toBe(2);
+    expect(liveValue(params.zoom, at(13.4))).toBe(2);
+    expect(liveValue(params.zoom, at(13.6))).toBe(1);
+    params.zoom.ease = "pulse";
+    expect(liveValue(params.zoom, at(10.9))).toBe(1);
+    expect(liveValue(params.zoom, at(11.1))).toBe(2);
+    expect(liveValue(params.zoom, at(12.9))).toBe(2);
+    expect(liveValue(params.zoom, at(13.1))).toBe(1);
+    params.zoom.ease = "late";
+    expect(liveValue(params.zoom, at(11.4))).toBe(1);
+    expect(liveValue(params.zoom, at(11.6))).toBe(2);
+    expect(liveValue(params.zoom, at(12.4))).toBe(2);
+    expect(liveValue(params.zoom, at(12.6))).toBe(1);
+  });
+
+  it("explodes past the end handle and implodes below the start handle, inside the slider", () => {
+    const params = createParams();
+    Object.assign(params.zoom, { on: true, low: 1, high: 2, custom: true, seconds: 2, ease: "explode" });
+    startRangeAt(params.zoom, 10);
+    expect(liveValue(params.zoom, at(10))).toBeCloseTo(1);
+    expect(liveValue(params.zoom, at(12))).toBeCloseTo(2);
+    let beyond = false;
+    for (let time = 10; time < 14; time += 0.01) {
+      const value = liveValue(params.zoom, at(time));
+      if (value > 2 + 1e-9) beyond = true;
+      expect(value).toBeGreaterThanOrEqual(params.zoom.min);
+      expect(value).toBeLessThanOrEqual(params.zoom.max);
+    }
+    expect(beyond).toBe(true);
+    /* With the end handle at the slider's top, the overshoot stops there. */
+    params.zoom.high = params.zoom.max;
+    for (let time = 10; time < 14; time += 0.01) expect(liveValue(params.zoom, at(time))).toBeLessThanOrEqual(params.zoom.max);
+    params.zoom.ease = "implode";
+    params.zoom.high = 2;
+    expect(liveValue(params.zoom, at(10))).toBeCloseTo(1);
+    expect(liveValue(params.zoom, at(12))).toBeCloseTo(2);
+    expect(liveValue(params.zoom, at(10.8))).toBeLessThan(1);
+    /* With the start handle at the slider's bottom, the pull back stops there. */
+    params.zoom.low = params.zoom.min;
+    for (let time = 10; time < 14; time += 0.01) expect(liveValue(params.zoom, at(time))).toBeGreaterThanOrEqual(params.zoom.min);
   });
 
   it("turns without stopping over the full circle", () => {
@@ -191,12 +239,14 @@ describe("resetEffects", () => {
     const state = createPlayState();
     randomizeParams(params, state);
     Object.assign(params.imageBlend, { value: 0.4, on: true });
+    addEffect(state, "trails");
     state.locks.trails = true;
     const trails = JSON.stringify(params.trailAmount);
     resetEffects(params, state);
     expect(params.zoom).toMatchObject({ value: defaultValue("zoom"), on: false });
     expect(params.rotation.on).toBe(false);
     expect(state.groups).toMatchObject({ warp: false, kaleidoscope: false, finish: false, trails: true, source: true });
+    expect(state.fxOrder).toEqual(["trails"]);
     expect(JSON.stringify(params.trailAmount)).toBe(trails);
     expect(params.imageBlend).toMatchObject({ value: 0.4, on: true });
   });
@@ -254,3 +304,112 @@ describe("randomizeParams", () => {
   });
 });
 
+
+describe("nudgeParams", () => {
+  it("moves each unlocked value by NUDGE of its slider, inside the slider and on its steps", () => {
+    const params = createParams();
+    const state = createPlayState();
+    params.zoom.value = 1.5;
+    params.trailAmount.value = 0.5;
+    const before = { zoom: params.zoom.value, trail: params.trailAmount.value };
+    nudgeParams(params, state, () => 0.9);
+    const zoomTarget = before.zoom + (params.zoom.max - params.zoom.min) * NUDGE;
+    expect(Math.abs(params.zoom.value - zoomTarget)).toBeLessThanOrEqual(params.zoom.step / 2 + 1e-9);
+    /* The result lands on the slider's step. */
+    const trailTarget = before.trail + (params.trailAmount.max - params.trailAmount.min) * NUDGE;
+    expect(Math.abs(params.trailAmount.value - trailTarget)).toBeLessThanOrEqual(params.trailAmount.step / 2 + 1e-9);
+    params.zoom.value = params.zoom.max;
+    nudgeParams(params, state, () => 0.9);
+    expect(params.zoom.value).toBe(params.zoom.max);
+  });
+
+  it("leaves locked groups, values at 0, the loop length and whole-circle turns alone", () => {
+    const params = createParams();
+    const state = createPlayState();
+    state.locks.relief = true;
+    params.reliefAmount.value = 0.8;
+    params.blurAmount.value = 0;
+    params.cycle.value = 30;
+    Object.assign(params.rotation, { on: true, low: 0, high: 360 });
+    nudgeParams(params, state, () => 0.1);
+    expect(params.reliefAmount.value).toBe(0.8);
+    expect(params.blurAmount.value).toBe(0);
+    expect(params.cycle.value).toBe(30);
+    expect([params.rotation.low, params.rotation.high]).toEqual([0, 360]);
+  });
+
+  it("moves both handles of a range", () => {
+    const params = createParams();
+    Object.assign(params.zoom, { on: true, low: 1, high: 2 });
+    nudgeParams(params, createPlayState(), () => 0.1);
+    const step = (params.zoom.max - params.zoom.min) * NUDGE;
+    expect(Math.abs(params.zoom.low! - (1 - step))).toBeLessThanOrEqual(params.zoom.step / 2 + 1e-9);
+    expect(Math.abs(params.zoom.high! - (2 - step))).toBeLessThanOrEqual(params.zoom.step / 2 + 1e-9);
+  });
+});
+
+describe("effect order", () => {
+  it("puts one kind of step in a new order, in the places that kind has now", () => {
+    expect(withKindOrder(["blur", "warp", "trails", "map", "kaleidoscope", "finish"], ["kaleidoscope", "map", "warp"]))
+      .toEqual(["blur", "kaleidoscope", "trails", "map", "warp", "finish"]);
+  });
+
+  it("Randomize picks effects in a random order, and a locked effect keeps its place", () => {
+    const state = createPlayState();
+    state.fxOrder = ["blur", "warp", "trails"];
+    state.groups.trails = true;
+    state.locks.trails = true;
+    const firsts = new Set<string>();
+    for (let round = 0; round < 60; round++) {
+      /* The locked effect keeps its place, or comes last when the new list is shorter than that. */
+      const place = state.fxOrder.indexOf("trails");
+      randomizeParams(createParams(), state);
+      expect(state.fxOrder.indexOf("trails")).toBe(Math.min(place, state.fxOrder.length - 1));
+      expect(new Set(state.fxOrder).size).toBe(state.fxOrder.length);
+      /* An effect in the list is on, and one that is not is off. */
+      for (const step of ["warp", "map", "kaleidoscope", "blur", "smear", "contours", "relief", "finish"] as const) {
+        expect(state.groups[step]).toBe(state.fxOrder.includes(step));
+      }
+      firsts.add(state.fxOrder[0]);
+    }
+    /* Picture steps and shape steps both come first sometimes. */
+    expect(firsts.size).toBeGreaterThan(2);
+  });
+
+  it("Clear all empties the list, except for locked effects", () => {
+    const state = createPlayState();
+    for (const step of ["blur", "warp", "trails", "kaleidoscope"] as const) addEffect(state, step);
+    state.locks.trails = true;
+    resetEffects(createParams(), state);
+    expect(state.fxOrder).toEqual(["trails"]);
+  });
+
+  it("adds an effect at the end and turns it on; removing it turns it off", () => {
+    const state = createPlayState();
+    expect(state.fxOrder).toEqual([]);
+    addEffect(state, "blur");
+    addEffect(state, "kaleidoscope");
+    expect(state.fxOrder).toEqual(["blur", "kaleidoscope"]);
+    expect(state.groups.kaleidoscope).toBe(true);
+    removeEffect(state, "blur");
+    expect(state.fxOrder).toEqual(["kaleidoscope"]);
+    expect(state.groups.blur).toBe(false);
+  });
+});
+
+describe("log sliders", () => {
+  it("give each ratio the same part of the slider", () => {
+    const cell = createParams().warpCellSize;
+    expect(toSlider(cell, cell.min)).toBe(0);
+    expect(toSlider(cell, cell.max)).toBeCloseTo(SLIDER_STEPS);
+    expect(fromSlider(cell, SLIDER_STEPS / 2)).toBeCloseTo(Math.sqrt(cell.min * cell.max), 2);
+    expect(fromSlider(cell, toSlider(cell, 4))).toBe(4);
+  });
+
+  it("move a range in equal ratios", () => {
+    const cell = createParams().warpCellSize;
+    Object.assign(cell, { on: true, low: 1, high: 16, ease: "linear" });
+    /* Halfway through the cycle, halfway along the slider: 4 is the middle ratio of 1 and 16. */
+    expect(liveValue(cell, at(10))).toBeCloseTo(4);
+  });
+});

@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { sourceSize, type ImageSource } from "../engine/renderer";
 
 export const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "gif", "bmp", "avif"];
 
@@ -152,10 +153,9 @@ export async function loadImageFile(path: string): Promise<LoadedImage> {
   return { image: await loadImageBlob(blob), blob };
 }
 
-/** A small JPEG preview (data URL) of an image, cropped to fill 16:9. */
-export function makeThumbnail(source: HTMLImageElement | HTMLCanvasElement, width = 128, height = 72): string {
-  const sourceWidth = source instanceof HTMLImageElement ? source.naturalWidth : source.width;
-  const sourceHeight = source instanceof HTMLImageElement ? source.naturalHeight : source.height;
+/** A small JPEG preview (data URL) of an image or a video's current frame, cropped to fill 16:9. */
+export function makeThumbnail(source: ImageSource, width = 128, height = 72): string {
+  const [sourceWidth, sourceHeight] = sourceSize(source);
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -166,16 +166,10 @@ export function makeThumbnail(source: HTMLImageElement | HTMLCanvasElement, widt
   return canvas.toDataURL("image/jpeg", 0.8);
 }
 
-/** "Kaleido 2026-10-11 23-15-02.png", in local time. */
-export function snapshotFileName(date = new Date()): string {
+/** "Kaleido 2026-10-11 23-15-02.png" (or another extension), in local time. */
+export function snapshotFileName(date = new Date(), extension = "png"): string {
   const pad = (value: number) => String(value).padStart(2, "0");
   const day = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
   const time = `${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
-  return `Kaleido ${day} ${time}.png`;
-}
-
-/** Saves a PNG to Pictures\Kaleido Sage and returns its path. */
-export async function saveSnapshot(blob: Blob): Promise<string> {
-  const bytes = new Uint8Array(await blob.arrayBuffer());
-  return invoke<string>("save_snapshot", bytes, { headers: { "file-name": snapshotFileName() } });
+  return `Kaleido ${day} ${time}.${extension}`;
 }

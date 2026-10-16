@@ -33,36 +33,6 @@ function checkerboard(square: number): Draw {
   };
 }
 
-function diagonalStripes(stripe: number): Draw {
-  return (context, width, height) => {
-    context.fillStyle = "#fff";
-    context.fillRect(0, 0, width, height);
-    context.fillStyle = "#000";
-    for (let start = -height; start < width + height; start += stripe * 2) {
-      context.beginPath();
-      context.moveTo(start, 0);
-      context.lineTo(start + stripe, 0);
-      context.lineTo(start + stripe + height, height);
-      context.lineTo(start + height, height);
-      context.fill();
-    }
-  };
-}
-
-function rings(ring: number): Draw {
-  return (context, width, height) => {
-    const cx = width / 2;
-    const cy = height / 2;
-    let index = 0;
-    for (let radius = Math.hypot(cx, cy) + ring; radius > 0; radius -= ring, index++) {
-      context.fillStyle = index % 2 === 0 ? "#000" : "#fff";
-      context.beginPath();
-      context.arc(cx, cy, radius, 0, Math.PI * 2);
-      context.fill();
-    }
-  };
-}
-
 function dotGrid(spacing: number): Draw {
   return (context, width, height) => {
     context.fillStyle = "#0c0c10";
@@ -165,13 +135,23 @@ const scatteredLines: Draw = (context, width, height) => {
   }
 };
 
+/** Black, with one white band from top to bottom through the center, "part" of the width wide. */
+function centerLine(part: number): Draw {
+  return (context, width, height) => {
+    const lineWidth = Math.round(width * part);
+    context.fillStyle = "#000";
+    context.fillRect(0, 0, width, height);
+    context.fillStyle = "#fff";
+    context.fillRect(Math.round((width - lineWidth) / 2), 0, lineWidth, height);
+  };
+}
+
 export const PATTERNS: Pattern[] = [
   { id: "checker-large", label: "Checkerboard, large", group: "Repeating", draw: checkerboard(120) },
   { id: "checker-fine", label: "Checkerboard, fine", group: "Repeating", draw: checkerboard(24) },
-  { id: "stripes", label: "Diagonal stripes", group: "Repeating", draw: diagonalStripes(40) },
-  { id: "rings", label: "Rings", group: "Repeating", draw: rings(36) },
   { id: "dots", label: "Dot grid", group: "Repeating", draw: dotGrid(96) },
   { id: "color-grid", label: "Color grid", group: "Repeating", draw: colorGrid(160) },
+  { id: "center-line", label: "Center line", group: "Not repeating", draw: centerLine(0.25) },
   { id: "clouds", label: "Color clouds", group: "Not repeating", draw: colorClouds },
   { id: "shapes", label: "Random shapes", group: "Not repeating", draw: randomShapes },
   { id: "lines", label: "Scattered lines", group: "Not repeating", draw: scatteredLines }

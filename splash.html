@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#242832" />
+    <title>Kaleido Sage</title>
+    <!--
+      The splash window shows this page while the main window loads behind it.
+      It has no script, so it paints the moment the webview reads it. Its look
+      matches the About dialog. Vite fills in the version (see vite.config.ts).
+    -->
+    <style>
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        color: #d4d4d8;
+        background: radial-gradient(circle at 22% 46%, rgba(75,118,247,.09), transparent 42%), linear-gradient(180deg, #292d37, #242832);
+        font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+        user-select: none;
+        cursor: default;
+      }
+      .splash { display: grid; grid-template-columns: 140px 1fr; align-items: center; gap: 24px; padding: 0 34px; }
+      .splash img { width: 140px; height: 140px; display: block; }
+      h1 { margin: 0; color: #a9ddf8; font-size: 26px; font-weight: 750; letter-spacing: -.02em; }
+      .version { margin-top: 3px; color: #848a9a; font-size: 11px; }
+      p { margin: 14px 0 4px; color: #eceef2; font-size: 13px; line-height: 1.4; }
+      .author { color: #858b9a; font-size: 11px; }
+      .spinner {
+        position: fixed;
+        left: 50%;
+        bottom: 22px;
+        width: 20px;
+        height: 20px;
+        margin-left: -10px;
+        border-radius: 50%;
+        border: 2.5px solid rgba(255,255,255,.1);
+        border-top-color: #4b76f7;
+        animation: spin .7s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <div class="splash">
+      <img src="/app-icon.png" alt="" width="140" height="140" />
+      <div>
+        <h1>Kaleido Sage</h1>
+        <div class="version">Version %APP_VERSION%</div>
+        <p>Any image, in endless motion.</p>
+        <span class="author">by Robert Mirabelle</span>
+      </div>
+    </div>
+    <div class="spinner"></div>
+  </body>
+</html>

@@ -8,7 +8,7 @@ use std::{
 };
 use tauri::Manager;
 
-use crate::files::{is_image_path, is_scene_path};
+use crate::files::{is_image_path, is_scene_path, is_video_path};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,7 +45,8 @@ fn display_path(path: &Path) -> String {
 fn file_kind(path: &Path) -> Option<&'static str> {
     if is_scene_path(path) {
         Some("scene")
-    } else if is_image_path(path) {
+    } else if is_image_path(path) || is_video_path(path) {
+        // Videos are listed as images: the Open Image dialog opens both.
         Some("image")
     } else {
         None

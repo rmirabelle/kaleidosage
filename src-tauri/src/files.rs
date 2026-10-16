@@ -13,18 +13,50 @@ pub(crate) fn is_image_path(path: &Path) -> bool {
         .is_some_and(|extension| IMAGE_EXTENSIONS.contains(&extension.to_ascii_lowercase().as_str()))
 }
 
+/// Experimental: videos the webview can play, used as an image source.
+const VIDEO_EXTENSIONS: [&str; 3] = ["mp4", "m4v", "webm"];
+
+pub(crate) fn is_video_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| VIDEO_EXTENSIONS.contains(&extension.to_ascii_lowercase().as_str()))
+}
+
 pub(crate) fn is_scene_path(path: &Path) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
         .is_some_and(|extension| extension.eq_ignore_ascii_case("ksage"))
 }
 
-/** A plain PNG file name with no folder part, so a snapshot cannot be written outside its folder. */
-fn is_safe_snapshot_name(name: &str) -> bool {
-    !name.is_empty()
-        && !name.starts_with('.')
-        && !name.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|'])
-        && name.to_ascii_lowercase().ends_with(".png")
+/**
+ * Decodes %XX escapes, as encodeURIComponent writes them, so a path with
+ * any characters fits in a request header. None for a broken escape or for
+ * text that is not UTF-8.
+ */
+fn percent_decode(text: &str) -> Option<String> {
+    let bytes = text.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            let hex = text.get(index + 1..index + 3)?;
+            decoded.push(u8::from_str_radix(hex, 16).ok()?);
+            index += 3;
+        } else {
+            decoded.push(bytes[index]);
+            index += 1;
+        }
+    }
+    String::from_utf8(decoded).ok()
+}
+
+/** An absolute path to a PNG or MP4 file: the only files an export writes. */
+fn is_export_path(path: &Path) -> bool {
+    path.is_absolute()
+        && path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("png") || extension.eq_ignore_ascii_case("mp4"))
 }
 
 /** Reads an image file the user picked, and returns its raw bytes to the webview. */
@@ -40,21 +72,44 @@ pub async fn read_image_file(path: String) -> Result<Response, String> {
         .map_err(|error| format!("Could not read {path}: {error}"))
 }
 
+/** Reads a video file the user picked, and returns its raw bytes to the webview. */
+#[tauri::command]
+pub async fn read_video_file(path: String) -> Result<Response, String> {
+    let file = Path::new(&path);
+    if !is_video_path(file) {
+        return Err(format!("{path} is not a supported video"));
+    }
+    tokio::fs::read(file)
+        .await
+        .map(Response::new)
+        .map_err(|error| format!("Could not read {path}: {error}"))
+}
+
 /**
- * Saves a PNG snapshot to Pictures\Kaleido Sage. The PNG bytes are the raw
- * request body, and the "file-name" header holds the file name.
+ * Saves an exported PNG image or MP4 video to the path the user picked. The
+ * file bytes are the raw request body, and the "path" header holds the
+ * path, percent-encoded.
  */
 #[tauri::command]
-pub async fn save_snapshot(app: AppHandle, request: Request<'_>) -> Result<String, String> {
+pub async fn save_export(request: Request<'_>) -> Result<(), String> {
     let InvokeBody::Raw(bytes) = request.body() else {
-        return Err("The snapshot data is missing".into());
+        return Err("The export data is missing".into());
     };
-    let name = request
+    let path = request
         .headers()
-        .get("file-name")
+        .get("path")
         .and_then(|value| value.to_str().ok())
-        .filter(|name| is_safe_snapshot_name(name))
-        .ok_or_else(|| "The snapshot file name is invalid".to_string())?;
+        .and_then(percent_decode)
+        .filter(|path| is_export_path(Path::new(path)))
+        .ok_or_else(|| "The export path is invalid".to_string())?;
+    tokio::fs::write(&path, bytes)
+        .await
+        .map_err(|error| format!("Could not save {path}: {error}"))
+}
+
+/** The folder the save dialog starts in the first time: Pictures\Kaleido Sage, made if it is missing. */
+#[tauri::command]
+pub async fn default_export_folder(app: AppHandle) -> Result<String, String> {
     let folder = app
         .path()
         .picture_dir()
@@ -63,32 +118,38 @@ pub async fn save_snapshot(app: AppHandle, request: Request<'_>) -> Result<Strin
     tokio::fs::create_dir_all(&folder)
         .await
         .map_err(|error| format!("Could not create {}: {error}", folder.display()))?;
-    let path = folder.join(name);
-    tokio::fs::write(&path, bytes)
-        .await
-        .map_err(|error| format!("Could not save {}: {error}", path.display()))?;
-    Ok(path.to_string_lossy().into_owned())
+    Ok(folder.to_string_lossy().into_owned())
 }
 
-/** Writes a scene (.ksage, JSON text) to the path the user picked. */
+/** Writes a scene (.ksage, JSON text) to the path the user picked. The text is the raw request body, and the "path" header holds the path, percent-encoded. */
 #[tauri::command]
-pub async fn save_scene(path: String, contents: String) -> Result<(), String> {
+pub async fn save_scene(request: Request<'_>) -> Result<(), String> {
+    let InvokeBody::Raw(bytes) = request.body() else {
+        return Err("The scene data is missing".into());
+    };
+    let path = request
+        .headers()
+        .get("path")
+        .and_then(|value| value.to_str().ok())
+        .and_then(percent_decode)
+        .ok_or_else(|| "The scene path is invalid".to_string())?;
     if !is_scene_path(Path::new(&path)) {
         return Err(format!("{path} is not a .ksage file"));
     }
-    tokio::fs::write(&path, contents)
+    tokio::fs::write(&path, bytes)
         .await
         .map_err(|error| format!("Could not save {path}: {error}"))
 }
 
-/** Reads a scene (.ksage, JSON text) the user picked. */
+/** Reads a scene (.ksage, JSON text) the user picked, as raw bytes: a scene with a video can be large. */
 #[tauri::command]
-pub async fn read_scene(path: String) -> Result<String, String> {
+pub async fn read_scene(path: String) -> Result<Response, String> {
     if !is_scene_path(Path::new(&path)) {
         return Err(format!("{path} is not a .ksage file"));
     }
-    tokio::fs::read_to_string(&path)
+    tokio::fs::read(&path)
         .await
+        .map(Response::new)
         .map_err(|error| format!("Could not read {path}: {error}"))
 }
 
@@ -147,6 +208,9 @@ mod tests {
         assert!(is_image_path(Path::new("art.webp")));
         assert!(!is_image_path(Path::new("notes.txt")));
         assert!(!is_image_path(Path::new("no-extension")));
+        assert!(is_video_path(Path::new(r"C:\Videos\Clip.MP4")));
+        assert!(is_video_path(Path::new("clip.webm")));
+        assert!(!is_video_path(Path::new("clip.mov")));
     }
 
     #[test]
@@ -156,11 +220,17 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_names_cannot_leave_the_folder() {
-        assert!(is_safe_snapshot_name("Kaleido 2026-10-11 23-15-02.png"));
-        assert!(!is_safe_snapshot_name(r"..\evil.png"));
-        assert!(!is_safe_snapshot_name("C:evil.png"));
-        assert!(!is_safe_snapshot_name(".png"));
-        assert!(!is_safe_snapshot_name("snapshot.exe"));
+    fn export_paths_are_absolute_png_or_mp4() {
+        assert!(is_export_path(Path::new(r"C:\Users\me\Pictures\Kaleido.png")));
+        assert!(is_export_path(Path::new(r"D:\Videos\Loop.MP4")));
+        assert!(!is_export_path(Path::new(r"relative\Loop.mp4")));
+        assert!(!is_export_path(Path::new(r"C:\Windows\evil.exe")));
+    }
+
+    #[test]
+    fn decodes_percent_escapes() {
+        assert_eq!(percent_decode("C%3A%5CVideos%5CK%C3%A4leido%20loop.mp4").as_deref(), Some(r"C:\Videos\Käleido loop.mp4"));
+        assert_eq!(percent_decode("bad%2"), None);
+        assert_eq!(percent_decode("bad%zz"), None);
     }
 }

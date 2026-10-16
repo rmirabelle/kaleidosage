@@ -13,6 +13,7 @@ describe("scene files", () => {
     Object.assign(params.panX, { on: true, ease: "bounce" });
     Object.assign(state, { blendMode: 1, warpMode: 2, mapMode: 4, blurMask: 3, trailMode: 2, overlayColor: "#12ab9f", time: 42, clock: 30, warpTime: 7 });
     params.cycle.value = 13;
+    state.fxOrder = ["map"];
     state.groups.map = true;
     state.groups.blur = false;
     const text = serializeScene(params, state, { image: IMAGE });
@@ -74,25 +75,49 @@ describe("scene files", () => {
     expect(shared.zoom.custom).toBeFalsy();
   });
 
-  it("keep the effect orders, and place the warp of older scenes by its old mode", () => {
+  it("keep the effect list, and place the warp of older scenes by its old mode", () => {
     const state = createPlayState();
-    state.shapeOrder = ["kaleidoscope", "warp", "map"];
-    state.pictureOrder = ["relief", "blur", "finish", "trails"];
+    state.fxOrder = ["relief", "warp", "blur", "map"];
     state.layerBlend = { warp: 1, map: 0, kaleidoscope: 4 };
     const loaded = createPlayState();
-    applyScene(serializeScene(createParams(), state, { image: IMAGE }), createParams(), loaded);
-    expect(loaded.shapeOrder).toEqual(["kaleidoscope", "warp", "map"]);
-    expect(loaded.pictureOrder).toEqual(["relief", "blur", "finish", "trails"]);
+    const text = serializeScene(createParams(), state, { image: IMAGE });
+    applyScene(text, createParams(), loaded);
+    expect(loaded.fxOrder).toEqual(["relief", "warp", "blur", "map"]);
     expect(loaded.layerBlend).toEqual({ warp: 1, map: 0, kaleidoscope: 4 });
+    /* Earlier versions of the app read a full order inside each kind: the list's order first. */
+    const savedState = JSON.parse(text).state;
+    expect(savedState.shapeStack).toEqual(["warp", "map", "kaleidoscope"]);
+    expect(savedState.pictureOrder).toEqual(["relief", "blur", "trails", "smear", "contours", "finish"]);
 
-    const old = createPlayState();
-    applyScene(JSON.stringify({ app: "KaleidoSage", version: 1, state: { warpMode: 2, shapeOrder: ["warp", "warp", "map"] }, image: IMAGE }), createParams(), old);
-    expect(old.shapeOrder).toEqual(["warp", "kaleidoscope", "map"]);
-    expect(old.pictureOrder).toEqual(["blur", "trails", "relief", "finish"]);
+    /* Scenes from before the effect list: every effect that is on and changes the picture, in their order. */
+    const showing = { warpAmount: { value: 0.3 }, blurAmount: { value: 10 }, trailAmount: { value: 0.5 }, smearAmount: { value: 1 }, contourOpacity: { value: 1 }, reliefAmount: { value: 1 }, sharpen: { value: 1 } };
+    const allOn = { warp: true, map: true, kaleidoscope: true, blur: true, trails: true, smear: true, contours: true, relief: true, finish: true };
+    const older = (state: Record<string, unknown>, params: Record<string, unknown> = showing) => {
+      const loadedState = createPlayState();
+      applyScene(JSON.stringify({ app: "KaleidoSage", version: 2, params, state: { groups: allOn, ...state }, image: IMAGE }), createParams(), loadedState);
+      return loadedState;
+    };
+    expect(older({ fxOrder: ["blur", "kaleidoscope", "warp", "map", "trails", "smear", "contours", "relief", "finish"] }).fxOrder)
+      .toEqual(["blur", "kaleidoscope", "warp", "map", "trails", "smear", "contours", "relief", "finish"]);
+    expect(older({ shapeStack: ["warp", "map", "kaleidoscope"], pictureOrder: ["relief", "contours", "blur", "finish", "trails", "smear"] }).fxOrder)
+      .toEqual(["warp", "map", "kaleidoscope", "relief", "contours", "blur", "finish", "trails", "smear"]);
+    expect(older({ warpMode: 2, shapeOrder: ["warp", "warp", "map"] }).fxOrder.slice(0, 3)).toEqual(["warp", "kaleidoscope", "map"]);
+    expect(older({ shapeOrder: ["warp", "map", "kaleidoscope"] }).fxOrder.slice(0, 3)).toEqual(["kaleidoscope", "map", "warp"]);
+    /* A scene from before Time smear and Contours keeps its order, with the new steps after Trails. */
+    expect(older({ pictureOrder: ["relief", "blur", "finish", "trails"] }).fxOrder.slice(3)).toEqual(["relief", "blur", "finish", "trails", "smear", "contours"]);
+    /* An effect that was off, or on with nothing to show, is not in the list, and it is off. */
+    const some = older({ groups: { ...allOn, map: false } }, { blurAmount: { value: 10 } });
+    expect(some.fxOrder).toEqual(["kaleidoscope", "blur"]);
+    expect(some.groups).toMatchObject({ map: false, warp: false, trails: false, kaleidoscope: true, blur: true });
+  });
 
-    const reversed = createPlayState();
-    applyScene(JSON.stringify({ app: "KaleidoSage", version: 1, state: { shapeOrder: ["warp", "map", "kaleidoscope"] }, image: IMAGE }), createParams(), reversed);
-    expect(reversed.shapeOrder).toEqual(["kaleidoscope", "map", "warp"]);
+  it("give scenes from before the cell size the same cells", () => {
+    const params = createParams();
+    applyScene(JSON.stringify({ app: "KaleidoSage", version: 2, params: { warpScale: { value: 2, low: 1, high: 4, on: true } }, image: IMAGE }), params, createPlayState());
+    expect(params.warpCellSize.value).toBeCloseTo(10 / 3);
+    expect(params.warpCellSize.low).toBeCloseTo(10 / 1.5);
+    expect(params.warpCellSize.high).toBeCloseTo(10 / 6);
+    expect(params.warpCellSize.on).toBe(true);
   });
 
   it("keep a second image, and skip a broken one", () => {
@@ -100,6 +125,12 @@ describe("scene files", () => {
     expect(applyScene(text, createParams(), createPlayState())).toEqual({ image: IMAGE, image2: IMAGE2 });
     const broken = JSON.stringify({ app: "KaleidoSage", version: 1, image: IMAGE, image2: { type: "text/plain", data: "x" } });
     expect(applyScene(broken, createParams(), createPlayState())).toEqual({ image: IMAGE });
+  });
+
+  it("keep a video as the first or the second image", () => {
+    const video = { type: "video/mp4", data: "AAAAIGZ0eXBpc29t" };
+    const text = serializeScene(createParams(), createPlayState(), { image: video, image2: IMAGE });
+    expect(applyScene(text, createParams(), createPlayState())).toEqual({ image: video, image2: IMAGE });
   });
 
   it("reject files that are not scenes or have no image", () => {

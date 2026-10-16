@@ -1,17 +1,22 @@
-import { EASES, MAX_CUSTOM_SECONDS, PARAM_KEYS, REFERENCE_CYCLE, defaultPictureOrder, defaultShapeOrder, type Ease, type GroupKey, type Param, type Params, type PlayState } from "./params";
+import { CONTOUR_TONES, EASES, MAX_CUSTOM_SECONDS, PARAM_KEYS, REFERENCE_CYCLE, defaultFxOrder, defaultPictureOrder, defaultShapeOrder, effectShows, type ContourTone, type Ease, type GroupKey, type Param, type Params, type PlayState } from "./params";
+import { isShapeStep, type FxStep } from "./renderer";
 
 export const SCENE_EXTENSION = "ksage";
 /** 2: ranges share one cycle, and a custom range keeps its own seconds. 1: each range had its own rate, and a speed. */
 const SCENE_VERSION = 2;
-const GROUP_KEYS: GroupKey[] = ["warp", "map", "kaleidoscope", "blur", "trails", "relief", "finish"];
+const GROUP_KEYS: GroupKey[] = ["warp", "map", "kaleidoscope", "blur", "trails", "branches", "smear", "contours", "relief", "finish"];
 
-/** The image inside a scene file: its original file bytes, as base64. */
+/** The image (or video) inside a scene file: its original file bytes, as base64, and its type ("image/..." or "video/..."). */
 export interface SceneImage {
   type: string;
   data: string;
 }
 
-/** The images a scene holds: the first one always, the second one when the scene fades between two. */
+/**
+ * The images a scene holds: the first one always, the second one when the
+ * scene fades between two. Either can be a video, so a scene file plays
+ * the same on any PC.
+ */
 export interface SceneImages {
   image: SceneImage;
   image2?: SceneImage;
@@ -36,12 +41,21 @@ export function serializeScene(params: Params, state: PlayState, { image, image2
     const { value, low, high, on, ease, custom, seconds, startTime } = params[key];
     savedParams[key] = { value, low, high, on, ease, custom, seconds, startTime };
   }
-  const { groups, blendMode, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, time, clock, warpTime, mapTravel, shapeOrder, pictureOrder, layerBlend } = state;
+  const { groups, blendMode, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, videoCrossfade, time, clock, warpTime, mapTravel, fxOrder, layerBlend } = state;
+  /**
+   * "effects" is the effect list. Earlier versions of the app read two full
+   * orders of their own, so they get the list's order inside each kind,
+   * with the other steps after it (their groups are off).
+   */
+  const fullOrder = [...fxOrder, ...defaultFxOrder().filter((step) => !fxOrder.includes(step))];
+  const shapeStack = fullOrder.filter((step) => isShapeStep(step));
+  /* Those versions refuse an order with a step they do not know, so the steps added since are left out. */
+  const pictureOrder = fullOrder.filter((step) => !isShapeStep(step) && step !== "branches");
   const scene: SceneFile = {
     app: "KaleidoSage",
     version: SCENE_VERSION,
     params: savedParams,
-    state: { groups: { ...groups }, blendMode, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, time, clock, warpTime, mapTravel, shapeStack: [...shapeOrder], pictureOrder: [...pictureOrder], layerBlend: { ...layerBlend } },
+    state: { groups: { ...groups }, blendMode, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, videoCrossfade, time, clock, warpTime, mapTravel, effects: [...fxOrder], shapeStack, pictureOrder, layerBlend: { ...layerBlend } },
     image,
     ...(image2 ? { image2 } : {})
   };
@@ -66,10 +80,27 @@ function oldRateSeconds(param: Param, rate: number) {
 
 /** A saved image, if it has an image type and data. */
 function sceneImage(value: unknown): SceneImage | undefined {
-  if (!isRecord(value) || typeof value.type !== "string" || !value.type.startsWith("image/") || typeof value.data !== "string" || !value.data) {
+  if (!isRecord(value) || typeof value.type !== "string" || !/^(image|video)\//.test(value.type) || typeof value.data !== "string" || !value.data) {
     return undefined;
   }
   return { type: value.type, data: value.data };
+}
+
+/**
+ * A saved order of steps, if each one is known and there only once. A scene
+ * from before a step was added (for example Contours) gets the new step at
+ * its default place, after the step it follows by default; the saved order
+ * of the others stays.
+ */
+function orderWithNewSteps<T extends string>(value: unknown, steps: readonly T[]): T[] | undefined {
+  if (!Array.isArray(value) || !value.every((step) => steps.includes(step)) || new Set(value).size !== value.length) return undefined;
+  const result = [...value] as T[];
+  steps.forEach((step, index) => {
+    if (result.includes(step)) return;
+    const before = index > 0 ? result.indexOf(steps[index - 1]) : -1;
+    result.splice(before + 1, 0, step);
+  });
+  return result;
 }
 
 /** A saved order, if it has every step exactly once. */
@@ -135,6 +166,17 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
     if (isNumber(entry.startTime)) param.startTime = entry.startTime;
   }
 
+  /**
+   * Scenes from before the cell size sized the cells warp with the warp size,
+   * where a larger size made smaller cells. The cell size gets the same cells.
+   */
+  if (!isRecord(savedParams.warpCellSize) && isRecord(savedParams.warpScale)) {
+    const cell = params.warpCellSize;
+    const scale = params.warpScale;
+    const toCell = (size: number) => clamp(10 / (1.5 * size), cell.min, cell.max);
+    Object.assign(cell, { value: toCell(scale.value), low: toCell(scale.low ?? scale.value), high: toCell(scale.high ?? scale.value), on: scale.on, ease: scale.ease, custom: scale.custom, seconds: scale.seconds, startTime: scale.startTime });
+  }
+
   if (isRecord(saved.groups)) {
     for (const key of GROUP_KEYS) if (typeof saved.groups[key] === "boolean") state.groups[key] = saved.groups[key] as boolean;
   }
@@ -146,16 +188,29 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   /* Scenes from before the tile modes have no fold mode; they were radial. */
   state.foldMode = mode(saved.foldMode, [0, 1, 2] as const) ?? 0;
   /**
-   * The shape order is saved as "shapeStack", in the order the steps act on
-   * the picture. Earlier scenes saved "shapeOrder" the other way round, and
-   * scenes before that kept the warp's place in the warp mode: 2 = the warp
-   * acts first on the picture (inside the wedges), 1 = last.
+   * The effect list is saved as "effects". Earlier scenes listed every
+   * effect in one order ("fxOrder"), and before that the shape steps came
+   * first, then the picture steps, each kind with its own order.
+   * The shape order was saved as "shapeStack", in the order the steps act on
+   * the picture; scenes before that saved "shapeOrder" the other way round,
+   * and scenes before that kept the warp's place in the warp mode: 2 = the
+   * warp acts first on the picture (inside the wedges), 1 = last.
    */
   const earlier = order(saved.shapeOrder, defaultShapeOrder());
-  state.shapeOrder = order(saved.shapeStack, defaultShapeOrder())
+  const shapeOrder = order(saved.shapeStack, defaultShapeOrder())
     ?? (earlier && [...earlier].reverse())
     ?? (saved.warpMode === 2 ? ["warp", "kaleidoscope", "map"] : defaultShapeOrder());
-  state.pictureOrder = order(saved.pictureOrder, defaultPictureOrder()) ?? defaultPictureOrder();
+  const effects = saved.effects;
+  if (Array.isArray(effects) && effects.every((step) => defaultFxOrder().includes(step)) && new Set(effects).size === effects.length) {
+    state.fxOrder = [...effects] as FxStep[];
+  } else {
+    /* Those scenes listed every effect; the list keeps the ones that are on and change the picture. */
+    const fullOrder = orderWithNewSteps(saved.fxOrder, defaultFxOrder())
+      ?? [...shapeOrder, ...(orderWithNewSteps(saved.pictureOrder, defaultPictureOrder()) ?? defaultPictureOrder())];
+    state.fxOrder = fullOrder.filter((step) => effectShows(step, params, state));
+  }
+  /* An effect that is not in the list is off. */
+  for (const step of defaultFxOrder()) if (!state.fxOrder.includes(step)) state.groups[step] = false;
   const blends = isRecord(saved.layerBlend) ? saved.layerBlend : {};
   for (const step of ["warp", "map", "kaleidoscope"] as const) {
     state.layerBlend[step] = mode(blends[step], [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? 0;
@@ -169,6 +224,10 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   if (isNumber(saved.mapTravel)) state.mapTravel = saved.mapTravel;
   if (typeof saved.overlayColor === "string" && /^#[0-9a-f]{6}$/i.test(saved.overlayColor)) state.overlayColor = saved.overlayColor;
   if (typeof saved.trailColor === "string" && /^#[0-9a-f]{6}$/i.test(saved.trailColor)) state.trailColor = saved.trailColor;
+  if (typeof saved.videoCrossfade === "boolean") state.videoCrossfade = saved.videoCrossfade;
+  state.smearShape = mode(saved.smearShape, [0, 1, 2, 3, 4] as const) ?? state.smearShape;
+  if (CONTOUR_TONES.includes(saved.contourTone as ContourTone)) state.contourTone = saved.contourTone as ContourTone;
+  state.contourBlend = mode(saved.contourBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? state.contourBlend;
 
   return image2 ? { image, image2 } : { image };
 }
@@ -184,21 +243,30 @@ export function sceneFingerprint(params: Params, state: PlayState, imageIds: [nu
     const { value, low, high, on, ease, custom, seconds } = params[key];
     return [value, low, high, on, ease ?? null, custom ?? false, custom ? seconds : null];
   });
-  const { groups, blendMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, shapeOrder, pictureOrder, layerBlend } = state;
-  return JSON.stringify([settings, groups, blendMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, shapeOrder, pictureOrder, layerBlend, imageIds]);
+  const { groups, blendMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, videoCrossfade, fxOrder, layerBlend } = state;
+  return JSON.stringify([settings, groups, blendMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, videoCrossfade, fxOrder, layerBlend, imageIds]);
 }
+
+/** Uint8Array.fromBase64 and toBase64, in newer browsers; much faster for a large video. */
+type Base64Bytes = { toBase64?: () => string };
+type Base64Constructor = { fromBase64?: (text: string) => Uint8Array };
 
 export async function blobToSceneImage(blob: Blob): Promise<SceneImage> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
+  const type = blob.type || "image/png";
+  const fast = (bytes as Base64Bytes).toBase64;
+  if (fast) return { type, data: fast.call(bytes) };
   let binary = "";
   const chunk = 0x8000;
   for (let index = 0; index < bytes.length; index += chunk) {
     binary += String.fromCharCode(...bytes.subarray(index, index + chunk));
   }
-  return { type: blob.type || "image/png", data: btoa(binary) };
+  return { type, data: btoa(binary) };
 }
 
 export function sceneImageToBlob(image: SceneImage): Blob {
+  const fast = (Uint8Array as unknown as Base64Constructor).fromBase64;
+  if (fast) return new Blob([fast(image.data) as Uint8Array<ArrayBuffer>], { type: image.type });
   const binary = atob(image.data);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);

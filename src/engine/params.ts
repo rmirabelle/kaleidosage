@@ -1,14 +1,17 @@
-import type { BlendMode, BlurMask, FoldMode, LayerBlend, MapMode, PictureStep, ShapeStep, TrailMode, WarpMode, WarpType } from "./renderer";
+import type { BlendMode, BlurMask, FoldMode, FxStep, LayerBlend, MapMode, PictureStep, ShapeStep, SmearShape, TrailMode, WarpMode, WarpType } from "./renderer";
 
 export const PARAM_KEYS = [
   "cycle",
   "imageBlend",
   "warpOpacity", "mapOpacity", "foldOpacity",
-  "warpAmount", "warpScale", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle",
+  "warpAmount", "warpScale", "warpCellSize", "warpCellAngle", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle",
   "mapMix", "mapScale", "mapPower", "mapPointX", "mapPointY", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "tunnelTwist",
   "segments", "tileSize", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl",
   "blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel",
   "trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint",
+  "branchOpacity", "branchCount", "branchSize", "branchSpread", "branchTurn", "branchJoint", "branchTrunk", "branchWidth", "branchTaper", "branchHide", "branchBackground", "branchFade", "branchHue", "branchBaseX", "branchBaseY",
+  "smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade",
+  "contourHue", "contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady",
   "reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine",
   "sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel"
 ] as const;
@@ -32,6 +35,12 @@ export interface Param {
   step: number;
   value: number;
   unit?: string;
+  /**
+   * "log": the slider and the range move in equal ratios, not equal steps,
+   * so small values get as much of the slider as large ones (min must be
+   * above 0). See toSlider and fromSlider.
+   */
+  scale?: "log";
   drift?: "spin" | "wave";
   low?: number;
   high?: number;
@@ -56,10 +65,19 @@ export interface Param {
  * than smooth), ease in slow at the start, ease out slow at the end, and
  * bounce, which bounces at the end handle. "organic" is the smooth curve's
  * name in scene files.
+ *
+ * The dramatic curves: explode shoots past the end handle and settles back
+ * on it; implode pulls back a little, then snaps to the end handle. Early,
+ * pulse and late step from one handle to the other at a quarter, a half,
+ * and three quarters of the trip. Out and back, a step makes a square wave
+ * that sits at the end handle three quarters, half, or a quarter of the
+ * time. Explode and implode leave the 0 to 1 range; liveValue keeps the
+ * value inside the slider.
  */
-export type Ease = "organic" | "linear" | "inOut" | "in" | "out" | "bounce";
+export type Ease = "organic" | "linear" | "inOut" | "in" | "out" | "bounce" | "explode" | "implode" | "early" | "pulse" | "late";
 export const EASES: readonly (readonly [Ease, string])[] = [
-  ["organic", "Smooth"], ["linear", "Linear"], ["inOut", "Ease in-out"], ["in", "Ease in"], ["out", "Ease out"], ["bounce", "Bounce"]
+  ["organic", "Smooth"], ["linear", "Linear"], ["inOut", "Ease in-out"], ["in", "Ease in"], ["out", "Ease out"], ["bounce", "Bounce"],
+  ["explode", "Explode"], ["implode", "Implode"], ["early", "Early"], ["pulse", "Pulse"], ["late", "Late"]
 ];
 
 /** The default curve: organic for waves, linear for angles (they turn at a steady angular speed). */
@@ -83,7 +101,30 @@ function bounceOut(t: number) {
   return 1;
 }
 
-/** A curve from 0 to 1 for t from 0 to 1. */
+/**
+ * Explode: the value rushes past the end handle, up to about a third of the
+ * range beyond it, then swings back and forth around the handle, each swing
+ * smaller, and comes to rest on it.
+ */
+function explodeOut(t: number) {
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  return 2 ** (-10 * t) * Math.sin((t * 10 - 0.75) * (2 * Math.PI / 3)) + 1;
+}
+
+/**
+ * Implode: the value first pulls back from the start handle, about a tenth
+ * of the range, then snaps to the end handle, faster and faster.
+ */
+function implodeIn(t: number) {
+  const pull = 1.70158;
+  return (pull + 1) * t ** 3 - pull * t ** 2;
+}
+
+/**
+ * A curve for t from 0 to 1, from 0 to 1 at its ends. Explode goes above 1
+ * and implode goes below 0 on the way.
+ */
 export function easeCurve(kind: Ease, t: number): number {
   switch (kind) {
     case "linear": return t;
@@ -91,6 +132,11 @@ export function easeCurve(kind: Ease, t: number): number {
     case "in": return t ** 3;
     case "out": return 1 - (1 - t) ** 3;
     case "bounce": return bounceOut(t);
+    case "explode": return explodeOut(t);
+    case "implode": return implodeIn(t);
+    case "early": return t < 0.25 ? 0 : 1;
+    case "pulse": return t < 0.5 ? 0 : 1;
+    case "late": return t < 0.75 ? 0 : 1;
     default: return 0.5 - 0.5 * Math.cos(Math.PI * t);
   }
 }
@@ -98,7 +144,11 @@ export function easeCurve(kind: Ease, t: number): number {
 export type Params = Record<ParamKey, Param>;
 
 /** The settings groups that can be turned off as a whole. */
-export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "relief" | "finish";
+/** The contour lines' color: the Color slider's fully saturated hue, black, or white. */
+export type ContourTone = "hue" | "black" | "white";
+export const CONTOUR_TONES: readonly ContourTone[] = ["hue", "black", "white"];
+
+export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "branches" | "smear" | "contours" | "relief" | "finish";
 
 export interface PlayState {
   /** Which groups are on. A group that is off has no effect, but keeps its settings. */
@@ -118,12 +168,13 @@ export interface PlayState {
   /** Radial wedges, or triangle or hexagon tiles. */
   foldMode: FoldMode;
   /**
-   * The order of the shape steps (they move pixels) and of the picture steps
-   * (they change the drawn picture), as the panel lists them: the first step
-   * acts first on the picture, and each next step works on that result.
+   * The effects the user added, in the order the panel lists them: shape
+   * steps (they move pixels) and picture steps (they change the drawn
+   * picture) mixed. The first step acts first on the picture, and each next
+   * step works on that result. An effect that is not in the list does
+   * nothing, and its group is off (see addEffect and removeEffect).
    */
-  shapeOrder: ShapeStep[];
-  pictureOrder: PictureStep[];
+  fxOrder: FxStep[];
   /** How each shape step's result combines with the picture without it. Randomize does not change it. */
   layerBlend: Record<ShapeStep, LayerBlend>;
   /**
@@ -137,6 +188,16 @@ export interface PlayState {
   overlayColor: string;
   /** The color the trails are tinted toward (see trailTint), as "#rrggbb". */
   trailColor: string;
+  /** The time smear's pattern of delays (see SMEAR_SHADER). */
+  smearShape: SmearShape;
+  /** The contour lines' color: the Color slider's hue, or black or white. And how the lines combine with the picture under them. */
+  contourTone: ContourTone;
+  contourBlend: LayerBlend;
+  /**
+   * A source video crossfades its end into its start (see video.ts). Off,
+   * the video starts again at the start of each loop, with a jump.
+   */
+  videoCrossfade: boolean;
   paused: boolean;
   /** Animation time in seconds. It runs at the speed the shared cycle sets (see REFERENCE_CYCLE). */
   time: number;
@@ -176,6 +237,10 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   imageBlend: { label: "Image blend", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 1, on: false },
   warpAmount: { label: "Warp strength", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.05, high: 0.3, on: false },
   warpScale: { label: "Warp size", min: 0.2, max: 8, step: 0.01, value: 1.5, drift: "wave", low: 1, high: 2.5, on: false },
+  /** Cells warp: the size of each cell, in tenths of the screen height. Larger makes larger cells. */
+  warpCellSize: { label: "Cell size", min: 0.05, max: 25, step: 0.01, scale: "log", value: 4, drift: "wave", low: 3, high: 6, on: false },
+  /** Cells warp: turns the whole cell pattern, with each cell's shift, around the center. The image does not turn. */
+  warpCellAngle: { label: "Cell rotation", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   warpMarble: { label: "Marbling", min: 0, max: 6, step: 0.01, value: 0, drift: "wave", low: 1, high: 3.5, on: false },
   warpDetail: { label: "Warp detail", min: 1, max: 6, step: 1, value: 4 },
   warpFlow: { label: "Warp flow", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.05, high: 0.6, on: false },
@@ -241,7 +306,68 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * each 1/60 s, so the trails take that color and get darker as they age.
    */
   trailTint: { label: "Trail tint", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.6, on: false },
+  /**
+   * Branches (a fractal tree made of the picture, see BRANCH_SHADER): how
+   * much the tree shows (0 = no effect), how many branches, their size as a
+   * part of the whole tree, the angle their directions spread over, the turn
+   * of all of them at each joint, where on the trunk they grow from (1 = its
+   * top), the trunk's height (screen heights) and width (a part of its
+   * height), how much the trunk narrows to its branches' width at its top
+   * (1 = all the way, so each branch starts as wide as its trunk ends), how many levels of trunks from the root are hidden (the tree
+   * keeps their branches), how much of the picture shows behind the tree,
+   * how much each level fades, the hue turn of each level, and the base
+   * point (the bottom of the trunk). The start values are a tree that
+   * grows well: a tall, thin, fully tapered trunk with two branches whose
+   * size, spread, turn and branch point move, so it curls and grows.
+   */
+  branchOpacity: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.7, high: 1, on: false },
+  branchCount: { label: "Branches", min: 1, max: 4, step: 1, value: 2 },
+  branchSize: { label: "Branch size", min: 0.2, max: 0.9, step: 0.01, value: 0.78, drift: "wave", low: 0.4, high: 0.8, on: true },
+  branchSpread: { label: "Spread", min: 0, max: 180, step: 1, value: 91, unit: "°", drift: "wave", low: 0, high: 130, on: true },
+  branchTurn: { label: "Turn", min: -90, max: 90, step: 1, value: 0, unit: "°", drift: "wave", low: -90, high: -50, on: true },
+  branchJoint: { label: "Branch point", min: 0.2, max: 1.2, step: 0.01, value: 0.65, drift: "wave", low: 0.2, high: 1.2, on: true },
+  branchHide: { label: "Hidden levels", min: 0, max: 4, step: 1, value: 1 },
+  branchTrunk: { label: "Trunk height", min: 0.05, max: 0.8, step: 0.01, value: 0.8, drift: "wave", low: 0.24, high: 0.32, on: false },
+  branchTaper: { label: "Taper", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0.6, high: 1, on: false },
+  branchWidth: { label: "Trunk width", min: 0.05, max: 1.5, step: 0.01, value: 0.05, drift: "wave", low: 0.15, high: 0.35, on: false },
+  branchBackground: { label: "Background", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.4, on: false },
+  branchFade: { label: "Fade per level", min: 0, max: 0.5, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.15, on: false },
+  branchHue: { label: "Hue per level", min: -60, max: 60, step: 1, value: -60, unit: "°", drift: "wave", low: -15, high: 15, on: false },
+  branchBaseX: { label: "Base X", min: -1, max: 1, step: 0.01, value: -0.3, drift: "wave", low: -0.2, high: 0.2, on: false },
+  branchBaseY: { label: "Base Y", min: -1, max: 1, step: 0.01, value: -0.5, drift: "wave", low: -0.5, high: -0.35, on: false },
   trailHue: { label: "Trail hue", min: -10, max: 10, step: 0.1, value: 0, unit: "°", drift: "wave", low: -3, high: 3, on: false },
+  /**
+   * Time smear: each pixel shows the picture from up to "Delay" seconds
+   * ago, by a pattern. Angle turns the Linear and Sweep patterns; Bands
+   * repeats the pattern back and forth.
+   */
+  smearAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
+  smearDelay: { label: "Delay", min: 0.05, max: 3, step: 0.01, value: 1, unit: " s", drift: "wave", low: 0.5, high: 2, on: false },
+  smearAngle: { label: "Angle", min: 0, max: 360, step: 1, value: 90, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  smearBands: { label: "Bands", min: 1, max: 12, step: 0.1, value: 1, drift: "wave", low: 1, high: 4, on: false },
+  /**
+   * Restart: every this many seconds of play, the smear forgets its kept
+   * frames, so the picture is sharp again and the smear grows back over the
+   * delay (0 = never). Fade: the seconds before each restart in which the
+   * smear fades out (0 = it jumps back to sharp).
+   */
+  smearRestart: { label: "Restart", min: 0, max: 20, step: 0.1, value: 0, unit: " s" },
+  smearFade: { label: "Fade", min: 0, max: 3, step: 0.05, value: 0.5, unit: " s" },
+  /**
+   * Contour lines where the brightness crosses evenly spaced levels.
+   * Color is the lines' hue, fully saturated (unless the lines are black
+   * or white, see contourTone), Opacity how strongly the lines show,
+   * Density how many levels there are.
+   * Resolution sets how much fine detail the lines follow: the brightness is
+   * blurred by (max - resolution) mip levels.
+   */
+  contourHue: { label: "Color", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  contourOpacity: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.4, high: 1, on: false },
+  contourLines: { label: "Density", min: 2, max: 80, step: 1, value: 16, drift: "wave", low: 8, high: 30, on: false },
+  contourWidth: { label: "Line width", min: 0.5, max: 100, step: 0.1, value: 1.5, unit: "px", drift: "wave", low: 1, high: 4, on: false },
+  contourResolution: { label: "Resolution", min: 0, max: 6, step: 0.1, value: 4, drift: "wave", low: 2, high: 5, on: false },
+  /** Smooth: how much of the last frame's contour brightness each 1/60 s keeps, so the lines glide instead of jumping. */
+  contourSteady: { label: "Smooth", min: 0, max: 0.98, step: 0.01, value: 0.8, drift: "wave", low: 0.5, high: 0.9, on: false },
   /** Relief lighting: the picture's brightness becomes height, lit from "Light angle". */
   reliefAmount: { label: "Relief", min: 0, max: 1.5, step: 0.01, value: 0, drift: "wave", low: 0.3, high: 0.9, on: false },
   reliefDepth: { label: "Relief depth", min: 0.5, max: 20, step: 0.1, value: 6, drift: "wave", low: 3, high: 10, on: false },
@@ -281,15 +407,60 @@ export function createParams(): Params {
   return params;
 }
 
-/** The start-up orders: the fold, then the map bends the folded picture, then the warp; and blur, trails, relief, final effects. */
+/** The start-up orders: the fold, then the map bends the folded picture, then the warp; and blur, trails, branches, time smear, contours, relief, final effects. */
 export const defaultShapeOrder = (): ShapeStep[] => ["kaleidoscope", "map", "warp"];
-export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "relief", "finish"];
+export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "branches", "smear", "contours", "relief", "finish"];
+export const defaultFxOrder = (): FxStep[] => [...defaultShapeOrder(), ...defaultPictureOrder()];
+
+/**
+ * The order with some of its steps (for example all shape steps) put in
+ * the order "kindOrder", in the places those steps have now. The other
+ * steps stay where they are.
+ */
+export function withKindOrder(order: FxStep[], kindOrder: FxStep[]): FxStep[] {
+  const queue = [...kindOrder];
+  return order.map((step) => (kindOrder.includes(step) ? queue.shift()! : step));
+}
+
+/** Adds an effect at the end of the list and turns its group on. */
+export function addEffect(state: PlayState, step: FxStep) {
+  if (!state.fxOrder.includes(step)) state.fxOrder = [...state.fxOrder, step];
+  state.groups[step] = true;
+}
+
+/** Takes an effect out of the list and turns its group off. Its settings stay, for when it is added again. */
+export function removeEffect(state: PlayState, step: FxStep) {
+  state.fxOrder = state.fxOrder.filter((item) => item !== step);
+  state.groups[step] = false;
+}
+
+/**
+ * True when an effect that is on changes the picture with its settings. A
+ * scene from before the effect list listed every effect; it keeps only
+ * these (see applyScene).
+ */
+export function effectShows(step: FxStep, params: Params, state: PlayState): boolean {
+  if (!state.groups[step]) return false;
+  const used = (key: ParamKey) => params[key].value !== 0 || Boolean(params[key].drift && params[key].on);
+  switch (step) {
+    case "warp": return used("warpAmount");
+    case "blur": return used("blurAmount");
+    case "trails": return used("trailAmount");
+    case "branches": return used("branchOpacity");
+    case "smear": return used("smearAmount");
+    case "contours": return used("contourOpacity");
+    case "relief": return used("reliefAmount");
+    case "finish": return used("sharpen") || used("exposure") || used("blackLevel") || used("overlayOpacity");
+    default: return true;
+  }
+}
 
 export function createPlayState(): PlayState {
   return {
-    groups: { animation: true, source: true, warp: true, map: false, kaleidoscope: true, blur: true, trails: true, relief: true, finish: true },
-    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, relief: false, finish: false },
-    blendMode: 0, warpMode: 1, warpType: 0, warpTime: 0, mapTravel: 0, mapMode: 1, foldMode: 2, shapeOrder: defaultShapeOrder(), pictureOrder: defaultPictureOrder(), layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", trailColor: "#2a6cff", paused: false, time: 0, clock: 0 };
+    /* No effect is in the list at start-up, so every effect group is off. */
+    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, branches: false, smear: false, contours: false, relief: false, finish: false },
+    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, branches: false, smear: false, contours: false, relief: false, finish: false },
+    blendMode: 0, warpMode: 1, warpType: 0, warpTime: 0, mapTravel: 0, mapMode: 1, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -300,7 +471,7 @@ export function startRangeAt(param: Param, time: number) {
   param.startTime = time;
 }
 
-const isCustom = (param: Param) => Boolean(param.custom && param.seconds && param.seconds > 0);
+export const isCustom = (param: Param) => Boolean(param.custom && param.seconds && param.seconds > 0);
 
 /** The time a range moves on: the real clock for a custom range, animation time otherwise. */
 export const rangeClock = (param: Param, state: PlayState) => (isCustom(param) ? state.clock : state.time);
@@ -350,7 +521,31 @@ export function liveValue(param: Param, state: PlayState): number {
     return end > start ? bottom + offset : top - offset;
   }
   const travel = (trips % 2 + 2) % 2;
-  return start + (end - start) * easeCurve(easeOf(param), travel <= 1 ? travel : 2 - travel);
+  const part = easeCurve(easeOf(param), travel <= 1 ? travel : 2 - travel);
+  /**
+   * A log slider's range moves at the same speed along the slider, so in
+   * equal ratios. A curve that leaves the handles (explode, implode) stops
+   * at the slider's ends.
+   */
+  if (param.scale === "log") return clamp(start * (end / start) ** part, param.min, param.max);
+  return clamp(start + (end - start) * part, param.min, param.max);
+}
+
+/** The positions of a log slider: it moves in this many equal ratios from min to max. */
+export const SLIDER_STEPS = 1000;
+
+/** Where a value is on its slider: the value itself, or a position from 0 to SLIDER_STEPS on a log slider. */
+export function toSlider(param: Param, value: number): number {
+  if (param.scale !== "log") return value;
+  return Math.log(clamp(value, param.min, param.max) / param.min) / Math.log(param.max / param.min) * SLIDER_STEPS;
+}
+
+/** The value at a slider position (see toSlider), on the parameter's steps and inside its limits. */
+export function fromSlider(param: Param, position: number): number {
+  if (param.scale !== "log") return position;
+  const value = param.min * (param.max / param.min) ** (clamp(position, 0, SLIDER_STEPS) / SLIDER_STEPS);
+  const decimals = (String(param.step).split(".")[1] ?? "").length;
+  return Number(clamp(Math.round(value / param.step) * param.step, param.min, param.max).toFixed(decimals));
 }
 
 /** "#rrggbb" to red, green and blue from 0 to 1. Anything else is black. */
@@ -389,6 +584,45 @@ export function formatValue(param: Param, value: number): string {
 }
 
 /** Picks a new random look. The range is on only for the values that move the picture most. */
+/** How far Nudge moves each value: this part of its slider's full range. */
+export const NUDGE = 0.025;
+
+/**
+ * Nudge: moves every value of the unlocked groups a little, up or down at
+ * random: NUDGE of its slider's full range, kept inside the slider and on
+ * its steps. A range moves both handles, each on its own way; a whole-circle
+ * turn keeps its full range, and other angles wrap around the circle. A
+ * value at 0 stays 0, so an effect that is off stays off. As with
+ * Randomize, the loop length, the image blend and the layer opacities stay;
+ * menus and colors do not change.
+ */
+export function nudgeParams(params: Params, state: PlayState, random = Math.random) {
+  for (const group of Object.keys(GROUP_PARAMS) as GroupKey[]) {
+    if (group === "animation" || group === "source" || state.locks[group]) continue;
+    for (const key of GROUP_PARAMS[group]) {
+      if (OPACITY_KEYS.includes(key)) continue;
+      const param = params[key];
+      const circle = param.drift === "spin" && param.min === 0 && param.max === 360;
+      const nudge = (value: number) => {
+        if (value === 0) return 0;
+        /* A log slider moves the same part of its length. */
+        if (param.scale === "log") return fromSlider(param, toSlider(param, value) + (random() < 0.5 ? -1 : 1) * SLIDER_STEPS * NUDGE);
+        const moved = value + (random() < 0.5 ? -1 : 1) * (param.max - param.min) * NUDGE;
+        const inside = circle ? ((moved % 360) + 360) % 360 : clamp(moved, param.min, param.max);
+        const stepped = param.min + Math.round((inside - param.min) / param.step) * param.step;
+        return Number(clamp(stepped, param.min, param.max).toFixed(6));
+      };
+      param.value = nudge(param.value);
+      if (!param.drift || !param.on) continue;
+      const low = param.low ?? param.min;
+      const high = param.high ?? param.max;
+      if (circle && Math.min(low, high) <= param.min && Math.max(low, high) >= param.max) continue;
+      param.low = nudge(low);
+      param.high = nudge(high);
+    }
+  }
+}
+
 export function randomizeParams(params: Params, state?: PlayState) {
   /** Settings of locked groups are copied first and put back at the end, so Randomize leaves them as they were. */
   const lockedGroups = state ? (Object.keys(GROUP_PARAMS) as GroupKey[]).filter((group) => state.locks[group]) : [];
@@ -399,7 +633,6 @@ export function randomizeParams(params: Params, state?: PlayState) {
     warpType: state.warpType,
     mapMode: state.mapMode,
     foldMode: state.foldMode,
-    shapeOrder: [...state.shapeOrder],
     overlayColor: state.overlayColor
   };
   randomizeAll(params, state);
@@ -412,8 +645,6 @@ export function randomizeParams(params: Params, state?: PlayState) {
     }
     if (state.locks.map) state.mapMode = keptState.mapMode;
     if (state.locks.kaleidoscope) state.foldMode = keptState.foldMode;
-    /* The shape order involves all three shape groups, so locking any of them keeps it. */
-    if (state.locks.warp || state.locks.map || state.locks.kaleidoscope) state.shapeOrder = keptState.shapeOrder;
     if (state.locks.finish) state.overlayColor = keptState.overlayColor;
   }
 }
@@ -445,10 +676,15 @@ export function resetEffects(params: Params, state: PlayState) {
     state.trailMode = fresh.trailMode;
     state.trailColor = fresh.trailColor;
   }
+  if (!state.locks.smear) state.smearShape = fresh.smearShape;
+  if (!state.locks.contours) {
+    state.contourTone = fresh.contourTone;
+    state.contourBlend = fresh.contourBlend;
+  }
   if (!state.locks.finish) state.overlayColor = fresh.overlayColor;
-  if (!state.locks.warp && !state.locks.map && !state.locks.kaleidoscope) state.shapeOrder = fresh.shapeOrder;
   for (const step of ["warp", "map", "kaleidoscope"] as const) if (!state.locks[step]) state.layerBlend[step] = 0;
-  if (!state.locks.blur && !state.locks.trails && !state.locks.relief && !state.locks.finish) state.pictureOrder = fresh.pictureOrder;
+  /* The unlocked effects leave the list (their groups are off now); the locked ones stay, in their order. */
+  state.fxOrder = state.fxOrder.filter((step) => state.locks[step]);
 }
 
 /** The parameters in each settings group, for locking. */
@@ -457,26 +693,42 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   animation: ["cycle"],
   /** The images are the user's choice; Randomize does not change the blend. */
   source: ["imageBlend"],
-  warp: ["warpOpacity", "warpAmount", "warpScale", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle"],
+  warp: ["warpOpacity", "warpAmount", "warpScale", "warpCellSize", "warpCellAngle", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle"],
   map: ["mapOpacity", "mapMix", "mapScale", "mapPower", "mapPointX", "mapPointY", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "tunnelTwist"],
   kaleidoscope: ["foldOpacity", "segments", "tileSize", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl"],
   blur: ["blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel"],
   trails: ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"],
+  branches: ["branchOpacity", "branchCount", "branchSize", "branchSpread", "branchTurn", "branchJoint", "branchTrunk", "branchWidth", "branchTaper", "branchHide", "branchBackground", "branchFade", "branchHue", "branchBaseX", "branchBaseY"],
+  smear: ["smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade"],
+  contours: ["contourHue", "contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady"],
   relief: ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"],
   finish: ["sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel"]
+};
+
+/** The chance that Randomize puts each effect in the list. Blur looks the least good, so Randomize leaves it out. */
+const EFFECT_CHANCE: Record<FxStep, number> = {
+  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, branches: 0.2, smear: 0.2, contours: 0.25, relief: 0.4, finish: 0.4
 };
 
 function randomizeAll(params: Params, state?: PlayState) {
   if (state) {
     state.overlayColor = hslToHex(rand(0, 360), rand(0.5, 1), rand(0.35, 0.6));
-    state.groups.map = Math.random() < 0.75;
     state.mapMode = (1 + Math.floor(Math.random() * 7)) as MapMode;
-    state.groups.warp = Math.random() < 0.7;
     /* Noise is the most common warp; the other kinds share the rest. */
     state.warpType = (Math.random() < 0.4 ? 0 : 1 + Math.floor(Math.random() * 5)) as WarpType;
-    /* Usually the warp acts last on the picture (it breaks the symmetry), and the map after the fold. */
-    const middle: ShapeStep[] = Math.random() < 0.75 ? ["kaleidoscope", "map"] : ["map", "kaleidoscope"];
-    state.shapeOrder = Math.random() < 0.65 ? [...middle, "warp"] : ["warp", ...middle];
+    /**
+     * Each unlocked effect is in the new list by its chance, in a random
+     * order. A locked effect keeps its place (or stays out of the list).
+     */
+    const chosen = defaultFxOrder().filter((step) => !state.locks[step] && Math.random() < EFFECT_CHANCE[step]);
+    for (let index = chosen.length - 1; index > 0; index--) {
+      const other = Math.floor(Math.random() * (index + 1));
+      [chosen[index], chosen[other]] = [chosen[other], chosen[index]];
+    }
+    for (const step of defaultFxOrder()) if (!state.locks[step]) state.groups[step] = chosen.includes(step);
+    const next = [...chosen];
+    state.fxOrder.forEach((step, index) => { if (state.locks[step]) next.splice(Math.min(index, next.length), 0, step); });
+    state.fxOrder = next;
     const fold = Math.random();
     state.foldMode = (fold < 0.6 ? 0 : fold < 0.8 ? 1 : 2) as FoldMode;
   }
@@ -519,6 +771,8 @@ function randomizeAll(params: Params, state?: PlayState) {
   params.segments.value = segmentChoices[Math.floor(Math.random() * segmentChoices.length)];
   set("warpAmount", rand(0.05, 0.4), rand(0.03, 0.15));
   set("warpScale", rand(0.6, 4), rand(0.2, 0.8));
+  set("warpCellSize", rand(2, 12), rand(0.5, 2));
+  setAngle("warpCellAngle", 0.3);
   set("warpMarble", rand(0.5, 4), rand(0.3, 1.5));
   set("warpDetail", Math.round(rand(2, 6)));
   set("warpFlow", rand(0.05, 0.6), rand(0, 0.25));
@@ -539,7 +793,8 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("panX", rand(-0.5, 0.5), rand(0.1, 0.4));
   set("panY", rand(-0.5, 0.5), rand(0.1, 0.4));
   set("twirl", Math.random() < 0.4 ? rand(-1.5, 1.5) : 0, rand(0.3, 1));
-  set("blurAmount", Math.random() < 0.5 ? 0 : rand(5, 30), rand(3, 15));
+  /* Whether an effect shows is set by the list (see EFFECT_CHANCE), so its strength is never 0 here. */
+  set("blurAmount", rand(5, 30), rand(3, 15));
   set("blurMaskSize", rand(0.15, 0.6), rand(0.05, 0.2));
   set("blurMaskSoft", rand(0.2, 0.9), rand(0, 0.2));
   if (state) state.blurMask = Math.floor(Math.random() * 6) as BlurMask;
@@ -549,10 +804,41 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("trailFlow", Math.random() < 0.5 ? 0 : (Math.random() < 0.5 ? -1 : 1) * rand(2, 10), rand(1, 4));
   set("trailSwirl", rand(0, 1), rand(0, 0.3));
   set("trailTint", Math.random() < 0.6 ? 0 : rand(0.1, 0.5), rand(0, 0.15));
+  set("branchOpacity", rand(0.8, 1), rand(0, 0.1));
+  set("branchCount", Math.random() < 0.6 ? 2 : Math.round(rand(1, 4)));
+  set("branchSize", rand(0.6, 0.78), rand(0.01, 0.05));
+  set("branchSpread", rand(30, 120), rand(5, 25));
+  set("branchTurn", Math.random() < 0.5 ? 0 : rand(-40, 40), rand(0, 15));
+  set("branchJoint", Math.random() < 0.6 ? 1 : rand(0.6, 1), rand(0, 0.1));
+  set("branchTrunk", rand(0.2, 0.32), rand(0.01, 0.04));
+  set("branchWidth", rand(0.12, 0.5), rand(0, 0.08));
+  set("branchTaper", Math.random() < 0.7 ? 1 : rand(0.4, 1), rand(0, 0.1));
+  set("branchHide", Math.random() < 0.6 ? 1 : Math.round(rand(0, 2)));
+  set("branchBackground", Math.random() < 0.6 ? 0 : rand(0.1, 0.5), rand(0, 0.1));
+  set("branchFade", Math.random() < 0.6 ? 0 : rand(0.03, 0.2), rand(0, 0.05));
+  set("branchHue", Math.random() < 0.5 ? 0 : rand(-20, 20), rand(0, 8));
+  set("branchBaseX", rand(-0.1, 0.1), rand(0, 0.1));
+  set("branchBaseY", rand(-0.5, -0.3), rand(0, 0.05));
   if (state) state.trailColor = hslToHex(rand(0, 360), rand(0.6, 1), rand(0.3, 0.55));
   set("tileSize", rand(0.25, 0.9), rand(0.05, 0.2));
   set("trailHue", Math.random() < 0.3 ? rand(-3, 3) : 0, rand(0.5, 3));
-  set("reliefAmount", Math.random() < 0.6 ? 0 : rand(0.3, 1), rand(0.1, 0.3));
+  set("smearAmount", rand(0.6, 1), rand(0, 0.2));
+  set("smearDelay", rand(0.3, 2), rand(0.1, 0.5));
+  setAngle("smearAngle", 0.3);
+  set("smearBands", Math.random() < 0.5 ? 1 : rand(1, 5), rand(0, 1));
+  if (state) state.smearShape = Math.floor(Math.random() * 5) as SmearShape;
+  set("contourOpacity", rand(0.4, 1), rand(0.1, 0.3));
+  setAngle("contourHue", 0.3);
+  set("contourLines", Math.round(rand(6, 40)), rand(2, 8));
+  set("contourWidth", rand(0.8, 4), rand(0.2, 1.5));
+  set("contourResolution", rand(2, 5.5), rand(0, 1));
+  set("contourSteady", rand(0.6, 0.92), rand(0, 0.05));
+  if (state) {
+    const tone = Math.random();
+    state.contourTone = tone < 0.6 ? "hue" : tone < 0.8 ? "white" : "black";
+    state.contourBlend = (Math.random() < 0.6 ? 0 : Math.floor(Math.random() * 8)) as LayerBlend;
+  }
+  set("reliefAmount", rand(0.3, 1), rand(0.1, 0.3));
   set("reliefDepth", rand(3, 12), rand(0, 3));
   set("reliefSize", rand(1, 3), rand(0, 0.8));
   setAngle("lightAngle", 0.5);

@@ -26,9 +26,11 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Engine } from "../engine/engine";
 import { createParams, createPlayState, type GroupKey, type Params, type PlayState } from "../engine/params";
-import type { ImageSource } from "../engine/renderer";
+import { sourceSize, type ImageSource } from "../engine/renderer";
 import { applyScene, sceneImageToBlob } from "../engine/scene";
-import { loadImageBlob, loadImageFile } from "../lib/images";
+import { loadImageFile } from "../lib/images";
+import { isVideoPath, videoFirstFrame } from "../lib/videos";
+import { loadSceneSource, readScene } from "../lib/scenes";
 import { ColorFolder } from "./ColorFolder";
 
 /** The kind of file the dialog opens: an image, or a scene (.ksage). */
@@ -130,17 +132,21 @@ const EFFECT_GROUPS: [GroupKey, string][] = [
   ["kaleidoscope", "Kaleidoscope"],
   ["blur", "Blur"],
   ["trails", "Trails"],
+  ["branches", "Branches"],
+  ["smear", "Time smear"],
+  ["contours", "Contours"],
   ["relief", "Relief"],
   ["finish", "Final effects"]
 ];
 
 const IMAGE_TYPES: Record<string, string> = {
   png: "PNG image", jpg: "JPEG image", jpeg: "JPEG image", webp: "WebP image",
-  gif: "GIF image", bmp: "BMP image", avif: "AVIF image"
+  gif: "GIF image", bmp: "BMP image", avif: "AVIF image",
+  mp4: "MP4 video", m4v: "MP4 video", webm: "WebM video"
 };
 
 const TEXT: Record<OpenKind, { hint: string; empty: string; startPlace: PlaceKind }> = {
-  image: { hint: "Choose a PNG, JPEG, WebP, GIF, BMP or AVIF image.", empty: "This folder has no images.", startPlace: "pictures" },
+  image: { hint: "Choose a PNG, JPEG, WebP, GIF, BMP or AVIF image, or an MP4 or WebM video.", empty: "This folder has no images.", startPlace: "pictures" },
   scene: { hint: "Choose a Kaleido Sage scene (.ksage).", empty: "This folder has no scenes.", startPlace: "documents" }
 };
 
@@ -299,6 +305,10 @@ function shrink(image: HTMLImageElement): HTMLCanvasElement {
 }
 
 async function buildImagePreview(path: string): Promise<ImagePreviewData> {
+  if (isVideoPath(path)) {
+    const { canvas, width, height } = await videoFirstFrame(path, PREVIEW_MAX_EDGE);
+    return { kind: "image", imageUrl: canvas.toDataURL("image/png"), width, height };
+  }
   /* The image's own blob URL is already revoked, so the preview is drawn from a canvas copy. */
   const { image } = await loadImageFile(path);
   return {
@@ -311,20 +321,23 @@ async function buildImagePreview(path: string): Promise<ImagePreviewData> {
 
 /** Reads a scene the same way Open Scene does, into fresh settings that only the preview uses. */
 async function buildScenePreview(path: string): Promise<ScenePreviewData> {
-  const text = await invoke<string>("read_scene", { path });
+  const text = await readScene(path);
   const params = createParams();
   const state = createPlayState();
   const images = applyScene(text, params, state);
-  const image = await loadImageBlob(sceneImageToBlob(images.image));
-  const image2 = images.image2 ? await loadImageBlob(sceneImageToBlob(images.image2)) : null;
+  const image = await loadSceneSource(sceneImageToBlob(images.image));
+  const image2 = images.image2 ? await loadSceneSource(sceneImageToBlob(images.image2)) : null;
+  const [width, height] = sourceSize(image);
+  /* A video plays as it is; a still image is made smaller for the preview. */
+  const small = (source: ImageSource) => source instanceof HTMLImageElement ? shrink(source) : source;
   return {
     kind: "scene",
     params,
     state,
-    image: shrink(image),
-    image2: image2 ? shrink(image2) : null,
-    width: image.naturalWidth,
-    height: image.naturalHeight,
+    image: small(image),
+    image2: image2 ? small(image2) : null,
+    width,
+    height,
     effects: EFFECT_GROUPS.filter(([key]) => state.groups[key]).map(([, label]) => label)
   };
 }
@@ -395,6 +408,7 @@ const placeIcon = (kind: PlaceKind) => {
 const entryIcon = (entry: BrowseEntry) => {
   if (entry.kind === "folder") return <Folder size={17} weight="fill" className="open-entry-icon folder" />;
   if (entry.kind === "scene") return <img className="open-entry-icon" src="/icon.ico" alt="" />;
+  if (isVideoPath(entry.path)) return <FilmSlate size={17} weight="duotone" className="open-entry-icon image" />;
   return <FileImage size={17} weight="duotone" className="open-entry-icon image" />;
 };
 

@@ -186,7 +186,7 @@ button { border: 0; }
 .toolbar-divider { width: 1px; height: 20px; margin: 0 6px; background: #393d4d; }
 
 /* Under the toolbar: the picture, with the settings panel docked at the right. */
-.workspace { display: flex; flex: 1; min-height: 0; }
+.workspace { position: relative; display: flex; flex: 1; min-height: 0; }
 .stage { position: relative; flex: 1; min-width: 0; background: #000; }
 .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .stage.cursor-idle, .stage.cursor-idle canvas { cursor: none; }
@@ -212,7 +212,7 @@ button { border: 0; }
 .side-panel-action { display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 7px; border-radius: 5px; color: var(--muted); background: transparent; font-size: 11px; cursor: pointer; }
 .side-panel-action:hover { color: #f1f2f4; background: rgba(255,255,255,.08); }
 /* The Effects panel does not scroll as a whole: its top stays, and only .panel-scroll under it scrolls. */
-.control-panel { flex: 0 0 300px; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; border-left: 1px solid var(--border); }
+.control-panel { flex: 0 0 400px; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; border-left: 1px solid var(--border); }
 .control-panel > :not(.panel-scroll) { flex: 0 0 auto; }
 /* The Designer header: a bar across the full panel width, a little lighter, with a line under it. */
 .panel-header-bar { margin: 0 -14px; padding: 0 14px; border-bottom: 1px solid var(--border); background: #252832; }
@@ -258,17 +258,37 @@ button { border: 0; }
 .panel-group:not(.open):hover { border-color: #626a7d; background: #393e4b; }
 /* Open, the header keeps the closed look; only the body below it is darker. */
 .panel-group.open { border-color: #474c5e; background: #30343f; }
-/* A group header: the power button, the title, the padlock, then the drag grip at the right. */
+/* A group header: the power button, the title, the padlock, the remove button, then the drag grip at the right. */
 .panel-group-header { display: flex; align-items: center; gap: 6px; padding: 0 4px 0 6px; }
+.panel-group-remove { display: grid; place-items: center; width: 22px; height: 20px; border-radius: 4px; color: #5d6272; background: transparent; cursor: pointer; }
+.panel-group-remove:hover { color: #f87171; background: rgba(255,255,255,.07); }
+/* Under the effect list: a note while the list is empty, and the full-width Add effect button. */
+.stage-empty { margin: 0 2px 10px; color: var(--muted); font-size: 12px; }
+.add-effect-button {
+  width: 100%;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 6px 0 12px;
+  border: 1px dashed #4b5164;
+  border-radius: 8px;
+  color: #c3c7d0;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.add-effect-button:hover:not(:disabled), .add-effect-button.open { border-style: solid; border-color: var(--accent); color: #fff; background: rgba(75,118,247,.12); }
+.add-effect-button:disabled { opacity: .45; cursor: default; }
 .panel-group-grip { display: grid; place-items: center; width: 20px; height: 30px; color: #5d6272; cursor: grab; touch-action: none; }
 .panel-group-grip:hover { color: #c3c7d0; }
 .panel-group-grip.dragging { color: #f1f2f4; cursor: grabbing; }
 /* After the power button, the title needs no left padding of its own. */
 .panel-group-toggle + .panel-group-title { padding-left: 0; }
-/* The two stages of groups, each under a small label. */
+/* The effect list, under a small label. */
 .stage-label { margin: 10px 2px 12px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-/* The labels' bottom margin merges with the first group's 6px top margin, so it must be larger to add space. A stage after another (Picture after Shape) gets more space above it. */
-.stage-list + .stage-label { margin-top: 20px; }
 .stage-item.dragging > .panel-group { border-color: var(--accent); box-shadow: 0 6px 18px rgba(0,0,0,.45); }
 .panel-group.open .panel-group-header { border-bottom: 1px solid #474c5e; }
 .panel-group-title {
@@ -316,6 +336,9 @@ button { border: 0; }
 .panel-row { padding: 11px 14px 10px; }
 /* A control outside any group (the cycle): it lines up with the buttons above it. */
 .panel-root-row > .panel-row { padding: 0 2px 10px; }
+/* Under Loop length: the source video's crossfade, shown only with a video source. */
+.panel-check-row { display: flex; align-items: center; gap: 7px; padding: 0 2px 10px; color: #a2a7b5; font-size: 12px; cursor: pointer; }
+.panel-check-row input { margin: 0; accent-color: var(--accent); cursor: pointer; }
 .panel-root-row .panel-row-name { color: #a2a7b5; }
 /* Loop length on one line: the name, then the slider, then the value. The row's inner boxes step aside so their parts line up in one grid. */
 .panel-root-row > .panel-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 10px; }
@@ -486,6 +509,21 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
   box-shadow: inset 0 1px 3px rgba(0,0,0,.7);
 }
 .slider-well .slider-fill { position: absolute; top: 0; bottom: 0; background: linear-gradient(180deg, #3a62e0, #4b76f7); box-shadow: inset 0 1px 2px rgba(0,0,0,.35); }
+/* A hue slider: its track shows every fully saturated color, and the fill is hidden so the colors show. */
+.panel-row.hue-track { --hues: linear-gradient(90deg, #f00, #ff0 16.67%, #0f0 33.33%, #0ff 50%, #00f 66.67%, #f0f 83.33%, #f00); }
+.panel-row.hue-track .slider-well { background: var(--hues); }
+.panel-row.hue-track .slider-well .slider-fill { display: none; }
+/* The contour Color's black and white chips; a lit chip turns the hue slider off. */
+.tone-chips { display: flex; gap: 4px; }
+.tone-chip { width: 14px; height: 14px; padding: 0; border: 1px solid #5a6072; border-radius: 3px; cursor: pointer; }
+.tone-chip.black { background: #000; }
+.tone-chip.white { background: #fff; }
+.tone-chip:hover { border-color: #c3c7d0; }
+.tone-chip.on { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.slider-off { flex: 1; opacity: .3; cursor: pointer; }
+.slider-off:hover { opacity: .5; }
+.slider-off input { pointer-events: none; }
+.panel-row.hue-track .slider.range::before { content: ""; position: absolute; left: 0; right: 0; top: 7px; height: 4px; border-radius: 2px; background: var(--hues); }
 .slider:not(.range) input[type=range]::-webkit-slider-thumb { width: 14px; height: 14px; margin-top: 2px; border-radius: 50%; }
 
 /* A range slider: no well, only the part between the two handles, drawn as [ and ]. Only the handles take clicks. */
@@ -622,6 +660,28 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .status-toast .status-close { display: grid; place-items: center; padding: 3px; color: #c8cbd3; background: transparent; }
 .status-toast .status-close:hover { color: #fff; background: rgba(255,255,255,.1); }
 
+/* A video being made in the background: above the status messages, at the bottom left. */
+.export-job {
+  position: absolute;
+  left: 14px;
+  bottom: 52px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid rgba(75,118,247,.45);
+  border-radius: 7px;
+  color: #d9dce3;
+  background: var(--panel-glass);
+  backdrop-filter: blur(8px);
+  font-size: 12px;
+}
+.export-job-label { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.export-job-bar { width: 110px; height: 6px; overflow: hidden; border: 1px solid #3f4554; border-radius: 99px; background: #1d2029; }
+.export-job-bar i { height: 100%; display: block; border-radius: inherit; background: var(--accent); }
+.export-job button { padding: 2px 8px; border-radius: 5px; color: #fff; background: #4a4f5f; font-size: 11px; cursor: pointer; }
+.export-job button:hover { background: #5a6072; }
+
 /* Error text can be selected and copied, although the rest of the app cannot. */
 .selectable { user-select: text; cursor: text; }
 
@@ -690,6 +750,32 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .button.primary:hover { background: var(--accent-hover); }
 .button.secondary { color: #d4d4d8; background: #343844; border: 1px solid #474c5e; }
 .button.secondary:hover { background: #3d4251; }
+.button.large { min-height: 40px; padding: 0 17px; font-size: 13px; }
+
+/* The start screen covers the work area until a scene starts. It matches the Image Sage start screen. */
+.start-screen {
+  position: absolute;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  grid-template-rows: 1fr auto 1fr;
+  justify-items: center;
+  padding: 30px 30px 18vh;
+  overflow: hidden;
+  text-align: center;
+  background-color: #22252f;
+  background-image: radial-gradient(rgba(75,118,247,.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.start-glow { position: absolute; z-index: -1; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 520px; height: 420px; background: radial-gradient(closest-side, rgba(75,118,247,.16), rgba(75,118,247,.10) 30%, rgba(75,118,247,.04) 60%, rgba(75,118,247,0)); }
+/* The app icon stands alone, with no frame around it. */
+.start-icon { position: relative; z-index: 1; width: 128px; height: 128px; display: grid; place-items: center; }
+.start-icon img { width: 128px; height: 128px; object-fit: contain; }
+.start-above { z-index: 1; align-self: end; padding-bottom: 14px; }
+.start-below { z-index: 1; align-self: start; display: flex; flex-direction: column; align-items: center; padding-top: 8px; }
+.start-screen h1 { z-index: 1; margin: 0; color: #fafafa; font-size: 28px; line-height: 1.2; letter-spacing: -.025em; }
+.start-copy { z-index: 1; max-width: 460px; margin: 0 0 22px; color: #9ca1af; font-size: 13px; line-height: 1.55; }
+.start-actions { z-index: 1; display: flex; gap: 10px; }
 
 /* About dialog, the same as the other Sage apps. */
 .about-dialog-overlay {
@@ -782,6 +868,31 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .confirm-dialog-content h2 { margin: 0; color: #f1f2f4; font-size: 16px; font-weight: 700; }
 .confirm-dialog-content p { margin: 10px 0 0; color: #b9bdc8; font-size: 13px; line-height: 1.45; }
 .confirm-dialog-actions { gap: 8px; }
+/* Export Video: the About dialog's frame, with a header like the Open dialog's. */
+.about-dialog.video-dialog { width: min(520px, 100%); }
+.video-dialog-header { display: flex; align-items: center; gap: 15px; padding: 14px 54px 14px 16px; border-bottom: 1px solid #3a3e4d; background: linear-gradient(180deg, #2c303b, #272b35); }
+.video-dialog-header h2 { margin: 0 0 4px; color: #f4f4f5; font-size: 18px; font-weight: 650; }
+.video-dialog-header p { margin: 0; color: #a2a7b5; font-size: 12px; line-height: 1.45; }
+.video-dialog-body { display: flex; flex-direction: column; gap: 14px; padding: 18px 20px 16px; background: linear-gradient(180deg, #292d37, #242832); }
+.video-row { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 12px; }
+.video-label { color: #b9bdc8; font-size: 12px; font-weight: 600; }
+.video-choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.video-choice { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 6px; border: 1px solid #474c5e; border-radius: 8px; color: #d4d4d8; background: #2f333e; cursor: pointer; }
+.video-choice strong { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.video-choice span { color: #8c91a1; font-size: 11px; }
+.video-choice:hover { background: #363a47; }
+.video-choice.active { border-color: var(--accent); background: rgba(75,118,247,.16); }
+.video-choice.active span { color: #c3d0fc; }
+.video-styles { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.video-radio { display: flex; align-items: center; gap: 7px; color: #e4e6eb; font-size: 13px; cursor: pointer; }
+.video-radio input { margin: 0; accent-color: var(--accent); }
+.video-input { width: 100%; min-height: 32px; padding: 0 10px; border: 1px solid #474c5e; border-radius: 6px; color: #f1f2f4; background: #1d2029; font: inherit; font-size: 13px; outline: none; }
+.video-input:focus { border-color: var(--accent); }
+.video-fade { display: flex; align-items: center; gap: 8px; color: #8c91a1; font-size: 12px; }
+.video-fade .video-input { width: 110px; }
+.video-note { margin: 0; color: #9ca1af; font-size: 12px; line-height: 1.5; }
+.video-dialog-actions { gap: 8px; }
+.video-dialog-actions .button { display: inline-flex; align-items: center; gap: 7px; }
 
 .spin { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }

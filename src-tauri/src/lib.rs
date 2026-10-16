@@ -3,7 +3,11 @@ mod files;
 mod screen;
 mod updater;
 
+use std::time::Duration;
 use tauri::Manager;
+
+/// How long the splash window may stay up before the main window is shown anyway.
+const SPLASH_TIME_LIMIT: Duration = Duration::from_secs(15);
 
 fn restore_main_window(app: &tauri::AppHandle) {
     if let Some(main) = app.get_webview_window("main") {
@@ -11,6 +15,26 @@ fn restore_main_window(app: &tauri::AppHandle) {
         let _ = main.unminimize();
         let _ = main.set_focus();
     }
+}
+
+/**
+ * The main window starts hidden behind the splash window, and the page shows
+ * it when it is ready (src/lib/splash.ts). If the page fails before that, this
+ * shows it and closes the splash after a time limit.
+ */
+fn end_splash_after_time_limit(app: tauri::AppHandle) {
+    std::thread::spawn(move || {
+        std::thread::sleep(SPLASH_TIME_LIMIT);
+        let hidden = app
+            .get_webview_window("main")
+            .is_some_and(|main| !main.is_visible().unwrap_or(true));
+        if hidden {
+            restore_main_window(&app);
+        }
+        if let Some(splash) = app.get_webview_window("splash") {
+            let _ = splash.close();
+        }
+    });
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -26,12 +50,14 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(
+            // The splash window is always centered, so its state is not saved.
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(window_state_flags)
+                .with_denylist(&["splash"])
                 .build(),
         )
         .setup(|app| {
-            restore_main_window(app.handle());
+            end_splash_after_time_limit(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -41,7 +67,9 @@ pub fn run() {
             browse::delete_browse_entry,
             browse::copy_browse_entry,
             files::read_image_file,
-            files::save_snapshot,
+            files::read_video_file,
+            files::save_export,
+            files::default_export_folder,
             files::save_scene,
             files::read_scene,
             files::reveal_file,

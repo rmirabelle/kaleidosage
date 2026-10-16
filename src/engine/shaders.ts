@@ -30,12 +30,20 @@ uniform vec2 u_imgRes;
 uniform float u_segments;
 uniform int u_foldMode;
 /**
- * The shape steps in the order they move the screen point: 0 = warp,
- * 1 = complex map, 2 = kaleidoscope fold. This is the reverse of the panel
- * list, because moving the point that is read is the reverse of moving the
- * picture: the last step here is the first to act on the picture.
+ * The shape steps of this pass in the order they move the screen point:
+ * 0 = warp, 1 = complex map, 2 = kaleidoscope fold. This is the reverse of
+ * the panel list, because moving the point that is read is the reverse of
+ * moving the picture: the last step here is the first to act on the
+ * picture. Only the first u_shapeCount entries are used.
  */
 uniform int u_shapeOrder[3];
+uniform int u_shapeCount;
+/**
+ * 1: the pass reads the picture made so far (u_img, the size of the screen)
+ * instead of the source images, for shape steps that come after a picture
+ * step. The picture is mirrored at its edges, like an image.
+ */
+uniform int u_picture;
 /* The opacity and blend mode of each shape step, by step code (warp, map, fold). */
 uniform float u_shapeOpacity[3];
 uniform int u_shapeBlend[3];
@@ -62,6 +70,9 @@ uniform float u_mapFog;
 uniform int u_warpMode;
 uniform float u_warpAmount;
 uniform float u_warpScale;
+/* Cells warp: the cell size, in tenths of the screen height, and the turn of the whole cell pattern (radians). */
+uniform float u_warpCellSize;
+uniform float u_warpCellAngle;
 uniform float u_warpMarble;
 uniform int u_warpDetail;
 uniform float u_warpTime;
@@ -146,7 +157,8 @@ vec2 turn(vec2 v, float a) { return vec2(v.x * cos(a) - v.y * sin(a), v.x * sin(
 
 /**
  * The warp: how far the point that is read moves. Size sets how close the
- * waves, whirlpools or cells are (larger is closer), and u_warpTime (which
+ * waves or whirlpools are (larger is closer); cells have their own cell
+ * size (larger is larger cells). u_warpTime (which
  * grows with the warp flow) moves them.
  * - Ripple: circles of waves move out from the center, like a drop in water.
  * - Waves: straight waves roll in the wave direction, with smaller waves
@@ -190,7 +202,8 @@ vec2 warpOffset(vec2 p) {
     return -d * amount * cos(t * 2.0) * lens * lens;
   }
   if (u_warpType == 5) {
-    vec2 x = p * u_warpScale * 1.5;
+    /* The cell pattern turns by u_warpCellAngle: the point is turned back into it, and the shift turned out again. */
+    vec2 x = turn(p, -u_warpCellAngle) * 10.0 / u_warpCellSize;
     vec2 cell = floor(x);
     vec2 nearest = cell;
     float best = 1e9;
@@ -206,7 +219,7 @@ vec2 warpOffset(vec2 p) {
       }
     }
     vec2 h = hash2(nearest);
-    return amount * 0.25 * vec2(cos(h.x * TAU + t), sin(h.y * TAU + t * 0.7));
+    return turn(amount * 0.25 * vec2(cos(h.x * TAU + t), sin(h.y * TAU + t * 0.7)), u_warpCellAngle);
   }
   return noiseWarp(p);
 }
@@ -329,10 +342,15 @@ vec2 hexLocal(vec2 p) {
   return (dot(h.xy, h.xy) < dot(h.zw, h.zw) ? h.xy : h.zw).yx;
 }
 
-/** Reads an image at the folded point q, mirrored at its edges, with texture detail g. */
+/**
+ * Reads an image at the folded point q, mirrored at its edges, with texture
+ * detail g. The picture made so far (u_picture) is placed the way it was on
+ * the screen, so a point that no step moves reads the same pixel.
+ */
 vec3 sampleImage(sampler2D image, vec2 size, vec2 q, float g) {
   float aspect = size.x / size.y;
   vec2 uv = q * vec2(1.0 / aspect, 1.0) + 0.5 + u_offset;
+  if (u_picture == 1) uv += u_center;
   uv = 1.0 - abs(1.0 - mod(uv, 2.0));
   return textureGrad(image, uv, vec2(g / aspect, 0.0), vec2(0.0, g)).rgb;
 }
@@ -397,6 +415,7 @@ vec2 fold(vec2 p) {
 
 /** Both source images at a point, faded into each other by the image blend. An image that the blend does not show is not read. */
 vec3 sourceColor(vec2 q, float g) {
+  if (u_picture == 1) return sampleImage(u_img, u_imgRes, q, g);
   vec3 color = vec3(0.0);
   if (u_blend < 1.0) color = sampleImage(u_img, u_imgRes, q, g);
   if (u_blend > 0.0) {
@@ -454,6 +473,7 @@ vec3 shapeColor(vec2 screen, int skip, float g0) {
   vec2 p2 = p;
   float fade = 0.0;
   for (int i = 0; i < 3; i++) {
+    if (i >= u_shapeCount) break;
     int shapeStep = u_shapeOrder[i];
     if ((skip & (1 << shapeStep)) != 0) continue;
     if (shapeStep == 0) {
@@ -525,6 +545,7 @@ void main() {
   vec3 color = shapeColor(screen, 0, g0);
   int skipped = 0;
   for (int i = 0; i < 3; i++) {
+    if (i >= u_shapeCount) break;
     int shapeStep = u_shapeOrder[i];
     float opacity = u_shapeOpacity[shapeStep];
     int mode = u_shapeBlend[shapeStep];
@@ -642,6 +663,120 @@ void main() {
 }`;
 
 /**
+ * Branches: a fractal tree made of the picture. The trunk is a strip of the
+ * picture, u_trunk high and u_width × u_trunk wide, standing on the base
+ * point u_base. The branches grow from the joint, u_joint × u_trunk up the
+ * trunk. Each of the 1 to 4 branches is a smaller copy (u_scale) of the
+ * whole tree, turned around the joint to its own angle (the angles spread
+ * evenly over u_spread, all turned by u_turn). So each branch has a trunk
+ * and branches of its own, joined at its own joint, without end. The trunk
+ * shows the middle of the picture, at the picture's own proportions, as
+ * large as it must be to cover the whole trunk: u_fit screen heights for
+ * the picture's height. So a trunk wider than the picture never reads past
+ * the picture's edges.
+ * The trunk narrows toward its top, by u_taper: at 1 its top is as wide as
+ * the bottom of the branches that grow from it (u_scale × its bottom), so
+ * each branch starts as wide as the trunk under it ends. The picture
+ * narrows with it.
+ *
+ * Each pixel undoes the branch moves, level by level, and takes its color
+ * from the first trunk it lands on, so the edges stay sharp. A search keeps
+ * the points still to test on a stack; a point that cannot be in the tree
+ * (farther from the base point than u_radius, the tree's size) is dropped.
+ * A trunk covers the branches that grow from it, and a later branch covers
+ * an earlier one. The search stops at u_depth levels, where a trunk is
+ * smaller than a pixel. The trunks of the first u_hide levels do not show:
+ * the search goes on through them to the branches, so the tree keeps its
+ * shape without its root. Where no trunk is, the picture shows, darkened to
+ * u_background. u_opacity is how much the tree shows; each level shows
+ * u_fade less and turns its colors u_hue more. Points and lengths are in
+ * screen heights from the screen center.
+ */
+export const BRANCH_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform vec2 u_res;
+uniform int u_count;
+uniform float u_scale;
+uniform float u_spread;
+uniform float u_turn;
+uniform float u_trunk;
+uniform float u_width;
+uniform float u_joint;
+uniform float u_taper;
+uniform float u_fit;
+uniform float u_opacity;
+uniform float u_background;
+uniform float u_fade;
+uniform float u_hue;
+uniform vec2 u_base;
+uniform float u_radius;
+uniform int u_depth;
+uniform int u_hide;
+/* The detail level (mip level) the trunk reads at level 0; each level down reads one step smaller (u_lodStep). */
+uniform float u_lod;
+uniform float u_lodStep;
+
+const int STACK = 48;
+
+vec2 turn(vec2 v, float a) { return vec2(v.x * cos(a) - v.y * sin(a), v.x * sin(a) + v.y * cos(a)); }
+
+vec3 hueShift(vec3 c, float h) {
+  const vec3 k = vec3(0.57735);
+  float ca = cos(h);
+  return c * ca + cross(k, c) * sin(h) + k * dot(k, c) * (1.0 - ca);
+}
+
+void main() {
+  float aspect = u_res.x / u_res.y;
+  vec3 back = texture(u_tex, v_uv).rgb * u_background;
+  float angles[4];
+  for (int i = 0; i < 4; i++) {
+    angles[i] = u_turn + (u_count > 1 ? u_spread * (float(i) / float(u_count - 1) - 0.5) : 0.0);
+  }
+  float halfWidth = u_width * u_trunk * 0.5;
+  float topWidth = mix(1.0, u_scale, u_taper);
+  vec2 joint = vec2(0.0, u_joint * u_trunk);
+  /* Points from the base point, in screen heights. */
+  vec2 points[STACK];
+  int levels[STACK];
+  points[0] = (v_uv - 0.5) * vec2(aspect, 1.0) - u_base;
+  levels[0] = 0;
+  int top = 1;
+  vec3 color = back;
+  for (int visit = 0; visit < 200; visit++) {
+    if (top == 0) break;
+    top--;
+    vec2 point = points[top];
+    int level = levels[top];
+    /* The trunk's half width at this height: from halfWidth at the bottom to topWidth × halfWidth at the top. */
+    float height = point.y / u_trunk;
+    float narrow = mix(1.0, topWidth, clamp(height, 0.0, 1.0));
+    if (level >= u_hide && abs(point.x) <= halfWidth * narrow && height >= 0.0 && height <= 1.0) {
+      /* The picture's middle covers the trunk, at the picture's proportions; it narrows with the trunk. */
+      vec2 uv = vec2(0.5 + point.x / narrow / (u_fit * aspect), 0.5 + (point.y - u_trunk * 0.5) / u_fit);
+      float depth = float(level);
+      vec3 trunk = hueShift(textureLod(u_tex, uv, u_lod + depth * u_lodStep).rgb, u_hue * depth);
+      color = mix(back, trunk, u_opacity * pow(1.0 - u_fade, depth));
+      break;
+    }
+    if (level >= u_depth) continue;
+    /* Pushed first is tested last, so the last branch is tested first and covers the others. */
+    for (int i = 0; i < 4; i++) {
+      if (i >= u_count || top >= STACK) break;
+      vec2 inside = turn(point - joint, -angles[i]) / u_scale;
+      if (dot(inside, inside) > u_radius * u_radius) continue;
+      points[top] = inside;
+      levels[top] = level + 1;
+      top++;
+    }
+  }
+  o = vec4(clamp(color, 0.0, 1.0), 1.0);
+}`;
+
+/**
  * Pass 3: feedback trails. The previous output is zoomed, turned and
  * hue-shifted around the screen center, then combined with the new frame.
  * Mode 1 = mix (smoky trails), 2 = lighten (glowing trails). Where the
@@ -662,6 +797,8 @@ uniform float u_hue;
 uniform vec2 u_texel;
 uniform float u_flow;
 uniform float u_swirl;
+/* Added to the flow's detail level, so a smaller video frame blurs as much as the screen (log2 of the pixel size). */
+uniform float u_lodShift;
 /* This frame's tint of the old trails (0 = none) and the tint color. */
 uniform float u_tint;
 uniform vec3 u_tintColor;
@@ -685,16 +822,26 @@ void main() {
    * Flow: the old frame is pushed along its own brightness slopes (swirl 0,
    * so bright areas bleed outward like melting paint) or around them
    * (swirl 1, so the trails whirl). It adds up frame after frame.
+   * The slopes are measured on a blurred copy of the old frame (a smaller
+   * mip level), over a distance that grows with the push. So the push
+   * follows the large shapes, and fine grain cannot grow into stripes. The
+   * slope is divided by the distance, so a smooth slope pushes as hard as
+   * before. One step never pushes farther than twice the distance.
    */
   if (u_flow != 0.0) {
-    vec2 d = u_texel * 2.0;
-    float gx = luma(texture(u_previous, uv + vec2(d.x, 0.0)).rgb) - luma(texture(u_previous, uv - vec2(d.x, 0.0)).rgb);
-    float gy = luma(texture(u_previous, uv + vec2(0.0, d.y)).rgb) - luma(texture(u_previous, uv - vec2(0.0, d.y)).rgb);
-    vec2 push = mix(vec2(gx, gy), vec2(-gy, gx), u_swirl);
-    uv -= push * u_flow * u_texel;
+    float reach = clamp(abs(u_flow), 4.0, 64.0);
+    float lod = max(0.0, log2(reach) - 1.0 + u_lodShift);
+    vec2 d = u_texel * reach;
+    float gx = luma(textureLod(u_previous, uv + vec2(d.x, 0.0), lod).rgb) - luma(textureLod(u_previous, uv - vec2(d.x, 0.0), lod).rgb);
+    float gy = luma(textureLod(u_previous, uv + vec2(0.0, d.y), lod).rgb) - luma(textureLod(u_previous, uv - vec2(0.0, d.y), lod).rgb);
+    vec2 push = mix(vec2(gx, gy), vec2(-gy, gx), u_swirl) * (2.0 / reach) * u_flow;
+    float size = length(push);
+    if (size > reach * 2.0) push *= reach * 2.0 / size;
+    uv -= push * u_texel;
   }
   vec3 current = texture(u_current, v_uv).rgb;
-  vec3 previous = texture(u_previous, uv).rgb;
+  /* Level 0: the old frame has blurred mip levels while the flow runs (see drawTrails). */
+  vec3 previous = textureLod(u_previous, uv, 0.0).rgb;
   if (u_hue != 0.0) previous = clamp(hueShift(previous, u_hue), 0.0, 1.0);
   /**
    * Trail tint: the old frame is multiplied a little toward the tint color
@@ -715,6 +862,24 @@ in vec2 v_uv;
 out vec4 o;
 uniform sampler2D u_tex;
 void main() { o = vec4(texture(u_tex, v_uv).rgb, 1.0); }`;
+
+/**
+ * Video export: draws a picture over the canvas at u_alpha (with
+ * premultiplied blending). u_opaque treats the picture as fully opaque, for
+ * a captured frame; otherwise its own alpha counts, for the title box.
+ */
+export const OVERLAY_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform float u_alpha;
+uniform int u_opaque;
+void main() {
+  vec4 color = texture(u_tex, v_uv);
+  if (u_opaque == 1) color.a = 1.0;
+  o = color * u_alpha;
+}`;
 
 /**
  * Pass 4: final effects on the whole picture. Sharpen is an unsharp mask:
@@ -760,6 +925,195 @@ void main() {
   float gloss = max(pow(max(dot(normal, halfway), 0.0), 40.0) - pow(halfway.z, 40.0), 0.0);
   vec3 lit = color * diffuse + u_shine * gloss;
   o = vec4(clamp(mix(color, lit, u_relief), 0.0, 1.0), 1.0);
+}`;
+
+/**
+ * Contour brightness: the picture's brightness, blurred, and eased over
+ * time. The blur reads a smaller copy of the picture (mip level u_smooth)
+ * with smooth cubic curves between its pixels, so the contour lines bend
+ * smoothly instead of following the small copy's square pixels. Each
+ * frame keeps u_keep of the last brightness (Steady), so the lines glide
+ * instead of jumping with every small change in the picture.
+ */
+export const CONTOUR_FIELD_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform sampler2D u_previous;
+uniform float u_smooth;
+uniform float u_keep;
+
+float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+
+vec4 bspline(float t) {
+  vec4 n = vec4(1.0, 2.0, 3.0, 4.0) - t;
+  vec4 s = n * n * n;
+  float x = s.x;
+  float y = s.y - 4.0 * s.x;
+  float z = s.z - 4.0 * s.y + 6.0 * s.x;
+  return vec4(x, y, z, 6.0 - x - y - z) / 6.0;
+}
+
+/* Cubic B-spline sampling of one mip level, from four filtered reads. */
+vec3 cubicAt(vec2 uv, int level) {
+  vec2 size = vec2(textureSize(u_tex, level));
+  vec2 p = uv * size - 0.5;
+  vec2 f = fract(p);
+  p -= f;
+  vec4 xc = bspline(f.x);
+  vec4 yc = bspline(f.y);
+  vec4 c = p.xxyy + vec2(-0.5, 1.5).xyxy;
+  vec4 s = vec4(xc.xz + xc.yw, yc.xz + yc.yw);
+  vec4 offset = (c + vec4(xc.yw, yc.yw) / s) / size.xxyy;
+  float lod = float(level);
+  vec3 a = textureLod(u_tex, offset.xz, lod).rgb;
+  vec3 b = textureLod(u_tex, offset.yz, lod).rgb;
+  vec3 d = textureLod(u_tex, offset.xw, lod).rgb;
+  vec3 e = textureLod(u_tex, offset.yw, lod).rgb;
+  float sx = s.x / (s.x + s.y);
+  float sy = s.z / (s.z + s.w);
+  return mix(mix(e, d, sx), mix(b, a, sx), sy);
+}
+
+void main() {
+  int level = int(floor(u_smooth));
+  float between = u_smooth - float(level);
+  vec3 color = cubicAt(v_uv, level);
+  if (between > 0.0) color = mix(color, cubicAt(v_uv, level + 1), between);
+  float brightness = luma(color);
+  o = vec4(mix(brightness, texture(u_previous, v_uv).r, u_keep), 0.0, 0.0, 1.0);
+}`;
+
+/**
+ * Contour lines: lines where the contour brightness (see
+ * CONTOUR_FIELD_SHADER) crosses evenly spaced levels, like the lines on a
+ * topographic map. The line width is in pixels: the distance to the
+ * nearest level is divided by how fast the level changes per pixel,
+ * measured from the neighbor pixels. The lines are drawn in u_color,
+ * combined with the picture by u_blend (see blendLayer), at u_amount (Opacity).
+ */
+export const CONTOUR_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform sampler2D u_field;
+uniform vec2 u_texel;
+uniform float u_amount;
+uniform float u_lines;
+uniform float u_width;
+uniform vec3 u_color;
+uniform int u_blend;
+
+vec3 blendLayer(vec3 base, vec3 top, int mode) {
+  if (mode == 1) return 1.0 - (1.0 - base) * (1.0 - top);
+  if (mode == 2) return base * top;
+  if (mode == 3) return mix(2.0 * base * top, 1.0 - 2.0 * (1.0 - base) * (1.0 - top), step(0.5, base));
+  if (mode == 4) return abs(base - top);
+  if (mode == 5) return max(base, top);
+  if (mode == 6) return min(base, top);
+  if (mode == 7) return min(base + top, 1.0);
+  return top;
+}
+
+float levelAt(vec2 uv) { return texture(u_field, uv).r * u_lines; }
+
+void main() {
+  vec3 color = texture(u_tex, v_uv).rgb;
+  float level = levelAt(v_uv);
+  vec2 slope = vec2(
+    levelAt(v_uv + vec2(u_texel.x, 0.0)) - levelAt(v_uv - vec2(u_texel.x, 0.0)),
+    levelAt(v_uv + vec2(0.0, u_texel.y)) - levelAt(v_uv - vec2(0.0, u_texel.y))) * 0.5;
+  float change = length(slope);
+  float pixels = abs(fract(level + 0.5) - 0.5) / max(change, 1e-5);
+  /* A flat area has no contour, even when its brightness sits exactly on a level (pure black or white). */
+  float line = (1.0 - smoothstep(u_width * 0.5 - 0.5, u_width * 0.5 + 0.5, pixels)) * smoothstep(0.0, 0.004, change);
+  o = vec4(mix(color, blendLayer(color, u_color, u_blend), line * u_amount), 1.0);
+}`;
+
+/**
+ * Time smear: each pixel shows the picture from a moment in the past. The
+ * last frames are kept in a ring of u_slots layers (u_history); the newest
+ * is layer u_head, taken u_since seconds ago, and the layers are u_interval
+ * seconds apart. A pattern (u_shape) gives each pixel a delay from 0 to
+ * u_delay seconds, and the pixel blends the two frames around that moment,
+ * so the delay changes smoothly:
+ * - 0, Linear: the delay grows across the picture in the u_angle direction.
+ * - 1, Rings: the delay grows from the center outward.
+ * - 2, Sweep: the delay grows around the center, starting at u_angle.
+ * - 3, Brightness: bright areas show older moments.
+ * - 4, Noise: soft blotches of different delays.
+ * u_bands repeats the pattern, back and forth, so it never has a hard edge.
+ */
+export const SMEAR_SHADER = `#version 300 es
+precision highp float;
+precision highp sampler2DArray;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform sampler2DArray u_history;
+uniform vec2 u_res;
+uniform int u_head;
+uniform int u_filled;
+uniform int u_slots;
+uniform float u_interval;
+uniform float u_since;
+uniform float u_delay;
+uniform int u_shape;
+uniform float u_angle;
+uniform float u_bands;
+uniform float u_amount;
+
+const float TAU = 6.28318530718;
+
+float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+
+/* The pattern, from 0 (no delay) to 1 (the full delay). */
+float pattern(vec2 uv, vec3 now) {
+  float aspect = u_res.x / u_res.y;
+  vec2 p = (uv - 0.5) * vec2(aspect, 1.0);
+  vec2 dir = vec2(cos(u_angle), sin(u_angle));
+  float m;
+  if (u_shape == 1) m = length(p) / length(vec2(aspect, 1.0)) * 2.0;
+  else if (u_shape == 2) m = fract((atan(p.y, p.x) - u_angle) / TAU);
+  else if (u_shape == 3) m = luma(now);
+  else if (u_shape == 4) m = noise(p * 3.0 + 7.3);
+  else m = dot(p, dir) / (abs(dir.x) * aspect + abs(dir.y)) + 0.5;
+  /* Back and forth: 0 to 1 over the first band, 1 to 0 over the next. */
+  float x = clamp(m, 0.0, 1.0) * u_bands;
+  return 1.0 - abs(fract(x * 0.5) * 2.0 - 1.0);
+}
+
+vec3 slot(int age) {
+  int layer = (u_head - age + u_slots) % u_slots;
+  return texture(u_history, vec3(v_uv, float(layer))).rgb;
+}
+
+void main() {
+  vec3 now = texture(u_tex, v_uv).rgb;
+  float age = pattern(v_uv, now) * u_delay;
+  vec3 past;
+  if (u_filled == 0) {
+    past = now;
+  } else if (age <= u_since) {
+    /* Newer than the newest kept frame: between now and that frame. */
+    past = mix(now, slot(0), age / max(u_since, 1e-4));
+  } else {
+    float k = min((age - u_since) / max(u_interval, 1e-4), float(u_filled - 1));
+    int first = int(floor(k));
+    int second = min(first + 1, u_filled - 1);
+    past = mix(slot(first), slot(second), k - float(first));
+  }
+  o = vec4(mix(now, past, u_amount), 1.0);
 }`;
 
 export const FINISH_SHADER = `#version 300 es
