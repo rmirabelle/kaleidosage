@@ -30,7 +30,7 @@ Pure curves (a function of `t` only, like today):
 
 | Preset  | Curve                                                            |
 |---------|------------------------------------------------------------------|
-| Explode | Shoots past the end handle and settles back on it (elastic out). The overshoot is clamped to the slider's min and max. |
+| Explode | A blast wave: one fast rise to a single peak past the end handle, then a fall back to it, fast at first and slower later. The overshoot is clamped to the slider's min and max. |
 | Implode | Pulls back a little, then snaps to the end handle (back in).     |
 | Early   | Steps to the end handle at a quarter of the trip. Out and back, this gives a square wave that sits at the end handle three quarters of the time. |
 | Late    | Steps at three quarters of the trip: a square wave that sits at the end handle one quarter of the time. |

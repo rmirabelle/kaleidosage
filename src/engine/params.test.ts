@@ -100,14 +100,25 @@ describe("liveValue", () => {
     startRangeAt(params.zoom, 10);
     expect(liveValue(params.zoom, at(10))).toBeCloseTo(1);
     expect(liveValue(params.zoom, at(12))).toBeCloseTo(2);
+    /* One peak on the trip out: the value only rises until the peak, then only falls. */
     let beyond = false;
-    for (let time = 10; time < 14; time += 0.01) {
+    let peakTime = 10;
+    let peakValue = 1;
+    for (let time = 10; time <= 12; time += 0.01) {
       const value = liveValue(params.zoom, at(time));
       if (value > 2 + 1e-9) beyond = true;
+      if (value > peakValue) [peakTime, peakValue] = [time, value];
       expect(value).toBeGreaterThanOrEqual(params.zoom.min);
       expect(value).toBeLessThanOrEqual(params.zoom.max);
     }
     expect(beyond).toBe(true);
+    expect(peakTime).toBeLessThan(10.2);
+    for (let time = 10.01; time <= 12; time += 0.01) {
+      const previous = liveValue(params.zoom, at(time - 0.01));
+      const value = liveValue(params.zoom, at(time));
+      if (time < peakTime) expect(value).toBeGreaterThanOrEqual(previous - 1e-9);
+      else if (time > peakTime + 0.01) expect(value).toBeLessThanOrEqual(previous + 1e-9);
+    }
     /* With the end handle at the slider's top, the overshoot stops there. */
     params.zoom.high = params.zoom.max;
     for (let time = 10; time < 14; time += 0.01) expect(liveValue(params.zoom, at(time))).toBeLessThanOrEqual(params.zoom.max);

@@ -66,8 +66,9 @@ export interface Param {
  * bounce, which bounces at the end handle. "organic" is the smooth curve's
  * name in scene files.
  *
- * The dramatic curves: explode shoots past the end handle and settles back
- * on it; implode pulls back a little, then snaps to the end handle. Early,
+ * The dramatic curves: explode shoots past the end handle in one peak, like
+ * a blast wave, and falls back to it; implode pulls back a little, then
+ * snaps to the end handle. Early,
  * pulse and late step from one handle to the other at a quarter, a half,
  * and three quarters of the trip. Out and back, a step makes a square wave
  * that sits at the end handle three quarters, half, or a quarter of the
@@ -102,14 +103,21 @@ function bounceOut(t: number) {
 }
 
 /**
- * Explode: the value rushes past the end handle, up to about a third of the
- * range beyond it, then swings back and forth around the handle, each swing
- * smaller, and comes to rest on it.
+ * Explode, shaped like the pressure of a blast wave: the value shoots up in
+ * the first 6% of the trip to one peak, about a third of the range past the
+ * end handle, then falls back, fast at first and slower and slower, and
+ * reaches the end handle at the end of the trip. There is one peak and no
+ * swinging.
  */
 function explodeOut(t: number) {
+  const rise = 0.06;
+  const peak = 0.35;
   if (t <= 0) return 0;
   if (t >= 1) return 1;
-  return 2 ** (-10 * t) * Math.sin((t * 10 - 0.75) * (2 * Math.PI / 3)) + 1;
+  if (t < rise) return (1 + peak) * (t / rise);
+  /* The fall: a straight line down to the end handle, times a fast decay (the Friedlander shape). */
+  const u = (t - rise) / (1 - rise);
+  return 1 + peak * (1 - u) * Math.exp(-3 * u);
 }
 
 /**
