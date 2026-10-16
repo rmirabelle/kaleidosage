@@ -66,14 +66,15 @@ export interface Param {
  * bounce, which bounces at the end handle. "organic" is the smooth curve's
  * name in scene files.
  *
- * The dramatic curves: explode shoots past the end handle in one peak, like
- * a blast wave, and falls back to it; implode pulls back a little, then
- * snaps to the end handle. Early,
- * pulse and late step from one handle to the other at a quarter, a half,
- * and three quarters of the trip. Out and back, a step makes a square wave
- * that sits at the end handle three quarters, half, or a quarter of the
- * time. Explode and implode leave the 0 to 1 range; liveValue keeps the
- * value inside the slider.
+ * The dramatic curves: early, pulse and late step from one handle to the
+ * other at a quarter, a half, and three quarters of the trip. Out and back,
+ * a step makes a square wave that sits at the end handle three quarters,
+ * half, or a quarter of the time. Explode and implode are one-way curves
+ * (see ONE_WAY): they play once per trip, from the start handle back to the
+ * start handle, and never run backward. Explode is a blast wave: the value
+ * shoots to the end handle, then falls back to the start handle, fast at
+ * first and slower later. Implode is the same played backward: a slow
+ * build to the end handle, then a snap back to the start.
  */
 export type Ease = "organic" | "linear" | "inOut" | "in" | "out" | "bounce" | "explode" | "implode" | "early" | "pulse" | "late";
 export const EASES: readonly (readonly [Ease, string])[] = [
@@ -103,35 +104,30 @@ function bounceOut(t: number) {
 }
 
 /**
+ * The curves that play one way, once per trip, and end where they began
+ * (at the start handle), instead of going out on one trip and back on the
+ * next.
+ */
+export const ONE_WAY: ReadonlySet<Ease> = new Set<Ease>(["explode", "implode"]);
+
+/**
  * Explode, shaped like the pressure of a blast wave: the value shoots up in
- * the first 6% of the trip to one peak, about a third of the range past the
- * end handle, then falls back, fast at first and slower and slower, and
- * reaches the end handle at the end of the trip. There is one peak and no
- * swinging.
+ * the first 3% of the trip to the end handle, then falls back to the start
+ * handle, fast at first and slower and slower (the Friedlander shape: a
+ * straight fall times a fast decay), and rests there for the last part of
+ * the trip. One peak, no swinging.
  */
-function explodeOut(t: number) {
-  const rise = 0.06;
-  const peak = 0.35;
-  if (t <= 0) return 0;
-  if (t >= 1) return 1;
-  if (t < rise) return (1 + peak) * (t / rise);
-  /* The fall: a straight line down to the end handle, times a fast decay (the Friedlander shape). */
+function explode(t: number) {
+  const rise = 0.03;
+  if (t <= 0 || t >= 1) return 0;
+  if (t < rise) return t / rise;
   const u = (t - rise) / (1 - rise);
-  return 1 + peak * (1 - u) * Math.exp(-3 * u);
+  return (1 - u) * Math.exp(-3 * u);
 }
 
 /**
- * Implode: the value first pulls back from the start handle, about a tenth
- * of the range, then snaps to the end handle, faster and faster.
- */
-function implodeIn(t: number) {
-  const pull = 1.70158;
-  return (pull + 1) * t ** 3 - pull * t ** 2;
-}
-
-/**
- * A curve for t from 0 to 1, from 0 to 1 at its ends. Explode goes above 1
- * and implode goes below 0 on the way.
+ * A curve for t from 0 to 1. A back-and-forth curve goes from 0 to 1; a
+ * one-way curve (see ONE_WAY) starts and ends at 0.
  */
 export function easeCurve(kind: Ease, t: number): number {
   switch (kind) {
@@ -140,8 +136,8 @@ export function easeCurve(kind: Ease, t: number): number {
     case "in": return t ** 3;
     case "out": return 1 - (1 - t) ** 3;
     case "bounce": return bounceOut(t);
-    case "explode": return explodeOut(t);
-    case "implode": return implodeIn(t);
+    case "explode": return explode(t);
+    case "implode": return explode(1 - t);
     case "early": return t < 0.25 ? 0 : 1;
     case "pulse": return t < 0.5 ? 0 : 1;
     case "late": return t < 0.75 ? 0 : 1;
@@ -528,15 +524,13 @@ export function liveValue(param: Param, state: PlayState): number {
     const offset = (trips % 1 + 1) % 1 * 360;
     return end > start ? bottom + offset : top - offset;
   }
-  const travel = (trips % 2 + 2) % 2;
-  const part = easeCurve(easeOf(param), travel <= 1 ? travel : 2 - travel);
-  /**
-   * A log slider's range moves at the same speed along the slider, so in
-   * equal ratios. A curve that leaves the handles (explode, implode) stops
-   * at the slider's ends.
-   */
-  if (param.scale === "log") return clamp(start * (end / start) ** part, param.min, param.max);
-  return clamp(start + (end - start) * part, param.min, param.max);
+  const kind = easeOf(param);
+  /* A one-way curve plays whole on every trip; the others go out on one trip and back on the next. */
+  const travel = ONE_WAY.has(kind) ? (trips % 1 + 1) % 1 : (trips % 2 + 2) % 2;
+  const part = easeCurve(kind, travel <= 1 ? travel : 2 - travel);
+  /* A log slider's range moves at the same speed along the slider, so in equal ratios. */
+  if (param.scale === "log") return start * (end / start) ** part;
+  return start + (end - start) * part;
 }
 
 /** The positions of a log slider: it moves in this many equal ratios from min to max. */

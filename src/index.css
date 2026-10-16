@@ -10,6 +10,8 @@
   --accent-hover: #7393f9;
   --secondary: #a9ddf8;
   --secondary-hover: #c9ecff;
+  /* The green of a range that has its own time. */
+  --own-time: #4ef08a;
   --panel-glass: rgba(29, 32, 41, .82);
   --border: #393d4d;
   --muted: #8c91a1;
@@ -466,10 +468,15 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 /* Own time: the button after the easing button, and the time slider under the range. */
 .panel-custom { display: grid; place-items: center; width: 22px; height: 18px; padding: 0; border: 1px solid transparent; border-radius: 4px; color: var(--muted); background: transparent; cursor: pointer; }
 .panel-custom:hover { color: #f1f2f4; background: rgba(255,255,255,.08); }
-.panel-custom.on { color: var(--secondary); border-color: rgba(169,221,248,.45); background: rgba(169,221,248,.12); }
+/* Own time on: a bright green button, and the time slider under the row is green to match. */
+.panel-custom.on { color: var(--own-time); border-color: rgba(78,240,138,.55); background: rgba(78,240,138,.16); }
+.panel-custom.on:hover { color: #8dffb6; background: rgba(78,240,138,.26); }
 .panel-custom:disabled { visibility: hidden; }
 .panel-row-time { margin-top: 6px; }
-.panel-time-value { flex: 0 0 94px; color: var(--secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
+.panel-row-time .slider-well .slider-fill { background: linear-gradient(180deg, #27b457, #3ddc6e); }
+.panel-row-time .slider input[type=range]::-webkit-slider-thumb { border-color: var(--own-time); }
+.panel-row-time .slider input[type=range]:hover::-webkit-slider-thumb { border-color: #8dffb6; }
+.panel-time-value { flex: 0 0 94px; color: var(--own-time); font-size: 11px; font-variant-numeric: tabular-nums; }
 /* The easing list, on the page body under its button. */
 .toolbar-dropdown.ease-menu { position: fixed; z-index: 100; min-width: 0; }
 .ease-item { display: flex; align-items: center; gap: 9px; }

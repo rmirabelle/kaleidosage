@@ -30,8 +30,8 @@ Pure curves (a function of `t` only, like today):
 
 | Preset  | Curve                                                            |
 |---------|------------------------------------------------------------------|
-| Explode | A blast wave: one fast rise to a single peak past the end handle, then a fall back to it, fast at first and slower later. The overshoot is clamped to the slider's min and max. |
-| Implode | Pulls back a little, then snaps to the end handle (back in).     |
+| Explode | A blast wave, one way, once per trip: the value shoots from the start handle to the end handle in the first 3% of the trip, then falls back to the start handle, fast at first and slower later. It never leaves the range and never plays backward. |
+| Implode | Explode played backward: a slow build to the end handle, then a snap back to the start handle. |
 | Early   | Steps to the end handle at a quarter of the trip. Out and back, this gives a square wave that sits at the end handle three quarters of the time. |
 | Late    | Steps at three quarters of the trip: a square wave that sits at the end handle one quarter of the time. |
 | Pulse   | Steps up at the half: an even square wave.                       |

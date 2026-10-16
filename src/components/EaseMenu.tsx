@@ -2,18 +2,11 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { EASES, easeCurve, easeOf, type Ease, type Param } from "../engine/params";
 
-/**
- * A small drawing of an easing curve, from the start handle (bottom left)
- * to the end handle (top right). A curve that goes past the handles
- * (explode, implode) is squeezed so its whole swing fits in the drawing.
- */
+/** A small drawing of an easing curve, from the start handle (bottom left) to the end handle (top right), over one trip. */
 function Curve({ kind, width = 16, height = 12 }: { kind: Ease; width?: number; height?: number }) {
-  const samples = Array.from({ length: 49 }, (_, index) => easeCurve(kind, index / 48));
-  const low = Math.min(0, ...samples);
-  const high = Math.max(1, ...samples);
-  const points = samples.map((value, index) => {
+  const points = Array.from({ length: 49 }, (_, index) => {
     const t = index / 48;
-    return `${(1 + t * (width - 2)).toFixed(2)},${(height - 1 - (value - low) / (high - low) * (height - 2)).toFixed(2)}`;
+    return `${(1 + t * (width - 2)).toFixed(2)},${(height - 1 - easeCurve(kind, t) * (height - 2)).toFixed(2)}`;
   });
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">

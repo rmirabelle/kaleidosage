@@ -94,42 +94,40 @@ describe("liveValue", () => {
     expect(liveValue(params.zoom, at(12.6))).toBe(1);
   });
 
-  it("explodes past the end handle and implodes below the start handle, inside the slider", () => {
+  it("explodes from the start handle to the end handle and falls back, once per trip, inside the range", () => {
     const params = createParams();
     Object.assign(params.zoom, { on: true, low: 1, high: 2, custom: true, seconds: 2, ease: "explode" });
     startRangeAt(params.zoom, 10);
-    expect(liveValue(params.zoom, at(10))).toBeCloseTo(1);
-    expect(liveValue(params.zoom, at(12))).toBeCloseTo(2);
-    /* One peak on the trip out: the value only rises until the peak, then only falls. */
-    let beyond = false;
-    let peakTime = 10;
-    let peakValue = 1;
-    for (let time = 10; time <= 12; time += 0.01) {
-      const value = liveValue(params.zoom, at(time));
-      if (value > 2 + 1e-9) beyond = true;
-      if (value > peakValue) [peakTime, peakValue] = [time, value];
-      expect(value).toBeGreaterThanOrEqual(params.zoom.min);
-      expect(value).toBeLessThanOrEqual(params.zoom.max);
+    /* At the start handle at the start of every trip, out and back alike; at the end handle a moment later. */
+    for (const time of [10, 12, 14, 16]) {
+      expect(liveValue(params.zoom, at(time))).toBeCloseTo(1);
+      expect(liveValue(params.zoom, at(time + 0.06))).toBeCloseTo(2);
     }
-    expect(beyond).toBe(true);
-    expect(peakTime).toBeLessThan(10.2);
-    for (let time = 10.01; time <= 12; time += 0.01) {
+    /* One peak: the value only rises until the peak, then only falls, and stays between the handles. */
+    for (let time = 10.01; time <= 14; time += 0.01) {
       const previous = liveValue(params.zoom, at(time - 0.01));
       const value = liveValue(params.zoom, at(time));
-      if (time < peakTime) expect(value).toBeGreaterThanOrEqual(previous - 1e-9);
-      else if (time > peakTime + 0.01) expect(value).toBeLessThanOrEqual(previous + 1e-9);
+      expect(value).toBeGreaterThanOrEqual(1 - 1e-9);
+      expect(value).toBeLessThanOrEqual(2 + 1e-9);
+      const sinceTrip = (time - 10) % 2;
+      if (sinceTrip > 0.07 && sinceTrip < 1.99) expect(value).toBeLessThanOrEqual(previous + 1e-9);
     }
-    /* With the end handle at the slider's top, the overshoot stops there. */
-    params.zoom.high = params.zoom.max;
-    for (let time = 10; time < 14; time += 0.01) expect(liveValue(params.zoom, at(time))).toBeLessThanOrEqual(params.zoom.max);
-    params.zoom.ease = "implode";
-    params.zoom.high = 2;
+    /* The fall is fast at first and slower later: more than half the way back in the first fifth of the trip. */
+    expect(liveValue(params.zoom, at(10.4))).toBeLessThan(1.5);
+    expect(liveValue(params.zoom, at(11.4))).toBeLessThan(1.1);
+  });
+
+  it("implodes: a slow build to the end handle, then a snap back to the start", () => {
+    const params = createParams();
+    Object.assign(params.zoom, { on: true, low: 1, high: 2, custom: true, seconds: 2, ease: "implode" });
+    startRangeAt(params.zoom, 10);
     expect(liveValue(params.zoom, at(10))).toBeCloseTo(1);
-    expect(liveValue(params.zoom, at(12))).toBeCloseTo(2);
-    expect(liveValue(params.zoom, at(10.8))).toBeLessThan(1);
-    /* With the start handle at the slider's bottom, the pull back stops there. */
-    params.zoom.low = params.zoom.min;
-    for (let time = 10; time < 14; time += 0.01) expect(liveValue(params.zoom, at(time))).toBeGreaterThanOrEqual(params.zoom.min);
+    expect(liveValue(params.zoom, at(11.94))).toBeCloseTo(2);
+    expect(liveValue(params.zoom, at(12))).toBeCloseTo(1);
+    expect(liveValue(params.zoom, at(13.94))).toBeCloseTo(2);
+    for (let time = 10.01; time < 11.94; time += 0.01) {
+      expect(liveValue(params.zoom, at(time))).toBeGreaterThanOrEqual(liveValue(params.zoom, at(time - 0.01)) - 1e-9);
+    }
   });
 
   it("turns without stopping over the full circle", () => {
