@@ -12,6 +12,7 @@
   --secondary-hover: #c9ecff;
   /* The green of a range that has its own time. */
   --own-time: #4ef08a;
+  --midi-on: #ff8a1f;
   --panel-glass: rgba(29, 32, 41, .82);
   --border: #393d4d;
   --muted: #8c91a1;
@@ -128,16 +129,19 @@ button { border: 0; }
 
 /* The toolbar under the menu bar. */
 /* The main toolbar: the Designer toolbar's button groups, with 4px padding on a dark strip. */
+/* Three parts: Save at the left, Stop and Play in the middle of the window, the view buttons at the right. */
 .toolbar {
   flex: 0 0 auto;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 8px;
   padding: 4px;
   border-bottom: 1px solid var(--border);
   background: #1d2029;
 }
-.toolbar-spacer { flex: 1; }
+.toolbar > .panel-buttons:first-child { justify-self: start; }
+.toolbar-end { justify-self: end; }
 
 /* The Patterns drop-down list. */
 .toolbar-menu { position: relative; }
@@ -213,12 +217,37 @@ button { border: 0; }
 .side-panel-header { display: flex; align-items: center; justify-content: space-between; }
 .side-panel-action { display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 7px; border-radius: 5px; color: var(--muted); background: transparent; font-size: 11px; cursor: pointer; }
 .side-panel-action:hover { color: #f1f2f4; background: rgba(255,255,255,.08); }
+
+/* MIDI: each slider's button before its value. Dim until assigned, lit (orange) while a control is assigned, pulsing while it waits for a control. */
+.panel-row-end { display: flex; align-items: center; gap: 4px; }
+.midi-assign, .midi-remove { display: grid; flex: 0 0 auto; place-items: center; width: 18px; height: 18px; margin: 0; padding: 0; border-radius: 4px; color: #5d6272; background: transparent; cursor: pointer; }
+.midi-assign:hover { color: #c3c7d0; background: rgba(255,255,255,.07); }
+.midi-assign.on { color: var(--midi-on); }
+.midi-assign.waiting { color: #fff; background: var(--accent); animation: midi-wait 1s ease-in-out infinite alternate; }
+@keyframes midi-wait { to { background: rgba(75,118,247,.35); } }
+/* A range that a MIDI control stopped: an orange play button plays it again. */
+.midi-play { display: grid; flex: 0 0 auto; place-items: center; width: 18px; height: 18px; margin: 0; padding: 0; border-radius: 4px; color: var(--midi-on); background: rgba(255,138,31,.14); cursor: pointer; }
+.midi-play svg { filter: drop-shadow(0 0 2px rgba(255,138,31,.8)); }
+.midi-play:hover { color: #fff; background: var(--midi-on); }
+.midi-play:hover svg { filter: none; }
+.stage-label { display: flex; align-items: center; gap: 8px; }
+/* The FX title bar's play button (every range that MIDI stopped), at the right of the title. */
+.panel-header-bar { display: flex; align-items: center; justify-content: space-between; }
+.panel-title-play { width: 22px; height: 20px; margin-right: auto; margin-left: 10px; }
+/* "All:" and the Random, Nudge and Clear icon buttons in the FX title bar: at the right, a little lower than the toolbar buttons. */
+.panel-title-all { margin-left: auto; margin-right: 8px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.panel-title-play + .panel-title-all { margin-left: 0; }
+.panel-title-buttons .panel-button { height: 28px; }
+.midi-remove { color: #c3c7d0; }
+.midi-remove:hover { color: #fff; background: #c83232; }
 /* The Effects panel does not scroll as a whole: its top stays, and only .panel-scroll under it scrolls. */
-.control-panel { flex: 0 0 400px; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; border-left: 1px solid var(--border); }
+/* The left panel, darker than the cards on it. */
+.control-panel { flex: 0 0 400px; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; border-right: 1px solid var(--border); background: #14161c; }
 .control-panel > :not(.panel-scroll) { flex: 0 0 auto; }
 /* The Designer header: a bar across the full panel width, a little lighter, with a line under it. */
 .panel-header-bar { margin: 0 -14px; padding: 0 14px; border-bottom: 1px solid var(--border); background: #252832; }
-.panel-header-bar .side-panel-title { padding: 9px 2px 8px; }
+/* The Source and Designer titles: twice the size of the other headings. */
+.panel-header-bar .side-panel-title { padding: 9px 2px 8px; font-size: 22px; letter-spacing: .05em; }
 /**
  * It reaches the panel's edges, so its scroll bar sits at the panel's right
  * edge. The scroll bar is very thin, and its space is always kept (taken
@@ -231,8 +260,8 @@ button { border: 0; }
   padding: 0 10px 12px 14px;
   overflow-y: auto;
   scrollbar-gutter: stable;
-  /* A line across the full panel width divides the fixed top from the scrolling groups. */
-  border-top: 1px solid var(--border);
+  /* No line above the groups: the FX title bar's line is enough. */
+  padding-top: 6px;
   /* The side panel's scroll bar color is passed down; "auto" here lets the thin style below take effect. */
   scrollbar-color: auto;
   scrollbar-width: auto;
@@ -241,10 +270,102 @@ button { border: 0; }
 .panel-scroll::-webkit-scrollbar-track { background: transparent; }
 .panel-scroll::-webkit-scrollbar-thumb { border-radius: 2px; background: #474c5e; }
 .panel-scroll::-webkit-scrollbar-thumb:hover { background: #626a7d; }
-.source-panel { flex: 0 0 248px; border-right: 1px solid var(--border); }
+/* The Source section at the top of the left panel, always open, across the full panel width. Its title bar is the same as the Designer's. */
+/* The Source and FX cards in the left panel: each a box with mildly rounded corners, its title bar across the top, and 10px around its content. */
+.panel-card { overflow: hidden; border: 1px solid var(--border); border-radius: 6px; background: #1b1e25; }
+.panel-card > .panel-header-bar { margin: 0; }
+.source-section { flex: 0 0 auto; margin-bottom: 18px; }
+.fx-card { display: flex; flex: 1; flex-direction: column; min-height: 0; margin-bottom: 10px; }
+/* 10px around the groups: each group already has 6px above it, so the list adds 4px at the top. */
+.fx-card > .panel-scroll { margin: 0; padding: 4px 6px 10px 10px; }
+.source-well .panel-row { padding: 10px; }
+/* With no line between them, the Crossfade row needs no top padding of its own: the images' bottom padding is enough. */
+.source-images + .panel-row { padding-top: 0; }
+.source-section .panel-header-bar { margin: 0; }
+/* The Source well fills the section with no space around it; the section's own lines are its borders. */
+.source-section .source-well { margin: 0; border: 0; border-radius: 0; }
+/* The MIDI panel: it slides up at the bottom of the window (its height grows), so the panels and the picture above get shorter. */
+.midi-panel { position: relative; flex: 0 0 auto; overflow: hidden; transition: height .25s ease; }
+.midi-panel.resizing { transition: none; }
+.midi-panel-body { display: flex; flex-direction: column; height: 100%; border-top: 4px solid var(--border); background: #1d2029; }
+/* The top edge: a drag makes the panel taller or shorter. */
+.midi-panel-grip { position: absolute; z-index: 2; top: 0; left: 0; right: 0; height: 6px; cursor: ns-resize; }
+.midi-panel-grip:hover, .midi-panel.resizing .midi-panel-grip { background: rgba(75,118,247,.5); }
+/* Two columns: the controllers at the left, the mappings at the right. */
+.midi-panel-columns { display: flex; flex: 1; min-height: 0; }
+.midi-panel-devices { display: flex; flex: 0 0 auto; min-width: 260px; max-width: 50%; flex-direction: column; min-height: 0; padding: 0 0 10px; overflow-y: auto; border-right: 1px solid var(--border); }
+.midi-panel-mappings { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; background: #23262f; }
+.midi-device-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0 12px 0 16px; list-style: none; }
+.midi-device-row { display: grid; grid-template-columns: 10px max-content auto; align-items: center; gap: 8px; font-size: 12px; }
+.midi-device-state { width: 8px; height: 8px; border-radius: 50%; background: #5d6272; }
+.midi-device-state.connected { background: #3ddc6e; }
+.midi-device-name { color: #f1f2f4; font-weight: 600; white-space: nowrap; }
+.midi-device-count { color: var(--muted); font-size: 11px; white-space: nowrap; }
+/* A controller with no mappings is grayed out. */
+.midi-device-row.unused .midi-device-name { color: #6b7080; font-weight: 400; }
+.midi-panel-header { display: flex; flex: 0 0 auto; align-items: center; gap: 14px; padding: 0 10px 0 16px; border-bottom: 1px solid var(--border); background: #252832; }
+.midi-panel-header .side-panel-title { padding: 9px 2px 8px; }
+.midi-panel-count { color: #a2a7b5; font-size: 12px; }
+/* The header: MIDI, then the count and Clear all at the left; the close button stays at the right. */
+.midi-panel-header > :last-child { margin-left: auto; }
+/* The column headings (Connected devices, Device: ...): a full-width dark box with a divider under it, as in the destination dialog. */
+.midi-panel-devices > .stage-label, .midi-map-heading { display: flex; align-items: center; height: 33px; margin: 0 0 8px; padding: 0 16px; line-height: 1; border-bottom: 1px solid #3a3e4d; background: #1b1e25; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.midi-panel-devices > .stage-label + .midi-panel-empty { margin-top: 6px; }
+.midi-panel-header .panel-button { display: inline-flex; align-items: center; gap: 6px; }
+.midi-panel-waiting { padding: 3px 9px; border: 1px solid var(--midi-on); border-radius: 5px; color: #fff; background: rgba(255,138,31,.15); font-size: 12px; }
+.midi-panel-empty { margin: 14px 16px; color: #a2a7b5; font-size: 12px; }
+/* One row per mapping, under its controller's name: activity icon, control, arrow, setting menu, remove button. */
+.midi-map-list { flex: 1; min-height: 0; margin: 0; padding: 0 10px 10px; overflow-y: auto; list-style: none; scrollbar-width: thin; scrollbar-color: #474c5e transparent; }
+/* A device heading spans the whole column, over the list's side padding; the next device's heading has space above it. */
+.midi-map-heading { margin: 0 -10px 6px; }
+.midi-map-heading:not(:first-child) { margin-top: 10px; border-top: 1px solid #3a3e4d; }
+/* The controller name after "Device:" keeps its own capitals, in white bold. */
+.midi-map-heading strong { margin-left: 4px; color: #fff; font-size: 12px; font-weight: 700; letter-spacing: 0; text-transform: none; }
+.midi-map-row { display: grid; grid-template-columns: 20px minmax(120px, 200px) 18px minmax(220px, 460px) 26px; align-items: center; gap: 10px; padding: 3px 6px; border-radius: 6px; }
+.midi-map-row:hover { background: rgba(255,255,255,.03); }
+.midi-map-row + .midi-map-row { border-top: 1px solid #30343f; }
+.midi-map-activity { display: grid; place-items: center; color: #5d6272; transition: color .3s ease; }
+.midi-map-activity.lit { color: var(--midi-on); transition: none; }
+.midi-map-control { display: flex; align-items: center; gap: 6px; color: #c3c7d0; font-size: 12px; white-space: nowrap; }
+.midi-map-control em { padding: 0 5px; border-radius: 3px; color: #a2a7b5; background: rgba(255,255,255,.07); font-size: 10px; font-style: normal; }
+.midi-map-row .dropdown-button { min-width: 0; }
+.midi-map-arrow { color: var(--muted); }
+.midi-map-clear { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 5px; color: #c3c7d0; background: transparent; cursor: pointer; }
+.midi-map-clear:hover { color: #fff; background: #c83232; }
+/* A control just moved over the panel, waiting for its setting. */
+.midi-learn-toggle { display: inline-flex; align-items: center; gap: 6px; }
+.midi-learn-toggle.on { color: #fff; background: var(--midi-on); }
+.midi-map-row.pending { border: 1px dashed var(--midi-on); background: rgba(255,138,31,.08); }
+.midi-map-choose { color: var(--midi-on); font-size: 12px; font-style: italic; }
+/* The destination dialog: the groups at the left, the picked group's settings at the right. */
+.about-dialog.destination-dialog { width: min(620px, 100%); border-radius: 8px; }
+.destination-dialog .video-dialog-header { padding-left: 24px; }
+.open-dialog-title-icon.destination-title-icon { border-color: rgba(255,138,31,.35); color: var(--midi-on); background: rgba(255,138,31,.08); }
+.destination-title-control { margin-left: 6px; color: var(--midi-on); font-weight: 400; }
+.destination-columns { display: grid; grid-template-columns: 200px minmax(0, 1fr); height: min(60vh, 460px); background: linear-gradient(180deg, #292d37, #242832); }
+.destination-column { display: flex; flex-direction: column; min-height: 0; }
+.destination-heading { margin: 0 0 6px; padding: 10px 18px; line-height: 1.2; border-bottom: 1px solid #3a3e4d; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.destination-settings { background: #21242c; }
+.destination-settings .destination-heading { background: #1b1e25; }
+.destination-column ul { flex: 1; min-height: 0; margin: 0; padding: 0 8px 8px; overflow-y: auto; list-style: none; scrollbar-width: thin; scrollbar-color: #474c5e transparent; }
+.destination-groups { border-right: 1px solid #3a3e4d; background: #1b1e25; }
+/* The groups: a power icon, then the name in capitals, as in the Designer panel. */
+.destination-groups .destination-item { justify-content: flex-start; gap: 8px; }
+.destination-power { display: grid; flex: 0 0 auto; place-items: center; width: 16px; }
+.destination-group-title { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.destination-item { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; width: 100%; padding: 7px 10px; border-radius: 6px; color: #d9dce3; background: transparent; font-size: 13px; text-align: left; cursor: pointer; }
+.destination-item:hover { color: #fff; background: rgba(255,255,255,.07); }
+.destination-item.selected { color: #fff; background: rgba(75,118,247,.45); }
+.destination-item.current { color: var(--midi-on); }
+.destination-item.selected.current { color: #fff; }
+.destination-item small { color: var(--muted); font-size: 11px; white-space: nowrap; }
+/* A setting the control moves: its trash button after it removes that mapping. */
+.destination-setting { display: flex; align-items: center; gap: 4px; }
+.destination-setting .destination-item { flex: 1; min-width: 0; }
+.destination-remove { display: grid; flex: 0 0 auto; place-items: center; width: 28px; height: 28px; border-radius: 6px; color: #c3c7d0; background: transparent; cursor: pointer; }
+.destination-remove:hover { color: #fff; background: #c83232; }
 /* The source controls sit in one well, like an open effect group. */
 .source-well { overflow: hidden; border: 1px solid #2b2f3a; border-radius: 7px; background: #1b1e25; }
-.source-well > * + * { border-top: 1px solid #2b2f3a; }
 /*
  * A foldable group of settings, with a check box that turns the whole group
  * on or off. Closed, the group looks like a button; open, it is a dark well
@@ -257,15 +378,17 @@ button { border: 0; }
   background: #30343f;
   transition: background .2s ease, border-color .2s ease;
 }
-.panel-group:not(.open):hover { border-color: #626a7d; background: #393e4b; }
-/* Open, the header keeps the closed look; only the body below it is darker. */
-.panel-group.open { border-color: #474c5e; background: #30343f; }
-/* A group header: the power button, the title, the padlock, the remove button, then the drag grip at the right. */
+/* A closed group: the same dark blue as an open group, a little lighter under the mouse. */
+.panel-group:not(.open) { border-color: #3e4a6c; background: #253049; }
+.panel-group:not(.open):hover { border-color: #56669a; background: #2e3a58; }
+/* Open, the header keeps the same dark blue; a line divides it from the body. */
+.panel-group.open { border-color: #3e4a6c; background: #253049; }
+/* A group header: the title (and a lock when locked), then the dice, the remove button and the drag grip at the right. */
 .panel-group-header { display: flex; align-items: center; gap: 6px; padding: 0 4px 0 6px; }
 .panel-group-remove { display: grid; place-items: center; width: 22px; height: 20px; border-radius: 4px; color: #5d6272; background: transparent; cursor: pointer; }
 .panel-group-remove:hover { color: #f87171; background: rgba(255,255,255,.07); }
 /* Under the effect list: a note while the list is empty, and the full-width Add effect button. */
-.stage-empty { margin: 0 2px 10px; color: var(--muted); font-size: 12px; }
+.stage-empty { margin: 10px 2px 10px; color: var(--muted); font-size: 12px; }
 .add-effect-button {
   width: 100%;
   min-height: 34px;
@@ -287,14 +410,13 @@ button { border: 0; }
 .panel-group-grip { display: grid; place-items: center; width: 20px; height: 30px; color: #5d6272; cursor: grab; touch-action: none; }
 .panel-group-grip:hover { color: #c3c7d0; }
 .panel-group-grip.dragging { color: #f1f2f4; cursor: grabbing; }
-/* After the power button, the title needs no left padding of its own. */
-.panel-group-toggle + .panel-group-title { padding-left: 0; }
 /* The effect list, under a small label. */
 .stage-label { margin: 10px 2px 12px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .stage-item.dragging > .panel-group { border-color: var(--accent); box-shadow: 0 6px 18px rgba(0,0,0,.45); }
-.panel-group.open .panel-group-header { border-bottom: 1px solid #474c5e; }
+.panel-group.open .panel-group-header { border-bottom: 1px solid #3e4a6c; }
 .panel-group-title {
-  flex: 1;
+  flex: 0 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -308,7 +430,8 @@ button { border: 0; }
   text-transform: uppercase;
   cursor: pointer;
 }
-.panel-group-solo { margin-left: auto; color: #f5ce69; font-size: 9px; font-weight: 700; text-transform: uppercase; }
+.panel-group-fill { flex: 1; align-self: stretch; cursor: pointer; }
+.panel-group-solo { margin-left: 4px; color: #f5ce69; font-size: 9px; font-weight: 700; text-transform: uppercase; }
 .panel-group-title:hover, .panel-group.open .panel-group-title { color: #f1f2f4; }
 .panel-group-caret { transition: transform .22s ease; }
 .panel-group.open .panel-group-caret { transform: rotate(90deg); }
@@ -321,34 +444,53 @@ button { border: 0; }
 }
 .panel-group.open .panel-group-body { grid-template-rows: 1fr; opacity: 1; }
 /* The open body, a little darker than its header. */
-.panel-group.open .panel-group-body { background: #262a33; border-radius: 0 0 6px 6px; }
+/* An open group's body: a dark blue, from the blue of the slider fill. */
+.panel-group.open .panel-group-body { background: #253049; border-radius: 0 0 6px 6px; }
+.panel-group.open .panel-group-inner > * + * { border-top-color: #34405e; }
 .panel-group-inner { min-height: 0; overflow: hidden; }
 /* A dark gray line across the full width of the group divides each control from the next. */
 .panel-group-inner > * + * { border-top: 1px solid #343843; }
-/* The group's power button: on (green) or off (gray). */
-.panel-group-toggle { display: grid; place-items: center; width: 24px; height: 22px; margin: 0; padding: 0; border-radius: 5px; background: transparent; cursor: pointer; }
-.panel-group-toggle:hover { background: rgba(255,255,255,.08); }
-/* On: a soft green glow that fades out around the icon. */
-.panel-group-toggle[aria-checked="true"] svg { filter: drop-shadow(0 0 2px rgba(61,220,110,.9)) drop-shadow(0 0 5px rgba(61,220,110,.45)); }
 /* The padlock: a locked group keeps its settings when Randomize runs. */
-.panel-group-lock { display: grid; place-items: center; width: 22px; height: 20px; border-radius: 4px; color: #5d6272; background: transparent; cursor: pointer; }
-.panel-group-lock:hover { color: #c3c7d0; background: rgba(255,255,255,.07); }
-.panel-group-lock.locked { color: #ffb020; }
+.panel-group-lock { display: grid; place-items: center; width: 22px; height: 20px; color: #5d6272; }
+.panel-group-lock.locked { color: #ff5c66; }
+/* A group's dice (new random settings for the group) and its MIDI icon (lit while MIDI controls move its sliders). */
+.panel-group-dice { display: grid; place-items: center; width: 22px; height: 20px; border-radius: 4px; color: #5d6272; background: transparent; cursor: pointer; }
+.panel-group-dice:hover { color: #c3c7d0; background: rgba(255,255,255,.07); }
+/* A submode menu choice with MIDI controls on sliders that the current choice hides. */
+.dropdown-mark { display: inline-grid; place-items: center; margin-left: 6px; color: var(--midi-on); vertical-align: middle; }
+.dropdown-button .dropdown-mark { margin-left: auto; margin-right: 6px; }
+/* While a MIDI control moves one of its sliders, the group's title lights orange. */
+.panel-group-title { transition: color .25s ease; }
+.panel-group.midi-touched .panel-group-title, .panel-group.midi-touched.disabled .panel-group-title { color: var(--midi-on); transition: none; }
+/* The same for the name of each slider the control moves. */
+.panel-row-name { transition: color .25s ease; }
+.panel-row-name.midi-touched { color: var(--midi-on); transition: none; }
+/* A setting held at no effect (Ctrl + hold on its name). */
+.panel-row-name.bypassed { color: #6b7080; text-decoration: line-through; }
+/* Ctrl held: a click on a group header or a setting name bypasses, so the mouse shows a no-entry cursor there. */
+.ctrl-held .panel-group-header, .ctrl-held .panel-group-header *, .ctrl-held .panel-row-name { cursor: not-allowed; }
+/* A right-click menu (for example a group header's Lock and Remove MIDI). */
+.toolbar-dropdown.context-menu { position: fixed; z-index: 150; min-width: 220px; }
+.context-menu .toolbar-dropdown-item { display: flex; align-items: center; gap: 9px; }
+.context-menu-icon { display: grid; flex: 0 0 auto; place-items: center; width: 16px; color: var(--muted); }
+.context-menu .toolbar-dropdown-item:disabled { opacity: .4; cursor: default; }
+.context-menu .toolbar-dropdown-item:disabled:hover { background: transparent; }
 .panel-group.disabled .panel-group-title { color: #6b7080; }
 .panel-group.disabled .panel-group-inner { opacity: .45; }
 .panel-row { padding: 11px 14px 10px; }
 /* A control outside any group (the cycle): it lines up with the buttons above it. */
-.panel-root-row > .panel-row { padding: 0 2px 10px; }
-/* Under Loop length: the source video's crossfade, shown only with a video source. */
-.panel-check-row { display: flex; align-items: center; gap: 7px; padding: 0 2px 10px; color: #a2a7b5; font-size: 12px; cursor: pointer; }
-.panel-check-row input { margin: 0; accent-color: var(--accent); cursor: pointer; }
+.panel-root-row > .panel-row { padding: 12px 2px 12px; }
+/* After the Scene length slider: the source video's crossfade, shown only with a video source. */
+.panel-check-inline { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; color: #a2a7b5; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.panel-check-inline input { margin: 0; accent-color: var(--accent); cursor: pointer; }
 .panel-root-row .panel-row-name { color: #a2a7b5; }
-/* Loop length on one line: the name, then the slider, then the value. The row's inner boxes step aside so their parts line up in one grid. */
-.panel-root-row > .panel-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 10px; }
-.panel-root-row .panel-row-top, .panel-root-row .panel-row-control { display: contents; }
+/* Length on one line: the name, then the slider (and the video's Crossfade), then the value. The top row's box steps aside so its parts line up with the slider. Length has no range, so it needs no space for the range buttons. */
+.panel-root-row > .panel-row { display: flex; align-items: center; gap: 10px; }
+.panel-root-row .panel-row-top { display: contents; }
 .panel-root-row .panel-row-name { order: 1; }
-.panel-root-row .panel-row-control > .slider { order: 2; margin-top: 0; }
-.panel-root-row .panel-row-value { order: 3; }
+.panel-root-row .panel-row-control { order: 2; flex: 1; min-width: 0; }
+.panel-root-row .panel-row-control > .slider { margin-top: 0; }
+.panel-root-row .panel-row-end { order: 3; }
 .panel-root-row .panel-drift-space { display: none; }
 /* A row with only a menu: the menu nearly fills the row. */
 .panel-select-row { padding: 6px; }
@@ -606,8 +748,6 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
  * lines inside it. Each button fills its cell, with no border of its own.
  * The buttons set the strip's width.
  */
-/* The toolbar row under the header: full panel width, 4px padding, a line under it; Random and Clear at the left, Stop and Play at the right. */
-.panel-toolbars { display: flex; justify-content: space-between; gap: 8px; margin: 0 -14px 12px; padding: 4px; border-bottom: 1px solid var(--border); }
 .panel-buttons {
   display: flex;
   width: fit-content;
@@ -876,6 +1016,11 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .confirm-dialog-content h2 { margin: 0; color: #f1f2f4; font-size: 16px; font-weight: 700; }
 .confirm-dialog-content p { margin: 10px 0 0; color: #b9bdc8; font-size: 13px; line-height: 1.45; }
 .confirm-dialog-actions { gap: 8px; }
+/* A list under the message, for example the MIDI controls to remove: the slider name, then where its control is. */
+.confirm-dialog-list { display: flex; flex-direction: column; gap: 6px; max-height: 240px; margin: 12px 0 0; padding: 0; overflow-y: auto; list-style: none; }
+.confirm-dialog-list li { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border: 1px solid #3a3f4d; border-radius: 6px; background: #1d2029; }
+.confirm-dialog-list strong { color: #f1f2f4; font-size: 13px; font-weight: 600; }
+.confirm-dialog-list span { color: #9ca1af; font-size: 11px; }
 /* Export Video: the About dialog's frame, with a header like the Open dialog's. */
 .about-dialog.video-dialog { width: min(520px, 100%); }
 .video-dialog-header { display: flex; align-items: center; gap: 15px; padding: 14px 54px 14px 16px; border-bottom: 1px solid #3a3e4d; background: linear-gradient(180deg, #2c303b, #272b35); }
@@ -901,6 +1046,16 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .video-note { margin: 0; color: #9ca1af; font-size: 12px; line-height: 1.5; }
 .video-dialog-actions { gap: 8px; }
 .video-dialog-actions .button { display: inline-flex; align-items: center; gap: 7px; }
+/* Photo search: a search bar, then the results as a grid of 16:9 previews. */
+.about-dialog.image-search-dialog { width: min(760px, 100%); }
+.image-search-bar { display: flex; gap: 8px; }
+.image-search-bar .button { min-height: 32px; padding: 0 16px; }
+.image-search-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; min-height: 120px; max-height: min(56vh, 520px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: #474c5e transparent; }
+.image-search-result { aspect-ratio: 16 / 9; overflow: hidden; padding: 0; border: 1px solid #3a3f4d; border-radius: 5px; background: #111318; cursor: pointer; }
+.image-search-result:hover { border-color: var(--accent-hover); box-shadow: 0 0 0 1px var(--accent-hover); }
+.image-search-result img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.image-search-message { grid-column: 1 / -1; display: grid; place-items: center; padding: 24px 0; color: var(--muted); }
+.image-search-more { align-self: center; min-height: 32px; padding: 0 16px; }
 
 .spin { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -910,7 +1065,8 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .crash-screen pre { max-width: 100%; overflow: auto; color: #fecaca; font-size: 12px; white-space: pre-wrap; }
 
 /* Source: the two images, A and B, with a swap button between them. */
-.source-images { display: grid; justify-items: stretch; gap: 4px; padding: 12px 14px 10px; }
+/* Images A and B side by side, with the swap button between them. */
+.source-images { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; padding: 10px; }
 .source-card { min-width: 0; }
 .source-thumb { position: relative; aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid #3a3f4d; border-radius: 5px; background: #111318; }
 .source-thumb.empty { border-style: dashed; border-color: #535a6c; background: transparent; }
@@ -924,15 +1080,20 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .source-letter { pointer-events: none; z-index: 1; position: absolute; left: 4px; top: 4px; padding: 1px 5px; border-radius: 3px; color: #fff; background: rgba(0,0,0,.62); font-size: 10px; font-weight: 700; }
 .source-remove { position: absolute; right: 4px; top: 4px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 3px; color: #fff; background: rgba(0,0,0,.62); cursor: pointer; }
 .source-remove:hover { background: rgba(200,50,50,.85); }
-.source-label { margin-top: 5px; overflow: hidden; color: #c3c7d0; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.source-actions { display: flex; gap: 4px; margin-top: 4px; }
-.source-actions button { position: relative; display: grid; place-items: center; width: 38px; height: 34px; border-radius: 5px; color: var(--muted); background: transparent; cursor: pointer; }
-.source-actions button:hover, .source-actions button.active { color: #f1f2f4; background: rgba(255,255,255,.08); }
+.source-label { margin-bottom: 5px; overflow: hidden; color: var(--muted); font-size: 11px; font-style: italic; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+/* The icon buttons: close together, centered under the slot. */
+/* The slot's buttons, over the bottom of its image on a dark fade: shown while the mouse is over the slot or a button has focus. */
+.source-actions { position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; gap: 0; padding: 2px 0; background: rgba(0,0,0,.82); opacity: 0; transition: opacity .15s ease; }
+.source-card:hover .source-actions, .source-actions:focus-within { opacity: 1; }
+.source-thumb.empty .source-actions { background: none; }
+.source-actions button { position: relative; display: grid; place-items: center; width: 30px; height: 26px; border-radius: 5px; color: #d8dbe2; background: transparent; cursor: pointer; }
+.source-actions button:hover, .source-actions button.active { color: #fff; background: rgba(255,255,255,.16); }
 /* The per-image pattern list: the toolbar's dropdown look, placed on the page body next to its button. */
 .toolbar-dropdown.source-pattern-menu { position: fixed; z-index: 100; max-height: calc(100vh - 16px); overflow-y: auto; }
-.source-swap { justify-self: center; display: grid; place-items: center; width: 32px; height: 30px; border-radius: 5px; color: var(--muted); background: transparent; cursor: pointer; }
-.source-swap:hover:not(:disabled) { color: #f1f2f4; background: rgba(255,255,255,.08); }
-.source-swap:disabled { opacity: .3; cursor: default; }
+/* The swap button: just its icon; the button face shows under the mouse. Its top margin is the file name line's height (13px text + 5px gap), so it centers on the images, not on the cards. */
+.source-swap { justify-self: center; margin-top: 18px; display: grid; place-items: center; width: 34px; height: 30px; border: 1px solid transparent; border-radius: 5px; color: #dfe2e8; background: transparent; cursor: pointer; }
+.source-swap:hover:not(:disabled) { border-color: #535a6c; color: #fff; background: #2f3340; }
+.source-swap:disabled { opacity: .35; cursor: default; }
 
 /* The Open dialog, ported from Image Sage: places, the file list and a preview. */
 .open-dialog-overlay {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GROUP_PARAMS, PARAM_KEYS, createParams, createPlayState, defaultValue, fullRange, NUDGE, hexToRgb, hslToHex, liveValue, NO_EFFECT, nudgeParams, randomizeParams, resetEffects, setCustomTime, startRangeAt, withKindOrder, addEffect, removeEffect, toSlider, fromSlider, SLIDER_STEPS } from "./params";
+import { GROUP_PARAMS, PARAM_KEYS, createParams, createPlayState, defaultValue, fullRange, NUDGE, hexToRgb, hslToHex, liveValue, NO_EFFECT, nudgeParams, randomizeGroup, randomizeParams, resetEffects, setCustomTime, startRangeAt, withKindOrder, addEffect, removeEffect, toSlider, fromSlider, SLIDER_STEPS } from "./params";
 
 /** A play state at this many seconds, on both clocks: animation time (the shared cycle) and real time (custom ranges). */
 const at = (time: number) => ({ ...createPlayState(), time, clock: time });
@@ -261,6 +261,27 @@ describe("resetEffects", () => {
   });
 });
 
+describe("randomizeGroup", () => {
+  it("changes only the group's controls and modes, and keeps the effect list", () => {
+    const params = createParams();
+    const state = createPlayState();
+    addEffect(state, "kaleidoscope");
+    addEffect(state, "warp");
+    const before = structuredClone(params);
+    const order = [...state.fxOrder];
+    const groups = { ...state.groups };
+    const warpType = state.warpType;
+    for (let run = 0; run < 20; run++) randomizeGroup(params, state, "kaleidoscope");
+    for (const key of PARAM_KEYS) {
+      if (!GROUP_PARAMS.kaleidoscope.includes(key)) expect(params[key]).toEqual(before[key]);
+    }
+    expect(GROUP_PARAMS.kaleidoscope.some((key) => params[key].value !== before[key].value)).toBe(true);
+    expect(state.fxOrder).toEqual(order);
+    expect(state.groups).toEqual(groups);
+    expect(state.warpType).toBe(warpType);
+  });
+});
+
 describe("randomizeParams", () => {
   it("leaves locked groups as they were", () => {
     for (let run = 0; run < 50; run++) {
@@ -332,7 +353,7 @@ describe("nudgeParams", () => {
     expect(params.zoom.value).toBe(params.zoom.max);
   });
 
-  it("leaves locked groups, values at 0, the loop length and whole-circle turns alone", () => {
+  it("leaves locked groups, values at 0, the scene length and whole-circle turns alone", () => {
     const params = createParams();
     const state = createPlayState();
     state.locks.relief = true;

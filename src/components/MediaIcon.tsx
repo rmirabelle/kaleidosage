@@ -1,19 +1,18 @@
 type MediaKind = "stop" | "play" | "pause";
 
-/** Each icon's flat color. */
+/** Each icon's flat color. Pause has no color of its own: the app's medium gray (--muted). */
 const COLORS: Record<MediaKind, string> = {
   stop: "#e2382d",
   play: "#2bc25a",
-  pause: "#f2ae22"
+  pause: "#8c91a1"
 };
 
 /**
- * The play controls in color: a red stop square, a green play triangle and
- * two amber pause bars, each in one flat color with a black outline, like
- * the folder and pattern icons.
+ * The play controls: a red stop square, a green play triangle and two
+ * plain medium gray pause bars, each in one flat color with no outline.
  */
 export function MediaIcon({ kind, size = 16 }: { kind: MediaKind; size?: number }) {
-  const shape = { fill: COLORS[kind], stroke: "#000000", strokeWidth: 1, strokeLinejoin: "round" as const };
+  const shape = { fill: COLORS[kind] };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
       {kind === "stop" && <rect x="4.5" y="4.5" width="15" height="15" rx="2.5" {...shape} />}

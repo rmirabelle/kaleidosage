@@ -1,14 +1,15 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 /**
  * A question with Cancel and a confirm button, in the About dialog's style,
  * and an optional third choice between them. Enter confirms; Esc, Cancel or
  * a click outside the dialog cancels. While it is open, keys do not reach
- * the app's shortcuts.
+ * the app's shortcuts. "details" shows under the message, for example a list.
  */
-export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onCancel, otherLabel, onOther }: {
+export function ConfirmDialog({ title, message, details, confirmLabel, onConfirm, onCancel, otherLabel, onOther }: {
   title: string;
   message: string;
+  details?: ReactNode;
   confirmLabel: string;
   onConfirm: () => void;
   onCancel: () => void;
@@ -42,6 +43,7 @@ export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onCance
         <div className="confirm-dialog-content">
           <h2 id="confirm-title">{title}</h2>
           <p id="confirm-message">{message}</p>
+          {details}
         </div>
         <div className="about-dialog-actions confirm-dialog-actions">
           <button className="button secondary" onClick={onCancel}>Cancel</button>

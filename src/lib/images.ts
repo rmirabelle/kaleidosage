@@ -46,54 +46,134 @@ export interface RandomImage extends LoadedImage {
 
 /** Wikimedia asks every program that uses its API to name itself. */
 const API_USER_AGENT = "KaleidoSage (https://github.com/rmirabelle/kaleidosage)";
-/** The first Picture of the Day on Wikimedia Commons. */
-const FIRST_POTD = Date.UTC(2007, 0, 1);
-const DAY_MS = 24 * 60 * 60 * 1000;
-/** Some days show a drawing, an animation or a video; those days are skipped, up to this many times. */
+const COMMONS_API = "https://commons.wikimedia.org/w/api.php";
+/** How wide every source photo is downloaded: 4K. */
+const SOURCE_WIDTH = 3840;
+/**
+ * Every search gets this: JPEG and PNG pictures at least 4K wide. Smaller
+ * pictures make a soft kaleidoscope. Commons search has no "JPEG or PNG", so
+ * it takes all bitmaps and leaves out the other two kinds.
+ */
+const FOUR_K = `filew:>${SOURCE_WIDTH - 1} filetype:bitmap -filemime:image/tiff -filemime:image/gif`;
+/** The kinds of file that searches keep. */
+const SEARCH_MIMES = new Set(["image/jpeg", "image/png"]);
+const FEATURED = 'incategory:"Featured pictures on Wikimedia Commons"';
+export const QUALITY = 'incategory:"Quality images"';
+/**
+ * The dice's themes: Commons searches for the photos that make the best
+ * kaleidoscopes. These are detailed architecture with repeating geometric
+ * patterns, and abstract pictures with no recognizable subject. Each theme
+ * gave tens to hundreds of 4K photos when tested (2026-10-16).
+ */
+const THEMES = [
+  `${FEATURED} intitle:ceiling`,
+  `${FEATURED} intitle:dome`,
+  `${FEATURED} intitle:mosque`,
+  `${QUALITY} intitle:ceiling`,
+  `${QUALITY} intitle:mosque interior`,
+  'incategory:"Islamic geometric patterns"',
+  `${QUALITY} intitle:mosaic`,
+  `${QUALITY} intitle:"stained glass"`,
+  `${QUALITY} intitle:pattern`,
+  'incategory:"Fractal art"',
+  `${QUALITY} intitle:texture`
+];
+/** An empty search (a rare short theme) is tried again with another theme, up to this many times. */
 const MAX_TRIES = 5;
 
-/** A random day's date from the first Picture of the Day to yesterday, as "YYYY-MM-DD". */
-function randomPotdDate(): string {
-  const days = Math.floor((Date.now() - DAY_MS - FIRST_POTD) / DAY_MS);
-  return new Date(FIRST_POTD + Math.floor(Math.random() * days) * DAY_MS).toISOString().slice(0, 10);
+/** One photo that a Commons search found. "thumb" is a preview, "width" and "height" are the full size. */
+export interface CommonsPhoto {
+  title: string;
+  label: string;
+  thumb: string;
+  width: number;
+  height: number;
 }
 
-/**
- * One try: looks up the Picture of the Day of a random date and downloads
- * it, about as wide as the screen. Returns null when that day's picture is
- * not a JPEG or PNG photo.
- */
-async function tryPotd(width: number, signal: AbortSignal): Promise<RandomImage | null> {
-  const api = new URL("https://commons.wikimedia.org/w/api.php");
-  for (const [key, value] of Object.entries({
-    action: "query", format: "json", origin: "*", prop: "imageinfo", iiprop: "url|mime",
-    iiurlwidth: String(width), generator: "images", titles: `Template:Potd/${randomPotdDate()}`
-  })) api.searchParams.set(key, value);
+interface CommonsPage {
+  title?: string;
+  index?: number;
+  imageinfo?: { url: string; thumburl?: string; mime: string; width: number; height: number }[];
+}
+
+async function commonsQuery(params: Record<string, string>, signal?: AbortSignal) {
+  const api = new URL(COMMONS_API);
+  for (const [key, value] of Object.entries({ action: "query", format: "json", origin: "*", ...params })) api.searchParams.set(key, value);
   const response = await fetch(api, { signal, headers: { "Api-User-Agent": API_USER_AGENT } });
   if (!response.ok) throw new Error(`The image service returned ${response.status}.`);
-  const data = await response.json() as {
-    query?: { pages?: Record<string, { title?: string; imageinfo?: { url: string; thumburl?: string; mime: string }[] }> };
-  };
-  const page = Object.values(data.query?.pages ?? {}).find((candidate) =>
-    candidate.imageinfo?.[0] && ["image/jpeg", "image/png"].includes(candidate.imageinfo[0].mime));
-  const info = page?.imageinfo?.[0];
-  if (!page || !info) return null;
+  return await response.json() as { query?: { pages?: Record<string, CommonsPage>; searchinfo?: { totalhits: number } }; continue?: { gsroffset?: number } };
+}
+
+/** "File:Dead_Vlei 5.jpg" shows as "Dead Vlei 5". */
+const labelOf = (title: string) => title.replace(/^File:/, "").replace(/\.[a-z0-9]+$/i, "").replace(/_/g, " ").trim();
+
+/**
+ * Searches Wikimedia Commons for 4K photos, "previewWidth" pixels wide.
+ * Returns the photos, in the search's order, and the offset of the next
+ * page (none after the last).
+ */
+export async function searchCommons(words: string, { limit = 30, offset = 0, previewWidth = 320, signal }: {
+  limit?: number; offset?: number; previewWidth?: number; signal?: AbortSignal;
+} = {}): Promise<{ photos: CommonsPhoto[]; next?: number }> {
+  const data = await commonsQuery({
+    generator: "search", gsrnamespace: "6", gsrsearch: `${words} ${FOUR_K}`, gsrlimit: String(limit), gsroffset: String(offset),
+    prop: "imageinfo", iiprop: "url|mime|size", iiurlwidth: String(previewWidth)
+  }, signal);
+  const photos = Object.values(data.query?.pages ?? {})
+    .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
+    .flatMap((page) => {
+      const info = page.imageinfo?.[0];
+      if (!page.title || !info || !SEARCH_MIMES.has(info.mime)) return [];
+      return [{ title: page.title, label: labelOf(page.title), thumb: info.thumburl ?? info.url, width: info.width, height: info.height }];
+    });
+  return { photos, next: data.continue?.gsroffset };
+}
+
+/** Downloads one Commons photo ("File:..."), 4K wide. */
+export async function loadCommonsPhoto(title: string, signal?: AbortSignal): Promise<RandomImage> {
+  const data = await commonsQuery({ titles: title, prop: "imageinfo", iiprop: "url|mime|size", iiurlwidth: String(SOURCE_WIDTH) }, signal);
+  const info = Object.values(data.query?.pages ?? {})[0]?.imageinfo?.[0];
+  if (!info) throw new Error("The image service did not find that photo.");
   const download = await fetch(info.thumburl ?? info.url, { signal });
   if (!download.ok) throw new Error(`The image service returned ${download.status}.`);
   const blob = await download.blob();
-  /* "File:Dead Vlei 5.jpg" shows as "Dead Vlei 5". */
-  const title = (page.title ?? "").replace(/^File:/, "").replace(/\.[a-z0-9]+$/i, "").replace(/_/g, " ").trim();
-  return { image: await loadImageBlob(blob), blob, title: title || "Random photo" };
+  return { image: await loadImageBlob(blob), blob, title: labelOf(title) || "Photo" };
+}
+
+/** Commons search goes no further than this many results. */
+const MAX_OFFSET = 10000;
+/** How many 4K photos each theme has; the count is looked up once per run. */
+const themeSizes = new Map<string, number>();
+
+async function themeSize(theme: string, signal: AbortSignal) {
+  const known = themeSizes.get(theme);
+  if (known !== undefined) return known;
+  const data = await commonsQuery({ list: "search", srnamespace: "6", srsearch: `${theme} ${FOUR_K}`, srlimit: "1", srinfo: "totalhits", srprop: "" }, signal);
+  const size = Math.min(data.query?.searchinfo?.totalhits ?? 0, MAX_OFFSET);
+  themeSizes.set(theme, size);
+  return size;
 }
 
 /**
- * A random Picture of the Day from Wikimedia Commons, about the size of the
- * screen. The whole download stops after timeoutMs, so a slow or silent
- * service cannot keep the app waiting.
+ * One try: a random 4K photo from a random theme, or null when that search
+ * found none. It picks a random place in the theme's results. The search's
+ * own random order does not work here: Commons keeps each answer for an
+ * hour, so the same search gives the same photo for that hour.
+ */
+async function tryTheme(signal: AbortSignal): Promise<RandomImage | null> {
+  const theme = THEMES[Math.floor(Math.random() * THEMES.length)];
+  const size = await themeSize(theme, signal);
+  if (size === 0) return null;
+  const { photos } = await searchCommons(theme, { limit: 1, offset: Math.floor(Math.random() * size), signal });
+  return photos[0] ? await loadCommonsPhoto(photos[0].title, signal) : null;
+}
+
+/**
+ * A random 4K photo from Wikimedia Commons, from one of the dice's themes.
+ * The whole download stops after timeoutMs, so a slow or silent service
+ * cannot keep the app waiting.
  */
 async function fetchRandomImage(timeoutMs: number): Promise<RandomImage> {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const width = Math.min(3840, Math.round(screen.width * dpr));
   const controller = new AbortController();
   const tooSlow = `The image service did not answer in ${timeoutMs / 1000} seconds.`;
   let timer = 0;
@@ -106,7 +186,7 @@ async function fetchRandomImage(timeoutMs: number): Promise<RandomImage> {
   });
   const load = async () => {
     for (let tries = 0; tries < MAX_TRIES; tries++) {
-      const found = await tryPotd(width, controller.signal);
+      const found = await tryTheme(controller.signal);
       if (found) return found;
     }
     throw new Error("The image service found no photo. Try again.");

@@ -1,4 +1,4 @@
-import { ArrowCounterClockwise, ArrowsDownUp, Plus, X } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, ArrowsLeftRight, MagnifyingGlass, Plus, X } from "@phosphor-icons/react";
 import { ColorFolder } from "./ColorFolder";
 import { ColorPattern } from "./ColorPattern";
 import { RedDice } from "./RedDice";
@@ -14,20 +14,25 @@ export interface SourceImagesProps {
   randomLoading: ImageSlot | null;
   onOpenImage: (slot: ImageSlot) => void;
   onRandomImage: (slot: ImageSlot) => void;
+  /** Opens the photo search for the slot. */
+  onSearchImage: (slot: ImageSlot) => void;
   onPatternImage: (pattern: Pattern, slot: ImageSlot) => void;
-  onRemoveSecondImage: () => void;
+  /** Removes one of the images. B moves up when A is removed. */
+  onRemoveImage: (slot: ImageSlot) => void;
   onSwapImages: () => void;
   /** Takes a pattern off a slot and shows the image under it again. */
   onRestoreImage: (slot: ImageSlot) => void;
 }
 
 /**
- * The two source images, one above the other: A, which the toolbar also loads, and
+ * The two source images, side by side: A, which the toolbar also loads, and
  * B, which the picture can fade to. Each card can load a file, a random
- * photo or a test pattern, and takes a dropped file. B can be removed, and
- * the swap button between them trades their places.
+ * photo, a searched photo or a test pattern, and takes a dropped file. B can be removed, and A
+ * too when B is there to take its place. With both images, a swap button
+ * between them trades their places.
  */
-export function SourceImages({ images, randomLoading, onOpenImage, onRandomImage, onPatternImage, onRemoveSecondImage, onSwapImages, onRestoreImage }: SourceImagesProps) {
+export function SourceImages({ images, randomLoading, onOpenImage, onRandomImage, onSearchImage, onPatternImage, onRemoveImage, onSwapImages, onRestoreImage }: SourceImagesProps) {
+  const removable = (slot: ImageSlot) => slot === 1 || Boolean(images[1]);
   const card = (slot: ImageSlot) => (
     <ImageCard
       slot={slot}
@@ -35,34 +40,37 @@ export function SourceImages({ images, randomLoading, onOpenImage, onRandomImage
       loading={randomLoading === slot}
       onOpen={() => onOpenImage(slot)}
       onRandom={() => onRandomImage(slot)}
+      onSearch={() => onSearchImage(slot)}
       onPattern={(pattern) => onPatternImage(pattern, slot)}
-      onRemove={slot === 1 ? onRemoveSecondImage : undefined}
+      onRemove={removable(slot) ? () => onRemoveImage(slot) : undefined}
       onRestore={() => onRestoreImage(slot)}
     />
   );
   return (
     <div className="source-images">
       {card(0)}
+      {/* With one image there is nothing to swap, so the button is off. */}
       <button
         className="source-swap"
         disabled={!images[0] || !images[1]}
         onClick={onSwapImages}
-        title="Swap A and B"
-        aria-label="Swap the first and second images"
+        title={images[0] && images[1] ? "Swap A and B" : "Load both sources to swap them"}
+        aria-label="Swap sources A and B"
       >
-        <ArrowsDownUp size={18} />
+        <ArrowsLeftRight size={16} weight="bold" />
       </button>
       {card(1)}
     </div>
   );
 }
 
-function ImageCard({ slot, image, loading, onOpen, onRandom, onPattern, onRemove, onRestore }: {
+function ImageCard({ slot, image, loading, onOpen, onRandom, onSearch, onPattern, onRemove, onRestore }: {
   slot: ImageSlot;
   image: SlotImage | null;
   loading: boolean;
   onOpen: () => void;
   onRandom: () => void;
+  onSearch: () => void;
   onPattern: (pattern: Pattern) => void;
   onRemove?: () => void;
   onRestore: () => void;
@@ -71,6 +79,8 @@ function ImageCard({ slot, image, loading, onOpen, onRandom, onPattern, onRemove
   return (
     /* App reads data-image-slot to send a dropped file to this slot. */
     <div className="source-card" data-image-slot={slot}>
+      {/* The file name, above the image; an empty slot keeps the line's height, so both cards line up. */}
+      <div className="source-label" title={image?.label}>{image?.label ?? " "}</div>
       <div className={`source-thumb ${image ? "" : "empty"}`}>
         {image?.under ? (
           /* A pattern over an image: the image's left half, then the pattern's right half. A click on the image half takes the pattern off. */
@@ -89,26 +99,29 @@ function ImageCard({ slot, image, loading, onOpen, onRandom, onPattern, onRemove
         ) : image ? (
           <img src={image.thumbnail} alt="" />
         ) : (
-          <span className="source-empty"><Plus size={12} weight="bold" /> Add image</span>
+          <span className="source-empty"><Plus size={12} weight="bold" /> Image / Video</span>
         )}
         <span className="source-letter">{letter}</span>
         {onRemove && image && (
-          <button className="source-remove" onClick={onRemove} title="Remove image B" aria-label="Remove the second image">
+          <button className="source-remove" onClick={onRemove} title={`Remove source ${letter}`} aria-label={slot === 0 ? "Remove source A; source B moves up" : "Remove source B"}>
             <X size={13} weight="bold" />
           </button>
         )}
-      </div>
-      <div className="source-label" title={image?.label}>{image?.label ?? "Drop or pick an image"}</div>
-      <div className="source-actions">
-        <button onClick={onRandom} title="Load a random photo" aria-label={`Load a random photo as image ${letter}`}>
-          <RedDice size={24} className={loading ? "spin" : undefined} />
-        </button>
-        <PatternMenu letter={letter} selected={image?.patternId} onPattern={onPattern} />
-        {isTauri() && (
-          <button onClick={onOpen} title="Open an image file" aria-label={`Open an image file as image ${letter}`}>
-            <ColorFolder size={25} />
+        {/* The slot's four buttons, over the bottom of its image: shown while the mouse is over the slot. */}
+        <div className="source-actions">
+          <button onClick={onRandom} title="Load a random 4K photo: architecture, patterns or fractal art" aria-label={`Load a random photo as source ${letter}`}>
+            <RedDice size={17} className={loading ? "spin" : undefined} />
           </button>
-        )}
+          <button onClick={onSearch} title="Search 4K photos on Wikimedia Commons" aria-label={`Search for a photo as source ${letter}`}>
+            <MagnifyingGlass size={16} weight="bold" />
+          </button>
+          <PatternMenu letter={letter} selected={image?.patternId} onPattern={onPattern} />
+          {isTauri() && (
+            <button onClick={onOpen} title="Open an image or video file" aria-label={`Open an image or video file as source ${letter}`}>
+              <ColorFolder size={18} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -177,14 +190,14 @@ function PatternMenu({ letter, selected, onPattern }: {
         className={position ? "active" : undefined}
         onClick={toggle}
         title="Use a test pattern"
-        aria-label={`Use a test pattern as image ${letter}`}
+        aria-label={`Use a test pattern as source ${letter}`}
         aria-haspopup="menu"
         aria-expanded={Boolean(position)}
       >
-        <ColorPattern size={24} />
+        <ColorPattern size={17} />
       </button>
       {position && createPortal(
-        <div ref={menuRef} className="toolbar-dropdown source-pattern-menu" role="menu" aria-label={`Patterns for image ${letter}`} style={position}>
+        <div ref={menuRef} className="toolbar-dropdown source-pattern-menu" role="menu" aria-label={`Patterns for source ${letter}`} style={position}>
           {groups.map((group) => (
             <div key={group} className="toolbar-dropdown-group">
               <div className="toolbar-dropdown-heading">{group}</div>

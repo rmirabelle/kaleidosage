@@ -2,12 +2,15 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { ArrowClockwise, ArrowCounterClockwise, ArrowsIn, ArrowsOut, Camera, FilmSlate, FilmStrip, FloppyDisk, Gauge, Info, SignOut, SlidersHorizontal, X } from "@phosphor-icons/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { AboutDialog } from "./components/AboutDialog";
 import { ColorFolder } from "./components/ColorFolder";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ControlPanel } from "./components/ControlPanel";
 import { ExportVideoDialog } from "./components/ExportVideoDialog";
+import { ImageSearchDialog } from "./components/ImageSearchDialog";
+import { MidiIcon } from "./components/MidiIcon";
+import { MidiPanel } from "./components/MidiPanel";
 import { SourcePanel } from "./components/SourcePanel";
 import { StartScreen } from "./components/StartScreen";
 import { MenuBar, type Menu } from "./components/MenuBar";
@@ -16,7 +19,7 @@ import { StatsOverlay } from "./components/StatsOverlay";
 import { TitleBar } from "./components/TitleBar";
 import { Toolbar } from "./components/Toolbar";
 import { Engine } from "./engine/engine";
-import { createParams, createPlayState, nudgeParams, randomizeParams, resetEffects } from "./engine/params";
+import { createParams, createPlayState, nudgeParams, randomizeGroup, randomizeParams, resetEffects, type GroupKey } from "./engine/params";
 import { SettingsHistory } from "./engine/history";
 import { SCENE_EXTENSION, applyScene, blobToSceneImage, sceneFingerprint, serializeScene, type SceneImage } from "./engine/scene";
 import { loadSceneMedia, readScene, writeScene } from "./lib/scenes";
@@ -24,15 +27,23 @@ import type { ImageSource } from "./engine/renderer";
 import {
   makeThumbnail,
   loadImageBlob,
+  loadCommonsPhoto,
   loadImageFile,
-  loadRandomImage
+  loadRandomImage,
+  type CommonsPhoto
 } from "./lib/images";
 import { chooseExportPath, fileNameOf, writeExport } from "./lib/exports";
 import { PATTERNS, drawPattern, type Pattern } from "./lib/patterns";
+import { midi } from "./lib/midi";
 import { revealMainWindow } from "./lib/splash";
 import { isVideoPath, isVideoType, loadVideoBlob, loadVideoFile, stageVideoBlob, type VideoFile } from "./lib/videos";
 import { checkForUpdate, getAppVersion, type UpdateInfo } from "./lib/updater";
 import { encodeVideo, videoSize, type VideoOptions } from "./lib/videoExport";
+
+const MIDI_PANEL_HEIGHT_KEY = "kaleidosage.midi-panel-height";
+/** The MIDI panel's height limits, in pixels; it opens at its last height, or DEFAULT. */
+const MIDI_PANEL_MIN = 120;
+const MIDI_PANEL_DEFAULT = 230;
 
 interface Status {
   message: string;
@@ -98,6 +109,40 @@ export default function App() {
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
+  /**
+   * The MIDI panel at the bottom of the window. It starts closed; it opens
+   * at the height it last had, which the user sets by dragging its top
+   * edge, and the app keeps that height across restarts.
+   */
+  const [midiPanelOpen, setMidiPanelOpen] = useState(false);
+  const toggleMidiPanel = useCallback(() => setMidiPanelOpen((open) => !open), []);
+  const [midiPanelHeight, setMidiPanelHeight] = useState(() => {
+    try { return Number(localStorage.getItem(MIDI_PANEL_HEIGHT_KEY)) || MIDI_PANEL_DEFAULT; } catch { return MIDI_PANEL_DEFAULT; }
+  });
+  const [midiPanelResizing, setMidiPanelResizing] = useState(false);
+  /** A drag on the panel's top edge: up makes it taller, down shorter, within MIDI_PANEL_MIN and 70% of the window. */
+  const resizeMidiPanel = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const startY = event.clientY;
+    const startHeight = midiPanelHeight;
+    let height = startHeight;
+    setMidiPanelResizing(true);
+    const move = (moveEvent: PointerEvent) => {
+      height = Math.round(Math.min(window.innerHeight * 0.7, Math.max(MIDI_PANEL_MIN, startHeight + startY - moveEvent.clientY)));
+      setMidiPanelHeight(height);
+    };
+    const end = () => {
+      setMidiPanelResizing(false);
+      try { localStorage.setItem(MIDI_PANEL_HEIGHT_KEY, String(height)); } catch { /* It opens at the default height next time. */ }
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  }, [midiPanelHeight]);
   const [statsOpen, setStatsOpen] = useState(false);
   /** The slot that a random photo is downloading for; the dice on its button spin. */
   const [randomLoading, setRandomLoading] = useState<ImageSlot | null>(null);
@@ -114,6 +159,8 @@ export default function App() {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [openRequest, setOpenRequest] = useState<OpenRequest | null>(null);
   const [videoDialogOpen, setVideoDialogOpen] = useState(false);
+  /** The slot that the photo search dialog loads into, while it is open. */
+  const [searchSlot, setSearchSlot] = useState<ImageSlot | null>(null);
   /** The video being made in the background: its file, progress from 0 to 1, and the controller that stops it. */
   const [videoJob, setVideoJob] = useState<{ path: string; progress: number; controller: AbortController } | null>(null);
   const videoJobRef = useRef(videoJob);
@@ -164,14 +211,12 @@ export default function App() {
     if (!engine || sceneGeneration !== sceneGenerationRef.current) return;
     try {
       /**
-       * A new second image starts a full fade: dissolve by brightness, over the
-       * whole blend range, from image A. Replacing a second image keeps the settings.
+       * A new second image shows at once: the crossfade goes all the way to
+       * image B, with no range. Replacing a second image keeps the settings.
        */
       if (slot === 1 && !imagesRef.current[1] && !fromScene) {
         const blend = engine.params.imageBlend;
-        Object.assign(blend, { on: true, low: blend.min, high: blend.max });
-        engine.startRangeNow("imageBlend");
-        engine.state.blendMode = 1;
+        Object.assign(blend, { on: false, value: blend.max });
         setRevision((value) => value + 1);
       }
       engine.setImage(source, slot);
@@ -183,19 +228,19 @@ export default function App() {
       setStartScreen(false);
       if (message) showStatus(message);
     } catch (error) {
-      showError(`Could not use that image. ${String(error)}`);
+      showError(`Could not use that image or video. ${String(error)}`);
     }
   }, [engine, sceneGeneration, setSlotImage, showError, showStatus]);
 
   const randomImage = useCallback(async (slot: ImageSlot = 0) => {
-    showStatus(slot === 0 ? "Loading a random image…" : "Loading a random second image…", 0);
+    showStatus(slot === 0 ? "Loading a random photo…" : "Loading a random photo for source B…", 0);
     setRandomLoading(slot);
     try {
       const loaded = await loadRandomImage();
       setImage(loaded.image, { message: loaded.title, blob: loaded.blob, name: loaded.title }, slot);
     } catch (error) {
       const reason = error instanceof Error && error.message.startsWith("The image service") ? error.message : "Check the internet connection.";
-      showError(`Could not load a random image. ${reason}`, { label: "Retry", run: () => void randomImageRef.current(slot) });
+      showError(`Could not load a random photo. ${reason}`, { label: "Retry", run: () => void randomImageRef.current(slot) });
     } finally {
       setRandomLoading(null);
     }
@@ -203,6 +248,20 @@ export default function App() {
   /** The Retry button calls the latest copy, so it uses the engine as it is now. */
   const randomImageRef = useRef(randomImage);
   randomImageRef.current = randomImage;
+
+  /** Downloads the photo picked in the search dialog, 4K wide. */
+  const loadSearchedPhoto = useCallback(async (photo: CommonsPhoto, slot: ImageSlot) => {
+    showStatus(`Loading ${photo.label}…`, 0);
+    setRandomLoading(slot);
+    try {
+      const loaded = await loadCommonsPhoto(photo.title);
+      setImage(loaded.image, { message: loaded.title, blob: loaded.blob, name: loaded.title }, slot);
+    } catch (error) {
+      showError(`Could not load the photo. ${error instanceof Error ? error.message : "Check the internet connection."}`);
+    } finally {
+      setRandomLoading(null);
+    }
+  }, [setImage, showError, showStatus]);
 
   const openImage = useCallback((slot: ImageSlot = 0) => {
     if (isTauri()) setOpenRequest({ kind: "image", slot });
@@ -221,7 +280,7 @@ export default function App() {
       const loaded = await loadImageFile(path);
       setImage(loaded.image, { message: name, blob: loaded.blob, name }, slot);
     } catch (error) {
-      showError(`Could not open the image. ${String(error)}`);
+      showError(`Could not open the image or video. ${String(error)}`);
     }
   }, [setImage, showError, showStatus]);
 
@@ -237,6 +296,18 @@ export default function App() {
     engine.clearSecondImage();
     setSlotImage(1, null);
   }, [engine, setSlotImage]);
+
+  /** Removes one of two images. When A goes, B moves up to take its place. */
+  const removeImage = useCallback((slot: ImageSlot) => {
+    const second = imagesRef.current[1];
+    if (!engine) return;
+    if (slot === 0) {
+      if (!imagesRef.current[0] || !second) return;
+      engine.setImage(second.source, 0);
+      setSlotImage(0, second);
+    }
+    removeSecondImage();
+  }, [engine, removeSecondImage, setSlotImage]);
 
   /** Takes the pattern off a slot and shows the image that was under it again. */
   const restoreUnderImage = useCallback((slot: ImageSlot) => {
@@ -389,7 +460,7 @@ export default function App() {
     if (!engine || !isTauri()) return false;
     const [first, second] = imagesRef.current;
     if (!first) {
-      showError("There is no image to save in the scene.");
+      showError("There is no source image or video to save in the scene.");
       return false;
     }
     const sceneMedia = async (image: SlotImage): Promise<SceneImage> => {
@@ -399,7 +470,7 @@ export default function App() {
       if (image.videoFile) return { type: image.videoFile.mime, video: image.videoFile.id };
       const blob = image.blob ?? (image.source instanceof HTMLCanvasElement
         ? await new Promise<Blob | null>((resolve) => (image.source as HTMLCanvasElement).toBlob(resolve, "image/png")) : null);
-      if (!blob) throw new Error("There is no image to save in the scene.");
+      if (!blob) throw new Error("There is no source image or video to save in the scene.");
       return blobToSceneImage(blob);
     };
     const current = scenePathRef.current;
@@ -450,11 +521,12 @@ export default function App() {
       const image = await loadSceneMedia(images.image);
       const image2 = images.image2 ? await loadSceneMedia(images.image2) : null;
       if (generation !== sceneGenerationRef.current) return;
+      engine.releaseHolds();
       Object.assign(engine.params, params);
       Object.assign(engine.state, state, { paused: engine.state.paused, locks: engine.state.locks });
       const name = path.split(/[\\/]/).pop();
       setImage(image.source, { message: name, blob: image.blob, videoFile: image.videoFile, name });
-      if (image2) setImage(image2.source, { blob: image2.blob, videoFile: image2.videoFile, name: `${name} (second image)`, fromScene: true }, 1);
+      if (image2) setImage(image2.source, { blob: image2.blob, videoFile: image2.videoFile, name: `${name} (source B)`, fromScene: true }, 1);
       else removeSecondImage();
       setRevision((value) => value + 1);
       setScenePath(path);
@@ -471,6 +543,13 @@ export default function App() {
     setRevision((value) => value + 1);
     showStatus("New random settings");
   }, [engine, showStatus]);
+
+  /** A group's dice: new random settings for that group only. */
+  const randomizeOneGroup = useCallback((group: GroupKey) => {
+    if (!engine) return;
+    randomizeGroup(engine.params, engine.state, group);
+    setRevision((value) => value + 1);
+  }, [engine]);
 
   /** Nudge: every unlocked value moves a little, up or down at random. */
   const nudge = useCallback(() => {
@@ -491,7 +570,7 @@ export default function App() {
   /**
    * Undo and redo for the settings. A change counts as a step when it is
    * complete: about four times a second, but never while a mouse button is
-   * down, so a whole slider drag is one step.
+   * down or a MIDI knob turns, so a whole slider drag or knob turn is one step.
    */
   const historyRef = useRef<SettingsHistory | null>(null);
   useEffect(() => {
@@ -505,7 +584,7 @@ export default function App() {
     window.addEventListener("pointerup", up, true);
     window.addEventListener("pointercancel", up, true);
     window.addEventListener("blur", up);
-    const id = window.setInterval(() => { if (!pointerDown) history.commit(); }, 250);
+    const id = window.setInterval(() => { if (!pointerDown && !midi.turning) history.commit(); }, 250);
     return () => {
       window.clearInterval(id);
       window.removeEventListener("pointerdown", down, true);
@@ -515,6 +594,15 @@ export default function App() {
       historyRef.current = null;
     };
   }, [engine]);
+
+  /** MIDI knobs move the engine's sliders; learn mode tells which knob it mapped. */
+  useEffect(() => {
+    if (!engine) return;
+    return midi.attach(engine, (device, control, keys) => {
+      const [channel, number] = control.split(":");
+      showStatus(`${device}: control ${number} (channel ${channel}) now moves ${keys.map((key) => engine.params[key].label).join(", ")}`, 4000);
+    });
+  }, [engine, showStatus]);
 
   const undo = useCallback(() => {
     if (historyRef.current?.undo()) setRevision((value) => value + 1);
@@ -569,6 +657,7 @@ export default function App() {
       engine.stop();
       engine.bypassedGroups.clear();
       engine.soloGroup = null;
+      engine.releaseHolds();
       Object.assign(engine.params, createParams());
       Object.assign(engine.state, createPlayState());
       resetEffects(engine.params, engine.state);
@@ -706,7 +795,7 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (aboutOpen || openRequest || videoDialogOpen || event.altKey || event.metaKey) return;
+      if (aboutOpen || openRequest || videoDialogOpen || searchSlot !== null || event.altKey || event.metaKey) return;
       /* The start screen takes only Ctrl+O; the other keys act on a scene that is not shown yet. */
       if (startScreen) {
         if (event.ctrlKey && event.key.toLowerCase() === "o") {
@@ -740,11 +829,15 @@ export default function App() {
       const run: Record<string, () => void> = {
         f: () => void toggleFullscreen(),
         f11: () => void toggleFullscreen(),
-        escape: () => void exitFullscreen(),
+        /* Esc plays the ranges that MIDI stopped; with none stopped, it leaves full screen. */
+        escape: () => {
+          if (engine?.anyHeld) engine.resumeAll();
+          else void exitFullscreen();
+        },
         h: () => setPanelOpen((open) => !open),
+        m: toggleMidiPanel,
         p: () => setStatsOpen((open) => !open),
         " ": event.shiftKey ? stop : togglePause,
-        r: () => void randomImage(),
         o: () => void openImage(),
         x: randomize,
         n: nudge,
@@ -759,7 +852,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [aboutOpen, closeScene, exitFullscreen, nudge, openImage, openRequest, videoDialogOpen, openScene, randomImage, randomize, redo, savePng, saveScene, startScreen, stop, toggleFullscreen, togglePause, undo]);
+  }, [aboutOpen, closeScene, engine, exitFullscreen, nudge, openImage, openRequest, videoDialogOpen, searchSlot, openScene, randomize, redo, savePng, saveScene, startScreen, stop, toggleFullscreen, toggleMidiPanel, togglePause, undo]);
 
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
@@ -790,7 +883,7 @@ export default function App() {
       id: "file",
       label: "File",
       items: [
-        { label: "Open Image…", icon: <ColorFolder size={18} />, shortcut: "O", run: () => void openImage() },
+        { label: "Open Image or Video…", icon: <ColorFolder size={18} />, shortcut: "O", run: () => void openImage() },
         { label: "Open Scene…", icon: <FilmSlate size={15} />, shortcut: "Ctrl+O", run: () => void openScene() },
         "separator",
         { label: "Save Scene", disabled: startScreen, icon: <FloppyDisk size={15} />, shortcut: "Ctrl+S", run: () => void saveScene() },
@@ -817,6 +910,7 @@ export default function App() {
       items: [
         { label: panelOpen ? "Hide Settings" : "Show Settings", icon: <SlidersHorizontal size={15} />, shortcut: "H", run: () => setPanelOpen((open) => !open) },
         { label: statsOpen ? "Hide Performance" : "Show Performance", icon: <Gauge size={15} />, shortcut: "P", run: () => setStatsOpen((open) => !open) },
+        { label: midiPanelOpen ? "Hide MIDI Panel" : "Show MIDI Panel", icon: <MidiIcon size={15} />, shortcut: "M", disabled: startScreen, run: toggleMidiPanel },
         "separator",
         { label: "Full Screen", icon: <ArrowsOut size={15} />, shortcut: "F", run: () => void toggleFullscreen() }
       ]
@@ -849,12 +943,15 @@ export default function App() {
           <TitleBar
             updateAvailable={Boolean(startupUpdate)}
             onAbout={() => setAboutOpen(true)}
-            fileName={scenePath ? scenePath.split(/[\\/]/).pop() ?? "Untitled" : "Untitled"}
+            fileName={startScreen ? null : scenePath?.split(/[\\/]/).pop() ?? "Untitled Scene"}
             dirty={dirty}
           />
           <MenuBar menus={menus} />
           {!startScreen && (
             <Toolbar
+              paused={paused}
+              onTogglePause={togglePause}
+              onStop={stop}
               onSaveScene={() => void saveScene()}
               statsOpen={statsOpen}
               onToggleStats={() => setStatsOpen((open) => !open)}
@@ -864,19 +961,34 @@ export default function App() {
         </>
       )}
       <div className="workspace">
-        {startScreen && <StartScreen onNewScene={() => setStartScreen(false)} onOpenScene={() => void openScene()} />}
+        {startScreen && <StartScreen onNewScene={() => { engine?.releaseHolds(); setStartScreen(false); }} onOpenScene={() => void openScene()} />}
+        {/* The left panel: the Source section, then the Designer (the effects). */}
         {engine && !startScreen && panelOpen && (
-          <SourcePanel
-            key={revision}
+          <ControlPanel
+            /* A change outside the panel (Randomize, Undo, a new scene) makes a new panel, so all of its state reloads. */
+            key={`controls-${revision}`}
             engine={engine}
-            images={images}
-            randomLoading={randomLoading}
-            onOpenImage={(slot) => void openImage(slot)}
-            onRandomImage={(slot) => void randomImage(slot)}
-            onPatternImage={loadPattern}
-            onRemoveSecondImage={removeSecondImage}
-            onSwapImages={swapImages}
-            onRestoreImage={restoreUnderImage}
+            openGroup={openGroup}
+            onOpenGroup={setOpenGroup}
+            onRandomize={randomize}
+            onNudge={nudge}
+            onReset={() => setResetAsked(true)}
+            onRandomizeGroup={randomizeOneGroup}
+            hasVideo={images.some((image) => image?.source instanceof HTMLVideoElement)}
+            source={(
+              <SourcePanel
+                engine={engine}
+                images={images}
+                randomLoading={randomLoading}
+                onOpenImage={(slot) => void openImage(slot)}
+                onRandomImage={(slot) => void randomImage(slot)}
+                onSearchImage={setSearchSlot}
+                onPatternImage={loadPattern}
+                onRemoveImage={removeImage}
+                onSwapImages={swapImages}
+                onRestoreImage={restoreUnderImage}
+              />
+            )}
           />
         )}
         <main className={`stage ${cursorIdle ? "cursor-idle" : ""}`}>
@@ -918,25 +1030,20 @@ export default function App() {
               <button onClick={() => videoJob.controller.abort()}>Stop</button>
             </div>
           )}
-          {dragging && <div className="drop-overlay">Drop the image here</div>}
+          {dragging && <div className="drop-overlay">Drop the image or video here</div>}
         </main>
-        {engine && !startScreen && panelOpen && (
-          <ControlPanel
-            /* A change outside the panel (Randomize, Undo, a new scene) makes a new panel, so all of its state reloads. */
-            key={`controls-${revision}`}
-            engine={engine}
-            openGroup={openGroup}
-            onOpenGroup={setOpenGroup}
-            paused={paused}
-            onRandomize={randomize}
-            onNudge={nudge}
-            onTogglePause={togglePause}
-            onStop={stop}
-            onReset={() => setResetAsked(true)}
-            hasVideo={images.some((image) => image?.source instanceof HTMLVideoElement)}
-          />
-        )}
       </div>
+      {/* The MIDI panel slides up at the bottom of the window, under the panels and the picture, which get shorter to make room. */}
+      {engine && !startScreen && panelOpen && (
+        <div
+          className={`midi-panel ${midiPanelOpen ? "open" : ""} ${midiPanelResizing ? "resizing" : ""}`}
+          style={{ height: midiPanelOpen ? midiPanelHeight : 0 }}
+          inert={!midiPanelOpen}
+        >
+          <div className="midi-panel-grip" onPointerDown={resizeMidiPanel} title="Drag to make the MIDI panel taller or shorter" />
+          <MidiPanel engine={engine} open={midiPanelOpen} onClose={toggleMidiPanel} />
+        </div>
+      )}
       {closeAsked && (
         <ConfirmDialog
           title="Save changes before closing?"
@@ -966,12 +1073,22 @@ export default function App() {
       {openRequest && (
         <OpenDialog
           kind={openRequest.kind}
-          title={openRequest.kind === "scene" ? "Open Scene" : openRequest.slot === 1 ? "Open Second Image" : "Open Image"}
+          title={openRequest.kind === "scene" ? "Open Scene" : openRequest.slot === 1 ? "Open Image or Video for Source B" : "Open Image or Video"}
           onCancel={() => setOpenRequest(null)}
           onOpen={(path) => {
             setOpenRequest(null);
             if (openRequest.kind === "scene") void openScenePath(path);
             else void openImagePath(path, openRequest.slot);
+          }}
+        />
+      )}
+      {searchSlot !== null && (
+        <ImageSearchDialog
+          letter={searchSlot === 0 ? "A" : "B"}
+          onCancel={() => setSearchSlot(null)}
+          onPick={(photo) => {
+            setSearchSlot(null);
+            void loadSearchedPhoto(photo, searchSlot);
           }}
         />
       )}

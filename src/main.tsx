@@ -15,6 +15,16 @@ document.addEventListener("contextmenu", (event) => {
   event.preventDefault();
 });
 
+/**
+ * While Ctrl is held, the body has the class "ctrl-held": over a group
+ * header or a setting name, the mouse shows a no-entry cursor, because a
+ * Ctrl + click there bypasses instead of acting.
+ */
+const watchCtrl = (event: KeyboardEvent) => document.body.classList.toggle("ctrl-held", event.ctrlKey);
+window.addEventListener("keydown", watchCtrl, true);
+window.addEventListener("keyup", watchCtrl, true);
+window.addEventListener("blur", () => document.body.classList.remove("ctrl-held"));
+
 /** Sends an error to the app's error output (the dev log); outside the app it does nothing. */
 const logError = (message: string) => {
   invoke("log_frontend_error", { message }).catch(() => { /* Not running in the app. */ });

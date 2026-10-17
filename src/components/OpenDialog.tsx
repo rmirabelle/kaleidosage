@@ -153,7 +153,7 @@ const IMAGE_TYPES: Record<string, string> = {
 };
 
 const TEXT: Record<OpenKind, { hint: string; empty: string; startPlace: PlaceKind }> = {
-  image: { hint: "Choose a PNG, JPEG, WebP, GIF, BMP or AVIF image, or an MP4, M4V, WebM, MOV or AVI video.", empty: "This folder has no images.", startPlace: "pictures" },
+  image: { hint: "Choose a PNG, JPEG, WebP, GIF, BMP or AVIF image, or an MP4, M4V, WebM, MOV or AVI video.", empty: "This folder has no images or videos.", startPlace: "pictures" },
   scene: { hint: "Choose a Kaleido Sage scene (.ksage).", empty: "This folder has no scenes.", startPlace: "documents" }
 };
 
@@ -1194,7 +1194,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
                 )}
                 {ready?.kind === "scene" && (
                   <>
-                    <dt>Images</dt>
+                    <dt>Sources</dt>
                     <dd>{ready.image2 ? "2 (fades between them)" : "1"}</dd>
                     <dt>Effects on</dt>
                     <dd>{ready.effects.length > 0 ? ready.effects.join(", ") : "None"}</dd>

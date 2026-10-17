@@ -1,13 +1,18 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { CaretRight, DotsSixVertical, LockSimple, LockSimpleOpen, X } from "@phosphor-icons/react";
+import { createPortal } from "react-dom";
+import { CaretRight, DiceFive, DotsSixVertical, Eye, EyeSlash, LockSimple, LockSimpleOpen, Play, Trash, Wind, X } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
-import { addEffect, createParams, removeEffect, type GroupKey, type ParamKey, type PlayState } from "../engine/params";
+import { GROUP_PARAMS, addEffect, createParams, removeEffect, type GroupKey, type ParamKey, type PlayState } from "../engine/params";
+import { midi } from "../lib/midi";
+import { BLUR_KEYS, BLUR_MASKS, EFFECT_NAMES, FOLD_MODES, KALEIDOSCOPE_KEYS, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
 import type { BlurMask, FoldMode, FxStep, MapMode, ShapeStep, SmearShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
+import { ConfirmDialog } from "./ConfirmDialog";
+import { ContextMenu } from "./ContextMenu";
 import { Dropdown } from "./Dropdown";
-import { MediaIcon } from "./MediaIcon";
-import { PowerIcon } from "./PowerIcon";
+import { MidiIcon } from "./MidiIcon";
 import { RedDice } from "./RedDice";
+import { useMidi } from "./useMidi";
 import { useParamRows } from "./useParamRows";
 
 interface Props {
@@ -15,66 +20,19 @@ interface Props {
   /** The open group; only one group is open at a time. All groups start closed. */
   openGroup: string | null;
   onOpenGroup: (group: string | null) => void;
-  paused: boolean;
   onRandomize: () => void;
   /** Moves every unlocked value a little (see nudgeParams). */
   onNudge: () => void;
-  onTogglePause: () => void;
-  onStop: () => void;
   onReset: () => void;
+  /** New random settings for one group only (its dice button). */
+  onRandomizeGroup: (group: GroupKey) => void;
   /** True when a source is a video; only then does the video crossfade choice show. */
   hasVideo: boolean;
+  /** The Source section (see SourcePanel), at the top of the panel, above the Designer. */
+  source: ReactNode;
 }
 
-/** Radial mode uses segments; the tile modes use a tile size instead. */
-const KALEIDOSCOPE_KEYS: Record<FoldMode, ParamKey[]> = {
-  0: ["segments", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl"],
-  1: ["tileSize", "panX", "panY", "centerX", "centerY", "rotation", "zoom", "twirl"],
-  2: ["tileSize", "panX", "panY", "centerX", "centerY", "rotation", "zoom", "twirl"]
-};
-/** The sliders each blur mask uses; the others are hidden. */
-const BLUR_KEYS: Record<BlurMask, ParamKey[]> = {
-  0: ["blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY"],
-  1: ["blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY"],
-  2: ["blurAmount", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle"],
-  3: ["blurAmount", "blurMaskLevel", "blurMaskSoft"],
-  4: ["blurAmount", "blurMaskLevel", "blurMaskSoft"],
-  5: ["blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY"]
-};
-const BLUR_MASKS = [
-  [0, "Circle, sharp center"], [1, "Circle, blurred center"], [2, "Gradient"], [3, "Bright areas"], [4, "Dark areas"], [5, "Noise"]
-] as const;
-/** The sliders each kind of warp uses; the others are hidden. */
-const WARP_KEYS: Record<WarpType, ParamKey[]> = {
-  0: ["warpAmount", "warpScale", "warpMarble", "warpDetail", "warpFlow"],
-  1: ["warpAmount", "warpScale", "warpFlow", "warpCenterX", "warpCenterY"],
-  2: ["warpAmount", "warpScale", "warpAngle", "warpFlow"],
-  3: ["warpAmount", "warpScale", "warpFlow", "warpCenterX", "warpCenterY"],
-  4: ["warpAmount", "warpScale", "warpFlow", "warpCenterX", "warpCenterY"],
-  5: ["warpAmount", "warpCellSize", "warpCellAngle", "warpFlow"]
-};
-const WARP_TYPES = [[0, "Noise"], [1, "Ripple"], [2, "Waves"], [3, "Swirl"], [4, "Bulge and pinch"], [5, "Cells"]] as const;
-/** The sliders each complex map uses; the others are hidden. */
-const MAP_KEYS: Record<MapMode, ParamKey[]> = {
-  0: [],
-  1: ["mapPower", "mapAngle", "mapScale", "mapMix"],
-  2: ["mapPointX", "mapPointY", "mapScale", "mapMix"],
-  3: ["mapPointX", "mapPointY", "mapSteps", "mapScale", "mapMix"],
-  4: ["mapTwist", "mapAngle", "mapScale", "mapMix"],
-  5: ["mapScale", "mapMix"],
-  6: ["mapSpeed", "tunnelTwist", "mapAngle", "mapFog", "mapScale", "mapMix"],
-  7: ["mapArms", "mapAngle", "mapScale", "mapMix"]
-};
 const TRAIL_KEYS: ParamKey[] = ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"];
-/** The sliders each time smear pattern uses; Angle only turns the Linear and Sweep patterns. */
-const SMEAR_KEYS: Record<SmearShape, ParamKey[]> = {
-  0: ["smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade"],
-  1: ["smearAmount", "smearDelay", "smearBands", "smearRestart", "smearFade"],
-  2: ["smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade"],
-  3: ["smearAmount", "smearDelay", "smearBands", "smearRestart", "smearFade"],
-  4: ["smearAmount", "smearDelay", "smearBands", "smearRestart", "smearFade"]
-};
-const SMEAR_SHAPES = [[0, "Linear"], [1, "Rings"], [2, "Sweep"], [3, "Brightness"], [4, "Noise"]] as const;
 const CONTOUR_KEYS: ParamKey[] = ["contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady"];
 const RELIEF_KEYS: ParamKey[] = ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"];
 const CAMERA_KEYS: ParamKey[] = ["cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth"];
@@ -83,20 +41,22 @@ const FINISH_KEYS: ParamKey[] = ["sharpen", "sharpenRadius", "overlayOpacity", "
 const LAYER_BLENDS = [
   [0, "Normal"], [1, "Screen"], [2, "Multiply"], [3, "Overlay"], [4, "Difference"], [5, "Lighten"], [6, "Darken"], [7, "Add"]
 ] as const;
-const FOLD_MODES = [[0, "Radial"], [1, "Triangle tiles"], [2, "Hexagon tiles"]] as const;
-const MAP_MODES = [[1, "Power (z^n)"], [2, "Möbius"], [3, "Julia"], [4, "Log spiral"], [5, "Sine"], [6, "Tunnel"], [7, "Seamless spiral"]] as const;
 const TRAIL_MODES = [[1, "Mix (smoky)"], [2, "Lighten (glowing)"]] as const;
 /** How the camera's land goes on past the picture. Mirror is seamless for every picture; Tile is seamless only for a picture that tiles. */
 const CAMERA_REPEATS = [[0, "Mirror"], [1, "Tile"], [2, "None"]] as const;
 
-/** The Effects panel, docked at the right: play buttons, then the effect groups. */
-export function ControlPanel({ engine, openGroup, onOpenGroup, paused, onRandomize, onNudge, onTogglePause, onStop, onReset, hasVideo }: Props) {
+/** The left panel: the Source section, then the Designer: its toolbar, the scene length, and the effect groups. */
+export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, hasVideo, source }: Props) {
   const row = useParamRows(engine);
+  /** True while MIDI holds any range: the Effects header then shows a play button that plays them all again. */
+  const [anyHeld, setAnyHeld] = useState(engine.anyHeld);
+  useEffect(() => engine.onParamChange(() => setAnyHeld(engine.anyHeld)), [engine]);
   const [videoCrossfade, setVideoCrossfade] = useState(engine.state.videoCrossfade);
-  /** Opening a group closes the others; clicking the open group closes it. */
-  const accordion = (key: string) => ({
+  /** Opening a group closes the others; clicking the open group closes it. Each group's dice randomizes that group. */
+  const accordion = (key: GroupKey) => ({
     open: openGroup === key,
-    onToggle: () => onOpenGroup(openGroup === key ? null : key)
+    onToggle: () => onOpenGroup(openGroup === key ? null : key),
+    onRandomize: () => onRandomizeGroup(key)
   });
 
   /**
@@ -256,55 +216,10 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, paused, onRandomi
 
   return (
     <aside className="side-panel control-panel">
-      <div className="side-panel-header panel-header-bar">
-        <h2 className="side-panel-title">Designer</h2>
-      </div>
-      {/* Two toolbars: Random all and Clear all at the left; Stop and Play or Pause as icons at the right. Stop is off while paused. */}
-      <div className="panel-toolbars">
-        <div className="panel-buttons">
-          <button className="panel-button" onClick={onRandomize}><RedDice size={16} /> Random all</button>
-          <button
-            className="panel-button text-only"
-            onClick={onNudge}
-            title="Nudge (N): move every unlocked value a little, up or down at random. Values at 0 stay at 0."
-          >
-            Nudge
-          </button>
-          <button
-            className="panel-button text-only"
-            onClick={onReset}
-            title="Remove every effect from the list and set its controls back to no effect. Locked groups stay as they are."
-          >
-            Clear all
-          </button>
-        </div>
-        <div className="panel-buttons">
-          <button
-            className="panel-button icon"
-            onClick={onStop}
-            disabled={paused}
-            title="Stop (Shift+Space): pause, and go back to the start"
-            aria-keyshortcuts="Shift+Space"
-            aria-label="Stop"
-          >
-            <MediaIcon kind="stop" size={17} />
-          </button>
-          <button
-            className="panel-button icon"
-            onClick={onTogglePause}
-            title={paused ? "Play (Space)" : "Pause (Space)"}
-            aria-label={paused ? "Play" : "Pause"}
-          >
-            {paused ? <MediaIcon kind="play" size={17} /> : <MediaIcon kind="pause" size={17} />}
-          </button>
-        </div>
-      </div>
-
-      {/* The cycle: first and always in view, because its timing affects every effect below. */}
+      {/* The scene length (the cycle): at the very top and always in view, because its timing affects the sources and every effect below. A video source adds its crossfade after the slider. */}
       <div className="panel-root-row">
-        {row("cycle")}
-        {hasVideo && (
-          <label className="panel-check-row" title="A source video fades its end into its start, so it never jumps. Off, the video starts again at the start of each loop. A seamless video export always crossfades.">
+        {row.with("cycle", { after: hasVideo && (
+          <label className="panel-check-inline" title="A source video fades its end into its start, so it never jumps. Off, the video starts again at the start of each loop. A seamless video export always crossfades.">
             <input
               type="checkbox"
               checked={videoCrossfade}
@@ -313,26 +228,67 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, paused, onRandomi
                 setVideoCrossfade(event.target.checked);
               }}
             />
-            Crossfade the video's loop
+            Crossfade
           </label>
-        )}
+        ) })}
       </div>
+      {source}
+      {/* The FX card: its title bar (Random all, Nudge, Clear all), then the effect groups, which scroll. */}
+      <section className="panel-card fx-card">
+        <div className="side-panel-header panel-header-bar">
+          <h2 className="side-panel-title">FX</h2>
+          {/* While MIDI holds any range: a play button that plays them all again (Esc does the same). */}
+          {anyHeld && (
+            <button
+              className="midi-play panel-title-play"
+              title="MIDI stopped some ranges. Click (or press Esc) to play them all again."
+              aria-label="Play every range that MIDI stopped"
+              aria-keyshortcuts="Escape"
+              onClick={() => engine.resumeAll()}
+            >
+              <Play size={12} weight="fill" />
+            </button>
+          )}
+          {/* "All:" Random, Nudge and Clear as icon buttons, at the right of the title. Stop and Play are in the app toolbar. */}
+          <span className="panel-title-all">All:</span>
+          <div className="panel-buttons panel-title-buttons">
+            <button className="panel-button icon" onClick={onRandomize} title="Random all (X): new random settings for every unlocked effect" aria-label="Random all">
+              <RedDice size={16} />
+            </button>
+            <button
+              className="panel-button icon"
+              onClick={onNudge}
+              title="Nudge all (N): move every unlocked value a little, up or down at random. Values at 0 stay at 0."
+              aria-label="Nudge all"
+            >
+              <Wind size={16} />
+            </button>
+            <button
+              className="panel-button icon"
+              onClick={onReset}
+              title="Clear all: remove every effect from the list and set its controls back to no effect. Locked groups stay as they are."
+              aria-label="Clear all"
+            >
+              <Trash size={16} />
+            </button>
+          </div>
+        </div>
 
-      {/* Only the effect groups scroll; the title, the toolbars and the cycle stay in view. */}
-      <div className="panel-scroll">
-        <StageList
-          label="Effects"
-          order={fxOrder}
-          onReorder={(next) => {
-            engine.state.fxOrder = next;
-            setFxOrder(next);
-          }}
-          onRemove={remove}
-          render={(key, grip) => groups[key](grip)}
-        />
-        {fxOrder.length === 0 && <p className="stage-empty">No effects yet. Add one to start.</p>}
-        <AddEffectMenu options={EFFECT_NAMES.filter(([step]) => !fxOrder.includes(step))} onAdd={add} />
-      </div>
+        {/* Only the effect groups scroll; the scene length, the Source section and the FX title stay in view. */}
+        <div className="panel-scroll">
+          <StageList
+            order={fxOrder}
+            onReorder={(next) => {
+              engine.state.fxOrder = next;
+              setFxOrder(next);
+            }}
+            onRemove={remove}
+            render={(key, grip) => groups[key](grip)}
+          />
+          {fxOrder.length === 0 && <p className="stage-empty">No effects yet. Add one to start.</p>}
+          <AddEffectMenu options={EFFECT_NAMES.filter(([step]) => !fxOrder.includes(step))} onAdd={add} />
+        </div>
+      </section>
     </aside>
   );
 }
@@ -344,19 +300,12 @@ interface Grip {
   onRemove?: () => void;
 }
 
-/** The effects in the Add effect menu, in menu order, with the names their groups show. */
-const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
-  ["kaleidoscope", "Kaleidoscope"], ["map", "Algorithm"], ["warp", "Warp"], ["blur", "Blur"], ["trails", "Trails"],
-  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["camera", "Camera"], ["finish", "Final effects"]
-];
-
 /**
- * One stage of groups under a small label. A group is dragged by its grip:
+ * The list of effect groups. A group is dragged by its grip:
  * while the mouse moves, the group takes the place whose middle the pointer
  * has passed, and the new order is sent at once, so the picture changes live.
  */
-function StageList<K extends string>({ label, order, onReorder, onRemove, render }: {
-  label: string;
+function StageList<K extends string>({ order, onReorder, onRemove, render }: {
   order: K[];
   onReorder: (order: K[]) => void;
   onRemove?: (key: K) => void;
@@ -400,7 +349,6 @@ function StageList<K extends string>({ label, order, onReorder, onRemove, render
 
   return (
     <>
-      <div className="stage-label">{label}</div>
       <div ref={listRef} className="stage-list">
         {order.map((key) => (
           <div key={key} data-key={key} className={`stage-item ${dragging === key ? "dragging" : ""}`}>
@@ -419,10 +367,12 @@ function StageList<K extends string>({ label, order, onReorder, onRemove, render
  * it on again restores them. Closed contents stay in the page, so they can
  * slide, but "inert" keeps the keyboard out of them.
  */
-function Group({ engine, group, title, grip, open, onToggle, onEnable, children }: {
+function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomize, children }: {
   engine?: Engine;
   group?: GroupKey;
   title: string;
+  /** New random settings for this group only. */
+  onRandomize?: () => void;
   /** Called when the group's power button turns the group on. */
   onEnable?: () => void;
   /** Set for a group that can be dragged to a new place in its stage. */
@@ -468,12 +418,42 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, children 
     };
   }, [engine, group, releaseBypass]);
   const showing = enabled && !bypassed;
+  const { mapped } = useMidi();
+  const groupKeys = group ? GROUP_PARAMS[group] : [];
+  const midiMapped = groupKeys.some((key) => mapped.has(key));
+  /** True while a MIDI control moves a slider of this group, and for 1 second after: the title lights orange. */
+  const [touched, setTouched] = useState(false);
+  const groupKeyList = groupKeys.join(",");
+  useEffect(() => {
+    if (!groupKeyList) return;
+    const keys = groupKeyList.split(",");
+    let timer = 0;
+    const stop = midi.onTouch((key) => {
+      if (!keys.includes(key)) return;
+      setTouched(true);
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setTouched(false), 1000);
+    });
+    return () => {
+      stop();
+      window.clearTimeout(timer);
+    };
+  }, [groupKeyList]);
+  /** Where the header's right-click menu opened, while it is open. */
+  const [menu, setMenu] = useState<{ left: number; top: number } | null>(null);
+  /** The section's MIDI assignments, while the dialog that asks to remove them is open. */
+  const [removing, setRemoving] = useState<ReturnType<typeof midi.mappings> | null>(null);
 
   return (
-    <section className={`panel-group ${showing ? "" : "disabled"} ${open ? "open" : ""}`}>
+    <section className={`panel-group ${showing ? "" : "disabled"} ${open ? "open" : ""} ${touched ? "midi-touched" : ""}`}>
       <header
         className="panel-group-header"
-        title={engine && group ? "Ctrl+hold to bypass; Ctrl+Shift+hold to solo this effect" : undefined}
+        title={engine && group ? "Ctrl+hold to bypass; Ctrl+Shift+hold to solo this effect. Right-click to enable or disable, lock, or remove MIDI." : undefined}
+        onContextMenu={(event) => {
+          if (!engine || !group) return;
+          event.preventDefault();
+          setMenu({ left: event.clientX, top: event.clientY });
+        }}
         onPointerDownCapture={(event) => {
           suppressClick.current = false;
           if (!engine || !group || !event.ctrlKey || event.button !== 0) return;
@@ -498,40 +478,85 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, children 
           suppressClick.current = false;
         }}
       >
-        {engine && group && (
-          <button
-            type="button"
-            role="switch"
-            className="panel-group-toggle"
-            aria-checked={showing}
-            aria-label={`${title} on`}
-            title={enabled ? `${title} is on. Click to turn it off.` : `${title} is off. Click to turn it on.`}
-            onClick={() => {
-              const next = !enabled;
-              engine.state.groups[group] = next;
-              setEnabled(next);
-              if (next) onEnable?.();
-            }}
-          >
-            <PowerIcon on={showing} size={18} />
-          </button>
-        )}
         <button className="panel-group-title" onClick={onToggle} aria-expanded={open}>
           <CaretRight size={12} weight="bold" className="panel-group-caret" />
           {title}{solo && <span className="panel-group-solo">Solo</span>}
         </button>
-        {engine && group && (
+        {/* Lock and Remove MIDI are in the header's right-click menu; a locked group shows its lock. */}
+        {locked && (
+          <span className="panel-group-lock locked" title="Locked against Randomize. Right-click the header to unlock.">
+            <LockSimple size={13} weight="fill" />
+          </span>
+        )}
+        {/* The empty part of the header opens and closes the group too. */}
+        <span className="panel-group-fill" onClick={onToggle} aria-hidden="true" />
+        {/* A locked group cannot be randomized, so its dice hides. */}
+        {engine && group && onRandomize && !locked && (
           <button
-            className={`panel-group-lock ${locked ? "locked" : ""}`}
-            aria-label={`Lock ${title.toLowerCase()} against Randomize`}
-            aria-pressed={locked}
-            onClick={() => {
-              engine.state.locks[group] = !locked;
-              setLocked(!locked);
-            }}
+            className="panel-group-dice"
+            aria-label={`Random settings for ${title.toLowerCase()}`}
+            title={`New random settings for ${title.toLowerCase()} only`}
+            onClick={onRandomize}
           >
-            {locked ? <LockSimple size={13} weight="fill" /> : <LockSimpleOpen size={13} />}
+            <DiceFive size={14} />
           </button>
+        )}
+        {menu && engine && group && createPortal(
+          <ContextMenu
+            position={menu}
+            onClose={() => setMenu(null)}
+            items={[
+              {
+                /* Turning a group on also gives it settings that show (see onEnable). */
+                label: enabled ? "Disable" : "Enable",
+                icon: enabled ? <EyeSlash size={14} /> : <Eye size={14} />,
+                run: () => {
+                  engine.state.groups[group] = !enabled;
+                  setEnabled(!enabled);
+                  if (!enabled) onEnable?.();
+                }
+              },
+              {
+                label: locked ? "Unlock" : "Lock (no random)",
+                icon: locked ? <LockSimpleOpen size={14} /> : <LockSimple size={14} weight="fill" />,
+                run: () => {
+                  engine.state.locks[group] = !locked;
+                  setLocked(!locked);
+                }
+              },
+              { label: "Remove MIDI mappings…", icon: <MidiIcon size={14} />, disabled: !midiMapped, run: () => setRemoving(midi.mappings(groupKeys)) }
+            ]}
+          />,
+          document.body
+        )}
+        {removing && engine && createPortal(
+          <ConfirmDialog
+            title={`Remove MIDI from ${title}?`}
+            message={removing.length === 1 ? "This MIDI control stops moving its slider:" : `These ${removing.length} MIDI controls stop moving their sliders:`}
+            details={(
+              <ul className="confirm-dialog-list">
+                {removing.map(({ device, control, key }) => {
+                  const [channel, number] = control.split(":");
+                  /* A slider that only some submodes show says so, and whether the current one hides it. */
+                  const note = submodeNote(key);
+                  const where = note ? ` (${isShown(key, engine.state) ? "" : "hidden now, "}${note})` : "";
+                  return (
+                    <li key={`${device}|${control}|${key}`}>
+                      <strong>{engine.params[key].label}{where}</strong>
+                      <span>Control {number}, channel {channel}, {device}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            confirmLabel="Remove"
+            onCancel={() => setRemoving(null)}
+            onConfirm={() => {
+              midi.clearAll(groupKeys);
+              setRemoving(null);
+            }}
+          />,
+          document.body
         )}
         {grip?.onRemove && (
           <button
@@ -566,11 +591,23 @@ export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, onCha
   onChange?: (mode: PlayState[K]) => void;
 }) {
   const [mode, setMode] = useState<PlayState[K]>(engine.state[stateKey]);
+  /**
+   * A submode menu marks the other choices that show sliders with MIDI
+   * controls that this choice hides: those controls do nothing here. The
+   * menu button shows the mark too, while any other choice has it.
+   */
+  const { mapped } = useMidi();
+  const submode = SUBMODES.find((each) => each.stateKey === stateKey);
+  const hiddenHere = (value: PlayState[K]) => Boolean(submode) &&
+    (submode!.keys[value as number] ?? []).some((key) => mapped.has(key) && !(submode!.keys[mode as number] ?? []).includes(key));
+  const marks = new Set(options.map(([value]) => value).filter((value) => value !== mode && hiddenHere(value)));
   return (
     <div className="panel-select-row">
       <Dropdown
         value={mode}
         options={options}
+        marks={marks}
+        mark={<span className="dropdown-mark" title="MIDI controls move sliders that only this choice shows"><MidiIcon size={11} /></span>}
         onChange={(next) => {
           engine.state[stateKey] = next;
           setMode(next);

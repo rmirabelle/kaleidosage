@@ -102,7 +102,7 @@ export function AboutDialog({ version, initialUpdateInfo, onClose, beforeInstall
           <div className="about-dialog-copy">
             <h2 id="about-title">Kaleido Sage</h2>
             <div className="about-version">Version {version || "—"}</div>
-            <p>Any image, in endless motion.</p>
+            <p>Any image or video, in endless motion.</p>
             <span>by Robert Mirabelle</span>
             <UpdateSection state={state} onCheck={() => void check()} onDownload={() => void download()} />
           </div>

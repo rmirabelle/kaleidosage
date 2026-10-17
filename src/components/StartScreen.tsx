@@ -1,4 +1,4 @@
-import { FilePlus, FolderOpen } from "@phosphor-icons/react";
+import { FolderOpen, Plus } from "@phosphor-icons/react";
 
 interface Props {
   onNewScene: () => void;
@@ -15,7 +15,7 @@ export function StartScreen({ onNewScene, onOpenScene }: Props) {
       <div className="start-above">
         <div className="start-icon"><div className="start-glow" /><img src="/app-icon.png" alt="" /></div>
       </div>
-      <h1>Any image, in endless motion.</h1>
+      <h1>Any image or video, in endless motion.</h1>
       <div className="start-below">
         <p className="start-copy">
           Turn any image into a moving kaleidoscope.<br />
@@ -24,7 +24,7 @@ export function StartScreen({ onNewScene, onOpenScene }: Props) {
         </p>
         <div className="start-actions">
           <button className="button primary large" onClick={onNewScene}>
-            <FilePlus size={19} weight="bold" /> New Scene
+            <Plus size={19} weight="bold" /> New Scene
           </button>
           <button className="button secondary large" onClick={onOpenScene}>
             <FolderOpen size={19} weight="bold" /> Open Scene

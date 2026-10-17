@@ -55,39 +55,94 @@ now; a later fix can give the hash a period equal to the loop length.
 
 ## 2. MIDI knobs
 
-Rule: one knob sets one slider's position. Nothing else is mappable.
+Rule: a knob or fader sets slider positions. Nothing else is mappable.
+One control can move several sliders at once (a macro): each slider goes
+to the same place along its own span. One slider can also have several
+controls.
 
-Transport: try the Web MIDI API in the webview first (no Rust). If WebView2
-blocks it with a permission prompt we cannot answer, use the `midir` crate
-in `src-tauri` and emit `midi` events with channel, control number and
-value. Decide this with a one-hour test before any UI work.
+Transport: the Web MIDI API in the webview (no Rust). Tested 2026-10-16:
+WebView2 gives access with no prompt and lists the Launchkey MK4 61. Built
+in `src/lib/midi.ts`.
 
 Mapping model:
 
 ```ts
 /** Per controller name, so the LaunchKey map survives a restart and another device starts clean. */
-type MidiMap = Record<string /* device name */, Record<string /* "channel:cc" */, ParamKey>>;
+type MidiMap = Record<string /* device name */, Record<string /* "channel:cc" */, ParamKey[]>>;
 ```
 
 Stored in `localStorage`, like the export options and the Open dialog state.
 
-Learn: a MIDI button in the Designer header turns on learn mode. The user
-clicks a slider, then turns a knob; the map is written, and learn mode
-turns off. A mapped row shows a small dot by its name; a right click on the
-dot clears the map.
+Learn: each slider has a MIDI button (a connector icon) at the left of the slider.
+A click waits for the next knob or fader move and assigns that control to
+the slider. The icon is lit while a control is assigned. An assignment
+only adds: a control can move several sliders (a macro: assign the same
+control to each slider in turn), and a slider can have several controls.
+The icon's tooltip names the slider's controls and the other sliders they
+move. While the button waits, an assigned slider shows a remove button; a
+right-click on the lit icon removes the controls too.
 
-Knob to value:
+MIDI panel (`src/components/MidiPanel.tsx`): the MIDI button in the
+Designer header opens a panel at the bottom of the window; the panels and
+the picture above get shorter. It lists every mapping, one line per
+control and setting, with a MIDI icon that lights while the control sends:
+"Launchkey MK4 61, Knob 1 <-> Kaleidoscope: Pan X". The setting is a menu
+of every mappable setting under group headings, so a row can be pointed at
+another setting (`midi.remap`); the X removes the row (`midi.unmapOne`);
+Clear all removes every mapping. A Launchkey's controls 21 to 28 on
+channel 1 show as knobs 1 to 8; other controls show their CC number.
 
-- 0 to 127 maps onto the slider's position space (`toSlider`), then
-  `fromSlider`, so a log slider feels even under the knob.
-- Range off: the knob sets `value`.
-- Range on: the knob slides the whole range, with `shiftRange`, so the two
-  handles keep their distance. This is still "position" control; the knob
-  never sets a handle on its own. (Open point: or ignore the knob while the
-  range is on.)
-- Soft takeover: the slider does not move until the knob's value passes
-  through the slider's current position (within two steps). A knob that
-  rests far from the slider never causes a jump.
+Knob to value. Every knob move is relative: the first step only takes the
+slider over where it is, so nothing jumps and a small turn is never lost.
+After that the value moves by value scaling (`scaledStep`): the knob's
+travel left in the direction it turns is spread over the value's travel
+left in that direction, so the knob's end (0 or 127) always takes the
+value to its end. (A soft takeover was tried first: the slider waited
+until the knob passed its value, so after a restart a small turn did
+nothing. A plain one-to-one move was tried next: after a takeover near the
+knob's end, the knob ran out before the value reached its end.)
+
+- Range off: the value moves along the whole slider (`moveValue`). It is
+  not rounded to the slider's steps, and a log slider moves in equal ratios.
+- Range on: the knob moves the playhead, not the range, between the
+  handles (`movePlayhead`). The range stops playing for this value (its handles
+  stay, and its clock runs on underneath), and the slider's MIDI icon
+  becomes an orange play button. A click on play curves the value back
+  into the playing range over 2 seconds (`RESUME_SECONDS`). The curve aims
+  at where the range will be when the curve ends, and arrives with the
+  range's own speed, so the value joins the range with no jump and no
+  change of speed. See `Engine.holdRange`, `resumeRange` and `planResume`.
+- Ctrl + knob on a range: the playhead moves along the whole slider. When
+  it passes a handle, the handle
+  moves with it, so the range grows (`pushPlayhead`, `Engine.stretchRange`).
+  The handles from before are kept: the play button gives them back, then
+  the value curves into the range as the user set it.
+- Submodes: a mapping belongs to a setting, not to a submode, so a shared
+  setting (Pan X in every Kaleidoscope submode) follows the control in each
+  submode. A setting that the current submode hides (Tile size in Radial)
+  has no effect there, so the control leaves it alone (`isShown` in
+  `src/engine/submodes.ts`). The submode menu marks the other choices that
+  show such a mapped setting with the orange MIDI icon, and the section's
+  MIDI dialog says "only in ..." for it.
+- Smooth steps: a 7-bit control has only 128 places, and it sends them at
+  uneven times. The shown value follows the control like a critically
+  damped spring (`Engine.follow`, `MIDI_SMOOTH_SECONDS` = 0.1 s): it speeds
+  up and slows down smoothly, as a playing range does. Straight lines from
+  step to step were tried first; they still looked jumpy, because their
+  speed changed at every step.
+- 14-bit controls: set a knob or fader to 14-bit in Novation Components.
+  It then sends a coarse part (control 0 to 31) and a fine part (32
+  higher), which make one of 16384 places. The app finds such pairs by
+  themselves; nothing needs to be set in the app.
+- An endless knob in absolute mode stops sending at 0 and at 127, so it
+  cannot move the slider further that way. Set it to Relative in Novation
+  Components (Encoders custom mode, Advanced, Behaviour). It then sends 64 +
+  n for n steps right and 64 - n for n steps left (`relativeMove`, one step
+  is 1/127 of the travel). The app finds such a control by itself: a
+  control that sends positions never repeats a value, but a relative one
+  turned one way does (65, 65, 65). It keeps the finding across restarts
+  (`kaleidosage.midi-relative`), and drops it when the control sends a
+  value far from 64 again.
 
 Row update: the engine gets a `onParamChange(key)` listener. The MIDI code
 writes the param and fires it; `ParamRow` subscribes and copies the new
@@ -125,6 +180,6 @@ interface Shot { kind: Ease; from: number; to: number; startClock: number; secon
 1. Pure curve presets (Explode, Implode, Early, Late, Pulse): one afternoon,
    no structural change, tests in `params.test.ts`.
 2. `onParamChange` listener and row subscription.
-3. MIDI transport test, then learn mode, knob mapping, soft takeover.
+3. MIDI transport test, then learn mode, knob mapping, relative knob moves.
 4. Random and Drunk.
 5. Pads and shots.

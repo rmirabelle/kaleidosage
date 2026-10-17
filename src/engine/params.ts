@@ -241,12 +241,12 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * handles. It also sets the speed of everything that moves (see
    * REFERENCE_CYCLE).
    */
-  cycle: { label: "Loop length", min: 5, max: 90, step: 1, value: REFERENCE_CYCLE, unit: " s" },
+  cycle: { label: "Length", min: 5, max: 90, step: 1, value: REFERENCE_CYCLE, unit: " s" },
   warpOpacity: opacitySpec,
   mapOpacity: opacitySpec,
   foldOpacity: opacitySpec,
   /** 0 shows the first image, 1 the second. With a range, the picture fades back and forth between them. */
-  imageBlend: { label: "Image blend", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 1, on: false },
+  imageBlend: { label: "Crossfade", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 1, on: false },
   warpAmount: { label: "Warp strength", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.05, high: 0.3, on: false },
   warpScale: { label: "Warp size", min: 0.2, max: 8, step: 0.01, value: 1.5, drift: "wave", low: 1, high: 2.5, on: false },
   /** Cells warp: the size of each cell, in tenths of the screen height. Larger makes larger cells. */
@@ -286,8 +286,8 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   /** Tile modes only: screen heights between neighbor cell centers. */
   tileSize: { label: "Tile size", min: 0.1, max: 2, step: 0.01, value: 0.5, drift: "wave", low: 0.3, high: 0.8, on: false },
   /** The center is a fraction of the screen size: -0.5 and 0.5 are the screen edges. */
-  centerX: { label: "Center X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.3, high: 0.3, on: false },
-  centerY: { label: "Center Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.25, high: 0.25, on: false },
+  centerX: { label: "Offset X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.3, high: 0.3, on: false },
+  centerY: { label: "Offset Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.25, high: 0.25, on: false },
   rotation: { label: "Rotation", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   zoom: { label: "Zoom", min: 0.2, max: 4, step: 0.01, value: 1, drift: "wave", low: 0.6, high: 1.8, on: false },
   panX: { label: "Pan X", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.35, high: 0.35, on: false },
@@ -347,7 +347,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   contourHue: { label: "Color", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   contourOpacity: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.4, high: 1, on: false },
   contourLines: { label: "Density", min: 2, max: 80, step: 1, value: 16, drift: "wave", low: 8, high: 30, on: false },
-  contourWidth: { label: "Line width", min: 0.5, max: 100, step: 0.1, value: 1.5, unit: "px", drift: "wave", low: 1, high: 4, on: false },
+  contourWidth: { label: "Line width", min: 0.5, max: 12, step: 0.1, value: 1.5, unit: "px", drift: "wave", low: 1, high: 4, on: false },
   contourResolution: { label: "Resolution", min: 0, max: 6, step: 0.1, value: 4, drift: "wave", low: 2, high: 5, on: false },
   /** Smooth: how much of the last frame's contour brightness each 1/60 s keeps, so the lines glide instead of jumping. */
   contourSteady: { label: "Smooth", min: 0, max: 0.98, step: 0.01, value: 0.8, drift: "wave", low: 0.5, high: 0.9, on: false },
@@ -597,7 +597,7 @@ export const NUDGE = 0.025;
  * its steps. A range moves both handles, each on its own way; a whole-circle
  * turn keeps its full range, and other angles wrap around the circle. A
  * value at 0 stays 0, so an effect that is off stays off. As with
- * Randomize, the loop length, the image blend and the layer opacities stay;
+ * Randomize, the scene length, the image blend and the layer opacities stay;
  * menus and colors do not change.
  */
 export function nudgeParams(params: Params, state: PlayState, random = Math.random) {
@@ -715,6 +715,33 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   camera: ["cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth"],
   finish: ["sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel"]
 };
+
+/** The play-state settings of each group that Randomize sets: a group's own Randomize changes these too. */
+const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
+  warp: ["warpType"],
+  map: ["mapMode"],
+  kaleidoscope: ["foldMode"],
+  blur: ["blurMask"],
+  trails: ["trailColor"],
+  smear: ["smearShape"],
+  contours: ["contourTone", "contourBlend"],
+  camera: ["skyColor", "cameraBlend", "cameraRepeat"],
+  finish: ["overlayColor"]
+};
+
+/**
+ * Randomize for one group: new random settings for its controls and its
+ * modes, the same as Randomize would give them. Everything else stays, and
+ * so do the effect list and the group's power button. It works on copies,
+ * then takes only the group's part.
+ */
+export function randomizeGroup(params: Params, state: PlayState, group: GroupKey) {
+  const scratchParams = structuredClone(params);
+  const scratchState = structuredClone(state);
+  randomizeAll(scratchParams, scratchState);
+  for (const key of GROUP_PARAMS[group]) Object.assign(params[key], scratchParams[key]);
+  for (const key of GROUP_STATE[group] ?? []) Object.assign(state, { [key]: scratchState[key] });
+}
 
 /** The chance that Randomize puts each effect in the list. Blur looks the least good, so Randomize leaves it out. */
 const EFFECT_CHANCE: Record<FxStep, number> = {

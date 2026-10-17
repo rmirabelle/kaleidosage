@@ -1,8 +1,7 @@
 /**
- * The on/off icon of an effect group: the power symbol on a round button.
- * On, it is green (the button gives it a soft green glow; see
- * .panel-group-toggle); off, it is plain gray. It is drawn in its own
- * colors, so it keeps them wherever it sits.
+ * The on/off icon of an effect group (in the MIDI destination dialog): the
+ * power symbol on a round button. On, it is green; off, it is plain gray.
+ * It is drawn in its own colors, so it keeps them wherever it sits.
  */
 export function PowerIcon({ on, size = 16 }: { on: boolean; size?: number }) {
   const color = on ? "#3ddc6e" : "#8c91a1";

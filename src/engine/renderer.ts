@@ -359,10 +359,15 @@ export class KaleidoRenderer {
     const gl = canvas.getContext("webgl2", { antialias: false, alpha: false });
     if (!gl) throw new Error("WebGL 2 is not available on this computer.");
     this.gl = gl;
-    /* A lost context (the graphics driver gave up, often on a frame that took too long) leaves the picture blank; say so in the console. */
+    /**
+     * A lost context (the graphics driver gave up, often on a frame that took
+     * too long) leaves the picture blank; say so in the console. A renderer
+     * that dispose gave back (a preview, a video export) loses its context
+     * on purpose, so that loss says nothing.
+     */
     canvas.addEventListener("webglcontextlost", (event) => {
       event.preventDefault();
-      console.error("The WebGL context was lost. The picture stops until the app is restarted.");
+      if (!this.disposed) console.error("The WebGL context was lost. The picture stops until the app is restarted.");
     });
     this.kaleido = this.createProgram(KALEIDO_SHADER);
     this.blur = this.createProgram(BLUR_SHADER);
@@ -1184,10 +1189,14 @@ export class KaleidoRenderer {
 
   /** Gives the GPU context back at once, so a short-lived renderer does not wait for garbage collection. */
   dispose() {
+    this.disposed = true;
     this.stopVideo(0);
     this.stopVideo(1);
     this.gl.getExtension("WEBGL_lose_context")?.loseContext();
   }
+
+  /** True after dispose: the context is lost on purpose. */
+  private disposed = false;
 
   /** Applies the final effects to the picture and draws it on the screen. */
   private drawFinish(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { CaretDown } from "@phosphor-icons/react";
 
@@ -7,13 +7,16 @@ import { CaretDown } from "@phosphor-icons/react";
  * option, and a list in the toolbar dropdown look. The list opens on the page
  * body, as wide as the button, below it or above it when there is no room.
  * Keys: Up and Down move, Enter or Space picks, Esc closes. A click outside
- * closes it.
+ * closes it. The options in "marks" show "mark" after their name; the
+ * button shows it too while any marked option is not the picked one.
  */
-export function Dropdown<V extends string | number>({ value, options, onChange, label }: {
+export function Dropdown<V extends string | number>({ value, options, onChange, label, marks, mark }: {
   value: V;
   options: readonly (readonly [V, string])[];
   onChange: (value: V) => void;
   label?: string;
+  marks?: ReadonlySet<V>;
+  mark?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -103,6 +106,7 @@ export function Dropdown<V extends string | number>({ value, options, onChange, 
         }}
       >
         <span>{options[selectedIndex]?.[1]}</span>
+        {marks && [...marks].some((option) => option !== value) && mark}
         <CaretDown size={11} weight="bold" className="dropdown-caret" />
       </button>
       {open && createPortal(
@@ -123,6 +127,7 @@ export function Dropdown<V extends string | number>({ value, options, onChange, 
               onClick={() => pick(index)}
             >
               {text}
+              {marks?.has(option) && mark}
             </button>
           ))}
         </div>,

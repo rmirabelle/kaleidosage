@@ -1,8 +1,65 @@
-import { PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, hexToRgb, liveValue, rangeClock, startRangeAt, type GroupKey, type ParamKey } from "./params";
+import { NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, defaultValue, hexToRgb, liveValue, rangeClock, startRangeAt, type GroupKey, type ParamKey } from "./params";
 import { KaleidoRenderer, type ImageSource } from "./renderer";
 import { copyVideo, cueVideo, releaseVideo, seekVideo, syncVideo, videoLoopPlan, videoLoopTime } from "./video";
 
 const DEGREES = Math.PI / 180;
+
+/**
+ * How fast a single value glides to a new slider or knob value: the time
+ * for about two thirds of the way. A slider moves in steps and a MIDI knob
+ * has 128 places, so without the glide the picture jumps from step to step.
+ */
+const GLIDE_SECONDS = 0.03;
+
+/**
+ * How smoothly a value follows a MIDI control (see follow): about the time
+ * the value takes to catch up with the control. A control has only 128
+ * places and sends them at uneven times, so the value follows it like a
+ * damped spring: it speeds up and slows down smoothly, as a playing range
+ * does, and never jumps from step to step.
+ */
+const MIDI_SMOOTH_SECONDS = 0.1;
+
+/** A value that follows a MIDI control: where it is and how fast it moves (per second). */
+interface Follower {
+  value: number;
+  speed: number;
+}
+
+/**
+ * One frame of a critically damped spring from "current" toward "target"
+ * over "elapsed" seconds (the smooth damp of Game Programming Gems 4). It
+ * changes "follower.speed" and returns the new value. It never overshoots
+ * by much and always arrives with a smooth speed.
+ */
+function springStep(follower: Follower, current: number, target: number, elapsed: number) {
+  const omega = 2 / MIDI_SMOOTH_SECONDS;
+  const x = omega * elapsed;
+  const decay = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+  const change = current - target;
+  const push = (follower.speed + omega * change) * elapsed;
+  follower.speed = (follower.speed - omega * push) * decay;
+  return target + (change + push) * decay;
+}
+/** A held range plays on again over this time: the held value curves into the playing range (see planResume). */
+const RESUME_SECONDS = 2;
+
+/**
+ * The way back into a playing range (see planResume): a curve from "from"
+ * (at rest) to "to", where the range will be at the end, arriving with the
+ * range's own speed there ("slope", per second), over "seconds" from
+ * "start".
+ */
+interface Resume {
+  from: number;
+  to: number;
+  slope: number;
+  start: number;
+  seconds: number;
+}
+
+/** The short way from one angle to another, in degrees from -180 to 180. */
+const turnBetween = (from: number, to: number) => (((to - from) % 360) + 540) % 360 - 180;
 
 /** A fully saturated color at "degrees" around the color wheel (0 red, 120 green, 240 blue), as red, green and blue from 0 to 1. */
 function fullHue(degrees: number): [number, number, number] {
@@ -20,6 +77,8 @@ export class Engine {
   readonly state = createPlayState();
   /** Momentary comparison only: never serialized, saved, or added to Undo history. */
   readonly bypassedGroups = new Set<GroupKey>();
+  /** Settings held at no effect while Ctrl + mouse is down on their name (see live). Momentary only, like bypassedGroups. */
+  readonly bypassedParams = new Set<ParamKey>();
   /** Temporarily isolate one effect, without changing its saved enable state. */
   soloGroup: GroupKey | null = null;
   private readonly renderer: KaleidoRenderer;
@@ -206,8 +265,210 @@ export class Engine {
    */
   warpFlowOffset = 0;
 
+  /** The glided value of each single value that moves (see GLIDE_SECONDS and glide). */
+  private readonly glided = new Map<ParamKey, number>();
+
+  /**
+   * Ranges that a MIDI control holds (see holdRange): the shown value and
+   * its speed, the control's value it follows, and, after a click on play,
+   * the way back into the playing range.
+   */
+  private readonly holds = new Map<ParamKey, Follower & { target: number; resume?: Resume; original?: { low?: number; high?: number } }>();
+  /** Single values that follow a MIDI control (see follow). */
+  private readonly followers = new Map<ParamKey, Follower>();
+  /** Real seconds of frames so far, for the holds. */
+  private realTime = 0;
+
+  /**
+   * A MIDI control moves a range's playhead: the value goes to "target" (a
+   * value between the range's handles) and stays there. The range stops
+   * playing for this value, but its handles stay, and its clock runs on
+   * underneath. The first move starts from where the playhead is, at the
+   * playhead's own speed, and slows smoothly to the control, so there is no
+   * jump and no sudden stop. The value stays held until resumeRange (the
+   * slider's play button). A move while it curves back holds it again from
+   * where it is.
+   */
+  holdRange(key: ParamKey, target: number) {
+    const hold = this.holds.get(key);
+    const wasHeld = this.isHeld(key);
+    if (hold) Object.assign(hold, { target, resume: undefined });
+    else this.holds.set(key, { value: this.live(key), speed: this.rangeSpeed(key, 0), target });
+    if (!wasHeld) this.paramChanged(key);
+  }
+
+  /** The value a MIDI control set for a held range, or undefined when nothing holds it. */
+  heldValue(key: ParamKey) {
+    return this.isHeld(key) ? this.holds.get(key)!.target : undefined;
+  }
+
+  /** The range's value "later" real seconds from now (nothing moves while paused). */
+  private rangeAhead(key: ParamKey, later: number) {
+    const moving = this.state.paused ? 0 : later;
+    return liveValue(this.params[key], { ...this.state, time: this.state.time + moving * this.speed, clock: this.state.clock + moving });
+  }
+
+  /** How fast the range moves "later" real seconds from now, per second. */
+  private rangeSpeed(key: ParamKey, later: number) {
+    return this.distance(this.params[key], this.rangeAhead(key, later - 0.01), this.rangeAhead(key, later + 0.01)) / 0.02;
+  }
+
+  /** True while a MIDI control holds the range's value (see holdRange), and it is not on its way back. */
+  isHeld(key: ParamKey) {
+    const hold = this.holds.get(key);
+    return Boolean(hold && !hold.resume);
+  }
+
+  /**
+   * Ends every MIDI hold at once, with no curve: each range plays normally
+   * again, and its row shows its MIDI icon. For a scene that opens or
+   * starts, so an old hold never carries into it.
+   */
+  releaseHolds() {
+    const keys = [...this.holds.keys()];
+    this.holds.clear();
+    this.followers.clear();
+    for (const key of keys) this.paramChanged(key);
+  }
+
+  /** True while a MIDI control holds any range (see isHeld). */
+  get anyHeld() {
+    return [...this.holds.keys()].some((key) => this.isHeld(key));
+  }
+
+  /** Plays every held range again, each on its own curve (see resumeRange). */
+  resumeAll() {
+    for (const key of [...this.holds.keys()]) this.resumeRange(key);
+  }
+
+  /** Plays a held range again: the value curves into the playing range (see planResume). */
+  resumeRange(key: ParamKey) {
+    const hold = this.holds.get(key);
+    if (!hold || hold.resume) return;
+    /* A range that Ctrl + MIDI stretched gets its handles back first, so it plays as the user set it. */
+    if (hold.original) {
+      Object.assign(this.params[key], hold.original);
+      hold.original = undefined;
+    }
+    hold.resume = this.planResume(key, hold.value);
+    this.paramChanged(key);
+  }
+
+  /**
+   * Ctrl + MIDI moved a held range's handles (see pushPlayhead). The handles
+   * from before the first move are kept, so play gives them back.
+   */
+  stretchRange(key: ParamKey, low: number, high: number) {
+    const hold = this.holds.get(key);
+    const param = this.params[key];
+    if (!hold || !param.on) return;
+    hold.original ??= { low: param.low, high: param.high };
+    Object.assign(param, { low, high });
+    this.paramChanged(key);
+  }
+
+  /**
+   * The way back from a held value into the playing range. The range plays
+   * on during the curve, so the curve does not aim at where the range is
+   * now: it aims at where the range will be when the curve ends, and it
+   * arrives there with the range's own speed. The value then leaves the
+   * hold at rest and joins the range with no jump and no change of speed.
+   */
+  private planResume(key: ParamKey, from: number): Resume {
+    const param = this.params[key];
+    const seconds = RESUME_SECONDS;
+    const to = from + this.distance(param, from, this.rangeAhead(key, seconds));
+    return { from, to, slope: this.rangeSpeed(key, seconds), start: this.realTime, seconds };
+  }
+
+  /**
+   * A MIDI control set the value: the shown value follows it like a damped
+   * spring (see MIDI_SMOOTH_SECONDS), until it is there and at rest.
+   */
+  follow(key: ParamKey) {
+    if (this.followers.has(key)) return;
+    this.followers.set(key, { value: this.glided.get(key) ?? this.params[key].value, speed: 0 });
+  }
+
+  /**
+   * The value a parameter has now. A range gives its moving value; a single
+   * value that can have a range gives its glided value. A value that never
+   * moves (a count such as Warp detail) does not glide.
+   */
   live(key: ParamKey) {
-    return liveValue(this.params[key], this.state);
+    /* A bypassed setting has no effect: its value with no effect, or its start-up default. */
+    if (this.bypassedParams.has(key)) return NO_EFFECT[key] ?? defaultValue(key);
+    const param = this.params[key];
+    const value = liveValue(param, this.state);
+    if (!param.drift) return value;
+    /* A range keeps its last value here, so a range turned off glides from where it was. */
+    const shown = this.glided.get(key);
+    if (param.on || shown === undefined) {
+      const held = param.on ? this.holds.get(key)?.value ?? value : value;
+      this.glided.set(key, held);
+      return held;
+    }
+    return shown;
+  }
+
+  /** From one value to another; for an angle that turns all the way round, the short way round the circle. */
+  private distance(param: { drift?: string; min: number; max: number }, from: number, to: number) {
+    return param.drift === "spin" && param.min === 0 && param.max === 360 ? turnBetween(from, to) : to - from;
+  }
+
+  /**
+   * Moves each glided value toward its slider value, by real time, so it
+   * glides while paused too. An angle that turns all the way round glides
+   * the short way round the circle.
+   */
+  private glide(elapsed: number) {
+    this.realTime += elapsed;
+    const part = 1 - Math.exp(-elapsed / GLIDE_SECONDS);
+    for (const [key, current] of this.glided) {
+      const param = this.params[key];
+      if (param.on) continue;
+      const circle = param.drift === "spin" && param.min === 0 && param.max === 360;
+      const wrap = (value: number) => circle ? ((value % 360) + 360) % 360 : value;
+      /* A value that follows a MIDI control moves like a spring, until it is there and at rest. */
+      const follower = this.followers.get(key);
+      if (follower) {
+        const value = springStep(follower, current, current + this.distance(param, current, param.value), elapsed);
+        const settled = Math.abs(this.distance(param, value, param.value)) < param.step * 1e-3 && Math.abs(follower.speed) < param.step * 1e-2;
+        if (settled) this.followers.delete(key);
+        this.glided.set(key, wrap(settled ? param.value : value));
+        continue;
+      }
+      const distance = this.distance(param, current, param.value);
+      const next = Math.abs(distance) < param.step * 1e-3 ? param.value : current + distance * part;
+      this.glided.set(key, wrap(next));
+    }
+    /* Held ranges: the held value follows the control like a spring; after a click on play, it curves back into the playing range. */
+    for (const [key, hold] of this.holds) {
+      const param = this.params[key];
+      /* The range was turned off: the hold ends, and the row shows its MIDI icon again. */
+      if (!param.on) {
+        this.holds.delete(key);
+        this.paramChanged(key);
+        continue;
+      }
+      if (!hold.resume) {
+        hold.value = springStep(hold, hold.value, hold.value + this.distance(param, hold.value, hold.target), elapsed);
+        continue;
+      }
+      const { from, to, slope, start, seconds } = hold.resume;
+      const t = (this.realTime - start) / seconds;
+      if (t >= 1) {
+        this.holds.delete(key);
+        continue;
+      }
+      /* A curve that leaves "from" at rest and reaches "to" with the range's speed (cubic Hermite). */
+      const t2 = t * t;
+      const t3 = t2 * t;
+      const value = from + (to - from) * (3 * t2 - 2 * t3) + slope * seconds * (t3 - t2);
+      /* Its speed is kept, so a MIDI move during the curve goes on from it with no sudden stop. */
+      if (elapsed > 0) hold.speed = (value - hold.value) / elapsed;
+      hold.value = value;
+    }
   }
 
   /** Starts a range from its start handle now, for example the fade of a new second image. */
@@ -261,6 +522,23 @@ export class Engine {
     return () => { this.frameListeners.delete(listener); };
   }
 
+  private readonly paramListeners = new Set<(key: ParamKey) => void>();
+
+  /**
+   * Calls the listener when something outside the sliders (a MIDI knob)
+   * changes a parameter, so its row can show the new value. Returns a
+   * function that removes it.
+   */
+  onParamChange(listener: (key: ParamKey) => void) {
+    this.paramListeners.add(listener);
+    return () => { this.paramListeners.delete(listener); };
+  }
+
+  /** Tells the rows that "key" changed (see onParamChange). */
+  paramChanged(key: ParamKey) {
+    for (const listener of this.paramListeners) listener(key);
+  }
+
   /** A PNG of the next frame. It is read right after drawing, while the canvas still holds it. */
   snapshot(): Promise<Blob | null> {
     return new Promise((resolve) => this.snapshotWaiters.push(resolve));
@@ -298,6 +576,7 @@ export class Engine {
     const elapsed = Math.min(interval / 1000, 0.1);
     this.lastTime = now;
     const animated = this.step(elapsed);
+    this.glide(elapsed);
 
     const paused = this.state.paused;
     for (const slot of [0, 1] as const) {
