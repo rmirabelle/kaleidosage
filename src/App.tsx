@@ -17,6 +17,7 @@ import { MenuBar, type Menu } from "./components/MenuBar";
 import { OpenDialog, type OpenKind } from "./components/OpenDialog";
 import { StatsOverlay } from "./components/StatsOverlay";
 import { TitleBar } from "./components/TitleBar";
+import { DocumentTab } from "./components/DocumentTab";
 import { Toolbar } from "./components/Toolbar";
 import { Engine } from "./engine/engine";
 import { createParams, createPlayState, nudgeParams, randomizeGroup, randomizeParams, resetEffects, type GroupKey } from "./engine/params";
@@ -924,6 +925,8 @@ export default function App() {
     }
   ];
 
+  const sceneFileName = scenePath?.split(/[\\/]/).pop() ?? "Untitled Scene";
+
   return (
     <div
       className={`app ${fullscreen ? "fullscreen" : ""}`}
@@ -943,7 +946,7 @@ export default function App() {
           <TitleBar
             updateAvailable={Boolean(startupUpdate)}
             onAbout={() => setAboutOpen(true)}
-            fileName={startScreen ? null : scenePath?.split(/[\\/]/).pop() ?? "Untitled Scene"}
+            fileName={startScreen ? null : sceneFileName}
             dirty={dirty}
           />
           <MenuBar menus={menus} />
@@ -991,47 +994,51 @@ export default function App() {
             )}
           />
         )}
-        <main className={`stage ${cursorIdle ? "cursor-idle" : ""}`}>
-          <canvas ref={canvasRef} onDoubleClick={() => void toggleFullscreen()} />
-          {engine && statsOpen && <StatsOverlay engine={engine} />}
-          {fullscreen && (
-            /* In full screen the title bar and toolbar are gone; these buttons show while the mouse moves. */
-            <div className={`fullscreen-controls ${cursorIdle && !panelOpen ? "hidden" : ""}`}>
-              <button
-                className={panelOpen ? "active" : ""}
-                onClick={() => setPanelOpen((open) => !open)}
-                title="Settings (H)"
-                aria-label="Settings"
-                aria-pressed={panelOpen}
-              >
-                <SlidersHorizontal size={18} />
-              </button>
-              <button onClick={() => void exitFullscreen()} title="Exit full screen (Esc)" aria-label="Exit full screen">
-                <ArrowsIn size={18} />
-              </button>
-            </div>
-          )}
-          {fatalError && <div className="fatal-error selectable">{fatalError}</div>}
-          {status && (
-            <div className={`status-toast ${status.error ? "error" : ""}`} role={status.error ? "alert" : "status"}>
-              <span className={status.error ? "selectable" : undefined}>{status.message}</span>
-              {status.action && <button onClick={status.action.run}>{status.action.label}</button>}
-              {status.error && (
-                <button className="status-close" onClick={() => setStatus(null)} aria-label="Close" title="Close">
-                  <X size={13} weight="bold" />
+        {/* The picture under its document tab; full screen hides the tab. */}
+        <div className="document">
+          {!fullscreen && !startScreen && <DocumentTab fileName={sceneFileName} path={scenePath} dirty={dirty} onClose={() => void closeScene()} />}
+          <main className={`stage ${cursorIdle ? "cursor-idle" : ""}`}>
+            <canvas ref={canvasRef} onDoubleClick={() => void toggleFullscreen()} />
+            {engine && statsOpen && <StatsOverlay engine={engine} />}
+            {fullscreen && (
+              /* In full screen the title bar and toolbar are gone; these buttons show while the mouse moves. */
+              <div className={`fullscreen-controls ${cursorIdle && !panelOpen ? "hidden" : ""}`}>
+                <button
+                  className={panelOpen ? "active" : ""}
+                  onClick={() => setPanelOpen((open) => !open)}
+                  title="Settings (H)"
+                  aria-label="Settings"
+                  aria-pressed={panelOpen}
+                >
+                  <SlidersHorizontal size={18} />
                 </button>
-              )}
-            </div>
-          )}
-          {videoJob && (
-            <div className="export-job" role="status">
-              <span className="export-job-label">Making {fileNameOf(videoJob.path)}… {Math.floor(videoJob.progress * 100)}%</span>
-              <span className="export-job-bar"><i style={{ width: `${videoJob.progress * 100}%` }} /></span>
-              <button onClick={() => videoJob.controller.abort()}>Stop</button>
-            </div>
-          )}
-          {dragging && <div className="drop-overlay">Drop the image or video here</div>}
-        </main>
+                <button onClick={() => void exitFullscreen()} title="Exit full screen (Esc)" aria-label="Exit full screen">
+                  <ArrowsIn size={18} />
+                </button>
+              </div>
+            )}
+            {fatalError && <div className="fatal-error selectable">{fatalError}</div>}
+            {status && (
+              <div className={`status-toast ${status.error ? "error" : ""}`} role={status.error ? "alert" : "status"}>
+                <span className={status.error ? "selectable" : undefined}>{status.message}</span>
+                {status.action && <button onClick={status.action.run}>{status.action.label}</button>}
+                {status.error && (
+                  <button className="status-close" onClick={() => setStatus(null)} aria-label="Close" title="Close">
+                    <X size={13} weight="bold" />
+                  </button>
+                )}
+              </div>
+            )}
+            {videoJob && (
+              <div className="export-job" role="status">
+                <span className="export-job-label">Making {fileNameOf(videoJob.path)}… {Math.floor(videoJob.progress * 100)}%</span>
+                <span className="export-job-bar"><i style={{ width: `${videoJob.progress * 100}%` }} /></span>
+                <button onClick={() => videoJob.controller.abort()}>Stop</button>
+              </div>
+            )}
+            {dragging && <div className="drop-overlay">Drop the image or video here</div>}
+          </main>
+        </div>
       </div>
       {/* The MIDI panel slides up at the bottom of the window, under the panels and the picture, which get shorter to make room. */}
       {engine && !startScreen && panelOpen && (

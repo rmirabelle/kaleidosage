@@ -26,7 +26,7 @@ export function TitleBar({ updateAvailable, onAbout, fileName, dirty }: Props) {
       </div>
       {fileName !== null && (
         <div className="titlebar-file" data-tauri-drag-region title={dirty ? "This scene has changes that are not saved" : undefined}>
-          {fileName}
+          <span className="titlebar-file-name">{fileName}</span>
           {dirty && <span className="titlebar-dirty">*</span>}
         </div>
       )}

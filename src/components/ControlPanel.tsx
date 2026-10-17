@@ -233,7 +233,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
         ) })}
       </div>
       {source}
-      {/* The FX card: its title bar (Random all, Nudge, Clear all), then the effect groups, which scroll. */}
+      {/* The FX card: its title bar (Random all, Nudge, Clear all, then Add New), then the effect groups, which scroll. */}
       <section className="panel-card fx-card">
         <div className="side-panel-header panel-header-bar">
           <h2 className="side-panel-title">FX</h2>
@@ -249,8 +249,8 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
               <Play size={12} weight="fill" />
             </button>
           )}
-          {/* "All:" Random, Nudge and Clear as icon buttons, at the right of the title. Stop and Play are in the app toolbar. */}
-          <span className="panel-title-all">All:</span>
+          {/* "All" Random, Nudge and Clear as icon buttons, at the right of the title. Stop and Play are in the app toolbar. */}
+          <span className="panel-title-all">All</span>
           <div className="panel-buttons panel-title-buttons">
             <button className="panel-button icon" onClick={onRandomize} title="Random all (X): new random settings for every unlocked effect" aria-label="Random all">
               <RedDice size={16} />
@@ -272,6 +272,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
               <Trash size={16} />
             </button>
           </div>
+          <AddEffectMenu options={EFFECT_NAMES.filter(([step]) => !fxOrder.includes(step))} onAdd={add} />
         </div>
 
         {/* Only the effect groups scroll; the scene length, the Source section and the FX title stay in view. */}
@@ -286,7 +287,10 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
             render={(key, grip) => groups[key](grip)}
           />
           {fxOrder.length === 0 && <p className="stage-empty">No effects yet. Add one to start.</p>}
-          <AddEffectMenu options={EFFECT_NAMES.filter(([step]) => !fxOrder.includes(step))} onAdd={add} />
+          {/* A copy of the title bar's Add New button, at the end of the list. */}
+          <div className="add-effect-end">
+            <AddEffectMenu options={EFFECT_NAMES.filter(([step]) => !fxOrder.includes(step))} onAdd={add} />
+          </div>
         </div>
       </section>
     </aside>

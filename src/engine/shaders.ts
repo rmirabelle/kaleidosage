@@ -67,12 +67,20 @@ uniform vec2 u_mapAxis;
 uniform float u_mapTravel;
 uniform float u_tunnelTwist;
 uniform float u_mapFog;
+/* Möbius only: the turn (radians), twist, zoom and pan applied after the map. */
+uniform float u_mobiusRotation;
+uniform float u_mobiusTwist;
+uniform float u_mobiusZoom;
+uniform vec2 u_mobiusPan;
 uniform int u_warpMode;
 uniform float u_warpAmount;
 uniform float u_warpScale;
 /* Cells warp: the cell size, in tenths of the screen height, and the turn of the whole cell pattern (radians). */
 uniform float u_warpCellSize;
 uniform float u_warpCellAngle;
+/* Cells warp: the number of sides (3 to 6), and how far each cell point moves from its grid place, in cells. */
+uniform float u_warpCellSides;
+uniform float u_warpCellRandom;
 uniform float u_warpMarble;
 uniform int u_warpDetail;
 uniform float u_warpTime;
@@ -202,23 +210,46 @@ vec2 warpOffset(vec2 p) {
     return -d * amount * cos(t * 2.0) * lens * lens;
   }
   if (u_warpType == 5) {
-    /* The cell pattern turns by u_warpCellAngle: the point is turned back into it, and the shift turned out again. */
+    /**
+     * Each cell shifts the picture by its own amount; a point belongs to the
+     * cell of the nearest cell point. The cell points sit in rows. From 4 to
+     * 6 sides, every second row slides by up to half a cell and the rows
+     * move closer (to sqrt(3)/2), so the squares change step by step into
+     * hexagons. From 4 to 3 sides, a diagonal line through each cell point
+     * cuts the cell in two: the second half's shift moves away from the
+     * first half's, so the cut fades in and each square becomes two
+     * triangles. u_warpCellRandom moves each point from its grid place.
+     * The cell pattern turns by u_warpCellAngle: the point is turned back
+     * into it, and the shift turned out again.
+     */
     vec2 x = turn(p, -u_warpCellAngle) * 10.0 / u_warpCellSize;
-    vec2 cell = floor(x);
-    vec2 nearest = cell;
+    float hexagons = clamp(u_warpCellSides - 4.0, 0.0, 2.0) * 0.5;
+    float triangles = clamp(4.0 - u_warpCellSides, 0.0, 1.0);
+    float slide = 0.5 * hexagons;
+    float rowHeight = mix(1.0, 0.8660254, hexagons);
+    float row = floor(x.y / rowHeight);
+    vec2 nearest = vec2(0.0);
+    vec2 nearestPoint = vec2(0.0);
     float best = 1e9;
     for (int j = -1; j <= 1; j++) {
+      float r = row + float(j);
+      float offset = slide * mod(r, 2.0);
+      float column = floor(x.x - offset);
       for (int i = -1; i <= 1; i++) {
-        vec2 id = cell + vec2(float(i), float(j));
-        vec2 point = id + 0.5 + 0.35 * hash2(id + 17.0);
-        float dist = dot(x - point, x - point);
+        vec2 id = vec2(column + float(i), r);
+        vec2 point = vec2(id.x + 0.5 + offset, (r + 0.5) * rowHeight) + u_warpCellRandom * hash2(id + 17.0) * vec2(1.0, rowHeight);
+        vec2 d = x - point;
+        float dist = dot(d, d);
         if (dist < best) {
           best = dist;
           nearest = id;
+          nearestPoint = point;
         }
       }
     }
     vec2 h = hash2(nearest);
+    vec2 fromPoint = x - nearestPoint;
+    if (triangles > 0.0 && fromPoint.x > fromPoint.y) h = mix(h, hash2(nearest + 31.7), triangles);
     return turn(amount * 0.25 * vec2(cos(h.x * TAU + t), sin(h.y * TAU + t * 0.7)), u_warpCellAngle);
   }
   return noiseWarp(p);
@@ -268,6 +299,8 @@ vec2 complexMap(vec2 p) {
   } else if (u_mapMode == 2) {
     vec2 a = u_mapPoint;
     w = cdiv(z - a, vec2(1.0, 0.0) - cmul(vec2(a.x, -a.y), z));
+    /* Then the turn and the twist (which turns more with distance), the zoom, and the pan. */
+    w = turn(w, u_mobiusRotation + u_mobiusTwist * length(w)) / u_mobiusZoom + u_mobiusPan;
   } else if (u_mapMode == 3) {
     /**
      * Julia: z = z^2 + c, a few steps, stopping when the point passes a size

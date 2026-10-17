@@ -58,8 +58,24 @@ button { border: 0; }
 }
 .titlebar-update-button:hover { background: var(--accent-hover); }
 .titlebar-spacer { flex: 1; }
-/* The scene file name after the app name; a red asterisk marks unsaved changes. */
-.titlebar-file { display: flex; align-items: center; padding: 0 4px; color: #c3c7d0; font-size: 12px; pointer-events: none; white-space: nowrap; }
+/* The scene file name in the middle of the title bar; a red asterisk marks unsaved changes. */
+.titlebar { position: relative; }
+.titlebar-file {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 40%;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  color: #c3c7d0;
+  font-size: 12px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.titlebar-file-name { overflow: hidden; text-overflow: ellipsis; }
 .titlebar-dirty { margin-left: 2px; color: #ff5c5c; font-weight: 800; }
 .window-controls { display: flex; align-items: stretch; }
 .window-controls button {
@@ -137,8 +153,7 @@ button { border: 0; }
   align-items: center;
   gap: 8px;
   padding: 4px;
-  border-bottom: 1px solid var(--border);
-  background: #1d2029;
+  background: #272b36;
 }
 .toolbar > .panel-buttons:first-child { justify-self: start; }
 .toolbar-end { justify-self: end; }
@@ -193,7 +208,32 @@ button { border: 0; }
 
 /* Under the toolbar: the picture, with the settings panel docked at the right. */
 .workspace { position: relative; display: flex; flex: 1; min-height: 0; }
-.stage { position: relative; flex: 1; min-width: 0; background: #000; }
+.document { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+/* With a scene open (not full screen), the settings panel and the picture with its tab are two separate cards. */
+.workspace:has(.document-tabs) { gap: 6px; padding: 6px; background: #272b36; }
+.workspace:has(.document-tabs) > .control-panel, .workspace:has(.document-tabs) > .document { overflow: hidden; border: 1px solid var(--border); border-radius: 8px; }
+.stage { position: relative; flex: 1; min-width: 0; min-height: 0; background: #000; }
+
+/* The open scene as one tab button above the picture: bright blue with white text. */
+.document-tabs { flex: 0 0 auto; display: flex; align-items: center; padding: 7px 6px; border-bottom: 1px solid var(--border); background: #1b1e25; }
+.document-tab {
+  height: 27px;
+  max-width: 350px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px 0 12px;
+  border-radius: 5px;
+  color: #fff;
+  background: #3b63dc;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.document-tab-name { overflow: hidden; text-overflow: ellipsis; }
+.document-tab .titlebar-dirty { color: #fff; }
+/* The close button is half transparent until the pointer is on it. */
+.document-tab-close { display: grid; place-items: center; width: 22px; height: 22px; margin-left: 7px; border-radius: 4px; color: #fff; background: transparent; opacity: .5; cursor: pointer; }
+.document-tab-close:hover { background: rgba(255,255,255,.2); opacity: 1; }
 .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .stage.cursor-idle, .stage.cursor-idle canvas { cursor: none; }
 
@@ -234,7 +274,7 @@ button { border: 0; }
 /* The FX title bar's play button (every range that MIDI stopped), at the right of the title. */
 .panel-header-bar { display: flex; align-items: center; justify-content: space-between; }
 .panel-title-play { width: 22px; height: 20px; margin-right: auto; margin-left: 10px; }
-/* "All:" and the Random, Nudge and Clear icon buttons in the FX title bar: at the right, a little lower than the toolbar buttons. */
+/* "All" and the Random, Nudge and Clear icon buttons in the FX title bar: at the right, a little lower than the toolbar buttons. */
 .panel-title-all { margin-left: auto; margin-right: 8px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .panel-title-play + .panel-title-all { margin-left: 0; }
 .panel-title-buttons .panel-button { height: 28px; }
@@ -244,6 +284,9 @@ button { border: 0; }
 /* The left panel, darker than the cards on it. */
 .control-panel { flex: 0 0 400px; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; border-right: 1px solid var(--border); background: #14161c; }
 .control-panel > :not(.panel-scroll) { flex: 0 0 auto; }
+/* A soft black glow inside the panel's edge, drawn above the panel's content so the cards in it do not cover it. */
+.control-panel { position: relative; }
+.control-panel::after { content: ""; position: absolute; z-index: 60; inset: 0; border-radius: inherit; box-shadow: inset 0 0 5px 1px rgba(0,0,0,.8); pointer-events: none; }
 /* The Designer header: a bar across the full panel width, a little lighter, with a line under it. */
 .panel-header-bar { margin: 0 -14px; padding: 0 14px; border-bottom: 1px solid var(--border); background: #252832; }
 /* The Source and Designer titles: twice the size of the other headings. */
@@ -283,8 +326,7 @@ button { border: 0; }
 .source-images + .panel-row { padding-top: 0; }
 .source-section .panel-header-bar { margin: 0; }
 /* The Source well fills the section with no space around it; the section's own lines are its borders. */
-.source-section .source-well { margin: 0; border: 0; border-radius: 0; }
-/* The MIDI panel: it slides up at the bottom of the window (its height grows), so the panels and the picture above get shorter. */
+.source-section .source-well { margin: 0; border: 0; border-radius: 0; }/* The MIDI panel: it slides up at the bottom of the window (its height grows), so the panels and the picture above get shorter. */
 .midi-panel { position: relative; flex: 0 0 auto; overflow: hidden; transition: height .25s ease; }
 .midi-panel.resizing { transition: none; }
 .midi-panel-body { display: flex; flex-direction: column; height: 100%; border-top: 4px solid var(--border); background: #1d2029; }
@@ -385,28 +427,30 @@ button { border: 0; }
 .panel-group.open { border-color: #3e4a6c; background: #253049; }
 /* A group header: the title (and a lock when locked), then the dice, the remove button and the drag grip at the right. */
 .panel-group-header { display: flex; align-items: center; gap: 6px; padding: 0 4px 0 6px; }
+/* The header is a brighter blue than the group's body, and brighter again under the mouse. */
+.panel-group-header { border-radius: 6px 6px 0 0; background: #304172; transition: background .2s ease; }
+/* A closed group: a standard dark gray header and border, a little lighter under the mouse. */
+.panel-group:not(.open), .panel-group:not(.open):hover { border-color: #474c5e; }
+.panel-group:not(.open) .panel-group-header { border-radius: 6px; background: #2c3039; }
+.panel-group:not(.open) .panel-group-header:hover { background: #363a45; }
+.panel-group-header:hover { background: #3a4d86; }
+/* On the brighter header, its icons (dice, remove, drag grip, open lock) are brighter too; their hover colors stay. */
+.panel-group-header .panel-group-dice:not(:hover), .panel-group-header .panel-group-remove:not(:hover), .panel-group-header .panel-group-grip:not(:hover):not(.dragging), .panel-group-header .panel-group-lock:not(.locked) { color: #8f99bd; }
 .panel-group-remove { display: grid; place-items: center; width: 22px; height: 20px; border-radius: 4px; color: #5d6272; background: transparent; cursor: pointer; }
 .panel-group-remove:hover { color: #f87171; background: rgba(255,255,255,.07); }
-/* Under the effect list: a note while the list is empty, and the full-width Add effect button. */
+/* Under the effect list: a note while the list is empty. The Add New button is at the end of the FX title bar, with a copy under the list. */
 .stage-empty { margin: 10px 2px 10px; color: var(--muted); font-size: 12px; }
-.add-effect-button {
-  width: 100%;
-  min-height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  margin: 6px 0 12px;
-  border: 1px dashed #4b5164;
-  border-radius: 8px;
-  color: #c3c7d0;
-  background: transparent;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.add-effect-button:hover:not(:disabled), .add-effect-button.open { border-style: solid; border-color: var(--accent); color: #fff; background: rgba(75,118,247,.12); }
-.add-effect-button:disabled { opacity: .45; cursor: default; }
+/* The Add New button at the end of the FX title bar, styled like the icon buttons, with a space after the All buttons. */
+/* An outline button: a dashed border and no fill, with a blue border and a light blue fill on hover or while its menu is open. */
+.panel-buttons.add-effect { margin-left: 10px; border: 1px dashed #5d6378; background: transparent; }
+.panel-buttons.add-effect:has(.panel-button:hover:not(:disabled)), .panel-buttons.add-effect:has(.panel-button.active) { border-style: solid; border-color: var(--accent); }
+.add-effect .panel-button { background: transparent; }
+.add-effect .panel-button:hover:not(:disabled), .add-effect .panel-button.active { color: #fff; background: rgba(75,118,247,.12); }
+/* The copy at the end of the effect list. */
+.add-effect-end { margin: 8px 0 4px; }
+.add-effect-end .panel-buttons.add-effect { margin-left: 0; }
+/* The FX title bar's button groups have round outer corners: Add New, the left of Random and the right of Clear. */
+.fx-card .panel-title-buttons { border-radius: 5px; }
 .panel-group-grip { display: grid; place-items: center; width: 20px; height: 30px; color: #5d6272; cursor: grab; touch-action: none; }
 .panel-group-grip:hover { color: #c3c7d0; }
 .panel-group-grip.dragging { color: #f1f2f4; cursor: grabbing; }
@@ -420,7 +464,7 @@ button { border: 0; }
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 0 8px 10px;
+  padding: 8px 0 8px 5px;
   color: #c3c7d0;
   background: transparent;
   font-size: 10px;
@@ -432,7 +476,9 @@ button { border: 0; }
 }
 .panel-group-fill { flex: 1; align-self: stretch; cursor: pointer; }
 .panel-group-solo { margin-left: 4px; color: #f5ce69; font-size: 9px; font-weight: 700; text-transform: uppercase; }
-.panel-group-title:hover, .panel-group.open .panel-group-title { color: #f1f2f4; }
+.panel-group-title:hover { color: #f1f2f4; }
+/* An open group's title is a bright neon blue with a soft glow. */
+.panel-group.open .panel-group-title { color: #3de0ff; text-shadow: 0 0 6px rgba(61,224,255,.55); }
 .panel-group-caret { transition: transform .22s ease; }
 .panel-group.open .panel-group-caret { transform: rotate(90deg); }
 /* The body slides open and shut: its one grid row grows from 0 to the content height. */
@@ -735,6 +781,9 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
   background: #30343f;
   cursor: pointer;
 }
+/* In the FX panel, the menu boxes are a blue a little darker than the open group's blue (#253049). */
+.fx-card .panel-select { border-color: #3e4a6c; background: #1b2438; }
+.fx-card .dropdown-button:hover, .fx-card .dropdown-button.open { border-color: #5a6890; }
 /* The themed mode menus: the button looks like the old menu box, the list like the toolbar dropdowns. */
 .dropdown-button { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; }
 .dropdown-button:hover, .dropdown-button.open { border-color: #626a7d; }

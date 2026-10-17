@@ -63,6 +63,9 @@ export interface FrameValues {
   /** Cells warp: the cell size, in tenths of the screen height, and the turn of the cell pattern (radians). */
   warpCellSize: number;
   warpCellAngle: number;
+  /** Cells warp: the number of sides, 3 to 6, and how far each cell point moves from its grid place, 0 to 1 (see params.ts). */
+  warpCellSides: number;
+  warpCellRandom: number;
   warpMarble: number;
   warpDetail: number;
   /** How far the warp noise has flowed. */
@@ -86,6 +89,12 @@ export interface FrameValues {
   mapTravel: number;
   /** How much the far end of the tunnel fades to black. */
   mapFog: number;
+  /** Möbius only: the turn (radians), twist, zoom and pan applied after the map. */
+  mobiusRotation: number;
+  mobiusTwist: number;
+  mobiusZoom: number;
+  mobiusPanX: number;
+  mobiusPanY: number;
   /** The kaleidoscope center, as a fraction of the screen size from the screen center. */
   centerX: number;
   centerY: number;
@@ -680,6 +689,9 @@ export class KaleidoRenderer {
     gl.uniform1f(k.uniforms.u_warpScale, v.warpScale);
     gl.uniform1f(k.uniforms.u_warpCellSize, Math.max(0.01, v.warpCellSize));
     gl.uniform1f(k.uniforms.u_warpCellAngle, v.warpCellAngle);
+    gl.uniform1f(k.uniforms.u_warpCellSides, Math.min(6, Math.max(3, v.warpCellSides)));
+    /* At most half a cell, so the nearest point is always in the 3 by 3 cells the shader looks at. */
+    gl.uniform1f(k.uniforms.u_warpCellRandom, 0.5 * Math.min(1, Math.max(0, v.warpCellRandom)));
     gl.uniform1f(k.uniforms.u_warpMarble, v.warpMarble);
     gl.uniform1i(k.uniforms.u_warpDetail, Math.round(v.warpDetail));
     gl.uniform1f(k.uniforms.u_warpTime, v.warpTime);
@@ -699,6 +711,10 @@ export class KaleidoRenderer {
     gl.uniform1f(k.uniforms.u_mapTravel, v.mapTravel);
     gl.uniform1f(k.uniforms.u_tunnelTwist, v.tunnelTwist);
     gl.uniform1f(k.uniforms.u_mapFog, v.mapFog);
+    gl.uniform1f(k.uniforms.u_mobiusRotation, v.mobiusRotation);
+    gl.uniform1f(k.uniforms.u_mobiusTwist, v.mobiusTwist);
+    gl.uniform1f(k.uniforms.u_mobiusZoom, Math.max(0.01, v.mobiusZoom));
+    gl.uniform2f(k.uniforms.u_mobiusPan, v.mobiusPanX, v.mobiusPanY);
     if (picture) gl.uniform2f(k.uniforms.u_imgRes, width, height);
     else gl.uniform2f(k.uniforms.u_imgRes, this.imageSizes[0][0], this.imageSizes[0][1]);
     /* The panel order is the order the steps act on the picture; the shader moves the screen point, which is the reverse. */

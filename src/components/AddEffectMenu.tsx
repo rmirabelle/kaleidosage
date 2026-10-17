@@ -3,8 +3,8 @@ import { createPortal } from "react-dom";
 import { Plus } from "@phosphor-icons/react";
 
 /**
- * The + button under the effect list, and its menu of the effects that are
- * not in the list yet. A pick adds that effect. The menu looks like the
+ * The + Add New button at the end of the FX title bar, and its menu of the
+ * effects that are not in the list yet. A pick adds that effect. The menu looks like the
  * other dropdown lists. Keys: Up and Down move, Enter or Space picks, Esc
  * closes. A click outside closes it.
  */
@@ -37,7 +37,8 @@ export function AddEffectMenu<K extends string>({ options, onAdd }: {
     const height = listRef.current?.offsetHeight ?? 0;
     const below = button.bottom + 4;
     const top = below + height > window.innerHeight - 8 ? Math.max(8, button.top - 4 - height) : below;
-    setPosition({ left: button.left, top, width: button.width });
+    /* The small header button is narrower than the effect names, so the menu is at least 180px wide. */
+    setPosition({ left: button.left, top, width: Math.max(button.width, 180) });
   }, [open]);
 
   useEffect(() => {
@@ -76,20 +77,22 @@ export function AddEffectMenu<K extends string>({ options, onAdd }: {
 
   return (
     <>
-      <button
-        ref={buttonRef}
-        className={`add-effect-button ${open ? "open" : ""}`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        disabled={options.length === 0}
-        title={options.length === 0 ? "Every effect is in the list" : "Add an effect at the end of the list"}
-        onClick={() => {
-          setActive(0);
-          setOpen(!open);
-        }}
-      >
-        <Plus size={14} weight="bold" /> Add effect
-      </button>
+      <div className="panel-buttons panel-title-buttons add-effect">
+        <button
+          ref={buttonRef}
+          className={`panel-button ${open ? "active" : ""}`}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          disabled={options.length === 0}
+          title={options.length === 0 ? "Every effect is in the list" : "Add an effect at the end of the list"}
+          onClick={() => {
+            setActive(0);
+            setOpen(!open);
+          }}
+        >
+          <Plus size={16} weight="bold" /> Add New
+        </button>
+      </div>
       {open && createPortal(
         <div
           ref={listRef}

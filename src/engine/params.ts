@@ -4,8 +4,9 @@ export const PARAM_KEYS = [
   "cycle",
   "imageBlend",
   "warpOpacity", "mapOpacity", "foldOpacity",
-  "warpAmount", "warpScale", "warpCellSize", "warpCellAngle", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle",
+  "warpAmount", "warpScale", "warpCellSize", "warpCellAngle", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle",
   "mapMix", "mapScale", "mapPower", "mapPointX", "mapPointY", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "tunnelTwist",
+  "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY",
   "segments", "tileSize", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl",
   "blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel",
   "trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint",
@@ -253,6 +254,15 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   warpCellSize: { label: "Cell size", min: 0.05, max: 25, step: 0.01, scale: "log", value: 4, drift: "wave", low: 3, high: 6, on: false },
   /** Cells warp: turns the whole cell pattern, with each cell's shift, around the center. The image does not turn. */
   warpCellAngle: { label: "Cell rotation", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  /**
+   * Cells warp: the cell shape, by its number of sides. 4 gives squares;
+   * from 4 to 6 the squares change step by step into hexagons; from 4 to 3
+   * a diagonal cut fades in and makes each square two triangles. It can
+   * drift, so the cells change shape as the scene plays.
+   */
+  warpCellSides: { label: "Cell sides", min: 3, max: 6, step: 0.01, value: 4, drift: "wave", low: 4, high: 6, on: false },
+  /** Cells warp: how far each cell point moves from its place in the grid. 0 gives regular shapes. */
+  warpCellRandom: { label: "Cell randomness", min: 0, max: 1, step: 0.01, value: 0.7, drift: "wave", low: 0.2, high: 0.7, on: false },
   warpMarble: { label: "Marbling", min: 0, max: 6, step: 0.01, value: 0, drift: "wave", low: 1, high: 3.5, on: false },
   warpDetail: { label: "Warp detail", min: 1, max: 6, step: 1, value: 4 },
   warpFlow: { label: "Warp flow", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.05, high: 0.6, on: false },
@@ -281,6 +291,16 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   /** Tunnel only: how far the wall turns per tube length, so the tube becomes a spiral. Log spiral keeps its own wider twist. */
   tunnelTwist: { label: "Twist", min: -10, max: 10, step: 0.1, value: 0, unit: "°", drift: "wave", low: -5, high: 5, on: false },
   mapFog: { label: "Depth fade", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.3, high: 0.8, on: false },
+  /**
+   * Möbius only: a turn, a twist (which turns more with distance, like the
+   * kaleidoscope's twirl), a zoom and a pan, applied to the point after the
+   * Möbius map.
+   */
+  mobiusRotation: { label: "Rotation", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  mobiusTwist: { label: "Twist", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -1, high: 1, on: false },
+  mobiusZoom: { label: "Zoom", min: 0.2, max: 4, step: 0.01, value: 1, drift: "wave", low: 0.7, high: 1.6, on: false },
+  mobiusPanX: { label: "Pan X", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.35, high: 0.35, on: false },
+  mobiusPanY: { label: "Pan Y", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.35, high: 0.35, on: false },
   /** The handles are whole numbers, but a drifting count moves smoothly between them (see fold() in shaders.ts). */
   segments: { label: "Segments", min: 0, max: 24, step: 1, value: 0, drift: "wave", low: 3, high: 8, on: false },
   /** Tile modes only: screen heights between neighbor cell centers. */
@@ -399,6 +419,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
 export const NO_EFFECT: Partial<Record<ParamKey, number>> = {
   warpCenterX: 0, warpCenterY: 0, cameraHeight: 0, cameraSpeed: 0,
   mapScale: 1, mapPower: 1, mapArms: 0, mapPointX: 0, mapPointY: 0, mapTwist: 0, mapSpeed: 0, tunnelTwist: 0,
+  mobiusTwist: 0, mobiusZoom: 1, mobiusPanX: 0, mobiusPanY: 0,
   centerX: 0, centerY: 0, zoom: 1, panX: 0, panY: 0, twirl: 0,
   blurMaskX: 0, blurMaskY: 0,
   trailZoom: 1, trailTurn: 0, trailHue: 0, trailFlow: 0,
@@ -704,8 +725,9 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   animation: ["cycle"],
   /** The images are the user's choice; Randomize does not change the blend. */
   source: ["imageBlend"],
-  warp: ["warpOpacity", "warpAmount", "warpScale", "warpCellSize", "warpCellAngle", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle"],
-  map: ["mapOpacity", "mapMix", "mapScale", "mapPower", "mapPointX", "mapPointY", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "tunnelTwist"],
+  warp: ["warpOpacity", "warpAmount", "warpScale", "warpCellSize", "warpCellAngle", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle"],
+  map: ["mapOpacity", "mapMix", "mapScale", "mapPower", "mapPointX", "mapPointY", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "tunnelTwist",
+    "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY"],
   kaleidoscope: ["foldOpacity", "segments", "tileSize", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl"],
   blur: ["blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel"],
   trails: ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"],
@@ -812,6 +834,8 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("warpScale", rand(0.6, 4), rand(0.2, 0.8));
   set("warpCellSize", rand(2, 12), rand(0.5, 2));
   setAngle("warpCellAngle", 0.3);
+  set("warpCellSides", [3, 4, 5, 6][Math.floor(Math.random() * 4)], rand(0.2, 1));
+  set("warpCellRandom", Math.random() < 0.3 ? 0 : rand(0.2, 0.9), rand(0.05, 0.3));
   set("warpMarble", rand(0.5, 4), rand(0.3, 1.5));
   set("warpDetail", Math.round(rand(2, 6)));
   set("warpFlow", rand(0.05, 0.6), rand(0, 0.25));
@@ -825,6 +849,11 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("mapSpeed", (Math.random() < 0.8 ? 1 : -1) * rand(0.1, 0.6), rand(0, 0.2));
   set("mapFog", rand(0.3, 0.9), rand(0, 0.15));
   set("tunnelTwist", Math.random() < 0.4 ? 0 : rand(-8, 8), rand(1, 4));
+  setAngle("mobiusRotation", 0.5);
+  set("mobiusTwist", Math.random() < 0.5 ? 0 : rand(-1.2, 1.2), rand(0.2, 0.6));
+  set("mobiusZoom", rand(0.7, 1.8), rand(0.1, 0.4));
+  set("mobiusPanX", Math.random() < 0.5 ? 0 : rand(-0.4, 0.4), rand(0.05, 0.25));
+  set("mobiusPanY", Math.random() < 0.5 ? 0 : rand(-0.4, 0.4), rand(0.05, 0.25));
   set("centerX", rand(-0.2, 0.2), rand(0.1, 0.35));
   set("centerY", rand(-0.15, 0.15), rand(0.08, 0.3));
   setAngle("rotation", 0.7);
