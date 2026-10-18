@@ -1,4 +1,4 @@
-import { GROUP_PARAMS, PARAM_KEYS, isCustom, liveValue, type Param, type ParamKey, type Params, type PlayState } from "./params";
+import { GROUP_PARAMS, PARAM_KEYS, WANDER, easeOf, isCustom, liveValue, type Param, type ParamKey, type Params, type PlayState } from "./params";
 import type { WarpType } from "./renderer";
 
 /**
@@ -7,9 +7,9 @@ import type { WarpType } from "./renderer";
  * picture repeats after two cycles (after one when only full turns move).
  * Four things do not follow the cycle: ranges with their own time, the warp
  * flow, the tunnel travel and the camera flight. A seamless video changes
- * the first two slightly so they repeat too; the tunnel, the camera and the
- * noise and cell warps never repeat, so their video crossfades its last
- * moment into its first.
+ * the first two slightly so they repeat too; the tunnel, the camera, the
+ * noise and cell warps, and the random and drunk curves never repeat, so
+ * their video crossfades its last moment into its first.
  */
 
 /**
@@ -79,12 +79,13 @@ export function fittedCustomSeconds(params: Params, videoSeconds: number) {
   return fitted;
 }
 
-/** True when something moves on and never comes back: a noise or cell warp that flows, a tunnel that flies, or a camera that flies. */
+/** True when something moves on and never comes back: a range on a random or drunk curve, a noise or cell warp that flows, a tunnel that flies, or a camera that flies. */
 export function needsSeamFade(params: Params, state: PlayState) {
+  const wandering = PARAM_KEYS.some((key) => inUse(key, state) && moving(params[key]) && WANDER.has(easeOf(params[key])));
   const warp = state.groups.warp && WARP_PERIODS[state.warpType] === null && everNonZero(params.warpFlow);
   const tunnel = state.groups.map && state.mapMode === 6 && everNonZero(params.mapSpeed);
   const camera = state.groups.camera && everNonZero(params.cameraSpeed);
-  return warp || tunnel || camera;
+  return wandering || warp || tunnel || camera;
 }
 
 /**

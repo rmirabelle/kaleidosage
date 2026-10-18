@@ -5,7 +5,7 @@ import { isShown, shownIn, submodeNote, submodeOf } from "./submodes";
 describe("submodes", () => {
   it("knows which submode menu shows or hides a slider", () => {
     expect(submodeOf("tileSize")?.stateKey).toBe("foldMode");
-    expect(submodeOf("mapPointX")?.stateKey).toBe("mapMode");
+    expect(submodeOf("juliaShape")?.stateKey).toBe("mapMode");
     expect(submodeOf("trailAmount")).toBeUndefined();
   });
 

@@ -1,12 +1,12 @@
-import type { BlendMode, BlurMask, CameraRepeat, FoldMode, FxStep, LayerBlend, MapMode, PictureStep, ShapeStep, SmearShape, TrailMode, WarpMode, WarpType } from "./renderer";
+import type { BlendMode, BlurMask, CameraRepeat, Tiling, FoldMode, FxStep, LayerBlend, MapMode, ParticleBlend, PictureStep, ReactionLook, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
 
 export const PARAM_KEYS = [
   "cycle",
   "imageBlend",
   "warpOpacity", "mapOpacity", "foldOpacity",
   "warpAmount", "warpScale", "warpCellSize", "warpCellAngle", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle",
-  "mapMix", "mapScale", "mapPower", "mapPointX", "mapPointY", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "tunnelTwist",
-  "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY",
+  "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl",
+  "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness",
   "segments", "tileSize", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl",
   "blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel",
   "trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint",
@@ -14,6 +14,11 @@ export const PARAM_KEYS = [
   "contourHue", "contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady",
   "reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine",
   "cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth",
+  "sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness",
+  "reactionAmount", "reactionFeed", "reactionKill", "reactionFollow", "reactionSpeed", "reactionSize",
+  "particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag",
+  "raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY",
+  "bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize",
   "sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel"
 ] as const;
 export type ParamKey = typeof PARAM_KEYS[number];
@@ -48,6 +53,8 @@ export interface Param {
   on?: boolean;
   /** How a back-and-forth range moves between its handles. Unset: smooth for waves, linear for angles. */
   ease?: Ease;
+  /** Gives each parameter its own path on the curves that never repeat (see wander). createParams sets it. */
+  seed?: number;
   /** True: the range uses its own time ("seconds") instead of the shared cycle. */
   custom?: boolean;
   /** A custom range's time: real seconds from the start handle to the end handle. */
@@ -67,20 +74,24 @@ export interface Param {
  * bounce, which bounces at the end handle. "organic" is the smooth curve's
  * name in scene files.
  *
- * The dramatic curves: early, pulse and late step from one handle to the
- * other at a quarter, a half, and three quarters of the trip. Out and back,
- * a step makes a square wave that sits at the end handle three quarters,
- * half, or a quarter of the time. Explode and implode are one-way curves
+ * The dramatic curves: early moves smoothly from one handle to the other
+ * in the first half of the trip and waits there for the second half; late
+ * waits for the first half and moves in the second. Out and back, the value
+ * sits near the end handle three quarters or a quarter of the time.
+ * Random and drunk never repeat (see WANDER): random is a fast wave about
+ * the middle of the range, with peaks of very different lengths and
+ * heights; drunk is the same wave in pairs of cycles, one tall and one
+ * short. Explode and implode are one-way curves
  * (see ONE_WAY): they play once per trip, from the start handle back to the
  * start handle, and never run backward. Explode is a blast wave: the value
  * shoots to the end handle, then falls back to the start handle, fast at
  * first and slower later. Implode is the same played backward: a slow
  * build to the end handle, then a snap back to the start.
  */
-export type Ease = "organic" | "linear" | "inOut" | "in" | "out" | "bounce" | "explode" | "implode" | "early" | "pulse" | "late";
+export type Ease = "organic" | "linear" | "inOut" | "in" | "out" | "bounce" | "explode" | "implode" | "early" | "late" | "random" | "drunk";
 export const EASES: readonly (readonly [Ease, string])[] = [
   ["organic", "Smooth"], ["linear", "Linear"], ["inOut", "Ease in-out"], ["in", "Ease in"], ["out", "Ease out"], ["bounce", "Bounce"],
-  ["explode", "Explode"], ["implode", "Implode"], ["early", "Early"], ["pulse", "Pulse"], ["late", "Late"]
+  ["explode", "Explode"], ["implode", "Implode"], ["early", "Early"], ["late", "Late"], ["random", "Random"], ["drunk", "Drunk"]
 ];
 
 /** The default curve: organic for waves, linear for angles (they turn at a steady angular speed). */
@@ -126,6 +137,89 @@ function explode(t: number) {
   return (1 - u) * Math.exp(-3 * u);
 }
 
+/** The curves that never repeat: they go on from trip to trip, by the trip count, not out and back. */
+export const WANDER: ReadonlySet<Ease> = new Set<Ease>(["random", "drunk"]);
+
+/** A random number from 0 to 1 for each whole number "index" and "seed". The same numbers give the same result. */
+function hash(index: number, seed: number) {
+  let h = Math.imul(index | 0, 0x27d4eb2d) ^ Math.imul(seed | 0, 0x165667b1);
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+/** The random curve: each trip has this many half waves, or up to "RANDOM_EXTRA" more (an even count, so every trip starts going up). */
+const RANDOM_HALVES = 20;
+const RANDOM_EXTRA = 12;
+
+/**
+ * Splits a trip into "count" pieces of random length (random weights: most
+ * short, some long) and returns the piece that "x" (0 to 1) is in, and how
+ * far into that piece it is (0 to 1). "random" gives the trip's random
+ * numbers; the weights use numbers 1 to "count".
+ */
+function pieceAt(x: number, count: number, random: (index: number) => number) {
+  const weights = Array.from({ length: count }, (_, j) => 0.5 - Math.log(1 - 0.999 * random(1 + j)));
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  let from = 0;
+  for (let j = 0; j < count; j++) {
+    const to = from + weights[j] / total;
+    if (x < to || j === count - 1) return { piece: j, u: clamp((x - from) / (to - from), 0, 1) };
+    from = to;
+  }
+  return { piece: count - 1, u: 1 };
+}
+
+/**
+ * The random curve, from 0 to 1: a wave about the middle of the range (0.5)
+ * that goes up, then down, then up again, with 10 to 16 peaks and as many
+ * dips per trip. Each half wave is half a sine wave with its own length
+ * (see pieceAt) and its own height (from a small ripple to the full way to
+ * a handle). Every half wave starts and ends at the middle, so the trips
+ * join without a gap.
+ */
+function randomCurve(trips: number, seed: number) {
+  const trip = Math.floor(trips);
+  const random = (index: number) => hash(trip * 256 + index, seed * 7 + 3);
+  const count = RANDOM_HALVES + 2 * Math.floor(random(0) * (RANDOM_EXTRA / 2 + 1));
+  const { piece, u } = pieceAt(trips - trip, count, random);
+  const height = 0.06 + 0.44 * random(50 + piece) ** 0.8;
+  return 0.5 + (piece % 2 === 0 ? 1 : -1) * height * Math.sin(Math.PI * u);
+}
+
+/** The drunk curve: each trip has this many pairs of sine cycles, or up to "DRUNK_EXTRA" more. */
+const DRUNK_PAIRS = 5;
+const DRUNK_EXTRA = 3;
+
+/**
+ * The drunk curve, from 0 to 1: like the random curve, a sine wave about
+ * the middle of the range, but in pairs of whole cycles (up, down, up,
+ * down), 10 to 16 cycles per trip. Each pair has its own length (see
+ * pieceAt), the same for both its cycles. In each pair one cycle is tall
+ * (0.3 to 0.5, near the handles) and the other short (a fifth to a half of
+ * the tall one); the tall one is first or second at random.
+ */
+function drunkCurve(trips: number, seed: number) {
+  const trip = Math.floor(trips);
+  const random = (index: number) => hash(trip * 256 + index, seed * 7 + 5);
+  const count = DRUNK_PAIRS + Math.floor(random(0) * (DRUNK_EXTRA + 1));
+  const { piece, u } = pieceAt(trips - trip, count, random);
+  const tall = 0.3 + 0.2 * random(50 + piece);
+  const short = tall * (0.2 + 0.3 * random(100 + piece));
+  const second = u >= 0.5;
+  const height = (random(150 + piece) < 0.5) === second ? short : tall;
+  return 0.5 + height * Math.sin(4 * Math.PI * u);
+}
+
+/**
+ * A curve that never repeats, from 0 to 1, at "trips" trips (any number,
+ * not only 0 to 1): see randomCurve and drunkCurve. "seed" gives each
+ * parameter its own path.
+ */
+export function wander(kind: Ease, trips: number, seed: number) {
+  return kind === "random" ? randomCurve(trips, seed) : drunkCurve(trips, seed);
+}
+
 /**
  * A curve for t from 0 to 1. A back-and-forth curve goes from 0 to 1; a
  * one-way curve (see ONE_WAY) starts and ends at 0.
@@ -139,9 +233,11 @@ export function easeCurve(kind: Ease, t: number): number {
     case "bounce": return bounceOut(t);
     case "explode": return explode(t);
     case "implode": return explode(1 - t);
-    case "early": return t < 0.25 ? 0 : 1;
-    case "pulse": return t < 0.5 ? 0 : 1;
-    case "late": return t < 0.75 ? 0 : 1;
+    case "early": return t < 0.5 ? 0.5 - 0.5 * Math.cos(2 * Math.PI * t) : 1;
+    case "late": return t < 0.5 ? 0 : 0.5 + 0.5 * Math.cos(2 * Math.PI * t);
+    /* The menu's drawing of a curve that never repeats: a sample of it over a few trips. */
+    case "random": return wander(kind, 0.5 * t, 4);
+    case "drunk": return wander(kind, 0.5 * t, 11);
     default: return 0.5 - 0.5 * Math.cos(Math.PI * t);
   }
 }
@@ -153,7 +249,7 @@ export type Params = Record<ParamKey, Param>;
 export type ContourTone = "hue" | "black" | "white";
 export const CONTOUR_TONES: readonly ContourTone[] = ["hue", "black", "white"];
 
-export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "camera" | "finish";
+export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "camera" | "sort" | "reaction" | "particles" | "rays" | "bloom" | "finish";
 
 export interface PlayState {
   /** Which groups are on. A group that is off has no effect, but keeps its settings. */
@@ -162,6 +258,8 @@ export interface PlayState {
   locks: Record<GroupKey, boolean>;
   /** How the two source images fade into each other. */
   blendMode: BlendMode;
+  /** How the source images go on past their edges. */
+  tiling: Tiling;
   warpMode: WarpMode;
   /** The kind of warp: 0 noise, 1 ripple, 2 waves, 3 swirl, 4 bulge and pinch, 5 cells. */
   warpType: WarpType;
@@ -206,6 +304,12 @@ export interface PlayState {
   skyColor: string;
   /** How the camera's land goes on past the picture: mirrored, repeated as it is, or not at all. */
   cameraRepeat: CameraRepeat;
+  /** The pixel sort's order along each run: dark to bright, or bright to dark. */
+  sortOrder: SortOrder;
+  /** How the reaction-diffusion pattern shows: as a mask over the picture, or bending it. */
+  reactionLook: ReactionLook;
+  /** How the particles combine with the picture under them: they add light (glow), or cover it. */
+  particleBlend: ParticleBlend;
   /**
    * A source video crossfades its end into its start (see video.ts). Off,
    * the video starts again at the start of each loop, with a jump.
@@ -227,7 +331,7 @@ type ParamSpec = Param;
  */
 const opacitySpec: ParamSpec = { label: "Opacity", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0, high: 1, on: false };
 /** Randomize does not change the opacities or their ranges. */
-const OPACITY_KEYS: ParamKey[] = ["warpOpacity", "mapOpacity", "foldOpacity"];
+const OPACITY_KEYS: ParamKey[] = ["warpOpacity", "mapOpacity", "foldOpacity", "particleBackground"];
 
 /**
  * A shared cycle of this many seconds runs at 1× speed; a shorter one runs
@@ -272,11 +376,21 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   /** Waves: the direction the waves roll. */
   warpAngle: { label: "Wave angle", min: 0, max: 360, step: 1, value: 30, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   mapMix: { label: "Map mix", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0.4, high: 1, on: false },
-  mapScale: { label: "Map zoom", min: 0.2, max: 4, step: 0.01, value: 1, drift: "wave", low: 0.8, high: 1.8, on: false },
-  mapPower: { label: "Power", min: 0.5, max: 6, step: 0.01, value: 1, drift: "wave", low: 1.5, high: 3, on: false },
-  mapPointX: { label: "Point X", min: -1.5, max: 1.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
-  mapPointY: { label: "Point Y", min: -1.5, max: 1.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
-  mapSteps: { label: "Steps", min: 1, max: 12, step: 1, value: 4 },
+  mapScale: { label: "Zoom", min: 0.25, max: 1.5, step: 0.01, value: 1, drift: "wave", low: 0.5, high: 1, on: false },
+  juliaZoom: { label: "Zoom", min: 0.5, max: 1.5, step: 0.01, value: 0.5, drift: "wave", low: 0.5, high: 1, on: true },
+  mapPower: { label: "Power", min: 0.5, max: 6, step: 0.01, value: 2, drift: "wave", low: 1, high: 3, on: true },
+  /**
+   * The Julia point walks the edge of the Mandelbrot set's main body, where
+   * every point gives a detailed shape (near the center the shape is a plain
+   * circle and the picture goes flat). Edge moves it a little inside the edge
+   * (smooth, joined shapes) or outside it (broken shapes).
+   */
+  juliaShape: { label: "Shape", min: 0, max: 360, step: 1, value: 120, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  /** Julia has its own Darkness and Softness (see mapFog): the far end is where the steps stretch the picture most. */
+  juliaFog: { label: "Darkness", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.3, high: 0.7, on: false },
+  juliaFogSoftness: { label: "Softness", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.3, high: 0.7, on: false },
+  juliaEdge: { label: "Edge", min: 0.5, max: 1.5, step: 0.01, value: 1, drift: "wave", low: 0.9, high: 1.1, on: false },
+  mapSteps: { label: "Steps", min: 1, max: 12, step: 1, value: 1 },
   /**
    * Seamless spiral: how far the spiral twists. Negative twists the other
    * way; 0 gives rings. Any value stays seamless (see the stretch in
@@ -284,23 +398,50 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    */
   mapArms: { label: "Twist", min: -8, max: 8, step: 0.05, value: 2, drift: "wave", low: 1, high: 3, on: false },
   mapTwist: { label: "Twist", min: -80, max: 80, step: 1, value: 0, unit: "°", drift: "wave", low: 10, high: 50, on: false },
-  /** Power, log spiral and tunnel fold the picture over an axis (so there is no seam); this turns that axis. */
-  mapAngle: { label: "Axis angle", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
-  /** Tunnel only: forward speed in tube lengths per second (backward below 0), and how dark the far end gets. */
-  mapSpeed: { label: "Tunnel speed", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: 0.1, high: 0.5, on: false },
+  /**
+   * Turns the whole map on the screen (Möbius has its own). With a mirrored
+   * image, Power, Log spiral and Tunnel fold the picture over an axis (so
+   * there is no seam), and this turns that axis too.
+   */
+  mapAngle: { label: "Rotation", min: 0, max: 360, step: 1, value: 270, unit: "°", drift: "spin", low: 153, high: 207, on: false, ease: "organic" },
+  /** Tunnel, Log spiral and Seamless spiral: forward speed into the far end (backward below 0). */
+  mapSpeed: { label: "Speed", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: 0.1, high: 0.5, on: false },
   /** Tunnel only: how far the wall turns per tube length, so the tube becomes a spiral. Log spiral keeps its own wider twist. */
-  tunnelTwist: { label: "Twist", min: -10, max: 10, step: 0.1, value: 0, unit: "°", drift: "wave", low: -5, high: 5, on: false },
-  mapFog: { label: "Depth fade", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.3, high: 0.8, on: false },
+  tunnelTwist: { label: "Twist", min: -90, max: 90, step: 0.1, value: 0, unit: "°", drift: "wave", low: -5, high: 5, on: false },
+  /** Moves the map's center on the screen, for every map but Möbius (which has its own pan). */
+  mapPanX: { label: "Pan X", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -0.35, high: 0.35, on: false },
+  mapPanY: { label: "Pan Y", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -0.35, high: 0.35, on: false },
+  /**
+   * Power, Julia and Sine (Möbius has its own): Roll turns the image inside
+   * the map's shapes, and Twist turns it more with distance. The spirals and
+   * the tunnel have none: turning their image would open a seam.
+   */
+  mapRoll: { label: "Roll", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  mapCurl: { label: "Twist", min: 0, max: 1, step: 0.001, value: 0, drift: "wave", low: 0, high: 0.2, on: false },
+  mapFog: { label: "Darkness", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.3, high: 0.7, on: false },
+  /** How gradual the darkness is: 0 a hard edge at the start, 1 a slow fade that is black only near the far end. */
+  mapFogSoftness: { label: "Softness", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.3, high: 0.7, on: false },
   /**
    * Möbius only: a turn, a twist (which turns more with distance, like the
    * kaleidoscope's twirl), a zoom and a pan, applied to the point after the
    * Möbius map.
    */
-  mobiusRotation: { label: "Rotation", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
-  mobiusTwist: { label: "Twist", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -1, high: 1, on: false },
-  mobiusZoom: { label: "Zoom", min: 0.2, max: 4, step: 0.01, value: 1, drift: "wave", low: 0.7, high: 1.6, on: false },
-  mobiusPanX: { label: "Pan X", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.35, high: 0.35, on: false },
-  mobiusPanY: { label: "Pan Y", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.35, high: 0.35, on: false },
+  /**
+   * The Möbius point's distance from the center. With the pole at the screen
+   * center, it sets the size of the picture around the pole: near 0 the
+   * picture blows out, and at 1 it shrinks to one color and then flips.
+   */
+  mobiusPoint: { label: "Point", min: 0.66, max: 0.99, step: 0.01, value: 0.86, drift: "wave", low: 0.66, high: 0.99, on: true },
+  /** Rotation turns the whole Möbius picture on the screen; Roll turns the image inside the map's shapes. */
+  mobiusTurn: { label: "Rotation", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 165, high: 211, on: false },
+  mobiusRotation: { label: "Roll", min: 0, max: 360, step: 1, value: 199, unit: "°", drift: "spin", low: 0, high: 66, on: true, ease: "organic" },
+  mobiusTwist: { label: "Twist", min: 0, max: 1, step: 0.001, value: 0, drift: "wave", low: 0, high: 0.207, on: false },
+  mobiusZoom: { label: "Zoom", min: 1, max: 5, step: 0.01, value: 1, drift: "wave", low: 1, high: 5, on: false },
+  mobiusPanX: { label: "Pan X", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -0.35, high: 0.35, on: false },
+  mobiusPanY: { label: "Pan Y", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -0.35, high: 0.35, on: false },
+  /** Möbius has its own Darkness and Softness (see mapFog), so it and Tunnel can have different defaults. */
+  mobiusFog: { label: "Darkness", min: 0, max: 1, step: 0.01, value: 0.17, drift: "wave", low: 0.33, high: 0.15, on: true },
+  mobiusFogSoftness: { label: "Softness", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.3, high: 0.7, on: false },
   /** The handles are whole numbers, but a drifting count moves smoothly between them (see fold() in shaders.ts). */
   segments: { label: "Segments", min: 0, max: 24, step: 1, value: 0, drift: "wave", low: 3, high: 8, on: false },
   /** Tile modes only: screen heights between neighbor cell centers. */
@@ -309,7 +450,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   centerX: { label: "Offset X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.3, high: 0.3, on: false },
   centerY: { label: "Offset Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.25, high: 0.25, on: false },
   rotation: { label: "Rotation", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
-  zoom: { label: "Zoom", min: 0.2, max: 4, step: 0.01, value: 1, drift: "wave", low: 0.6, high: 1.8, on: false },
+  zoom: { label: "Zoom", min: 0.25, max: 1.5, step: 0.01, value: 1, drift: "wave", low: 0.5, high: 1, on: false },
   panX: { label: "Pan X", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.35, high: 0.35, on: false },
   panY: { label: "Pan Y", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.35, high: 0.35, on: false },
   twirl: { label: "Twirl", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -1.5, high: 1.5, on: false },
@@ -328,7 +469,8 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   blurMaskLevel: { label: "Level", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.3, high: 0.7, on: false },
   /** Trail values are per 1/60 s; the renderer scales them to the real frame time. */
   trailAmount: { label: "Trail length", min: 0, max: 0.98, step: 0.01, value: 0, drift: "wave", low: 0.7, high: 0.95, on: false },
-  trailZoom: { label: "Trail zoom", min: 0.97, max: 1.03, step: 0.001, value: 1, drift: "wave", low: 0.996, high: 1.015, on: false },
+  /** Trail zoom only grows the old frame (1 is no zoom); it never shrinks it. */
+  trailZoom: { label: "Zoom", min: 1, max: 1.03, step: 0.001, value: 1, drift: "wave", low: 1.002, high: 1.015, on: false },
   trailTurn: { label: "Trail turn", min: -1, max: 1, step: 0.01, value: 0, unit: "°", drift: "wave", low: -0.3, high: 0.3, on: false },
   /** Flow pushes the old frame along its brightness slopes (swirl 0) or around them (swirl 1). Below 0, the push goes the other way. */
   trailFlow: { label: "Trail flow", min: -100, max: 100, step: 0.1, value: 0, unit: "px", drift: "wave", low: 2, high: 8, on: false },
@@ -401,6 +543,84 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   cameraSky: { label: "Sky", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.2, high: 0.8, on: false },
   cameraShine: { label: "Shine", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.1, high: 0.5, on: false },
   cameraSmooth: { label: "Smooth", min: 0, max: 6, step: 0.1, value: 2.5, drift: "wave", low: 1, high: 4, on: false },
+  /**
+   * Pixel sort (see SORT_STEP_SHADER): along lines at Angle, each run of
+   * pixels whose brightness is between Low and High is sorted by
+   * brightness. Length cuts the runs into pieces at most this part of the
+   * screen's diagonal long (1 = no cut). Thickness is the width of each
+   * sort line, in pixels at 1080p. Opacity mixes the sorted picture over
+   * the picture.
+   */
+  sortAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
+  sortLow: { label: "Low", min: 0, max: 1, step: 0.01, value: 0.25, drift: "wave", low: 0.15, high: 0.4, on: false },
+  sortHigh: { label: "High", min: 0, max: 1, step: 0.01, value: 0.8, drift: "wave", low: 0.6, high: 0.95, on: false },
+  sortAngle: { label: "Angle", min: 0, max: 360, step: 1, value: 270, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  sortLength: { label: "Length", min: 0.02, max: 1, step: 0.01, value: 1, drift: "wave", low: 0.1, high: 0.5, on: false },
+  sortThickness: { label: "Thickness", min: 1, max: 64, step: 0.1, scale: "log", value: 1, unit: "px", drift: "wave", low: 2, high: 16, on: false },
+  /**
+   * Reaction-diffusion (see REACTION_STEP_SHADER): two chemicals on a grid
+   * that grow spots, stripes and mazes. Feed and Kill pick the kind of
+   * pattern; Follow lets the picture's brightness raise the feed (below 0,
+   * lower it), so bright and dark areas grow different patterns. Speed is
+   * the steps of growth per 1/60 s; Size is the grid cell, in pixels at
+   * 1080p (a larger cell makes a larger pattern; a new size starts the
+   * pattern again). Opacity is how strongly the pattern masks or bends the
+   * picture.
+   */
+  reactionAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
+  reactionFeed: { label: "Feed", min: 0.01, max: 0.1, step: 0.0005, value: 0.0545, drift: "wave", low: 0.035, high: 0.06, on: false },
+  reactionKill: { label: "Kill", min: 0.045, max: 0.07, step: 0.0005, value: 0.062, drift: "wave", low: 0.059, high: 0.065, on: false },
+  reactionFollow: { label: "Follow", min: -1, max: 1, step: 0.01, value: 0.5, drift: "wave", low: -0.5, high: 1, on: false },
+  reactionSpeed: { label: "Speed", min: 0, max: 30, step: 0.5, value: 10, drift: "wave", low: 4, high: 16, on: false },
+  reactionSize: { label: "Size", min: 1, max: 8, step: 0.5, value: 2, unit: "px" },
+  /**
+   * Particles (see PARTICLE_STEP_SHADER): their opacity, how many there are,
+   * and the brightness a spot of the picture needs to emit one (0 = any
+   * spot). Each particle takes the color of the spot it came from. Size is
+   * in pixels at 1080p, Life in seconds (each particle lives half to one and
+   * a half times as long), Speed is the start speed in screen heights per
+   * second. Gravity pulls toward Direction (below 0, away from it).
+   * Turbulence pushes the particles along a moving swirl of noise, and Drag
+   * slows them. Background is the opacity of the picture under the
+   * particles: at 0 only the particles show, on black, but the picture
+   * still sets where they are born and their color.
+   */
+  particleAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
+  particleBackground: { label: "Background", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0, high: 1, on: false },
+  particleCount: { label: "Count", min: 100, max: 262144, step: 1, scale: "log", value: 4000, drift: "wave", low: 1000, high: 10000, on: false },
+  particleLevel: { label: "Emit level", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.4, high: 0.8, on: false },
+  particleSize: { label: "Size", min: 0.5, max: 40, step: 0.1, scale: "log", value: 4, unit: "px", drift: "wave", low: 2, high: 8, on: false },
+  particleLife: { label: "Life", min: 0.2, max: 10, step: 0.1, value: 2.5, unit: " s", drift: "wave", low: 1, high: 4, on: false },
+  particleSpeed: { label: "Speed", min: 0, max: 0.2, step: 0.001, value: 0.15, drift: "wave", low: 0.05, high: 0.2, on: false },
+  particleGravity: { label: "Gravity", min: -1, max: 1, step: 0.01, value: 0.1, drift: "wave", low: -0.2, high: 0.2, on: false },
+  particleAngle: { label: "Direction", min: 0, max: 360, step: 1, value: 270, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  particleTurbulence: { label: "Turbulence", min: 0, max: 2, step: 0.01, value: 0.3, drift: "wave", low: 0.1, high: 0.8, on: false },
+  particleDrag: { label: "Drag", min: 0, max: 5, step: 0.01, value: 1, drift: "wave", low: 0.5, high: 2, on: false },
+  /**
+   * Light rays (see RAYS_SHADER): the bright parts of the picture shine
+   * out in rays, away from a center. Strength is how much light the rays
+   * add; Threshold is the brightness where the light starts. Length is how
+   * far each ray reaches, as a part of the way to the center (1 = all the
+   * way), and Fade how fast a ray gets dimmer along its length. The center
+   * is a part of the screen size from the screen center: -0.5 and 0.5 are
+   * the screen edges.
+   */
+  raysAmount: { label: "Strength", min: 0, max: 4, step: 0.01, value: 0, drift: "wave", low: 0.8, high: 2, on: false },
+  raysThreshold: { label: "Threshold", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.4, high: 0.8, on: false },
+  raysLength: { label: "Length", min: 0, max: 1, step: 0.01, value: 0.4, drift: "wave", low: 0.2, high: 0.7, on: false },
+  raysFade: { label: "Fade", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.2, high: 0.8, on: false },
+  raysX: { label: "Center X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.3, high: 0.3, on: false },
+  raysY: { label: "Center Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.25, high: 0.25, on: false },
+  /**
+   * Bloom (see BLOOM_SHADER): the bright parts of the picture glow into the
+   * parts around them. Strength is how much glow is added; Threshold is the
+   * brightness where the glow starts, and Softness how gradually it starts.
+   * Size is how far the glow spreads: each step doubles the spread.
+   */
+  bloomAmount: { label: "Strength", min: 0, max: 3, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1.5, on: false },
+  bloomThreshold: { label: "Threshold", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.4, high: 0.8, on: false },
+  bloomSoftness: { label: "Softness", min: 0, max: 1, step: 0.01, value: 0.3, drift: "wave", low: 0.1, high: 0.6, on: false },
+  bloomSize: { label: "Size", min: 1, max: 6, step: 0.1, value: 3, drift: "wave", low: 2, high: 5, on: false },
   sharpen: { label: "Sharpen", min: 0, max: 3, step: 0.01, value: 0, drift: "wave", low: 0.2, high: 1, on: false },
   sharpenRadius: { label: "Sharpen radius", min: 0.5, max: 4, step: 0.1, value: 1, unit: "px", drift: "wave", low: 0.8, high: 2.5, on: false },
   /** Color overlay: the opacity of state.overlayColor, blended over the whole picture. */
@@ -418,11 +638,14 @@ const SPECS: Record<ParamKey, ParamSpec> = {
  */
 export const NO_EFFECT: Partial<Record<ParamKey, number>> = {
   warpCenterX: 0, warpCenterY: 0, cameraHeight: 0, cameraSpeed: 0,
-  mapScale: 1, mapPower: 1, mapArms: 0, mapPointX: 0, mapPointY: 0, mapTwist: 0, mapSpeed: 0, tunnelTwist: 0,
-  mobiusTwist: 0, mobiusZoom: 1, mobiusPanX: 0, mobiusPanY: 0,
+  mapScale: 1, juliaZoom: 1, mapPower: 1, mapArms: 0, mapTwist: 0, mapSpeed: 0, tunnelTwist: 0, mapPanX: 0, mapPanY: 0,
+  mobiusPanX: 0, mobiusPanY: 0,
   centerX: 0, centerY: 0, zoom: 1, panX: 0, panY: 0, twirl: 0,
   blurMaskX: 0, blurMaskY: 0,
-  trailZoom: 1, trailTurn: 0, trailHue: 0, trailFlow: 0,
+  trailTurn: 0, trailHue: 0, trailFlow: 0,
+  particleGravity: 0,
+  reactionFollow: 0,
+  raysX: 0, raysY: 0,
   exposure: 0
 };
 
@@ -431,13 +654,13 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 
 export function createParams(): Params {
   const params = {} as Params;
-  for (const key of PARAM_KEYS) params[key] = { ...SPECS[key] };
+  PARAM_KEYS.forEach((key, index) => { params[key] = { ...SPECS[key], seed: index }; });
   return params;
 }
 
-/** The start-up orders: the fold, then the map bends the folded picture, then the warp; and blur, trails, time smear, contours, relief, camera, final effects. */
+/** The start-up orders: the fold, then the map bends the folded picture, then the warp; and blur, trails, time smear, contours, relief, camera, pixel sort, reaction-diffusion, particles, light rays, bloom, final effects. */
 export const defaultShapeOrder = (): ShapeStep[] => ["kaleidoscope", "map", "warp"];
-export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "camera", "finish"];
+export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "camera", "sort", "reaction", "particles", "rays", "bloom", "finish"];
 export const defaultFxOrder = (): FxStep[] => [...defaultShapeOrder(), ...defaultPictureOrder()];
 
 /**
@@ -477,6 +700,11 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
     case "smear": return used("smearAmount");
     case "contours": return used("contourOpacity");
     case "relief": return used("reliefAmount");
+    case "sort": return used("sortAmount");
+    case "reaction": return used("reactionAmount");
+    case "particles": return used("particleAmount");
+    case "rays": return used("raysAmount");
+    case "bloom": return used("bloomAmount");
     case "finish": return used("sharpen") || used("exposure") || used("blackLevel") || used("overlayOpacity");
     default: return true;
   }
@@ -485,13 +713,13 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
 export function createPlayState(): PlayState {
   return {
     /* No effect is in the list at start-up, so every effect group is off. */
-    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, camera: false, finish: false },
-    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, camera: false, finish: false },
-    blendMode: 0, warpMode: 1, warpType: 0, warpTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 1, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, camera: false, sort: false, reaction: false, particles: false, rays: false, bloom: false, finish: false },
+    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, camera: false, sort: false, reaction: false, particles: false, rays: false, bloom: false, finish: false },
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 1, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, sortOrder: 0, reactionLook: 0, particleBlend: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
-export const MAX_CUSTOM_SECONDS = 120;
+export const MAX_CUSTOM_SECONDS = 60;
 
 /** Starts a range's timing again: it is at its start handle at this time (animation time, or the clock for a custom range). */
 export function startRangeAt(param: Param, time: number) {
@@ -548,9 +776,9 @@ export function liveValue(param: Param, state: PlayState): number {
     return end > start ? bottom + offset : top - offset;
   }
   const kind = easeOf(param);
-  /* A one-way curve plays whole on every trip; the others go out on one trip and back on the next. */
+  /* A one-way curve plays whole on every trip; a wandering one goes on from trip to trip; the others go out on one trip and back on the next. */
   const travel = ONE_WAY.has(kind) ? (trips % 1 + 1) % 1 : (trips % 2 + 2) % 2;
-  const part = easeCurve(kind, travel <= 1 ? travel : 2 - travel);
+  const part = WANDER.has(kind) ? wander(kind, trips, param.seed ?? 0) : easeCurve(kind, travel <= 1 ? travel : 2 - travel);
   /* A log slider's range moves at the same speed along the slider, so in equal ratios. */
   if (param.scale === "log") return start * (end / start) ** part;
   return start + (end - start) * part;
@@ -687,8 +915,8 @@ export function resetEffects(params: Params, state: PlayState) {
   for (const group of Object.keys(GROUP_PARAMS) as GroupKey[]) {
     if (group === "source" || group === "animation" || state.locks[group]) continue;
     for (const key of GROUP_PARAMS[group]) {
-      const { value, low, high, on } = SPECS[key];
-      Object.assign(params[key], { value, low, high, on, ease: undefined, custom: false, startTime: 0 });
+      const { value, low, high, on, ease } = SPECS[key];
+      Object.assign(params[key], { value, low, high, on, ease, custom: false, startTime: 0 });
     }
     state.groups[group] = false;
   }
@@ -713,6 +941,9 @@ export function resetEffects(params: Params, state: PlayState) {
     state.skyColor = fresh.skyColor;
     state.cameraRepeat = fresh.cameraRepeat;
   }
+  if (!state.locks.sort) state.sortOrder = fresh.sortOrder;
+  if (!state.locks.reaction) state.reactionLook = fresh.reactionLook;
+  if (!state.locks.particles) state.particleBlend = fresh.particleBlend;
   if (!state.locks.finish) state.overlayColor = fresh.overlayColor;
   for (const step of ["warp", "map", "kaleidoscope"] as const) if (!state.locks[step]) state.layerBlend[step] = 0;
   /* The unlocked effects leave the list (their groups are off now); the locked ones stay, in their order. */
@@ -726,8 +957,8 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   /** The images are the user's choice; Randomize does not change the blend. */
   source: ["imageBlend"],
   warp: ["warpOpacity", "warpAmount", "warpScale", "warpCellSize", "warpCellAngle", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle"],
-  map: ["mapOpacity", "mapMix", "mapScale", "mapPower", "mapPointX", "mapPointY", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "tunnelTwist",
-    "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY"],
+  map: ["mapOpacity", "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl",
+    "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness"],
   kaleidoscope: ["foldOpacity", "segments", "tileSize", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl"],
   blur: ["blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel"],
   trails: ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"],
@@ -735,6 +966,11 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   contours: ["contourHue", "contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady"],
   relief: ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"],
   camera: ["cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth"],
+  sort: ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"],
+  reaction: ["reactionAmount", "reactionFeed", "reactionKill", "reactionFollow", "reactionSpeed", "reactionSize"],
+  particles: ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag"],
+  rays: ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"],
+  bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
   finish: ["sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel"]
 };
 
@@ -748,6 +984,9 @@ const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   smear: ["smearShape"],
   contours: ["contourTone", "contourBlend"],
   camera: ["skyColor", "cameraBlend", "cameraRepeat"],
+  sort: ["sortOrder"],
+  reaction: ["reactionLook"],
+  particles: ["particleBlend"],
   finish: ["overlayColor"]
 };
 
@@ -767,7 +1006,7 @@ export function randomizeGroup(params: Params, state: PlayState, group: GroupKey
 
 /** The chance that Randomize puts each effect in the list. Blur looks the least good, so Randomize leaves it out. */
 const EFFECT_CHANCE: Record<FxStep, number> = {
-  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.25, relief: 0.4, camera: 0.3, finish: 0.4
+  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.25, relief: 0.4, camera: 0.3, sort: 0.2, reaction: 0.2, particles: 0.25, rays: 0.25, bloom: 0.3, finish: 0.4
 };
 
 function randomizeAll(params: Params, state?: PlayState) {
@@ -840,24 +1079,36 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("warpDetail", Math.round(rand(2, 6)));
   set("warpFlow", rand(0.05, 0.6), rand(0, 0.25));
   set("mapMix", rand(0.6, 1), rand(0, 0.3));
-  set("mapScale", rand(0.6, 2), rand(0.1, 0.4));
+  set("mapScale", rand(0.3, 1.1), rand(0.05, 0.2));
+  set("juliaZoom", rand(0.6, 1.2), rand(0.05, 0.2));
   set("mapPower", rand(1.5, 4), rand(0.2, 1));
-  set("mapPointX", rand(-0.9, 0.5), rand(0.05, 0.25));
-  set("mapPointY", rand(-0.7, 0.7), rand(0.05, 0.25));
+  setAngle("juliaShape", 0.3);
+  set("juliaEdge", rand(0.8, 1.2), rand(0.03, 0.1));
   set("mapSteps", Math.round(rand(2, 8)));
   set("mapTwist", rand(-60, 60), rand(5, 25));
   set("mapSpeed", (Math.random() < 0.8 ? 1 : -1) * rand(0.1, 0.6), rand(0, 0.2));
-  set("mapFog", rand(0.3, 0.9), rand(0, 0.15));
+  set("mapFog", rand(0.3, 0.8), rand(0, 0.15));
+  set("mapFogSoftness", rand(0.3, 0.7), rand(0, 0.1));
+  set("mobiusFog", rand(0.3, 0.8), rand(0, 0.15));
+  set("juliaFog", rand(0.3, 0.8), rand(0, 0.15));
+  set("juliaFogSoftness", rand(0.3, 0.7), rand(0, 0.1));
+  set("mobiusFogSoftness", rand(0.3, 0.7), rand(0, 0.1));
   set("tunnelTwist", Math.random() < 0.4 ? 0 : rand(-8, 8), rand(1, 4));
+  set("mapPanX", Math.random() < 0.5 ? 0 : rand(-0.4, 0.4), rand(0.05, 0.25));
+  set("mapPanY", Math.random() < 0.5 ? 0 : rand(-0.4, 0.4), rand(0.05, 0.25));
+  setAngle("mapRoll", 0.5);
+  set("mapCurl", Math.random() < 0.5 ? 0 : rand(0.02, 0.3), rand(0.01, 0.05));
+  set("mobiusPoint", rand(0.7, 0.95), rand(0.03, 0.1));
+  setAngle("mobiusTurn", 0.5);
   setAngle("mobiusRotation", 0.5);
-  set("mobiusTwist", Math.random() < 0.5 ? 0 : rand(-1.2, 1.2), rand(0.2, 0.6));
-  set("mobiusZoom", rand(0.7, 1.8), rand(0.1, 0.4));
+  set("mobiusTwist", Math.random() < 0.5 ? 0 : rand(0.01, 0.08), rand(0.005, 0.03));
+  set("mobiusZoom", rand(1, 3), rand(0.2, 0.8));
   set("mobiusPanX", Math.random() < 0.5 ? 0 : rand(-0.4, 0.4), rand(0.05, 0.25));
   set("mobiusPanY", Math.random() < 0.5 ? 0 : rand(-0.4, 0.4), rand(0.05, 0.25));
   set("centerX", rand(-0.2, 0.2), rand(0.1, 0.35));
   set("centerY", rand(-0.15, 0.15), rand(0.08, 0.3));
   setAngle("rotation", 0.7);
-  set("zoom", rand(0.6, 2.4), rand(0.2, 0.8));
+  set("zoom", rand(0.4, 1.3), rand(0.05, 0.25));
   set("panX", rand(-0.5, 0.5), rand(0.1, 0.4));
   set("panY", rand(-0.5, 0.5), rand(0.1, 0.4));
   set("twirl", Math.random() < 0.4 ? rand(-1.5, 1.5) : 0, rand(0.3, 1));
@@ -867,7 +1118,7 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("blurMaskSoft", rand(0.2, 0.9), rand(0, 0.2));
   if (state) state.blurMask = Math.floor(Math.random() * 6) as BlurMask;
   set("trailAmount", rand(0.6, 0.95), rand(0.03, 0.1));
-  set("trailZoom", rand(0.992, 1.02), rand(0.002, 0.008));
+  set("trailZoom", rand(1.004, 1.02), rand(0.002, 0.008));
   set("trailTurn", rand(-0.4, 0.4), rand(0.05, 0.3));
   set("trailFlow", Math.random() < 0.5 ? 0 : (Math.random() < 0.5 ? -1 : 1) * rand(2, 10), rand(1, 4));
   set("trailSwirl", rand(0, 1), rand(0, 0.3));
@@ -892,6 +1143,9 @@ function randomizeAll(params: Params, state?: PlayState) {
     state.contourBlend = (Math.random() < 0.6 ? 0 : Math.floor(Math.random() * 8)) as LayerBlend;
     state.cameraBlend = (Math.random() < 0.6 ? 0 : Math.floor(Math.random() * 8)) as LayerBlend;
     state.cameraRepeat = (Math.random() < 0.7 ? 0 : Math.random() < 0.7 ? 1 : 2) as CameraRepeat;
+    state.particleBlend = (Math.random() < 0.7 ? 0 : 1) as ParticleBlend;
+    state.sortOrder = (Math.random() < 0.5 ? 0 : 1) as SortOrder;
+    state.reactionLook = (Math.random() < 0.6 ? 0 : 1) as ReactionLook;
   }
   set("reliefAmount", rand(0.3, 1), rand(0.1, 0.3));
   set("reliefDepth", rand(3, 12), rand(0, 3));
@@ -912,13 +1166,45 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("cameraSky", rand(0, 1), rand(0, 0.2));
   set("cameraShine", Math.random() < 0.5 ? 0 : rand(0.1, 0.6), rand(0, 0.2));
   set("cameraSmooth", rand(1.5, 4), rand(0, 1));
+  set("sortAmount", rand(0.7, 1), rand(0, 0.2));
+  set("sortLow", rand(0.1, 0.4), rand(0.02, 0.1));
+  set("sortHigh", rand(0.6, 0.95), rand(0.02, 0.1));
+  setAngle("sortAngle", 0.15);
+  set("sortLength", Math.random() < 0.5 ? 1 : rand(0.1, 0.6), rand(0.05, 0.2));
+  set("sortThickness", Math.random() < 0.5 ? 1 : rand(2, 24), rand(0.5, 4));
+  set("reactionAmount", rand(0.6, 1), rand(0, 0.2));
+  set("reactionFeed", rand(0.03, 0.06), rand(0.001, 0.005));
+  set("reactionKill", rand(0.058, 0.065), rand(0.0005, 0.002));
+  set("reactionFollow", rand(-0.5, 1), rand(0.1, 0.3));
+  set("reactionSpeed", rand(5, 20), rand(1, 4));
+  set("reactionSize", [1.5, 2, 2, 3, 4][Math.floor(Math.random() * 5)]);
+  set("particleAmount", rand(0.6, 1), rand(0, 0.2));
+  set("particleCount", Math.round(rand(1500, 15000)), rand(200, 2000));
+  set("particleLevel", rand(0.3, 0.8), rand(0.05, 0.15));
+  set("particleSize", rand(1.5, 10), rand(0.5, 3));
+  set("particleLife", rand(1, 5), rand(0.2, 1));
+  set("particleSpeed", rand(0.01, 0.2), rand(0, 0.05));
+  set("particleGravity", Math.random() < 0.4 ? 0 : rand(-0.3, 0.3), rand(0.02, 0.1));
+  setAngle("particleAngle", 0.2);
+  set("particleTurbulence", rand(0, 1), rand(0.05, 0.3));
+  set("particleDrag", rand(0.3, 2.5), rand(0, 0.5));
+  set("raysAmount", rand(0.8, 2.5), rand(0.2, 0.5));
+  set("raysThreshold", rand(0.4, 0.8), rand(0, 0.1));
+  set("raysLength", rand(0.2, 0.8), rand(0.05, 0.2));
+  set("raysFade", rand(0.2, 0.8), rand(0, 0.2));
+  set("raysX", Math.random() < 0.5 ? 0 : rand(-0.3, 0.3), rand(0.05, 0.25));
+  set("raysY", Math.random() < 0.5 ? 0 : rand(-0.25, 0.25), rand(0.05, 0.2));
+  set("bloomAmount", rand(0.4, 1.8), rand(0.1, 0.4));
+  set("bloomThreshold", rand(0.4, 0.85), rand(0, 0.1));
+  set("bloomSoftness", rand(0.1, 0.6), rand(0, 0.15));
+  set("bloomSize", rand(1.5, 5), rand(0.3, 1));
   set("sharpen", rand(0, 1.2), rand(0, 0.3));
   set("sharpenRadius", rand(0.7, 2.5), rand(0, 0.8));
   set("exposure", Math.random() < 0.6 ? 0 : rand(-1, 0.3), rand(0, 0.5));
   set("overlayOpacity", Math.random() < 0.75 ? 0 : rand(0.1, 0.4), rand(0, 0.15));
   set("blackLevel", Math.random() < 0.6 ? 0 : rand(0.02, 0.25), rand(0, 0.1));
   /** Every range starts off; Randomize turns on the ones that move the picture most. */
-  const moving: ParamKey[] = ["warpAmount", "warpMarble", "mapPower", "mapPointX", "mapPointY", "mapTwist", "mapSpeed", "lightAngle", "cameraTurn",
+  const moving: ParamKey[] = ["warpAmount", "warpMarble", "mapPower", "juliaShape", "mobiusPoint", "mapTwist", "mapSpeed", "lightAngle", "cameraTurn",
     "centerX", "centerY", "rotation", "zoom", "panX", "panY"];
   for (const key of PARAM_KEYS) {
     const userOwned = GROUP_PARAMS.source.includes(key) || GROUP_PARAMS.animation.includes(key) || OPACITY_KEYS.includes(key);

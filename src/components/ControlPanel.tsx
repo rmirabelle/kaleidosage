@@ -36,12 +36,20 @@ const TRAIL_KEYS: ParamKey[] = ["trailAmount", "trailZoom", "trailTurn", "trailH
 const CONTOUR_KEYS: ParamKey[] = ["contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady"];
 const RELIEF_KEYS: ParamKey[] = ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"];
 const CAMERA_KEYS: ParamKey[] = ["cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth"];
+const SORT_KEYS: ParamKey[] = ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"];
+const REACTION_KEYS: ParamKey[] = ["reactionAmount", "reactionFeed", "reactionKill", "reactionFollow", "reactionSpeed", "reactionSize"];
+const PARTICLE_KEYS: ParamKey[] = ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag"];
+const RAYS_KEYS: ParamKey[] = ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"];
+const BLOOM_KEYS: ParamKey[] = ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"];
 const FINISH_KEYS: ParamKey[] = ["sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel"];
 
 const LAYER_BLENDS = [
   [0, "Normal"], [1, "Screen"], [2, "Multiply"], [3, "Overlay"], [4, "Difference"], [5, "Lighten"], [6, "Darken"], [7, "Add"]
 ] as const;
 const TRAIL_MODES = [[1, "Mix (smoky)"], [2, "Lighten (glowing)"]] as const;
+const PARTICLE_BLENDS = [[0, "Glow (add)"], [1, "Normal"]] as const;
+const SORT_ORDERS = [[0, "Dark to bright"], [1, "Bright to dark"]] as const;
+const REACTION_LOOKS = [[0, "Mask"], [1, "Bend"]] as const;
 /** How the camera's land goes on past the picture. Mirror is seamless for every picture; Tile is seamless only for a picture that tiles. */
 const CAMERA_REPEATS = [[0, "Mirror"], [1, "Tile"], [2, "None"]] as const;
 
@@ -52,6 +60,22 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
   const [anyHeld, setAnyHeld] = useState(engine.anyHeld);
   useEffect(() => engine.onParamChange(() => setAnyHeld(engine.anyHeld)), [engine]);
   const [videoCrossfade, setVideoCrossfade] = useState(engine.state.videoCrossfade);
+  /**
+   * The MIDI button before the FX title shows the settings' MIDI buttons; they
+   * are hidden until then. It shows when a MIDI device is there or a setting
+   * has a control. Hiding them stops a wait for a control and plays every
+   * range that MIDI stopped (their play buttons are in the MIDI column).
+   */
+  const { available, devices, mapped } = useMidi();
+  const midiReady = mapped.size > 0 || (available && devices.length > 0);
+  const [showMidi, setShowMidi] = useState(false);
+  const toggleMidi = () => {
+    if (showMidi) {
+      midi.setLearning(false);
+      engine.resumeAll();
+    }
+    setShowMidi(!showMidi);
+  };
   /** Opening a group closes the others; clicking the open group closes it. Each group's dice randomizes that group. */
   const accordion = (key: GroupKey) => ({
     open: openGroup === key,
@@ -115,10 +139,18 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     Object.assign(engine.params.warpScale, { value: 2, on: false });
     setWarpRevision((value) => value + 1);
   };
+  /**
+   * Turning the Algorithm on sets its mix and opacity to full. A Power map at
+   * power 1 only folds the picture over its axis (a mirror line across the
+   * middle), so it starts at power 2 instead. A power that is already set
+   * stays as it is.
+   */
   const enableMap = () => {
     for (const key of ["mapMix", "mapOpacity"] as const) {
       Object.assign(engine.params[key], { value: engine.params[key].max, on: false });
     }
+    const power = engine.params.mapPower;
+    if (engine.state.mapMode === 1 && power.value === 1 && !power.on) power.value = 2;
     setMapRevision((value) => value + 1);
   };
 
@@ -142,7 +174,12 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       trails: () => start("trailAmount", 0.85),
       smear: () => start("smearAmount", 1),
       relief: () => start("reliefAmount", 0.6),
-      camera: () => start("cameraAmount", 1)
+      camera: () => start("cameraAmount", 1),
+      sort: () => start("sortAmount", 1),
+      reaction: () => start("reactionAmount", 1),
+      particles: () => start("particleAmount", 1),
+      rays: () => start("raysAmount", 1.5),
+      bloom: () => start("bloomAmount", 1)
     };
     enable[step]?.();
     addEffect(engine.state, step);
@@ -177,7 +214,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     ),
     trails: (grip) => (
       <Group engine={engine} group="trails" title="Trails" grip={grip} {...accordion("trails")}>
-        <ModeSelect engine={engine} stateKey="trailMode" options={TRAIL_MODES} />
+        <ModeSelect engine={engine} stateKey="trailMode" options={TRAIL_MODES} name="Type" />
         {TRAIL_KEYS.map(row)}
       </Group>
     ),
@@ -207,6 +244,34 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
         {CAMERA_KEYS.map(row)}
       </Group>
     ),
+    sort: (grip) => (
+      <Group engine={engine} group="sort" title="Pixel sort" grip={grip} {...accordion("sort")}>
+        <ModeSelect engine={engine} stateKey="sortOrder" options={SORT_ORDERS} name="Order" />
+        {SORT_KEYS.map(row)}
+      </Group>
+    ),
+    reaction: (grip) => (
+      <Group engine={engine} group="reaction" title="Reaction-diffusion" grip={grip} {...accordion("reaction")}>
+        <ModeSelect engine={engine} stateKey="reactionLook" options={REACTION_LOOKS} name="Look" />
+        {REACTION_KEYS.map(row)}
+      </Group>
+    ),
+    particles: (grip) => (
+      <Group engine={engine} group="particles" title="Particles" grip={grip} {...accordion("particles")}>
+        <ModeSelect engine={engine} stateKey="particleBlend" options={PARTICLE_BLENDS} name="Blend" />
+        {PARTICLE_KEYS.map(row)}
+      </Group>
+    ),
+    rays: (grip) => (
+      <Group engine={engine} group="rays" title="Light rays" grip={grip} {...accordion("rays")}>
+        {RAYS_KEYS.map(row)}
+      </Group>
+    ),
+    bloom: (grip) => (
+      <Group engine={engine} group="bloom" title="Bloom" grip={grip} {...accordion("bloom")}>
+        {BLOOM_KEYS.map(row)}
+      </Group>
+    ),
     finish: (grip) => (
       <Group engine={engine} group="finish" title="Final effects" grip={grip} {...accordion("finish")}>
         {FINISH_KEYS.map(row)}
@@ -215,7 +280,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
   };
 
   return (
-    <aside className="side-panel control-panel">
+    <aside className={`side-panel control-panel ${showMidi && midiReady ? "" : "midi-hidden"}`}>
       {/* The scene length (the cycle): at the very top and always in view, because its timing affects the sources and every effect below. A video source adds its crossfade after the slider. */}
       <div className="panel-root-row">
         {row.with("cycle", { after: hasVideo && (
@@ -233,9 +298,20 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
         ) })}
       </div>
       {source}
-      {/* The FX card: its title bar (Random all, Nudge, Clear all, then Add New), then the effect groups, which scroll. */}
+      {/* The FX card: its title bar (Random all, Nudge, Clear all, then New), then the effect groups, which scroll. */}
       <section className="panel-card fx-card">
         <div className="side-panel-header panel-header-bar">
+          {midiReady && (
+            <button
+              className={`panel-title-midi ${showMidi ? "on" : ""}`}
+              title={showMidi ? "Hide the MIDI buttons of the settings" : "Show the MIDI buttons of the settings, to assign knobs and faders"}
+              aria-label="Show MIDI buttons"
+              aria-pressed={showMidi}
+              onClick={toggleMidi}
+            >
+              <MidiIcon size={16} />
+            </button>
+          )}
           <h2 className="side-panel-title">FX</h2>
           {/* While MIDI holds any range: a play button that plays them all again (Esc does the same). */}
           {anyHeld && (
@@ -287,10 +363,12 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
             render={(key, grip) => groups[key](grip)}
           />
           {fxOrder.length === 0 && <p className="stage-empty">No effects yet. Add one to start.</p>}
-          {/* A copy of the title bar's Add New button, at the end of the list. */}
-          <div className="add-effect-end">
-            <AddEffectMenu options={EFFECT_NAMES.filter(([step]) => !fxOrder.includes(step))} onAdd={add} />
-          </div>
+          {/* A copy of the title bar's New button, at the end of the list, while an effect group is open. */}
+          {fxOrder.some((step) => step === openGroup) && (
+            <div className="add-effect-end">
+              <AddEffectMenu options={EFFECT_NAMES.filter(([step]) => !fxOrder.includes(step))} onAdd={add} />
+            </div>
+          )}
         </div>
       </section>
     </aside>
@@ -585,13 +663,15 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "reactionLook" | "particleBlend";
 
 /** A menu that sets one of the engine's mode values. */
-export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, onChange }: {
+export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange }: {
   engine: Engine;
   stateKey: K;
   options: readonly (readonly [PlayState[K], string])[];
+  /** A name at the left of the menu, like the Blend menu's. */
+  name?: string;
   onChange?: (mode: PlayState[K]) => void;
 }) {
   const [mode, setMode] = useState<PlayState[K]>(engine.state[stateKey]);
@@ -606,7 +686,8 @@ export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, onCha
     (submode!.keys[value as number] ?? []).some((key) => mapped.has(key) && !(submode!.keys[mode as number] ?? []).includes(key));
   const marks = new Set(options.map(([value]) => value).filter((value) => value !== mode && hiddenHere(value)));
   return (
-    <div className="panel-select-row">
+    <div className={name ? "panel-select-row panel-select-named" : "panel-select-row"}>
+      {name && <span className="panel-row-name">{name}</span>}
       <Dropdown
         value={mode}
         options={options}
@@ -628,7 +709,7 @@ function WarpSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => 
   const [type, setType] = useState<WarpType>(engine.state.warpType);
   return (
     <>
-      <ModeSelect engine={engine} stateKey="warpType" options={WARP_TYPES} onChange={setType} />
+      <ModeSelect engine={engine} stateKey="warpType" options={WARP_TYPES} name="Type" onChange={setType} />
       {WARP_KEYS[type].map(row)}
       <LayerRows engine={engine} step="warp" row={row} />
     </>
@@ -639,7 +720,7 @@ function MapSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => R
   const [mode, setMode] = useState<MapMode>(engine.state.mapMode);
   return (
     <>
-      <ModeSelect engine={engine} stateKey="mapMode" options={MAP_MODES} onChange={setMode} />
+      <ModeSelect engine={engine} stateKey="mapMode" options={MAP_MODES} name="Type" onChange={setMode} />
       {MAP_KEYS[mode].map(row)}
       <LayerRows engine={engine} step="map" row={row} />
     </>
@@ -747,7 +828,7 @@ function KaleidoscopeSection({ engine, row }: { engine: Engine; row: (key: Param
   const [mode, setMode] = useState<FoldMode>(engine.state.foldMode);
   return (
     <>
-      <ModeSelect engine={engine} stateKey="foldMode" options={FOLD_MODES} onChange={setMode} />
+      <ModeSelect engine={engine} stateKey="foldMode" options={FOLD_MODES} name="Type" onChange={setMode} />
       {KALEIDOSCOPE_KEYS[mode].map(row)}
       <LayerRows engine={engine} step="kaleidoscope" row={row} />
     </>

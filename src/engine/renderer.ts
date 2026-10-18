@@ -1,5 +1,5 @@
 import { GpuTimer } from "./gpuTimer";
-import { BLUR_SHADER, CAMERA_FIELD_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MAX_SHADER, OVERLAY_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, CAMERA_FIELD_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, REACTION_SHADER, REACTION_START_SHADER, REACTION_STEP_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 
 /** The blur mask: circle with a sharp or a blurred center, gradient, bright areas, dark areas, noise. */
 export type BlurMask = 0 | 1 | 2 | 3 | 4 | 5;
@@ -17,7 +17,7 @@ export type ShapeStep = "warp" | "map" | "kaleidoscope";
 /** The kind of warp: noise, ripple, waves, swirl, bulge and pinch, cells. */
 export type WarpType = 0 | 1 | 2 | 3 | 4 | 5;
 /** The steps that change the drawn picture. The user sets their order. */
-export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "camera" | "finish";
+export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "camera" | "sort" | "reaction" | "particles" | "rays" | "bloom" | "finish";
 /**
  * Any effect step. The user sets one order for all of them. Shape steps
  * that are next to each other run in one pass; a shape step after a
@@ -25,7 +25,7 @@ export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | 
  */
 export type FxStep = ShapeStep | PictureStep;
 export const SHAPE_STEPS: readonly ShapeStep[] = ["warp", "map", "kaleidoscope"];
-export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "camera", "finish"];
+export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "camera", "sort", "reaction", "particles", "rays", "bloom", "finish"];
 export const isShapeStep = (step: FxStep): step is ShapeStep => (SHAPE_STEPS as readonly FxStep[]).includes(step);
 /** The time smear's pattern: 0 linear, 1 rings, 2 sweep, 3 brightness, 4 noise (see SMEAR_SHADER). */
 export type SmearShape = 0 | 1 | 2 | 3 | 4;
@@ -35,8 +35,20 @@ const SHAPE_CODES: Record<ShapeStep, number> = { warp: 0, map: 1, kaleidoscope: 
 export type LayerBlend = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 /** How the camera's land goes on past the picture: 0 mirrored, 1 repeated as it is, 2 not at all (sky around the picture). */
 export type CameraRepeat = 0 | 1 | 2;
+/** The pixel sort's order along each run: 0 dark to bright, 1 bright to dark. */
+export type SortOrder = 0 | 1;
+/** How the reaction-diffusion pattern shows: 0 as a mask over the picture, 1 bending the picture. */
+export type ReactionLook = 0 | 1;
+/** How the particles combine with the picture: 0 glow (they add their light), 1 normal (they cover it). */
+export type ParticleBlend = 0 | 1;
 /** How the two images fade: 0 = crossfade, 1 = dissolve by brightness (light areas change first). */
 export type BlendMode = 0 | 1;
+/**
+ * How the image goes on past its edges: 0 auto (repeated for a repeating
+ * test pattern, mirrored for anything else), 1 mirrored, 2 repeated as it
+ * is. Repeating keeps a seamless tile, such as a checkerboard, seamless.
+ */
+export type Tiling = 0 | 1 | 2;
 
 /** The values for one frame. Angles are in radians. */
 export interface FrameValues {
@@ -83,13 +95,19 @@ export interface FrameValues {
   mapTwist: number;
   /** The angle (radians) of the axis that power, log spiral and tunnel fold over. */
   mapAngle: number;
+  mapPanX: number;
+  mapPanY: number;
+  mapRoll: number;
+  mapCurl: number;
   /** Tunnel only: how far the wall turns per tube length, in radians. */
   tunnelTwist: number;
   /** How far the view has flown into the tunnel. */
   mapTravel: number;
   /** How much the far end of the tunnel fades to black. */
   mapFog: number;
+  mapFogSoftness: number;
   /** Möbius only: the turn (radians), twist, zoom and pan applied after the map. */
+  mobiusTurn: number;
   mobiusRotation: number;
   mobiusTwist: number;
   mobiusZoom: number;
@@ -195,6 +213,74 @@ export interface FrameValues {
   skyColor: [number, number, number];
   cameraShine: number;
   cameraSmooth: number;
+  /**
+   * Pixel sort (see SORT_STEP_SHADER): opacity (0 = off), the order, the
+   * brightness range that is sorted, the angle of the sort lines (radians),
+   * the longest run, as a part of the screen's diagonal (1 = no cut), and
+   * the width of each sort line in pixels at 1080p.
+   */
+  sort: number;
+  sortOrder: SortOrder;
+  sortLow: number;
+  sortHigh: number;
+  sortAngle: number;
+  sortLength: number;
+  sortThickness: number;
+  /**
+   * Reaction-diffusion (see REACTION_STEP_SHADER): opacity (0 = off), the
+   * look, feed and kill rates, how much the picture's brightness moves the
+   * feed, steps per 1/60 s, and the grid cell in pixels at 1080p.
+   */
+  reaction: number;
+  reactionLook: ReactionLook;
+  reactionFeed: number;
+  reactionKill: number;
+  reactionFollow: number;
+  reactionSpeed: number;
+  reactionSize: number;
+  /**
+   * Particles (see PARTICLE_STEP_SHADER): opacity (0 = off), how they
+   * combine with the picture, how many there are, the brightness a spot
+   * needs to emit one, the size in pixels at 1080p, the life span and the
+   * start speed (screen heights per second), gravity and its direction
+   * (radians), turbulence and drag.
+   */
+  particles: number;
+  particleBlend: ParticleBlend;
+  /** The opacity of the picture under the particles: 1 shows it whole, 0 leaves only the particles, on black. */
+  particleBackground: number;
+  particleCount: number;
+  particleLevel: number;
+  particleSize: number;
+  particleLife: number;
+  particleSpeed: number;
+  particleGravity: number;
+  particleAngle: number;
+  particleTurbulence: number;
+  particleDrag: number;
+  /** Animation seconds since the last frame (0 while paused, so the particles stand still), and the animation time. */
+  particleSeconds: number;
+  particleTime: number;
+  /**
+   * Light rays (see RAYS_SHADER): strength (0 = off), the brightness where
+   * the light starts, the length (a part of the way to the center), the
+   * fade along a ray, and the center (a part of the screen size from the
+   * screen center).
+   */
+  rays: number;
+  raysThreshold: number;
+  raysLength: number;
+  raysFade: number;
+  raysX: number;
+  raysY: number;
+  /**
+   * Bloom (see BLOOM_SHADER): strength (0 = off), the brightness where the
+   * glow starts and how gradually, and its size (a mip level at 1080p).
+   */
+  bloom: number;
+  bloomThreshold: number;
+  bloomSoftness: number;
+  bloomSize: number;
   /** 0 shows the first image, 1 the second; between, they fade into each other. */
   imageBlend: number;
   /**
@@ -211,6 +297,8 @@ export interface FrameValues {
   blurMaskAngle: number;
   blurMaskLevel: number;
   blendMode: BlendMode;
+  /** True to repeat the images past their edges, false to mirror them (see Tiling). */
+  tileRepeat: boolean;
 }
 
 /** Sizes and counts that drive the GPU cost, for the performance display. */
@@ -275,6 +363,15 @@ interface Program {
   uniforms: Record<string, WebGLUniformLocation>;
 }
 
+/** The particles: one texel of the state textures per particle, so at most PARTICLE_SIDE² of them. */
+const PARTICLE_SIDE = 512;
+
+/** One copy of the particle state: place and speed, age and life span, color (see PARTICLE_STEP_SHADER). */
+interface ParticleState {
+  framebuffer: WebGLFramebuffer;
+  textures: [WebGLTexture, WebGLTexture, WebGLTexture];
+}
+
 /** Frames the time smear keeps, and the most GPU memory they may use (they get smaller on a large canvas). */
 const SMEAR_SLOTS = 32;
 const SMEAR_MEMORY = 320 * 1024 * 1024;
@@ -327,6 +424,48 @@ export class KaleidoRenderer {
    */
   private history: { texture: WebGLTexture; framebuffers: WebGLFramebuffer[]; size: [number, number]; head: number; filled: number; since: number; round: number } | null = null;
   private smearWasOn = false;
+  private readonly particleStep: Program;
+  private readonly particleDraw: Program;
+  /** The particle state of the last frame and of this frame; they change roles each frame. Made on first use. */
+  private particleStates: [ParticleState, ParticleState] | null = null;
+  private particleIndex = 0;
+  private particlesWereOn = false;
+  /** Counts the frames that move the particles, so each frame gets new random numbers. */
+  private particleFrame = 0;
+  /** An empty vertex array: the particle points read their state from textures, not from attributes. */
+  private readonly particleVertices: WebGLVertexArrayObject;
+  /** True when the GPU can draw to 32-bit float textures, which the particle state needs. */
+  private readonly floatTargets: boolean;
+  private readonly reactionStart: Program;
+  private readonly reactionStep: Program;
+  private readonly reactionShow: Program;
+  /** The reaction-diffusion grid of the last step and of the next one (32-bit float), and its size in cells. Made on first use. */
+  private reactionStates: [Target, Target] | null = null;
+  private reactionGrid: [number, number] = [0, 0];
+  private reactionIndex = 0;
+  private reactionWasOn = false;
+  /** The pixel sort's passes, in order (see drawSort). */
+  private readonly sortPrograms: { turn: Program; start: Program; jump: Program; pack: Program; step: Program; show: Program };
+  /** Three square pictures for the pixel sort, made on first use, and their side. */
+  private sortTargets: [Target, Target, Target] | null = null;
+  private sortSide = 0;
+  private readonly rays: Program;
+  private readonly raysMix: Program;
+  /** Two half-size pictures for the light rays; the ray passes go back and forth between them. */
+  private readonly raysTargets: [Target, Target];
+  private readonly bloomBright: Program;
+  private readonly bloomDown: Program;
+  private readonly bloomUp: Program;
+  private readonly bloomMix: Program;
+  /** The bright parts of the picture, for the bloom. */
+  private readonly bloomTarget: Target;
+  /**
+   * The bloom levels: the bright parts at half size, quarter size, and so
+   * on (see drawBloom). Only the first "bloomLevels" fit this canvas; the
+   * smallest of those is at least 8 pixels tall.
+   */
+  private readonly bloomChain: Target[] = [];
+  private bloomLevels = 0;
   /** A second scratch picture, so a pass never reads the texture it draws to. */
   private readonly scratch: Target;
   /** A scratch picture between passes. */
@@ -390,6 +529,26 @@ export class KaleidoRenderer {
     this.contours = this.createProgram(CONTOUR_SHADER);
     this.contourField = this.createProgram(CONTOUR_FIELD_SHADER);
     this.smear = this.createProgram(SMEAR_SHADER);
+    this.particleStep = this.createProgram(PARTICLE_STEP_SHADER);
+    this.particleDraw = this.createProgram(PARTICLE_SHADER, PARTICLE_VERTEX_SHADER);
+    this.particleVertices = gl.createVertexArray()!;
+    this.bloomBright = this.createProgram(BLOOM_BRIGHT_SHADER);
+    this.bloomDown = this.createProgram(BLOOM_DOWN_SHADER);
+    this.rays = this.createProgram(RAYS_SHADER);
+    this.reactionStart = this.createProgram(REACTION_START_SHADER);
+    this.reactionStep = this.createProgram(REACTION_STEP_SHADER);
+    this.reactionShow = this.createProgram(REACTION_SHADER);
+    this.sortPrograms = {
+      turn: this.createProgram(SORT_TURN_SHADER),
+      start: this.createProgram(SORT_START_SHADER),
+      jump: this.createProgram(SORT_JUMP_SHADER),
+      pack: this.createProgram(SORT_PACK_SHADER),
+      step: this.createProgram(SORT_STEP_SHADER),
+      show: this.createProgram(SORT_SHADER)
+    };
+    this.raysMix = this.createProgram(RAYS_MIX_SHADER);
+    this.bloomUp = this.createProgram(BLOOM_UP_SHADER);
+    this.bloomMix = this.createProgram(BLOOM_SHADER);
 
     /** One triangle that covers the whole screen. */
     const buffer = gl.createBuffer();
@@ -410,7 +569,8 @@ export class KaleidoRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     this.framebuffer = gl.createFramebuffer()!;
 
-    this.trailFormat = gl.getExtension("EXT_color_buffer_float")
+    this.floatTargets = Boolean(gl.getExtension("EXT_color_buffer_float"));
+    this.trailFormat = this.floatTargets
       ? { internal: gl.RGBA16F, type: gl.HALF_FLOAT }
       : { internal: gl.RGBA8, type: gl.UNSIGNED_BYTE };
     this.current = this.createTarget();
@@ -418,6 +578,8 @@ export class KaleidoRenderer {
     this.trailTargets = [this.createTarget(), this.createTarget()];
     this.fieldTargets = [this.createTarget(), this.createTarget()];
     this.heightTarget = this.createTarget();
+    this.bloomTarget = this.createTarget();
+    this.raysTargets = [this.createTarget(), this.createTarget()];
     this.maxFramebuffer = gl.createFramebuffer()!;
     this.maxFormat = this.trailFormat.internal === gl.RGBA16F ? gl.R16F : gl.R8;
     this.timer = new GpuTimer(gl);
@@ -542,8 +704,34 @@ export class KaleidoRenderer {
     gl.generateMipmap(gl.TEXTURE_2D);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    this.setWrap(this.tileRepeat);
+  }
+
+  /** True while the images repeat past their edges (see setTiling). */
+  private tileRepeat = false;
+
+  /**
+   * Sets how the bound texture's filter reads past its edges: around to the
+   * other side for a repeated image, so the repeat has no seam, or the edge
+   * pixel for a mirrored one.
+   */
+  private setWrap(repeat: boolean) {
+    const gl = this.gl;
+    const wrap = repeat ? gl.REPEAT : gl.CLAMP_TO_EDGE;
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
+  }
+
+  /** Repeats the images past their edges, or mirrors them. */
+  private setTiling(repeat: boolean) {
+    if (repeat === this.tileRepeat) return;
+    this.tileRepeat = repeat;
+    const gl = this.gl;
+    gl.activeTexture(gl.TEXTURE0);
+    for (const texture of this.imageTextures) {
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      this.setWrap(repeat);
+    }
   }
 
   render(v: FrameValues) {
@@ -567,6 +755,13 @@ export class KaleidoRenderer {
       relief: v.relief > 0,
       /* The camera's view always shows while it is on: at opacity 0 it is the flat floor, seen by the camera. */
       camera: v.cameraOn,
+      particles: v.particles > 0 && this.floatTargets,
+      /* The sort keeps column numbers in half floats, so it needs float textures. */
+      sort: v.sort > 0 && this.floatTargets,
+      /* The chemicals change by tiny amounts each step, so they need 32-bit float textures. */
+      reaction: v.reaction > 0 && this.floatTargets,
+      rays: v.rays > 0,
+      bloom: v.bloom > 0,
       finish: v.sharpen > 0 || v.exposure !== 0 || v.blackLevel > 0 || v.overlayOpacity > 0
     };
     /**
@@ -645,6 +840,11 @@ export class KaleidoRenderer {
         else if (step === "camera") this.drawCamera(v, source, target, width, height);
         else if (step === "contours") this.drawContours(v, source, target, width, height);
         else if (step === "smear") this.drawSmear(v, source, target, width, height);
+        else if (step === "particles") this.drawParticles(v, source, target, width, height);
+        else if (step === "rays") this.drawRays(v, source, target, width, height);
+        else if (step === "sort") this.drawSort(v, source, target, width, height);
+        else if (step === "reaction") this.drawReaction(v, source, target, width, height);
+        else if (step === "bloom") this.drawBloom(v, source, target, width, height);
         else this.drawFinish(v, source, target, width, height);
         if (target) source = target.texture;
         padded = false;
@@ -654,6 +854,8 @@ export class KaleidoRenderer {
     this.trailsWereOn = active.trails;
     this.contoursWereOn = active.contours;
     this.smearWasOn = active.smear;
+    this.particlesWereOn = active.particles;
+    this.reactionWasOn = active.reaction;
   }
 
   /**
@@ -672,6 +874,8 @@ export class KaleidoRenderer {
     gl.uniform2f(k.uniforms.u_imgRes2, this.imageSizes[1][0], this.imageSizes[1][1]);
     gl.uniform1f(k.uniforms.u_blend, Math.min(1, Math.max(0, v.imageBlend)));
     gl.uniform1i(k.uniforms.u_blendMode, v.blendMode);
+    this.setTiling(v.tileRepeat);
+    gl.uniform1i(k.uniforms.u_tileRepeat, v.tileRepeat ? 1 : 0);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, picture ?? this.imageTextures[0]);
     /* The picture gets smaller copies (mip levels), so a step that shrinks it does not shimmer. */
@@ -709,8 +913,13 @@ export class KaleidoRenderer {
     gl.uniform1f(k.uniforms.u_mapTwist, v.mapTwist);
     gl.uniform2f(k.uniforms.u_mapAxis, Math.cos(v.mapAngle), Math.sin(v.mapAngle));
     gl.uniform1f(k.uniforms.u_mapTravel, v.mapTravel);
+    gl.uniform2f(k.uniforms.u_mapPan, v.mapPanX, v.mapPanY);
+    gl.uniform1f(k.uniforms.u_mapRoll, v.mapRoll);
+    gl.uniform1f(k.uniforms.u_mapCurl, v.mapCurl);
     gl.uniform1f(k.uniforms.u_tunnelTwist, v.tunnelTwist);
     gl.uniform1f(k.uniforms.u_mapFog, v.mapFog);
+    gl.uniform1f(k.uniforms.u_mapFogSoftness, v.mapFogSoftness);
+    gl.uniform1f(k.uniforms.u_mobiusTurn, v.mobiusTurn);
     gl.uniform1f(k.uniforms.u_mobiusRotation, v.mobiusRotation);
     gl.uniform1f(k.uniforms.u_mobiusTwist, v.mobiusTwist);
     gl.uniform1f(k.uniforms.u_mobiusZoom, Math.max(0.01, v.mobiusZoom));
@@ -1034,6 +1243,416 @@ export class KaleidoRenderer {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
+  /**
+   * Particles, in two steps: first PARTICLE_STEP_SHADER moves them one
+   * frame on (and gives each particle that is born its place and color from
+   * the picture), then the picture is copied and the particles are drawn
+   * over it as soft dots (PARTICLE_VERTEX_SHADER and PARTICLE_SHADER), with
+   * glow (add) or normal blending. The copy is dimmed toward black by the
+   * background opacity; the particles still read the whole picture. While
+   * paused, they stand still.
+   */
+  private drawParticles(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+    const gl = this.gl;
+    const states = this.ensureParticles();
+    if (v.particleSeconds > 0 || !this.particlesWereOn) {
+      const previous = states[this.particleIndex];
+      const next = states[1 - this.particleIndex];
+      const s = this.particleStep;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, next.framebuffer);
+      gl.viewport(0, 0, PARTICLE_SIDE, PARTICLE_SIDE);
+      gl.useProgram(s.program);
+      this.bindParticleState(s, previous);
+      gl.activeTexture(gl.TEXTURE3);
+      gl.bindTexture(gl.TEXTURE_2D, source);
+      gl.uniform1i(s.uniforms.u_picture, 3);
+      gl.uniform1i(s.uniforms.u_reset, this.particlesWereOn ? 0 : 1);
+      gl.uniform1ui(s.uniforms.u_frame, this.particleFrame);
+      this.particleFrame = (this.particleFrame + 1) >>> 0;
+      gl.uniform1i(s.uniforms.u_side, PARTICLE_SIDE);
+      gl.uniform1f(s.uniforms.u_dt, v.particleSeconds);
+      gl.uniform1f(s.uniforms.u_time, v.particleTime);
+      gl.uniform1f(s.uniforms.u_aspect, width / height);
+      gl.uniform1f(s.uniforms.u_level, v.particleLevel);
+      gl.uniform1f(s.uniforms.u_lifeTime, Math.max(0.05, v.particleLife));
+      gl.uniform1f(s.uniforms.u_speed, v.particleSpeed);
+      gl.uniform2f(s.uniforms.u_gravity, Math.cos(v.particleAngle) * v.particleGravity, Math.sin(v.particleAngle) * v.particleGravity);
+      gl.uniform1f(s.uniforms.u_turbulence, v.particleTurbulence);
+      gl.uniform1f(s.uniforms.u_drag, Math.max(0, v.particleDrag));
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      this.particleIndex = 1 - this.particleIndex;
+    }
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(this.copy.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.uniform1i(this.copy.uniforms.u_tex, 0);
+    /* The blend constant scales the copy's color and keeps its alpha at 1. */
+    const background = Math.min(1, Math.max(0, v.particleBackground));
+    gl.enable(gl.BLEND);
+    gl.blendColor(background, background, background, 1);
+    gl.blendFunc(gl.CONSTANT_COLOR, gl.ZERO);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.disable(gl.BLEND);
+
+    const d = this.particleDraw;
+    gl.useProgram(d.program);
+    this.bindParticleState(d, states[this.particleIndex]);
+    gl.uniform1i(d.uniforms.u_side, PARTICLE_SIDE);
+    gl.uniform1f(d.uniforms.u_size, v.particleSize * height / 1080);
+    gl.uniform1f(d.uniforms.u_maxSize, (gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE) as Float32Array)[1]);
+    gl.uniform1f(d.uniforms.u_opacity, Math.min(1, Math.max(0, v.particles)));
+    gl.bindVertexArray(this.particleVertices);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, v.particleBlend === 0 ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA);
+    gl.drawArrays(gl.POINTS, 0, Math.round(Math.min(PARTICLE_SIDE * PARTICLE_SIDE, Math.max(0, v.particleCount))));
+    gl.disable(gl.BLEND);
+    gl.bindVertexArray(null);
+  }
+
+  /**
+   * Reaction-diffusion. The grid has one cell per "Size" pixels (at
+   * 1080p). It starts again (REACTION_START_SHADER) when the effect starts
+   * or the grid size changes. Each frame it takes Speed steps per 1/60 s
+   * of animation time (REACTION_STEP_SHADER), none while paused, then
+   * masks or bends the picture (REACTION_SHADER).
+   */
+  private drawReaction(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+    const gl = this.gl;
+    const cell = Math.max(0.5, v.reactionSize * height / 1080);
+    const grid: [number, number] = [Math.max(8, Math.round(width / cell)), Math.max(8, Math.round(height / cell))];
+    const states = this.ensureReaction(grid);
+    gl.viewport(0, 0, ...grid);
+    if (!this.reactionWasOn) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, states[this.reactionIndex].framebuffer);
+      gl.useProgram(this.reactionStart.program);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+    const steps = Math.min(120, Math.round(Math.max(0, v.reactionSpeed) * v.frameScale));
+    if (steps > 0) {
+      const s = this.reactionStep;
+      gl.useProgram(s.program);
+      gl.uniform2f(s.uniforms.u_grid, ...grid);
+      gl.uniform1f(s.uniforms.u_feed, v.reactionFeed);
+      gl.uniform1f(s.uniforms.u_kill, v.reactionKill);
+      gl.uniform1f(s.uniforms.u_follow, v.reactionFollow);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, source);
+      gl.uniform1i(s.uniforms.u_picture, 1);
+      gl.uniform1i(s.uniforms.u_state, 0);
+      gl.activeTexture(gl.TEXTURE0);
+      for (let index = 0; index < steps; index++) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, states[1 - this.reactionIndex].framebuffer);
+        gl.bindTexture(gl.TEXTURE_2D, states[this.reactionIndex].texture);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        this.reactionIndex = 1 - this.reactionIndex;
+      }
+    }
+
+    const d = this.reactionShow;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(d.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, states[this.reactionIndex].texture);
+    gl.uniform1i(d.uniforms.u_state, 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.uniform1i(d.uniforms.u_picture, 1);
+    gl.uniform2f(d.uniforms.u_grid, ...grid);
+    gl.uniform2f(d.uniforms.u_res, width, height);
+    gl.uniform1f(d.uniforms.u_amount, Math.min(1, Math.max(0, v.reaction)));
+    gl.uniform1i(d.uniforms.u_look, v.reactionLook);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /** The reaction-diffusion grid pair at "grid" cells. A new size makes them again, and the pattern starts again. */
+  private ensureReaction(grid: [number, number]) {
+    if (this.reactionStates && this.reactionGrid[0] === grid[0] && this.reactionGrid[1] === grid[1]) return this.reactionStates;
+    const gl = this.gl;
+    if (this.reactionStates) {
+      for (const state of this.reactionStates) {
+        gl.deleteTexture(state.texture);
+        gl.deleteFramebuffer(state.framebuffer);
+      }
+    }
+    const make = (): Target => {
+      const texture = gl.createTexture()!;
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA32F, ...grid);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      const framebuffer = gl.createFramebuffer()!;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+      return { texture, framebuffer };
+    };
+    this.reactionStates = [make(), make()];
+    this.reactionGrid = grid;
+    this.reactionIndex = 0;
+    this.reactionWasOn = false;
+    return this.reactionStates;
+  }
+
+  /**
+   * Pixel sort. The picture is turned so the sort lines are the rows of a
+   * square buffer (SORT_TURN_SHADER). Its side is the power of two nearest
+   * the screen's diagonal, at most 2048, so the bitonic sort works and the
+   * half-float column numbers stay exact. Then each pixel finds the start
+   * of its run (SORT_START_SHADER, then log2(side) passes of
+   * SORT_JUMP_SHADER), takes it as its key (SORT_PACK_SHADER), and the rows
+   * are sorted by key and brightness in log2(side) * (log2(side) + 1) / 2
+   * passes (SORT_STEP_SHADER): 66 at 2048. Last, the buffer is turned back
+   * and mixed over the picture (SORT_SHADER). With thick lines, only the
+   * first rows of the buffer are used, one for each line.
+   */
+  private drawSort(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+    const gl = this.gl;
+    const p = this.sortPrograms;
+    const diagonal = Math.hypot(width, height);
+    const side = Math.min(2048, 2 ** Math.round(Math.log2(diagonal)));
+    const [turned, first, second] = this.ensureSortTargets(side);
+    const direction: [number, number] = [Math.cos(v.sortAngle), Math.sin(v.sortAngle)];
+    const band = Math.max(1, v.sortThickness * height / 1080);
+    const rows = Math.max(1, Math.min(side, Math.round(diagonal / band)));
+    const low = Math.min(v.sortLow, v.sortHigh);
+    const high = Math.max(v.sortLow, v.sortHigh);
+    const run = (program: Program, to: Target | null, textures: [string, WebGLTexture][], uniforms: () => void = () => {}) => {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, to ? to.framebuffer : null);
+      gl.useProgram(program.program);
+      textures.forEach(([name, texture], unit) => {
+        gl.activeTexture(gl.TEXTURE0 + unit);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.uniform1i(program.uniforms[name], unit);
+      });
+      uniforms();
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    };
+
+    gl.viewport(0, 0, side, rows);
+    run(p.turn, turned, [["u_tex", source]], () => {
+      gl.uniform2f(p.turn.uniforms.u_res, width, height);
+      gl.uniform1f(p.turn.uniforms.u_diag, diagonal);
+      gl.uniform2f(p.turn.uniforms.u_dir, ...direction);
+      gl.uniform1f(p.turn.uniforms.u_band, diagonal / rows);
+    });
+    run(p.start, first, [["u_tex", turned.texture]], () => {
+      gl.uniform1f(p.start.uniforms.u_low, low);
+      gl.uniform1f(p.start.uniforms.u_high, high);
+      gl.uniform1f(p.start.uniforms.u_length, v.sortLength >= 1 ? 1e6 : Math.max(2, v.sortLength * side));
+    });
+    let links = first;
+    let spare = second;
+    for (let reach = 1; reach < side; reach *= 2) {
+      run(p.jump, spare, [["u_tex", links.texture]]);
+      [links, spare] = [spare, links];
+    }
+    run(p.pack, spare, [["u_tex", turned.texture], ["u_start", links.texture]]);
+    let sorted = spare;
+    let free = turned;
+    gl.useProgram(p.step.program);
+    gl.uniform1f(p.step.uniforms.u_sign, v.sortOrder === 1 ? -1 : 1);
+    for (let k = 2; k <= side; k *= 2) {
+      for (let j = k / 2; j >= 1; j /= 2) {
+        run(p.step, free, [["u_tex", sorted.texture]], () => {
+          gl.uniform1i(p.step.uniforms.u_k, k);
+          gl.uniform1i(p.step.uniforms.u_j, j);
+        });
+        [sorted, free] = [free, sorted];
+      }
+    }
+
+    gl.viewport(0, 0, width, height);
+    run(p.show, target, [["u_sorted", sorted.texture], ["u_links", links.texture], ["u_picture", source]], () => {
+      gl.uniform2f(p.show.uniforms.u_res, width, height);
+      gl.uniform1f(p.show.uniforms.u_diag, diagonal);
+      gl.uniform2f(p.show.uniforms.u_dir, ...direction);
+      gl.uniform1f(p.show.uniforms.u_amount, Math.min(1, Math.max(0, v.sort)));
+      gl.uniform1f(p.show.uniforms.u_rows, rows);
+      gl.uniform1f(p.show.uniforms.u_side, side);
+      gl.uniform1f(p.show.uniforms.u_band, band);
+      gl.uniform1f(p.show.uniforms.u_low, low);
+      gl.uniform1f(p.show.uniforms.u_high, high);
+    });
+  }
+
+  /** The pixel sort's three square pictures at "side" pixels; a new side makes them again. */
+  private ensureSortTargets(side: number) {
+    if (this.sortTargets && this.sortSide === side) return this.sortTargets;
+    this.sortTargets ??= [this.createTarget(), this.createTarget(), this.createTarget()];
+    for (const target of this.sortTargets) this.allocate(target, side, side);
+    this.sortSide = side;
+    return this.sortTargets;
+  }
+
+  /**
+   * Light rays, at half size: the bright parts of the picture (the bloom's
+   * BLOOM_BRIGHT_SHADER), then four ray passes (RAYS_SHADER) of 1/512,
+   * 1/64, 1/8 and all of the length. Each pass covers more than one step of the
+   * next one, so together they smear each bright pixel smoothly along its
+   * ray, with no beads, then the picture plus the rays (RAYS_MIX_SHADER).
+   */
+  private drawRays(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+    const gl = this.gl;
+    const [first, second] = this.raysTargets;
+    const half: [number, number] = [Math.max(1, width >> 1), Math.max(1, height >> 1)];
+    const b = this.bloomBright;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, first.framebuffer);
+    gl.viewport(0, 0, ...half);
+    gl.useProgram(b.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.uniform1i(b.uniforms.u_tex, 0);
+    gl.uniform1f(b.uniforms.u_threshold, v.raysThreshold);
+    gl.uniform1f(b.uniforms.u_softness, 0.2);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    const r = this.rays;
+    gl.useProgram(r.program);
+    gl.uniform1i(r.uniforms.u_tex, 0);
+    gl.uniform2f(r.uniforms.u_center, 0.5 + v.raysX, 0.5 + v.raysY);
+    /* The fade is per whole way to the center: at Fade 1, a ray's far end counts about 2% as much as its start. */
+    gl.uniform1f(r.uniforms.u_fade, 4 * Math.max(0, v.raysFade));
+    const length = Math.min(1, Math.max(0, v.raysLength));
+    const passes = [length / 512, length / 64, length / 8, length];
+    passes.forEach((span, index) => {
+      const [from, to] = index % 2 === 0 ? [first, second] : [second, first];
+      gl.bindFramebuffer(gl.FRAMEBUFFER, to.framebuffer);
+      gl.bindTexture(gl.TEXTURE_2D, from.texture);
+      gl.uniform1f(r.uniforms.u_span, span);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    });
+    const rays = passes.length % 2 === 1 ? second : first;
+
+    const m = this.raysMix;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(m.program);
+    gl.bindTexture(gl.TEXTURE_2D, rays.texture);
+    gl.uniform1i(m.uniforms.u_tex, 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.uniform1i(m.uniforms.u_picture, 1);
+    gl.uniform1f(m.uniforms.u_amount, Math.max(0, v.rays));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /** The size of bloom level "index": half the canvas for level 0, and half again for each next level. */
+  private bloomSize(index: number, width: number, height: number): [number, number] {
+    return [Math.max(1, width >> (index + 1)), Math.max(1, height >> (index + 1))];
+  }
+
+  /**
+   * Bloom: the bright parts of the picture (BLOOM_BRIGHT_SHADER), then
+   * levels of half, quarter, eighth size and so on, each a soft copy of the
+   * one before (BLOOM_DOWN_SHADER). Then, from the smallest level up, each
+   * level adds the next smaller one, enlarged (BLOOM_UP_SHADER), and the
+   * picture adds the first level (BLOOM_SHADER). Size 1 uses 3 levels at
+   * 1080p, and each step adds a level twice as large; the last level counts
+   * by the part of the size past the level before. The count moves with
+   * the picture height, so the glow covers the same part of the screen at
+   * any size.
+   */
+  private drawBloom(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+    const gl = this.gl;
+    const b = this.bloomBright;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.bloomTarget.framebuffer);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(b.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.uniform1i(b.uniforms.u_tex, 0);
+    gl.uniform1f(b.uniforms.u_threshold, v.bloomThreshold);
+    gl.uniform1f(b.uniforms.u_softness, v.bloomSoftness);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    const size = Math.max(1, v.bloomSize + 2 + Math.log2(height / 1080));
+    const count = Math.min(this.bloomLevels, Math.ceil(size));
+    const lastWeight = count < Math.ceil(size) ? 1 : size - (count - 1);
+    const d = this.bloomDown;
+    gl.useProgram(d.program);
+    gl.uniform1i(d.uniforms.u_tex, 0);
+    let input = this.bloomTarget.texture;
+    let inputSize: [number, number] = [width, height];
+    for (let index = 0; index < count; index++) {
+      const levelSize = this.bloomSize(index, width, height);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.bloomChain[index].framebuffer);
+      gl.viewport(0, 0, ...levelSize);
+      gl.bindTexture(gl.TEXTURE_2D, input);
+      gl.uniform2f(d.uniforms.u_texel, 1 / inputSize[0], 1 / inputSize[1]);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      input = this.bloomChain[index].texture;
+      inputSize = levelSize;
+    }
+
+    const u = this.bloomUp;
+    gl.useProgram(u.program);
+    gl.uniform1i(u.uniforms.u_tex, 0);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE);
+    for (let index = count - 2; index >= 0; index--) {
+      const smaller = this.bloomSize(index + 1, width, height);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.bloomChain[index].framebuffer);
+      gl.viewport(0, 0, ...this.bloomSize(index, width, height));
+      gl.bindTexture(gl.TEXTURE_2D, this.bloomChain[index + 1].texture);
+      gl.uniform2f(u.uniforms.u_texel, 1 / smaller[0], 1 / smaller[1]);
+      gl.uniform1f(u.uniforms.u_weight, index + 1 === count - 1 ? lastWeight : 1);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+    gl.disable(gl.BLEND);
+
+    const m = this.bloomMix;
+    const first = this.bloomSize(0, width, height);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(m.program);
+    gl.bindTexture(gl.TEXTURE_2D, this.bloomChain[0].texture);
+    gl.uniform1i(m.uniforms.u_tex, 0);
+    gl.uniform2f(m.uniforms.u_texel, 1 / first[0], 1 / first[1]);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.uniform1i(m.uniforms.u_picture, 1);
+    /* With one level only, its weight scales the whole glow. */
+    gl.uniform1f(m.uniforms.u_amount, Math.max(0, v.bloom) * (count === 1 ? lastWeight : 1));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /** Binds one copy of the particle state to texture units 0, 1 and 2 of the program. */
+  private bindParticleState(program: Program, state: ParticleState) {
+    const gl = this.gl;
+    ["u_motion", "u_life", "u_color"].forEach((name, index) => {
+      gl.activeTexture(gl.TEXTURE0 + index);
+      gl.bindTexture(gl.TEXTURE_2D, state.textures[index]);
+      gl.uniform1i(program.uniforms[name], index);
+    });
+  }
+
+  /** The two copies of the particle state: three 32-bit float textures each, drawn to together. */
+  private ensureParticles() {
+    if (this.particleStates) return this.particleStates;
+    const gl = this.gl;
+    const make = (): ParticleState => {
+      const textures = [0, 1, 2].map(() => {
+        const texture = gl.createTexture()!;
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA32F, PARTICLE_SIDE, PARTICLE_SIDE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        return texture;
+      }) as ParticleState["textures"];
+      const framebuffer = gl.createFramebuffer()!;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+      textures.forEach((texture, index) => gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + index, gl.TEXTURE_2D, texture, 0));
+      gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
+      return { framebuffer, textures };
+    };
+    this.particleStates = [make(), make()];
+    this.particlesWereOn = false;
+    return this.particleStates;
+  }
+
   /** The time smear's history at the size for this canvas; a new canvas size starts it empty. */
   private ensureHistory(width: number, height: number) {
     const gl = this.gl;
@@ -1200,6 +1819,8 @@ export class KaleidoRenderer {
   resetTrails() {
     this.contoursWereOn = false;
     this.smearWasOn = false;
+    this.particlesWereOn = false;
+    this.reactionWasOn = false;
     this.trailsWereOn = false;
   }
 
@@ -1301,7 +1922,11 @@ export class KaleidoRenderer {
   private ensureTrailTargets(width: number, height: number) {
     if (width === this.trailSize[0] && height === this.trailSize[1]) return;
     this.trailSize = [width, height];
-    for (const target of [this.current, this.scratch, ...this.trailTargets, ...this.fieldTargets, this.heightTarget]) this.allocate(target, width, height);
+    for (const target of [this.current, this.scratch, ...this.trailTargets, ...this.fieldTargets, this.heightTarget, this.bloomTarget]) this.allocate(target, width, height);
+    for (const target of this.raysTargets) this.allocate(target, Math.max(1, width >> 1), Math.max(1, height >> 1));
+    this.bloomLevels = Math.max(1, Math.floor(Math.log2(Math.min(width, height))) - 3);
+    while (this.bloomChain.length < this.bloomLevels) this.bloomChain.push(this.createTarget());
+    this.bloomChain.slice(0, this.bloomLevels).forEach((target, index) => this.allocate(target, ...this.bloomSize(index, width, height)));
     this.allocateMax(width, height);
     this.contoursWereOn = false;
     this.trailsWereOn = false;
@@ -1367,10 +1992,10 @@ export class KaleidoRenderer {
     return shader;
   }
 
-  private createProgram(fragmentSource: string): Program {
+  private createProgram(fragmentSource: string, vertexSource = VERTEX_SHADER): Program {
     const gl = this.gl;
     const program = gl.createProgram()!;
-    gl.attachShader(program, this.compile(gl.VERTEX_SHADER, VERTEX_SHADER));
+    gl.attachShader(program, this.compile(gl.VERTEX_SHADER, vertexSource));
     gl.attachShader(program, this.compile(gl.FRAGMENT_SHADER, fragmentSource));
     gl.bindAttribLocation(program, 0, "a_pos");
     gl.linkProgram(program);

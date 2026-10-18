@@ -23,6 +23,8 @@ uniform sampler2D u_img2;
 uniform vec2 u_imgRes2;
 uniform float u_blend;
 uniform int u_blendMode;
+/* 1 when the images repeat past their edges, 0 when they are mirrored (see Tiling). */
+uniform int u_tileRepeat;
 uniform vec2 u_res;
 uniform float u_pad;
 uniform vec2 u_center;
@@ -65,9 +67,15 @@ uniform float u_mapTwist;
 /* The direction of the axis that power, log spiral and tunnel fold over (see complexMap). */
 uniform vec2 u_mapAxis;
 uniform float u_mapTravel;
+/* The map center's pan, and Power, Julia and Sine's roll and twist (Möbius has its own). */
+uniform vec2 u_mapPan;
+uniform float u_mapRoll;
+uniform float u_mapCurl;
 uniform float u_tunnelTwist;
 uniform float u_mapFog;
+uniform float u_mapFogSoftness;
 /* Möbius only: the turn (radians), twist, zoom and pan applied after the map. */
+uniform float u_mobiusTurn;
 uniform float u_mobiusRotation;
 uniform float u_mobiusTwist;
 uniform float u_mobiusZoom;
@@ -284,23 +292,57 @@ vec2 seamlessSpiral(vec2 l, float k, float n) {
   return w;
 }
 
+/**
+ * The point the Möbius map works on, from the point after the map zoom. The
+ * rotation turns the whole picture (the pan too) around the screen center.
+ * The map's pole is at a / |a|^2 (a is the Möbius point), so moving by it
+ * puts the pole at the screen center, and the pan then moves the pole from there.
+ */
+vec2 mobiusInput(vec2 z) {
+  vec2 a = u_mapPoint;
+  return turn(z, -u_mobiusTurn) - u_mobiusPan + a / max(dot(a, a), 1e-4);
+}
+
+/**
+ * How much the last Julia map stretched the picture: the size of the steps'
+ * derivative (each step multiplies it by 2|z|). Set by complexMap, it works
+ * like mobiusStretch, so fast-growing points blur instead of breaking into noise.
+ */
+float juliaStretch;
+
+/**
+ * How far the last Tunnel or Möbius map's point was from the far end (the
+ * tunnel's center, or the Möbius pole), measured before the map. Set by
+ * complexMap, for the depth fade.
+ */
+float depthDistance;
+
 vec2 complexMap(vec2 p) {
+  depthDistance = 1e9;
   if (u_mapMode == 0) return p;
-  vec2 z = p * u_mapScale;
+  /* The pan moves the map's center on the screen (in screen units, whatever the zoom). */
+  vec2 z = (p - u_mapPan) / u_mapScale;
   vec2 w = z;
   /**
-   * Power, log spiral and tunnel use the size of the angle, which folds the
-   * picture over an axis. The point is turned first, so the axis lies at
-   * the axis angle instead of always flat.
+   * The point turned by the rotation, which turns the whole map. With a
+   * mirrored image, Power, log spiral and tunnel use the size of the angle,
+   * which folds the picture over an axis, so the rotation turns that axis too.
    */
   vec2 onAxis = vec2(dot(z, u_mapAxis), dot(z, vec2(-u_mapAxis.y, u_mapAxis.x)));
   if (u_mapMode == 1) {
-    w = cpowSeamless(onAxis, u_mapPower);
+    /**
+     * A repeated image would show the mirror line of cpowSeamless as a seam,
+     * so it uses the full angle: no seam at a whole power, and a seam on
+     * the left of the center at other powers.
+     */
+    w = u_tileRepeat == 1 ? cpow(onAxis, u_mapPower) : cpowSeamless(onAxis, u_mapPower);
   } else if (u_mapMode == 2) {
+    vec2 c = mobiusInput(z);
+    depthDistance = length(c - u_mapPoint / max(dot(u_mapPoint, u_mapPoint), 1e-4));
     vec2 a = u_mapPoint;
-    w = cdiv(z - a, vec2(1.0, 0.0) - cmul(vec2(a.x, -a.y), z));
-    /* Then the turn and the twist (which turns more with distance), the zoom, and the pan. */
-    w = turn(w, u_mobiusRotation + u_mobiusTwist * length(w)) / u_mobiusZoom + u_mobiusPan;
+    w = cdiv(c - a, vec2(1.0, 0.0) - cmul(vec2(a.x, -a.y), c));
+    /* Then the turn and the twist (which turns more with distance), and the zoom. */
+    w = turn(w, u_mobiusRotation + u_mobiusTwist * length(w)) / u_mobiusZoom;
   } else if (u_mapMode == 3) {
     /**
      * Julia: z = z^2 + c, a few steps, stopping when the point passes a size
@@ -311,10 +353,15 @@ vec2 complexMap(vec2 p) {
      * the edge with the band that stops a step later). Both edges then match
      * their neighbors exactly. Points that never stop keep their last point.
      */
+    w = onAxis;
     vec2 before = w;
     bool stopped = false;
+    float stretch = 1.0 / u_mapScale;
+    float stretchBefore = stretch;
     for (int i = 0; i < u_mapSteps; i++) {
       before = w;
+      stretchBefore = stretch;
+      stretch *= 2.0 * length(w);
       w = cmul(w, w) + u_mapPoint;
       if (dot(w, w) > 16.0) {
         stopped = true;
@@ -325,14 +372,36 @@ vec2 complexMap(vec2 p) {
       /* "past": how far the stop point is past the size of 4; "below": how far the point before it was under 4. */
       float past = log(length(w)) - log(4.0);
       float below = max(log(4.0) - log(max(length(before), 1e-6)), 0.0);
-      w = mix(before, w, below / (past + below + 1e-6));
+      float t = below / (past + below + 1e-6);
+      w = mix(before, w, t);
+      stretch = mix(stretchBefore, stretch, t);
     }
+    juliaStretch = stretch;
+    /**
+     * Julia has no single far end; its far ends are where the steps stretch
+     * the picture most. Near the Möbius pole the stretch grows as 1 /
+     * distance^2, so 1 / sqrt(stretch) works as the distance for the depth fade.
+     */
+    depthDistance = inversesqrt(max(stretch, 1e-8));
   } else if (u_mapMode == 4) {
-    /* The size of the angle, as in cpowSeamless: the cut on the left of the center then closes. */
-    vec2 l = vec2(log(max(length(onAxis), 1e-6)), abs(atan(onAxis.y, onAxis.x)));
-    float c = cos(u_mapTwist);
-    float s = sin(u_mapTwist);
-    w = mat2(c, s, -s, c) * l * 0.5;
+    if (u_tileRepeat == 1) {
+      /**
+       * A repeated image: the full angle, so there is no mirror line. One
+       * turn moves the image up by exactly 3 repeats, so it meets itself
+       * on the left of the center. The twist turns only the distance part,
+       * which slants the rings into a spiral and keeps that match.
+       */
+      vec2 l = vec2(log(max(length(onAxis), 1e-6)) - u_mapTravel, atan(onAxis.y, onAxis.x));
+      w = 0.5 * l.x * vec2(cos(u_mapTwist), sin(u_mapTwist)) + vec2(0.0, 3.0 * l.y / TAU);
+    } else {
+      /* The size of the angle, as in cpowSeamless: the cut on the left of the center then closes. */
+      vec2 l = vec2(log(max(length(onAxis), 1e-6)) - u_mapTravel, abs(atan(onAxis.y, onAxis.x)));
+      float c = cos(u_mapTwist);
+      float s = sin(u_mapTwist);
+      w = mat2(c, s, -s, c) * l * 0.5;
+    }
+    /* The center is endlessly deep, as in the tunnel: the speed moves into it, and the depth fade darkens it. */
+    depthDistance = length(onAxis);
   } else if (u_mapMode == 7) {
     /**
      * Seamless spiral (see seamlessSpiral). Where the angle jumps from +PI
@@ -344,10 +413,11 @@ vec2 complexMap(vec2 p) {
      */
     float k = u_mapArms;
     float n = u_spiralCopies == 0.0 ? 0.0 : (k < 0.0 ? -1.0 : 1.0) * u_spiralCopies;
-    vec2 l = vec2(log(max(length(onAxis), 1e-6)), atan(onAxis.y, onAxis.x));
+    vec2 l = vec2(log(max(length(onAxis), 1e-6)) - u_mapTravel, atan(onAxis.y, onAxis.x));
     w = seamlessSpiral(l, n == 0.0 ? k : (abs(k) < 1e-4 ? 1e-4 : k), n);
+    depthDistance = length(onAxis);
   } else if (u_mapMode == 5) {
-    w = csin(z * PI) / PI;
+    w = csin(onAxis * PI) / PI;
   } else if (u_mapMode == 6) {
     /**
      * Tunnel: the angle goes around the wall, and 1/r is the distance into
@@ -355,11 +425,39 @@ vec2 complexMap(vec2 p) {
      * view forward; twist turns the wall more with distance (a spiral).
      * The size of the angle is used, as in cpowSeamless, so there is no seam.
      */
+    depthDistance = length(onAxis);
     float depth = 0.3 / max(length(onAxis), 1e-4) + u_mapTravel;
-    float around = abs(atan(onAxis.y, onAxis.x)) / PI + depth * u_tunnelTwist / PI;
+    float around = abs(atan(onAxis.y, onAxis.x)) / PI;
+    if (u_tileRepeat == 1) {
+      /**
+       * A repeated image: the full angle, so there is no mirror line, and a
+       * whole number of image widths around (about as many as the mirrored
+       * image shows), so the wall meets itself on the left of the center.
+       */
+      float aspect = u_imgRes.x / u_imgRes.y;
+      around = atan(onAxis.y, onAxis.x) / TAU * max(1.0, floor(2.0 / aspect + 0.5)) * aspect;
+    }
+    around += depth * u_tunnelTwist / PI;
     w = vec2(around, depth);
   }
+  /* Roll and twist for the maps with no seam to keep (see mapRoll). */
+  if (u_mapMode == 1 || u_mapMode == 3 || u_mapMode == 5) w = turn(w, u_mapRoll + u_mapCurl * length(w));
   return mix(p, w, u_mapMix);
+}
+
+/**
+ * How much the Möbius map stretches the picture at the point p: the size of
+ * its derivative, (1 - |a|^2) / |1 - conj(a) z|^2, over the zooms, mixed by
+ * the map mix. It grows without limit near the pole, where the map sends the
+ * picture to infinity. The texture detail there comes from this exact value
+ * instead of the capped measure, so the picture fades to its average color
+ * instead of breaking into noise.
+ */
+float mobiusStretch(vec2 p) {
+  vec2 a = u_mapPoint;
+  vec2 d = vec2(1.0, 0.0) - cmul(vec2(a.x, -a.y), mobiusInput(p / u_mapScale));
+  float s = abs(1.0 - dot(a, a)) / max(dot(d, d), 1e-12) / (u_mapScale * u_mobiusZoom);
+  return mix(1.0, s, u_mapMix);
 }
 
 /**
@@ -379,12 +477,28 @@ vec2 hexLocal(vec2 p) {
  * Reads an image at the folded point q, mirrored at its edges, with texture
  * detail g. The picture made so far (u_picture) is placed the way it was on
  * the screen, so a point that no step moves reads the same pixel.
+ *
+ * Where a step enlarges the image (one image pixel covers more than one
+ * screen pixel, for example at the center of a high power map), plain
+ * smoothing spreads the step from one image pixel to the next over the
+ * whole enlarged pixel, which shows as a blur. There the read point moves
+ * toward the center of its image pixel, so the step between two pixels
+ * takes about one screen pixel: edges stay sharp at any size. Where the
+ * image is not enlarged, the read point does not move.
  */
 vec3 sampleImage(sampler2D image, vec2 size, vec2 q, float g) {
   float aspect = size.x / size.y;
   vec2 uv = q * vec2(1.0 / aspect, 1.0) + 0.5 + u_offset;
   if (u_picture == 1) uv += u_center;
-  uv = 1.0 - abs(1.0 - mod(uv, 2.0));
+  /* A repeated image is read at its place in one repeat; the texture's repeat wrap keeps its edges seamless. */
+  uv = u_picture == 0 && u_tileRepeat == 1 ? fract(uv) : 1.0 - abs(1.0 - mod(uv, 2.0));
+  float texels = g * size.y;
+  if (texels < 1.0) {
+    vec2 texel = uv * size - 0.5;
+    vec2 cell = floor(texel);
+    vec2 f = clamp((texel - cell - 0.5) / max(texels, 1e-4) + 0.5, 0.0, 1.0);
+    uv = (cell + f + 0.5) / size;
+  }
   return textureGrad(image, uv, vec2(g / aspect, 0.0), vec2(0.0, g)).rgb;
 }
 
@@ -505,6 +619,9 @@ vec3 shapeColor(vec2 screen, int skip, float g0) {
   bool fading = false;
   vec2 p2 = p;
   float fade = 0.0;
+  /* The Möbius or Julia map's exact stretch, as texture detail (see mobiusStretch and juliaStretch). */
+  float mapDetail = 0.0;
+  float farDistance = 1e9;
   for (int i = 0; i < 3; i++) {
     if (i >= u_shapeCount) break;
     int shapeStep = u_shapeOrder[i];
@@ -516,7 +633,10 @@ vec3 shapeColor(vec2 screen, int skip, float g0) {
       }
     } else if (shapeStep == 1) {
       if (spiralLast) continue;
+      if (u_mapMode == 2) mapDetail = g0 * mobiusStretch(p);
       p = complexMap(p);
+      farDistance = depthDistance;
+      if (u_mapMode == 3) mapDetail = g0 * mix(1.0, juliaStretch, u_mapMix);
       if (fading) p2 = complexMap(p2);
       mapped = true;
     } else {
@@ -553,14 +673,28 @@ vec3 shapeColor(vec2 screen, int skip, float g0) {
    * Texture detail follows how much the steps stretch the screen; with a
    * fold it is measured before the fold, because the fold makes the angle
    * jump. It is capped, so the jumps at a map's cut lines and poles do not
-   * blur seams. Explicit gradients avoid seams at the fold.
+   * blur seams. The Möbius and Julia maps' exact stretch has no such jumps,
+   * so it is not capped. Explicit gradients avoid seams at the fold.
    */
   vec2 measured = folded ? beforeFold : (spiralLast ? beforeSpiral : p);
-  float g = min(max(length(dFdx(measured)), length(dFdy(measured))), g0 * 4.0) / (folded ? u_zoom : 1.0) * stretch;
+  float g = max(min(max(length(dFdx(measured)), length(dFdy(measured))), g0 * 4.0) * stretch, mapDetail) / (folded ? u_zoom : 1.0);
   vec3 color = sourceColor(p, g);
   if (fading) color = mix(color, sourceColor(p2, g), fade);
-  /* The far end of the tunnel (the center) fades to black, which makes it look deep. */
-  if (mapped && u_mapMode == 6) color *= mix(1.0, smoothstep(0.0, 0.7, length(screen)), u_mapFog * u_mapMix);
+  /**
+   * Depth fade: the far end of the tunnel or a spiral (its center), the Möbius pole, or Julia's most stretched places
+   * fades to black, which makes it look deep. It works as fog: each step of
+   * depth takes the same share of the light, so the brightness falls as
+   * e^-(depth^power), and the depth is 1 / distance from the far end.
+   * Darkness sets where the fade starts (the brightness is 95% there, at a
+   * distance of 1 at full darkness), so all the darkening stays inside that
+   * distance. Softness sets the power (8 at 0, 1 at 1): a high power keeps
+   * the picture bright almost to the start and then goes to black fast; a
+   * low one goes darker slowly, and is black only close to the far end.
+   */
+  if (mapped && u_mapMode >= 2 && u_mapMode != 5 && u_mapFog > 0.0) {
+    float power = exp2(3.0 - 3.0 * u_mapFogSoftness);
+    color *= mix(1.0, exp(-0.0513 * pow(u_mapFog / max(farDistance, 1e-4), power)), u_mapMix);
+  }
   return color;
 }
 
@@ -1416,4 +1550,561 @@ void main() {
   color *= exp2(u_exposure);
   color = max(color - u_black, 0.0) / (1.0 - u_black);
   o = vec4(clamp(color, 0.0, 1.0), 1.0);
+}`;
+
+/**
+ * Bloom, step 1: the bright parts of the picture. A pixel passes in full
+ * when its brightest color channel is well above u_threshold, and not at
+ * all well below it; u_softness is the width of the fade between. The
+ * brightest channel, not the brightness, decides, so strong pure colors
+ * glow too.
+ */
+export const BLOOM_BRIGHT_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform float u_threshold;
+uniform float u_softness;
+void main() {
+  vec3 color = texture(u_tex, v_uv).rgb;
+  float peak = max(color.r, max(color.g, color.b));
+  float band = max(u_softness, 0.002) * 0.5;
+  o = vec4(color * smoothstep(u_threshold - band, u_threshold + band, peak), 1.0);
+}`;
+
+/**
+ * Reaction-diffusion, start: the grid is full of chemical A (red), with
+ * small random blocks of chemical B (green) as seeds.
+ */
+export const REACTION_START_SHADER = `#version 300 es
+precision highp float;
+out vec4 o;
+void main() {
+  vec2 block = floor(gl_FragCoord.xy / 5.0);
+  float r = fract(sin(dot(block, vec2(12.9898, 78.233))) * 43758.5453);
+  o = r > 0.92 ? vec4(0.5, 0.25, 0.0, 1.0) : vec4(1.0, 0.0, 0.0, 1.0);
+}`;
+
+/**
+ * Reaction-diffusion, one step (the Gray-Scott model): both chemicals
+ * spread to their neighbor cells, A twice as fast as B; B turns A into
+ * more B; A is fed in at the feed rate and B is taken out at the feed plus
+ * kill rate. The feed moves with the picture's brightness under the cell
+ * (u_follow), so bright and dark areas grow different patterns. The grid
+ * is u_grid cells; its edges act as walls.
+ */
+export const REACTION_STEP_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+out vec4 o;
+uniform highp sampler2D u_state;
+uniform sampler2D u_picture;
+uniform vec2 u_grid;
+uniform float u_feed;
+uniform float u_kill;
+uniform float u_follow;
+float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+void main() {
+  ivec2 cell = ivec2(gl_FragCoord.xy);
+  ivec2 last = ivec2(u_grid) - 1;
+  vec2 here = texelFetch(u_state, cell, 0).rg;
+  vec2 sides = vec2(0.0);
+  vec2 corners = vec2(0.0);
+  for (int dy = -1; dy <= 1; dy++) {
+    for (int dx = -1; dx <= 1; dx++) {
+      if (dx == 0 && dy == 0) continue;
+      vec2 next = texelFetch(u_state, clamp(cell + ivec2(dx, dy), ivec2(0), last), 0).rg;
+      if (dx == 0 || dy == 0) sides += next; else corners += next;
+    }
+  }
+  vec2 spread = 0.2 * sides + 0.05 * corners - here;
+  float bright = luma(texture(u_picture, (vec2(cell) + 0.5) / u_grid).rgb);
+  float feed = clamp(u_feed + u_follow * (bright - 0.5) * 0.04, 0.0, 0.12);
+  float a = here.r;
+  float b = here.g;
+  float react = a * b * b;
+  a += spread.r - react + feed * (1.0 - a);
+  b += 0.5 * spread.g + react - (feed + u_kill) * b;
+  o = vec4(clamp(a, 0.0, 1.0), clamp(b, 0.0, 1.0), 0.0, 1.0);
+}`;
+
+/**
+ * Reaction-diffusion, display. The amount of chemical B is read between
+ * grid cells (a bilinear mix of the four nearest). Look 0 (mask): the
+ * picture shows where the pattern is and goes dark between, by u_amount.
+ * Look 1 (bend): the picture is pushed along the pattern's slopes, by
+ * u_amount times a quarter of the screen height for each unit of slope
+ * (about 0.08 of the screen height at the steepest slopes).
+ */
+export const REACTION_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform highp sampler2D u_state;
+uniform sampler2D u_picture;
+uniform vec2 u_grid;
+uniform vec2 u_res;
+uniform float u_amount;
+uniform int u_look;
+float patternAt(vec2 uv) {
+  vec2 p = uv * u_grid - 0.5;
+  vec2 f = fract(p);
+  ivec2 c = ivec2(floor(p));
+  ivec2 last = ivec2(u_grid) - 1;
+  float a = texelFetch(u_state, clamp(c, ivec2(0), last), 0).g;
+  float b = texelFetch(u_state, clamp(c + ivec2(1, 0), ivec2(0), last), 0).g;
+  float d = texelFetch(u_state, clamp(c + ivec2(0, 1), ivec2(0), last), 0).g;
+  float e = texelFetch(u_state, clamp(c + ivec2(1, 1), ivec2(0), last), 0).g;
+  return mix(mix(a, b, f.x), mix(d, e, f.x), f.y);
+}
+void main() {
+  if (u_look == 1) {
+    vec2 across = 1.0 / u_grid;
+    vec2 slope = vec2(patternAt(v_uv + vec2(across.x, 0.0)) - patternAt(v_uv - vec2(across.x, 0.0)),
+                      patternAt(v_uv + vec2(0.0, across.y)) - patternAt(v_uv - vec2(0.0, across.y)));
+    vec2 push = slope * u_amount * 0.25 * vec2(u_res.y / u_res.x, 1.0);
+    o = vec4(texture(u_picture, v_uv + push).rgb, 1.0);
+    return;
+  }
+  vec3 color = texture(u_picture, v_uv).rgb;
+  float mask = smoothstep(0.1, 0.3, patternAt(v_uv));
+  o = vec4(mix(color, color * mask, u_amount), 1.0);
+}`;
+
+/**
+ * Pixel sort, step 1: the picture turned so that the sort direction
+ * (u_dir) runs along the rows of the buffer, which spans the screen's
+ * diagonal (u_diag pixels) so it covers the screen at any angle. Each row
+ * is one sort line, u_band screen pixels wide: it takes the mean of up to
+ * 8 points across that width. Alpha is the part of those points on the
+ * screen; outside it nothing is sorted.
+ */
+export const SORT_TURN_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform vec2 u_res;
+uniform float u_diag;
+uniform vec2 u_dir;
+uniform float u_band;
+void main() {
+  vec2 along = (v_uv - 0.5) * u_diag;
+  int taps = int(clamp(ceil(u_band), 1.0, 8.0));
+  vec4 sum = vec4(0.0);
+  for (int i = 0; i < 8; i++) {
+    if (i >= taps) break;
+    vec2 point = along + vec2(0.0, ((float(i) + 0.5) / float(taps) - 0.5) * u_band);
+    vec2 screen = vec2(point.x * u_dir.x - point.y * u_dir.y, point.x * u_dir.y + point.y * u_dir.x);
+    vec2 uv = screen / u_res + 0.5;
+    bool inside = all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)));
+    if (inside) sum += vec4(texture(u_tex, uv).rgb, 1.0);
+  }
+  o = sum.a > 0.0 ? vec4(sum.rgb / sum.a, sum.a / float(taps)) : vec4(0.0);
+}`;
+
+const SORT_GLSL = `
+float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+`;
+
+/**
+ * Pixel sort, step 2: where each run starts. A pixel on the screen with a
+ * brightness from u_low to u_high is in a run; it joins the run of the
+ * pixel before it in the row when that pixel is in a run too. The output
+ * is the column of the pixel it joins (or its own column when it starts a
+ * run), and 1 in green when the pixel is in a run. Every u_length pixels (moved by a random amount in each row, so
+ * the cuts do not line up) a run is cut.
+ */
+export const SORT_START_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform float u_low;
+uniform float u_high;
+uniform float u_length;
+${SORT_GLSL}
+bool inRun(ivec2 cell) {
+  vec4 t = texelFetch(u_tex, cell, 0);
+  float l = luma(t.rgb);
+  return t.a > 0.5 && l >= u_low && l <= u_high;
+}
+void main() {
+  ivec2 cell = ivec2(gl_FragCoord.xy);
+  float x = float(cell.x);
+  float shift = fract(sin(float(cell.y) * 12.9898) * 43758.5453) * u_length;
+  bool cut = mod(x + shift, u_length) < 1.0;
+  bool joins = cell.x > 0 && !cut && inRun(cell) && inRun(cell - ivec2(1, 0));
+  o = vec4(joins ? x - 1.0 : x, inRun(cell) ? 1.0 : 0.0, 0.0, 1.0);
+}`;
+
+/** Pixel sort, step 3: each pixel follows its link twice as far (pointer jumping), so after log2(width) passes every pixel links to the start of its run. Green (in a run) stays. */
+export const SORT_JUMP_SHADER = `#version 300 es
+precision highp float;
+out vec4 o;
+uniform sampler2D u_tex;
+void main() {
+  ivec2 cell = ivec2(gl_FragCoord.xy);
+  vec4 self = texelFetch(u_tex, cell, 0);
+  o = vec4(texelFetch(u_tex, ivec2(int(self.r), cell.y), 0).r, self.g, 0.0, 1.0);
+}`;
+
+/** Pixel sort, step 4: each pixel's color, with the start of its run in alpha: the first part of its sort key. */
+export const SORT_PACK_SHADER = `#version 300 es
+precision highp float;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform sampler2D u_start;
+void main() {
+  ivec2 cell = ivec2(gl_FragCoord.xy);
+  o = vec4(texelFetch(u_tex, cell, 0).rgb, texelFetch(u_start, cell, 0).r);
+}`;
+
+/**
+ * Pixel sort, step 5: one pass of a bitonic sort along each row. A pixel
+ * compares itself with its partner u_j columns away and keeps the smaller
+ * or the larger of the two, by the block of u_k columns it is in. The key
+ * is the start of the run first, then the brightness (times u_sign: -1
+ * sorts bright to dark). The run starts grow along the row, and a pixel
+ * outside a run starts its own run, so every pixel stays in its run and
+ * only the pixels inside each run change places.
+ */
+export const SORT_STEP_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform int u_k;
+uniform int u_j;
+uniform float u_sign;
+${SORT_GLSL}
+bool before(vec4 a, vec4 b) {
+  return a.a < b.a || (a.a == b.a && u_sign * luma(a.rgb) < u_sign * luma(b.rgb));
+}
+void main() {
+  ivec2 cell = ivec2(gl_FragCoord.xy);
+  int partner = cell.x ^ u_j;
+  vec4 self = texelFetch(u_tex, cell, 0);
+  vec4 other = texelFetch(u_tex, ivec2(partner, cell.y), 0);
+  bool keepSmaller = (cell.x < partner) == ((cell.x & u_k) == 0);
+  bool otherFirst = before(other, self);
+  o = keepSmaller == otherFirst ? other : self;
+}`;
+
+/**
+ * Pixel sort, step 6: the sorted buffer turned back onto the screen, mixed
+ * over the picture by u_amount. Each screen pixel reads the middle of its
+ * sort line (u_rows lines in a buffer u_side pixels tall), so a thick line
+ * has hard edges. A place that is not in a run (green in u_links) was not
+ * sorted, so it keeps the picture's own sharp pixel. Thin lines (u_band
+ * near 1 pixel) also check the pixel's own brightness against u_low and
+ * u_high, so the edges of the range stay sharp; thick lines show whole.
+ */
+export const SORT_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_sorted;
+uniform sampler2D u_links;
+uniform sampler2D u_picture;
+uniform vec2 u_res;
+uniform float u_diag;
+uniform vec2 u_dir;
+uniform float u_amount;
+uniform float u_rows;
+uniform float u_side;
+uniform float u_band;
+uniform float u_low;
+uniform float u_high;
+${SORT_GLSL}
+void main() {
+  vec3 color = texture(u_picture, v_uv).rgb;
+  vec2 screen = (v_uv - 0.5) * u_res;
+  vec2 along = vec2(screen.x * u_dir.x + screen.y * u_dir.y, -screen.x * u_dir.y + screen.y * u_dir.x);
+  vec2 place = along / u_diag + 0.5;
+  float row = clamp(floor(place.y * u_rows), 0.0, u_rows - 1.0);
+  vec3 sorted = texture(u_sorted, vec2(place.x, (row + 0.5) / u_side)).rgb;
+  float inRun = texelFetch(u_links, ivec2(clamp(place.x * u_side, 0.0, u_side - 1.0), row), 0).g;
+  float l = luma(color);
+  inRun *= mix(l >= u_low && l <= u_high ? 1.0 : 0.0, 1.0, clamp(u_band - 1.5, 0.0, 1.0));
+  o = vec4(mix(color, sorted, u_amount * inRun), 1.0);
+}`;
+
+/**
+ * Light rays, step 2: one pass of the rays. Each pixel mixes 16 points on
+ * the line from it toward u_center, over u_span of the way there (1 = all
+ * the way), so bright parts are smeared out along lines away from the
+ * center. The points farther along count less, by u_fade (per whole way
+ * to the center). The renderer runs a short pass, a longer one, and a long
+ * * one, so the rays are smooth with few points per pass.
+ */
+export const RAYS_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform vec2 u_center;
+uniform float u_span;
+uniform float u_fade;
+void main() {
+  vec3 sum = vec3(0.0);
+  float total = 0.0;
+  for (int i = 0; i < 16; i++) {
+    float t = u_span * float(i) / 15.0;
+    float weight = exp(-u_fade * t);
+    sum += texture(u_tex, u_center + (v_uv - u_center) * (1.0 - t)).rgb * weight;
+    total += weight;
+  }
+  o = vec4(sum / total, 1.0);
+}`;
+
+/** Light rays, step 3: the picture plus u_amount times the rays. */
+export const RAYS_MIX_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform sampler2D u_picture;
+uniform float u_amount;
+void main() {
+  o = vec4(texture(u_picture, v_uv).rgb + u_amount * texture(u_tex, v_uv).rgb, 1.0);
+}`;
+
+/**
+ * Bloom, step 2: one level of the glow, half the size of the level before
+ * (u_texel is one pixel of that level). It reads 13 points in a 4 by 4
+ * pixel area, weighted toward the middle, so the level is a soft copy
+ * with no grid: a small light anywhere gives the same round glow.
+ */
+export const BLOOM_DOWN_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform vec2 u_texel;
+vec3 at(float x, float y) { return texture(u_tex, v_uv + u_texel * vec2(x, y)).rgb; }
+void main() {
+  vec3 corners = at(-2.0, 2.0) + at(2.0, 2.0) + at(-2.0, -2.0) + at(2.0, -2.0);
+  vec3 sides = at(0.0, 2.0) + at(-2.0, 0.0) + at(2.0, 0.0) + at(0.0, -2.0);
+  vec3 inner = at(-1.0, 1.0) + at(1.0, 1.0) + at(-1.0, -1.0) + at(1.0, -1.0);
+  o = vec4(at(0.0, 0.0) * 0.125 + corners * 0.03125 + sides * 0.0625 + inner * 0.125, 1.0);
+}`;
+
+/** A smooth 3 by 3 enlargement of a smaller level (u_texel is one of its pixels), times u_weight. */
+const BLOOM_TENT_GLSL = `
+vec3 tent(sampler2D tex, vec2 uv, vec2 texel) {
+  vec3 sum = texture(tex, uv).rgb * 4.0;
+  sum += (texture(tex, uv + vec2(texel.x, 0.0)).rgb + texture(tex, uv - vec2(texel.x, 0.0)).rgb
+    + texture(tex, uv + vec2(0.0, texel.y)).rgb + texture(tex, uv - vec2(0.0, texel.y)).rgb) * 2.0;
+  sum += texture(tex, uv + texel).rgb + texture(tex, uv - texel).rgb
+    + texture(tex, uv + vec2(texel.x, -texel.y)).rgb + texture(tex, uv + vec2(-texel.x, texel.y)).rgb;
+  return sum / 16.0;
+}
+`;
+
+/**
+ * Bloom, step 3: adds the next smaller level, enlarged, to a level (the
+ * renderer draws it with add blending). Going from the smallest level up,
+ * each level gathers all the smaller ones, so the largest level holds the
+ * whole glow: bright near the light and soft far from it.
+ */
+export const BLOOM_UP_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform vec2 u_texel;
+uniform float u_weight;
+${BLOOM_TENT_GLSL}
+void main() { o = vec4(tent(u_tex, v_uv, u_texel) * u_weight, 1.0); }`;
+
+/** Bloom, step 4: the picture plus u_amount times the glow (the first level, enlarged). */
+export const BLOOM_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform vec2 u_texel;
+uniform sampler2D u_picture;
+uniform float u_amount;
+${BLOOM_TENT_GLSL}
+void main() {
+  vec3 color = texture(u_picture, v_uv).rgb;
+  o = vec4(color + u_amount * tent(u_tex, v_uv, u_texel), 1.0);
+}`;
+
+/**
+ * Particles, step 1: moves every particle one frame on. Each texel of the
+ * state textures is one particle: u_motion holds its place (0 to 1 across
+ * the screen) and its speed (screen heights per second), u_life its age
+ * and life span (seconds) and a fixed random number, u_color the color it
+ * took at birth. An age below 0 is a particle that waits to be born.
+ *
+ * A particle that comes to the end of its life (or leaves the screen) is
+ * born again at once: it tries a few random spots of the picture and takes
+ * the first one at least as bright as u_level. When no spot is bright
+ * enough, it waits a short time and tries again, so a picture with few
+ * bright spots emits fewer particles. A new particle starts in a random
+ * direction at about u_speed. Gravity, a moving swirl of noise
+ * (turbulence) and drag then change its speed.
+ */
+export const PARTICLE_STEP_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+layout(location = 0) out vec4 o_motion;
+layout(location = 1) out vec4 o_life;
+layout(location = 2) out vec4 o_color;
+uniform highp sampler2D u_motion;
+uniform highp sampler2D u_life;
+uniform highp sampler2D u_color;
+uniform sampler2D u_picture;
+/* 1 on the first frame: every particle starts to wait for a random part of one life span, so they are not all born at once. */
+uniform int u_reset;
+uniform uint u_frame;
+uniform int u_side;
+/* Animation seconds since the last frame, and the animation time (the swirl moves with it). */
+uniform float u_dt;
+uniform float u_time;
+/* The screen's width over its height. */
+uniform float u_aspect;
+uniform float u_level;
+uniform float u_lifeTime;
+uniform float u_speed;
+/* In screen heights per second, each second. */
+uniform vec2 u_gravity;
+uniform float u_turbulence;
+uniform float u_drag;
+
+uint hashU(uint x) {
+  x ^= x >> 16; x *= 0x7feb352du;
+  x ^= x >> 15; x *= 0x846ca68bu;
+  x ^= x >> 16;
+  return x;
+}
+/* A random number from 0 to 1; each call moves "state" on. */
+float random(inout uint state) {
+  state = hashU(state);
+  return float(state >> 8) / 16777216.0;
+}
+
+float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+
+vec2 gradient(vec2 cell) {
+  float angle = 6.2831853 * fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+  return vec2(cos(angle), sin(angle));
+}
+float gnoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(dot(gradient(i), f), dot(gradient(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0)), u.x),
+             mix(dot(gradient(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0)), dot(gradient(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0)), u.x), u.y);
+}
+/* The swirl: the noise's slope turned a quarter turn, so it flows around the noise's hills and never bunches the particles up. */
+vec2 swirl(vec2 p) {
+  const float e = 0.01;
+  float dx = gnoise(p + vec2(e, 0.0)) - gnoise(p - vec2(e, 0.0));
+  float dy = gnoise(p + vec2(0.0, e)) - gnoise(p - vec2(0.0, e));
+  return vec2(dy, -dx) / (2.0 * e);
+}
+
+void main() {
+  ivec2 cell = ivec2(gl_FragCoord.xy);
+  uint index = uint(cell.y * u_side + cell.x);
+  uint rng = hashU(index * 1973u + u_frame * 9277u + 1u);
+  vec4 motion = texelFetch(u_motion, cell, 0);
+  vec4 life = texelFetch(u_life, cell, 0);
+  vec4 color = texelFetch(u_color, cell, 0);
+  if (u_reset == 1) {
+    o_motion = vec4(0.0);
+    o_life = vec4(-random(rng) * u_lifeTime, 1.0, random(rng), 0.0);
+    o_color = vec4(0.0);
+    return;
+  }
+  float age = life.x + u_dt;
+  bool waiting = life.x < 0.0;
+  if (waiting && age < 0.0) {
+    o_motion = motion;
+    o_life = vec4(age, life.yzw);
+    o_color = color;
+    return;
+  }
+  if (waiting || age >= life.y) {
+    for (int attempt = 0; attempt < 8; attempt++) {
+      vec2 spot = vec2(random(rng), random(rng));
+      vec3 picture = textureLod(u_picture, spot, 0.0).rgb;
+      if (luma(picture) < u_level) continue;
+      float angle = 6.2831853 * random(rng);
+      float speed = u_speed * (0.5 + random(rng));
+      o_motion = vec4(spot, cos(angle) * speed, sin(angle) * speed);
+      o_life = vec4(0.0, u_lifeTime * (0.5 + random(rng)), life.z, 0.0);
+      o_color = vec4(picture, 1.0);
+      return;
+    }
+    o_motion = vec4(0.0);
+    o_life = vec4(-0.02 - random(rng) * 0.25 * u_lifeTime, 1.0, life.z, 0.0);
+    o_color = vec4(0.0);
+    return;
+  }
+  /* The swirl works in screen heights, so its whirls are round on any screen shape. */
+  vec2 place = vec2(motion.x * u_aspect, motion.y);
+  vec2 flow = swirl(place * 3.0 + vec2(0.11, -0.07) * u_time) + 0.5 * swirl(place * 6.1 + vec2(-0.13, 0.17) * u_time + 5.3);
+  vec2 velocity = motion.zw + (u_gravity + u_turbulence * flow) * u_dt;
+  velocity *= exp(-u_drag * u_dt);
+  vec2 next = motion.xy + velocity * u_dt * vec2(1.0 / u_aspect, 1.0);
+  /* A particle that leaves the screen ends its life, to be born again on the next frame. */
+  bool outside = any(lessThan(next, vec2(-0.05))) || any(greaterThan(next, vec2(1.05)));
+  o_motion = vec4(next, velocity);
+  o_life = vec4(outside ? life.y : age, life.yzw);
+  o_color = color;
+}`;
+
+/**
+ * Particles, step 2: draws each living particle as one point at its place
+ * (gl_VertexID picks its texel). It fades in over the first tenth of its
+ * life and out over the last two fifths. Its fixed random number makes it
+ * 0.6 to 1.4 times u_size. A particle smaller than a pixel is drawn one
+ * pixel wide but fainter, so small sizes still look smaller.
+ */
+export const PARTICLE_VERTEX_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+uniform highp sampler2D u_motion;
+uniform highp sampler2D u_life;
+uniform highp sampler2D u_color;
+uniform int u_side;
+uniform float u_size;
+uniform float u_maxSize;
+uniform float u_opacity;
+out vec4 v_color;
+void main() {
+  ivec2 cell = ivec2(gl_VertexID % u_side, gl_VertexID / u_side);
+  vec4 life = texelFetch(u_life, cell, 0);
+  float t = life.x / life.y;
+  if (life.x < 0.0 || t >= 1.0) {
+    gl_Position = vec4(-10.0, -10.0, 0.0, 1.0);
+    gl_PointSize = 1.0;
+    v_color = vec4(0.0);
+    return;
+  }
+  vec4 motion = texelFetch(u_motion, cell, 0);
+  float fade = smoothstep(0.0, 0.1, t) * (1.0 - smoothstep(0.6, 1.0, t));
+  float size = u_size * (0.6 + 0.8 * life.z);
+  gl_Position = vec4(motion.xy * 2.0 - 1.0, 0.0, 1.0);
+  gl_PointSize = clamp(size, 1.0, u_maxSize);
+  v_color = vec4(texelFetch(u_color, cell, 0).rgb, fade * u_opacity * min(1.0, size * size));
+}`;
+
+/** A soft round dot, full at its center and gone at its edge, with premultiplied alpha. */
+export const PARTICLE_SHADER = `#version 300 es
+precision highp float;
+in vec4 v_color;
+out vec4 o;
+void main() {
+  vec2 p = gl_PointCoord * 2.0 - 1.0;
+  float d2 = dot(p, p);
+  if (d2 > 1.0) discard;
+  float a = v_color.a * (1.0 - d2) * (1.0 - d2);
+  o = vec4(v_color.rgb * a, a);
 }`;

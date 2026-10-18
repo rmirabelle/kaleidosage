@@ -4,7 +4,7 @@ import { isShapeStep, type FxStep } from "./renderer";
 export const SCENE_EXTENSION = "ksage";
 /** 2: ranges share one cycle, and a custom range keeps its own seconds. 1: each range had its own rate, and a speed. */
 const SCENE_VERSION = 2;
-const GROUP_KEYS: GroupKey[] = ["warp", "map", "kaleidoscope", "blur", "trails", "smear", "contours", "relief", "camera", "finish"];
+const GROUP_KEYS: GroupKey[] = ["warp", "map", "kaleidoscope", "blur", "trails", "smear", "contours", "relief", "camera", "sort", "reaction", "particles", "rays", "bloom", "finish"];
 
 /** Still images and legacy videos use base64. New videos refer to an embedded archive entry. */
 export type SceneImage = { type: string; data: string; video?: never }
@@ -39,7 +39,7 @@ export function serializeScene(params: Params, state: PlayState, { image, image2
     const { value, low, high, on, ease, custom, seconds, startTime } = params[key];
     savedParams[key] = { value, low, high, on, ease, custom, seconds, startTime };
   }
-  const { groups, blendMode, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, videoCrossfade, time, clock, warpTime, mapTravel, cameraX, cameraY, fxOrder, layerBlend } = state;
+  const { groups, blendMode, tiling, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, reactionLook, particleBlend, videoCrossfade, time, clock, warpTime, mapTravel, cameraX, cameraY, fxOrder, layerBlend } = state;
   /**
    * "effects" is the effect list. Earlier versions of the app read two full
    * orders of their own, so they get the list's order inside each kind,
@@ -52,7 +52,7 @@ export function serializeScene(params: Params, state: PlayState, { image, image2
     app: "KaleidoSage",
     version: SCENE_VERSION,
     params: savedParams,
-    state: { groups: { ...groups }, blendMode, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, videoCrossfade, time, clock, warpTime, mapTravel, cameraX, cameraY, effects: [...fxOrder], shapeStack, pictureOrder, layerBlend: { ...layerBlend } },
+    state: { groups: { ...groups }, blendMode, tiling, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, reactionLook, particleBlend, videoCrossfade, time, clock, warpTime, mapTravel, cameraX, cameraY, effects: [...fxOrder], shapeStack, pictureOrder, layerBlend: { ...layerBlend } },
     image,
     ...(image2 ? { image2 } : {})
   };
@@ -178,6 +178,8 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
     for (const key of GROUP_KEYS) if (typeof saved.groups[key] === "boolean") state.groups[key] = saved.groups[key] as boolean;
   }
   state.blendMode = mode(saved.blendMode, [0, 1] as const) ?? state.blendMode;
+  /* Scenes from before tiling have none; auto works as they did, except for repeating test patterns. */
+  state.tiling = mode(saved.tiling, [0, 1, 2] as const) ?? 0;
   state.warpMode = mode(saved.warpMode, [1, 2] as const) ?? state.warpMode;
   /* Scenes from before the warp types had only the noise warp. */
   state.warpType = mode(saved.warpType, [0, 1, 2, 3, 4, 5] as const) ?? 0;
@@ -231,6 +233,9 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   state.contourBlend = mode(saved.contourBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? state.contourBlend;
   state.cameraBlend = mode(saved.cameraBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? state.cameraBlend;
   state.cameraRepeat = mode(saved.cameraRepeat, [0, 1, 2] as const) ?? state.cameraRepeat;
+  state.sortOrder = mode(saved.sortOrder, [0, 1] as const) ?? state.sortOrder;
+  state.reactionLook = mode(saved.reactionLook, [0, 1] as const) ?? state.reactionLook;
+  state.particleBlend = mode(saved.particleBlend, [0, 1] as const) ?? state.particleBlend;
 
   return image2 ? { image, image2 } : { image };
 }
@@ -246,8 +251,8 @@ export function sceneFingerprint(params: Params, state: PlayState, imageIds: [nu
     const { value, low, high, on, ease, custom, seconds } = params[key];
     return [value, low, high, on, ease ?? null, custom ?? false, custom ? seconds : null];
   });
-  const { groups, blendMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, videoCrossfade, fxOrder, layerBlend } = state;
-  return JSON.stringify([settings, groups, blendMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, videoCrossfade, fxOrder, layerBlend, imageIds]);
+  const { groups, blendMode, tiling, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, reactionLook, particleBlend, videoCrossfade, fxOrder, layerBlend } = state;
+  return JSON.stringify([settings, groups, blendMode, tiling, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, reactionLook, particleBlend, videoCrossfade, fxOrder, layerBlend, imageIds]);
 }
 
 /** Uint8Array.fromBase64 and toBase64, in newer browsers; much faster for a large video. */

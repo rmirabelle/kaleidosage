@@ -16,7 +16,7 @@ describe("scene files", () => {
   it("restore every parameter and the play state", () => {
     const params = createParams();
     const state = createPlayState();
-    Object.assign(params.zoom, { value: 2.2, low: 1.1, high: 3.3, on: false, custom: true, seconds: 12, startTime: 4.5 });
+    Object.assign(params.mapPower, { value: 2.2, low: 1.1, high: 3.3, on: false, custom: true, seconds: 12, startTime: 4.5 });
     Object.assign(params.panX, { on: true, ease: "bounce" });
     Object.assign(state, { blendMode: 1, warpMode: 2, mapMode: 4, blurMask: 3, trailMode: 2, overlayColor: "#12ab9f", time: 42, clock: 30, warpTime: 7 });
     params.cycle.value = 13;
@@ -30,7 +30,7 @@ describe("scene files", () => {
     const images = applyScene(text, loadedParams, loadedState);
 
     expect(images).toEqual({ image: IMAGE });
-    expect(loadedParams.zoom).toMatchObject({ value: 2.2, low: 1.1, high: 3.3, on: false, custom: true, seconds: 12, startTime: 4.5 });
+    expect(loadedParams.mapPower).toMatchObject({ value: 2.2, low: 1.1, high: 3.3, on: false, custom: true, seconds: 12, startTime: 4.5 });
     expect(loadedParams.panX).toMatchObject({ on: true, ease: "bounce", custom: false });
     expect(loadedState).toMatchObject({ blendMode: 1, warpMode: 2, mapMode: 4, blurMask: 3, trailMode: 2, overlayColor: "#12ab9f", time: 42, clock: 30, warpTime: 7 });
     expect(loadedParams.cycle.value).toBe(13);
@@ -94,7 +94,7 @@ describe("scene files", () => {
     /* Earlier versions of the app read a full order inside each kind: the list's order first. */
     const savedState = JSON.parse(text).state;
     expect(savedState.shapeStack).toEqual(["warp", "map", "kaleidoscope"]);
-    expect(savedState.pictureOrder).toEqual(["relief", "blur", "trails", "smear", "contours", "camera", "finish"]);
+    expect(savedState.pictureOrder).toEqual(["relief", "blur", "trails", "smear", "contours", "camera", "sort", "reaction", "particles", "rays", "bloom", "finish"]);
 
     /* Scenes from before the effect list: every effect that is on and changes the picture, in their order. */
     const showing = { warpAmount: { value: 0.3 }, blurAmount: { value: 10 }, trailAmount: { value: 0.5 }, smearAmount: { value: 1 }, contourOpacity: { value: 1 }, reliefAmount: { value: 1 }, sharpen: { value: 1 } };

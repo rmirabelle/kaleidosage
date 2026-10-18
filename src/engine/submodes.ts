@@ -4,7 +4,7 @@ import type { BlurMask, FoldMode, FxStep, MapMode, SmearShape, WarpType } from "
 /** The effects in the Add effect menu, in menu order, with the names their groups show. */
 export const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
   ["kaleidoscope", "Kaleidoscope"], ["map", "Algorithm"], ["warp", "Warp"], ["blur", "Blur"], ["trails", "Trails"],
-  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["camera", "Camera"], ["finish", "Final effects"]
+  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["camera", "Camera"], ["sort", "Pixel sort"], ["reaction", "Reaction-diffusion"], ["particles", "Particles"], ["rays", "Light rays"], ["bloom", "Bloom"], ["finish", "Final effects"]
 ];
 
 /**
@@ -50,13 +50,13 @@ export const WARP_TYPES = [[0, "Noise"], [1, "Ripple"], [2, "Waves"], [3, "Swirl
 /** The sliders each complex map uses; the others are hidden. */
 export const MAP_KEYS: Record<MapMode, ParamKey[]> = {
   0: [],
-  1: ["mapPower", "mapAngle", "mapScale", "mapMix"],
-  2: ["mapPointX", "mapPointY", "mapScale", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mapMix"],
-  3: ["mapPointX", "mapPointY", "mapSteps", "mapScale", "mapMix"],
-  4: ["mapTwist", "mapAngle", "mapScale", "mapMix"],
-  5: ["mapScale", "mapMix"],
-  6: ["mapSpeed", "tunnelTwist", "mapAngle", "mapFog", "mapScale", "mapMix"],
-  7: ["mapArms", "mapAngle", "mapScale", "mapMix"]
+  1: ["mapPower", "mapAngle", "mapRoll", "mapCurl", "mapScale", "mapPanX", "mapPanY", "mapMix"],
+  2: ["mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness", "mapMix"],
+  3: ["juliaShape", "juliaEdge", "mapSteps", "mapAngle", "mapRoll", "mapCurl", "juliaZoom", "juliaFog", "juliaFogSoftness", "mapPanX", "mapPanY", "mapMix"],
+  4: ["mapSpeed", "mapTwist", "mapAngle", "mapFog", "mapFogSoftness", "mapScale", "mapPanX", "mapPanY", "mapMix"],
+  5: ["mapAngle", "mapRoll", "mapCurl", "mapScale", "mapPanX", "mapPanY", "mapMix"],
+  6: ["mapSpeed", "tunnelTwist", "mapAngle", "mapFog", "mapFogSoftness", "mapScale", "mapPanX", "mapPanY", "mapMix"],
+  7: ["mapSpeed", "mapArms", "mapAngle", "mapFog", "mapFogSoftness", "mapScale", "mapPanX", "mapPanY", "mapMix"]
 };
 export const MAP_MODES = [[1, "Power (z^n)"], [2, "Möbius"], [3, "Julia"], [4, "Log spiral"], [5, "Sine"], [6, "Tunnel"], [7, "Seamless spiral"]] as const;
 

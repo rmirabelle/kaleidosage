@@ -7,18 +7,18 @@ const at = (time: number) => ({ ...createPlayState(), time, clock: time });
 describe("liveValue", () => {
   it("returns the slider value when drift is off", () => {
     const params = createParams();
-    params.zoom.on = false;
-    params.zoom.value = 2.5;
-    expect(liveValue(params.zoom, at(12.3))).toBe(2.5);
+    params.mapPower.on = false;
+    params.mapPower.value = 2.5;
+    expect(liveValue(params.mapPower, at(12.3))).toBe(2.5);
   });
 
   it("keeps a drifting value inside its range and reaches both ends", () => {
     const params = createParams();
-    Object.assign(params.zoom, { on: true, low: 1, high: 2, custom: true, seconds: 1 });
+    Object.assign(params.mapPower, { on: true, low: 1, high: 2, custom: true, seconds: 1 });
     let lowest = Infinity;
     let highest = -Infinity;
     for (let time = 0; time < 60; time += 0.01) {
-      const value = liveValue(params.zoom, at(time));
+      const value = liveValue(params.mapPower, at(time));
       lowest = Math.min(lowest, value);
       highest = Math.max(highest, value);
     }
@@ -30,10 +30,10 @@ describe("liveValue", () => {
 
   it("starts every drift at its start handle at time 0", () => {
     const params = createParams();
-    Object.assign(params.zoom, { on: true, low: 1.7, high: 0.9 });
+    Object.assign(params.mapPower, { on: true, low: 1.7, high: 0.9 });
     Object.assign(params.rotation, { on: true, low: 90, high: 180 });
     Object.assign(params.lightAngle, { on: true, low: 360, high: 0, custom: true, seconds: 7 });
-    expect(liveValue(params.zoom, at(0))).toBeCloseTo(1.7);
+    expect(liveValue(params.mapPower, at(0))).toBeCloseTo(1.7);
     expect(liveValue(params.rotation, at(0))).toBeCloseTo(90);
     expect(liveValue(params.lightAngle, at(0))).toBeCloseTo(360);
   });
@@ -57,76 +57,107 @@ describe("liveValue", () => {
 
   it("follows the chosen easing between the handles, starting at the start handle", () => {
     const params = createParams();
-    Object.assign(params.zoom, { on: true, low: 1, high: 2, custom: true, seconds: 2, ease: "linear" });
-    startRangeAt(params.zoom, 10);
-    expect(liveValue(params.zoom, at(10))).toBeCloseTo(1);
-    expect(liveValue(params.zoom, at(11))).toBeCloseTo(1.5);
-    expect(liveValue(params.zoom, at(12))).toBeCloseTo(2);
-    expect(liveValue(params.zoom, at(13))).toBeCloseTo(1.5);
-    params.zoom.ease = "in";
-    expect(liveValue(params.zoom, at(11))).toBeCloseTo(1.125);
-    params.zoom.ease = "bounce";
+    Object.assign(params.mapPower, { on: true, low: 1, high: 2, custom: true, seconds: 2, ease: "linear" });
+    startRangeAt(params.mapPower, 10);
+    expect(liveValue(params.mapPower, at(10))).toBeCloseTo(1);
+    expect(liveValue(params.mapPower, at(11))).toBeCloseTo(1.5);
+    expect(liveValue(params.mapPower, at(12))).toBeCloseTo(2);
+    expect(liveValue(params.mapPower, at(13))).toBeCloseTo(1.5);
+    params.mapPower.ease = "in";
+    expect(liveValue(params.mapPower, at(11))).toBeCloseTo(1.125);
+    params.mapPower.ease = "bounce";
     for (let time = 10; time < 20; time += 0.05) {
-      const value = liveValue(params.zoom, at(time));
+      const value = liveValue(params.mapPower, at(time));
       expect(value).toBeGreaterThanOrEqual(1 - 1e-9);
       expect(value).toBeLessThanOrEqual(2 + 1e-9);
     }
   });
 
-  it("steps between the handles early, at the half, or late", () => {
+  it("moves early or late in the trip on a smooth curve, and waits at a handle for the other half", () => {
     const params = createParams();
     /* Two seconds from start to end: the trip out runs from 10 to 12, the trip back from 12 to 14. */
-    Object.assign(params.zoom, { on: true, low: 1, high: 2, custom: true, seconds: 2, ease: "early" });
-    startRangeAt(params.zoom, 10);
-    expect(liveValue(params.zoom, at(10.4))).toBe(1);
-    expect(liveValue(params.zoom, at(10.6))).toBe(2);
-    expect(liveValue(params.zoom, at(13.4))).toBe(2);
-    expect(liveValue(params.zoom, at(13.6))).toBe(1);
-    params.zoom.ease = "pulse";
-    expect(liveValue(params.zoom, at(10.9))).toBe(1);
-    expect(liveValue(params.zoom, at(11.1))).toBe(2);
-    expect(liveValue(params.zoom, at(12.9))).toBe(2);
-    expect(liveValue(params.zoom, at(13.1))).toBe(1);
-    params.zoom.ease = "late";
-    expect(liveValue(params.zoom, at(11.4))).toBe(1);
-    expect(liveValue(params.zoom, at(11.6))).toBe(2);
-    expect(liveValue(params.zoom, at(12.4))).toBe(2);
-    expect(liveValue(params.zoom, at(12.6))).toBe(1);
+    Object.assign(params.mapPower, { on: true, low: 1, high: 2, custom: true, seconds: 2, ease: "early" });
+    startRangeAt(params.mapPower, 10);
+    expect(liveValue(params.mapPower, at(10))).toBeCloseTo(1);
+    expect(liveValue(params.mapPower, at(10.5))).toBeCloseTo(1.5);
+    expect(liveValue(params.mapPower, at(11))).toBeCloseTo(2);
+    expect(liveValue(params.mapPower, at(11.6))).toBeCloseTo(2);
+    expect(liveValue(params.mapPower, at(13.5))).toBeCloseTo(1.5);
+    params.mapPower.ease = "late";
+    expect(liveValue(params.mapPower, at(10.6))).toBeCloseTo(1);
+    expect(liveValue(params.mapPower, at(11))).toBeCloseTo(1);
+    expect(liveValue(params.mapPower, at(11.5))).toBeCloseTo(1.5);
+    expect(liveValue(params.mapPower, at(12))).toBeCloseTo(2);
+    expect(liveValue(params.mapPower, at(12.5))).toBeCloseTo(1.5);
+    /* No jumps: the curve is smooth on both sides of the half. */
+    for (const ease of ["early", "late"] as const) {
+      params.mapPower.ease = ease;
+      for (let time = 10.01; time <= 14; time += 0.01) {
+        expect(Math.abs(liveValue(params.mapPower, at(time)) - liveValue(params.mapPower, at(time - 0.01)))).toBeLessThan(0.02);
+      }
+    }
+  });
+
+  it("wanders inside the range on the random and drunk curves, the same way each time, and never repeats", () => {
+    for (const ease of ["random", "drunk"] as const) {
+      const params = createParams();
+      Object.assign(params.mapPower, { on: true, low: 1, high: 2, custom: true, seconds: 2, ease });
+      startRangeAt(params.mapPower, 10);
+      const values: number[] = [];
+      for (let time = 10; time <= 30; time += 0.01) values.push(liveValue(params.mapPower, at(time)));
+      for (const value of values) {
+        expect(value).toBeGreaterThanOrEqual(1 - 1e-9);
+        expect(value).toBeLessThanOrEqual(2 + 1e-9);
+      }
+      /* Fast, but with no jumps. */
+      for (let time = 10.0001; time < 12; time += 0.0001) {
+        expect(Math.abs(liveValue(params.mapPower, at(time)) - liveValue(params.mapPower, at(time - 0.0001)))).toBeLessThan(0.02);
+      }
+      /* It uses most of the range, and the trip out and the trip back differ. */
+      expect(Math.max(...values) - Math.min(...values)).toBeGreaterThan(0.5);
+      expect(liveValue(params.mapPower, at(11))).not.toBeCloseTo(liveValue(params.mapPower, at(13)), 3);
+      /* The same time gives the same value, but another parameter takes another path. */
+      expect(liveValue(params.mapPower, at(17.3))).toBeCloseTo(values[730], 9);
+      const other = createParams().warpScale;
+      Object.assign(other, { on: true, low: 1, high: 2, custom: true, seconds: 2, ease });
+      startRangeAt(other, 10);
+      expect(liveValue(other, at(17.3))).not.toBeCloseTo(values[730], 3);
+    }
   });
 
   it("explodes from the start handle to the end handle and falls back, once per trip, inside the range", () => {
     const params = createParams();
-    Object.assign(params.zoom, { on: true, low: 1, high: 2, custom: true, seconds: 2, ease: "explode" });
-    startRangeAt(params.zoom, 10);
+    Object.assign(params.mapPower, { on: true, low: 1, high: 2, custom: true, seconds: 2, ease: "explode" });
+    startRangeAt(params.mapPower, 10);
     /* At the start handle at the start of every trip, out and back alike; at the end handle a moment later. */
     for (const time of [10, 12, 14, 16]) {
-      expect(liveValue(params.zoom, at(time))).toBeCloseTo(1);
-      expect(liveValue(params.zoom, at(time + 0.06))).toBeCloseTo(2);
+      expect(liveValue(params.mapPower, at(time))).toBeCloseTo(1);
+      expect(liveValue(params.mapPower, at(time + 0.06))).toBeCloseTo(2);
     }
     /* One peak: the value only rises until the peak, then only falls, and stays between the handles. */
     for (let time = 10.01; time <= 14; time += 0.01) {
-      const previous = liveValue(params.zoom, at(time - 0.01));
-      const value = liveValue(params.zoom, at(time));
+      const previous = liveValue(params.mapPower, at(time - 0.01));
+      const value = liveValue(params.mapPower, at(time));
       expect(value).toBeGreaterThanOrEqual(1 - 1e-9);
       expect(value).toBeLessThanOrEqual(2 + 1e-9);
       const sinceTrip = (time - 10) % 2;
       if (sinceTrip > 0.07 && sinceTrip < 1.99) expect(value).toBeLessThanOrEqual(previous + 1e-9);
     }
     /* The fall is fast at first and slower later: more than half the way back in the first fifth of the trip. */
-    expect(liveValue(params.zoom, at(10.4))).toBeLessThan(1.5);
-    expect(liveValue(params.zoom, at(11.4))).toBeLessThan(1.1);
+    expect(liveValue(params.mapPower, at(10.4))).toBeLessThan(1.5);
+    expect(liveValue(params.mapPower, at(11.4))).toBeLessThan(1.1);
   });
 
   it("implodes: a slow build to the end handle, then a snap back to the start", () => {
     const params = createParams();
-    Object.assign(params.zoom, { on: true, low: 1, high: 2, custom: true, seconds: 2, ease: "implode" });
-    startRangeAt(params.zoom, 10);
-    expect(liveValue(params.zoom, at(10))).toBeCloseTo(1);
-    expect(liveValue(params.zoom, at(11.94))).toBeCloseTo(2);
-    expect(liveValue(params.zoom, at(12))).toBeCloseTo(1);
-    expect(liveValue(params.zoom, at(13.94))).toBeCloseTo(2);
+    Object.assign(params.mapPower, { on: true, low: 1, high: 2, custom: true, seconds: 2, ease: "implode" });
+    startRangeAt(params.mapPower, 10);
+    expect(liveValue(params.mapPower, at(10))).toBeCloseTo(1);
+    expect(liveValue(params.mapPower, at(11.94))).toBeCloseTo(2);
+    expect(liveValue(params.mapPower, at(12))).toBeCloseTo(1);
+    expect(liveValue(params.mapPower, at(13.94))).toBeCloseTo(2);
     for (let time = 10.01; time < 11.94; time += 0.01) {
-      expect(liveValue(params.zoom, at(time))).toBeGreaterThanOrEqual(liveValue(params.zoom, at(time - 0.01)) - 1e-9);
+      expect(liveValue(params.mapPower, at(time))).toBeGreaterThanOrEqual(liveValue(params.mapPower, at(time - 0.01)) - 1e-9);
     }
   });
 
@@ -168,10 +199,10 @@ describe("liveValue", () => {
 describe("range timing", () => {
   it("moves every range on the shared cycle together", () => {
     const params = createParams();
-    Object.assign(params.zoom, { on: true, low: 1, high: 2, ease: "linear" });
+    Object.assign(params.mapPower, { on: true, low: 1, high: 2, ease: "linear" });
     Object.assign(params.panX, { on: true, low: -0.3, high: 0.3, ease: "linear" });
     for (const [time, zoom, panX] of [[0, 1, -0.3], [10, 1.5, 0], [20, 2, 0.3], [30, 1.5, 0], [40, 1, -0.3]]) {
-      expect(liveValue(params.zoom, at(time))).toBeCloseTo(zoom);
+      expect(liveValue(params.mapPower, at(time))).toBeCloseTo(zoom);
       expect(liveValue(params.panX, at(time))).toBeCloseTo(panX);
     }
   });
@@ -186,24 +217,24 @@ describe("range timing", () => {
 
   it("keeps the value where it is when a range gets its own time, then rejoins the cycle", () => {
     const params = createParams();
-    Object.assign(params.zoom, { on: true, low: 0.8, high: 3 });
+    Object.assign(params.mapPower, { on: true, low: 0.8, high: 3 });
     const state = { ...createPlayState(), time: 13, clock: 7 };
-    const before = liveValue(params.zoom, state);
-    setCustomTime(params.zoom, 4, state);
-    expect(liveValue(params.zoom, state)).toBeCloseTo(before);
-    setCustomTime(params.zoom, 9, state);
-    expect(liveValue(params.zoom, state)).toBeCloseTo(before);
+    const before = liveValue(params.mapPower, state);
+    setCustomTime(params.mapPower, 4, state);
+    expect(liveValue(params.mapPower, state)).toBeCloseTo(before);
+    setCustomTime(params.mapPower, 9, state);
+    expect(liveValue(params.mapPower, state)).toBeCloseTo(before);
     /* Two trips of its own time later, it is back where it was. */
-    expect(liveValue(params.zoom, { ...state, clock: 25 })).toBeCloseTo(before);
-    setCustomTime(params.zoom, null, state);
-    expect(params.zoom.custom).toBe(false);
-    expect(liveValue(params.zoom, { ...state, time: 0 })).toBeCloseTo(0.8);
+    expect(liveValue(params.mapPower, { ...state, clock: 25 })).toBeCloseTo(before);
+    setCustomTime(params.mapPower, null, state);
+    expect(params.mapPower.custom).toBe(false);
+    expect(liveValue(params.mapPower, { ...state, time: 0 })).toBeCloseTo(0.8);
   });
 
   it("moves a custom range on the real clock, so the cycle does not change it", () => {
     const params = createParams();
-    Object.assign(params.zoom, { on: true, low: 1, high: 2, ease: "linear", custom: true, seconds: 5 });
-    expect(liveValue(params.zoom, { ...createPlayState(), time: 999, clock: 5 })).toBeCloseTo(2);
+    Object.assign(params.mapPower, { on: true, low: 1, high: 2, ease: "linear", custom: true, seconds: 5 });
+    expect(liveValue(params.mapPower, { ...createPlayState(), time: 999, clock: 5 })).toBeCloseTo(2);
   });
 });
 
@@ -225,10 +256,10 @@ describe("double-click resets", () => {
 
   it("widen a range to the full span and keep its direction", () => {
     const params = createParams();
-    Object.assign(params.zoom, { low: 1, high: 2 });
-    expect(fullRange(params.zoom)).toEqual([params.zoom.min, params.zoom.max]);
-    Object.assign(params.zoom, { low: 2, high: 1 });
-    expect(fullRange(params.zoom)).toEqual([params.zoom.max, params.zoom.min]);
+    Object.assign(params.mapPower, { low: 1, high: 2 });
+    expect(fullRange(params.mapPower)).toEqual([params.mapPower.min, params.mapPower.max]);
+    Object.assign(params.mapPower, { low: 2, high: 1 });
+    expect(fullRange(params.mapPower)).toEqual([params.mapPower.max, params.mapPower.min]);
   });
 });
 
@@ -252,7 +283,9 @@ describe("resetEffects", () => {
     state.locks.trails = true;
     const trails = JSON.stringify(params.trailAmount);
     resetEffects(params, state);
-    expect(params.zoom).toMatchObject({ value: defaultValue("zoom"), on: false });
+    const fresh = createParams();
+    expect(params.mapPower).toMatchObject({ value: fresh.mapPower.value, low: fresh.mapPower.low, high: fresh.mapPower.high, on: fresh.mapPower.on });
+    expect(params.mapAngle.ease).toBe(fresh.mapAngle.ease);
     expect(params.rotation.on).toBe(false);
     expect(state.groups).toMatchObject({ warp: false, kaleidoscope: false, finish: false, trails: true, source: true });
     expect(state.fxOrder).toEqual(["trails"]);
@@ -339,18 +372,18 @@ describe("nudgeParams", () => {
   it("moves each unlocked value by NUDGE of its slider, inside the slider and on its steps", () => {
     const params = createParams();
     const state = createPlayState();
-    params.zoom.value = 1.5;
+    params.mapPower.value = 1.5;
     params.trailAmount.value = 0.5;
-    const before = { zoom: params.zoom.value, trail: params.trailAmount.value };
+    const before = { zoom: params.mapPower.value, trail: params.trailAmount.value };
     nudgeParams(params, state, () => 0.9);
-    const zoomTarget = before.zoom + (params.zoom.max - params.zoom.min) * NUDGE;
-    expect(Math.abs(params.zoom.value - zoomTarget)).toBeLessThanOrEqual(params.zoom.step / 2 + 1e-9);
+    const zoomTarget = before.zoom + (params.mapPower.max - params.mapPower.min) * NUDGE;
+    expect(Math.abs(params.mapPower.value - zoomTarget)).toBeLessThanOrEqual(params.mapPower.step / 2 + 1e-9);
     /* The result lands on the slider's step. */
     const trailTarget = before.trail + (params.trailAmount.max - params.trailAmount.min) * NUDGE;
     expect(Math.abs(params.trailAmount.value - trailTarget)).toBeLessThanOrEqual(params.trailAmount.step / 2 + 1e-9);
-    params.zoom.value = params.zoom.max;
+    params.mapPower.value = params.mapPower.max;
     nudgeParams(params, state, () => 0.9);
-    expect(params.zoom.value).toBe(params.zoom.max);
+    expect(params.mapPower.value).toBe(params.mapPower.max);
   });
 
   it("leaves locked groups, values at 0, the scene length and whole-circle turns alone", () => {
@@ -370,11 +403,11 @@ describe("nudgeParams", () => {
 
   it("moves both handles of a range", () => {
     const params = createParams();
-    Object.assign(params.zoom, { on: true, low: 1, high: 2 });
+    Object.assign(params.mapPower, { on: true, low: 1, high: 2 });
     nudgeParams(params, createPlayState(), () => 0.1);
-    const step = (params.zoom.max - params.zoom.min) * NUDGE;
-    expect(Math.abs(params.zoom.low! - (1 - step))).toBeLessThanOrEqual(params.zoom.step / 2 + 1e-9);
-    expect(Math.abs(params.zoom.high! - (2 - step))).toBeLessThanOrEqual(params.zoom.step / 2 + 1e-9);
+    const step = (params.mapPower.max - params.mapPower.min) * NUDGE;
+    expect(Math.abs(params.mapPower.low! - (1 - step))).toBeLessThanOrEqual(params.mapPower.step / 2 + 1e-9);
+    expect(Math.abs(params.mapPower.high! - (2 - step))).toBeLessThanOrEqual(params.mapPower.step / 2 + 1e-9);
   });
 });
 

@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Plus } from "@phosphor-icons/react";
 
 /**
- * The + Add New button at the end of the FX title bar, and its menu of the
+ * The + New button at the end of the FX title bar, and its menu of the
  * effects that are not in the list yet. A pick adds that effect. The menu looks like the
  * other dropdown lists. Keys: Up and Down move, Enter or Space picks, Esc
  * closes. A click outside closes it.
@@ -90,7 +90,7 @@ export function AddEffectMenu<K extends string>({ options, onAdd }: {
             setOpen(!open);
           }}
         >
-          <Plus size={16} weight="bold" /> Add New
+          <Plus size={16} weight="bold" /> New
         </button>
       </div>
       {open && createPortal(

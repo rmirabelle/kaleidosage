@@ -3,7 +3,11 @@
  * repeating patterns, and patterns that never repeat. They are drawn at 4K
  * when picked, so the app ships no image files; the random ones come out
  * different each time. tools/make-test-images.py makes the same kinds as files.
+ * The repeating patterns fit a whole number of tiles across and down (both
+ * sides divide by 120), so they repeat with no seam.
  */
+
+import { repeatingImages } from "../engine/engine";
 
 export const PATTERN_WIDTH = 3840;
 export const PATTERN_HEIGHT = 2160;
@@ -38,9 +42,12 @@ function dotGrid(spacing: number): Draw {
     context.fillStyle = "#0c0c10";
     context.fillRect(0, 0, width, height);
     const radius = spacing * 0.32;
+    const rows = Math.round(height / spacing);
+    const columns = Math.round(width / spacing);
     for (let row = 0; row * spacing < height; row++) {
       for (let column = 0; column * spacing < width; column++) {
-        context.fillStyle = `hsl(${((row * 0.07 + column * 0.03) % 1) * 360} 85% 55%)`;
+        /* The hue goes once around across and once down, so the repeat meets itself. */
+        context.fillStyle = `hsl(${((row / rows + column / columns) % 1) * 360} 85% 55%)`;
         context.beginPath();
         context.arc(column * spacing + spacing / 2, row * spacing + spacing / 2, radius, 0, Math.PI * 2);
         context.fill();
@@ -149,8 +156,8 @@ function centerLine(part: number): Draw {
 export const PATTERNS: Pattern[] = [
   { id: "checker-large", label: "Checkerboard, large", group: "Repeating", draw: checkerboard(120) },
   { id: "checker-fine", label: "Checkerboard, fine", group: "Repeating", draw: checkerboard(24) },
-  { id: "dots", label: "Dot grid", group: "Repeating", draw: dotGrid(96) },
-  { id: "color-grid", label: "Color grid", group: "Repeating", draw: colorGrid(160) },
+  { id: "dots", label: "Dot grid", group: "Repeating", draw: dotGrid(120) },
+  { id: "color-grid", label: "Color grid", group: "Repeating", draw: colorGrid(120) },
   { id: "center-line", label: "Center line", group: "Not repeating", draw: centerLine(0.25) },
   { id: "clouds", label: "Color clouds", group: "Not repeating", draw: colorClouds },
   { id: "shapes", label: "Random shapes", group: "Not repeating", draw: randomShapes },
@@ -162,5 +169,6 @@ export function drawPattern(pattern: Pattern): HTMLCanvasElement {
   canvas.width = PATTERN_WIDTH;
   canvas.height = PATTERN_HEIGHT;
   pattern.draw(canvas.getContext("2d")!, PATTERN_WIDTH, PATTERN_HEIGHT);
+  if (pattern.group === "Repeating") repeatingImages.add(canvas);
   return canvas;
 }

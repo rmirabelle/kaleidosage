@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowsLeftRight, BracketsSquare, Play, Timer, X } from "@phosphor-icons/react";
+import { ArrowsLeftRight, BracketsSquare, Play, Timer, Trash } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
 import { MAX_CUSTOM_SECONDS, NO_EFFECT, SLIDER_STEPS, defaultValue, formatValue, fromSlider, fullRange, setCustomTime, toSlider, type ContourTone, type Param, type ParamKey } from "../engine/params";
 import { ColorPicker } from "./ColorPicker";
@@ -210,36 +210,58 @@ function ParamRow({ engine, paramKey, readout, marker, after, menu, onHold }: {
 
   return (
     <div
-      className={`panel-row ${HUE_KEYS.includes(paramKey) ? "hue-track" : ""}`}
+      className={`panel-row ${HUE_KEYS.includes(paramKey) ? "hue-track" : ""} ${NOT_MAPPABLE.includes(paramKey) ? "" : "has-midi"}`}
       onContextMenu={menu && ((event) => {
         event.preventDefault();
         setMenuAt({ left: event.clientX, top: event.clientY });
       })}
     >
       {menu && menuAt && createPortal(<ContextMenu position={menuAt} items={menu} onClose={() => setMenuAt(null)} />, document.body)}
+      {/**
+        * The MIDI column, at the left of the setting while the MIDI view is
+        * on: the MIDI button beside the name, and under it, beside the
+        * slider, the remove button (while it waits) and the play button of
+        * a range that MIDI stopped.
+        */}
+      {!NOT_MAPPABLE.includes(paramKey) && (
+        <>
+          <div className="panel-row-midi top">
+            <MidiAssign engine={engine} paramKey={paramKey} label={param.label} />
+          </div>
+          <div className="panel-row-midi bottom">
+            <MidiRemove paramKey={paramKey} label={param.label} />
+            {held && (
+              <button className="midi-play" title="MIDI stopped this range at this value. Click to play the range again." aria-label={`Play the ${param.label.toLowerCase()} range again`} onClick={() => engine.resumeRange(paramKey)}>
+                <Play size={12} weight="fill" />
+              </button>
+            )}
+          </div>
+        </>
+      )}
       <div className="panel-row-top">
-        {/* Double-click on the name: back to the default value, or the full range. */}
-        <span
-          className={`panel-row-name ${touched ? "midi-touched" : ""} ${bypassed ? "bypassed" : ""}`}
-          title={`Double-click: back to the default. Ctrl + hold: no effect while held.${menu ? " Right-click: more choices." : ""}`}
-          onDoubleClick={(event) => { if (!event.ctrlKey) reset(); }}
-          onPointerDown={(event) => {
-            if (!event.ctrlKey || event.button !== 0) return;
-            event.preventDefault();
-            engine.bypassedParams.add(paramKey);
-            setBypassed(true);
-            event.currentTarget.setPointerCapture(event.pointerId);
-          }}
-          onLostPointerCapture={releaseBypass}
-        >
-          {param.label}
+        <span className="panel-row-label">
+          {/* Double-click on the name: back to the default value, or the full range. */}
+          <span
+            className={`panel-row-name ${touched ? "midi-touched" : ""} ${bypassed ? "bypassed" : ""}`}
+            title={`Double-click: back to the default. Ctrl + hold: no effect while held.${menu ? " Right-click: more choices." : ""}`}
+            onDoubleClick={(event) => { if (!event.ctrlKey) reset(); }}
+            onPointerDown={(event) => {
+              if (!event.ctrlKey || event.button !== 0) return;
+              event.preventDefault();
+              engine.bypassedParams.add(paramKey);
+              setBypassed(true);
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onLostPointerCapture={releaseBypass}
+          >
+            {param.label}
+          </span>
         </span>
         <span className="panel-row-end">
           <span className="panel-row-value" ref={readout} />
         </span>
       </div>
       <div className="panel-row-control">
-        <MidiAssign engine={engine} paramKey={paramKey} label={param.label} held={held} onPlay={() => engine.resumeRange(paramKey)} />
         {paramKey === "overlayOpacity" && <ColorSwatch engine={engine} stateKey="overlayColor" label="Overlay color" />}
         {paramKey === "trailTint" && <ColorSwatch engine={engine} stateKey="trailColor" label="Trail color" />}
         {paramKey === "cameraSky" && <ColorSwatch engine={engine} stateKey="skyColor" label="Sky color" />}
@@ -328,6 +350,7 @@ function ParamRow({ engine, paramKey, readout, marker, after, menu, onHold }: {
       </div>
       {drifting && custom && (
         <div className="panel-row-control panel-row-time">
+          <span className="panel-time-label">Loop</span>
           <Slider
             label={`${param.label} time from start to end`}
             min={1}
@@ -346,19 +369,29 @@ function ParamRow({ engine, paramKey, readout, marker, after, menu, onHold }: {
   );
 }
 
+/** The remove button under a slider's MIDI button: it shows while the slider waits for a control and has one, and removes its controls. */
+function MidiRemove({ paramKey, label }: { paramKey: ParamKey; label: string }) {
+  const { armed, mapped } = useMidi();
+  if (!armed.includes(paramKey) || !mapped.has(paramKey)) return null;
+  return (
+    <button className="midi-remove" title="Remove the MIDI control" aria-label={`Remove the MIDI control from ${label}`} onClick={() => midi.clear(paramKey)}>
+      <Trash size={12} weight="bold" />
+    </button>
+  );
+}
+
 /**
- * The MIDI button of one slider, at the left of the slider. A click waits for the
+ * The MIDI button of one slider, in the MIDI column at the left of the
+ * setting (see the Show MIDI button before the FX title). A click waits for the
  * next knob or fader move and adds that control to this slider. Nothing is
  * taken away: a control can move several sliders (a macro), and a slider
  * can have several controls. A second click or Esc stops waiting. The
  * tooltip names the slider's controls and the other sliders they move. It is lit while a control is
- * assigned. While it waits, an assigned slider also shows a remove button;
+ * assigned. While it waits, an assigned slider also shows a remove button (see MidiRemove);
  * a right-click on the lit icon removes the control too. It shows only
  * while a MIDI controller is connected, or when a control is assigned.
- * While a MIDI control holds a range's value ("held"), it is an orange
- * play button instead: a click plays the range again.
  */
-function MidiAssign({ engine, paramKey, label, held, onPlay }: { engine: Engine; paramKey: ParamKey; label: string; held: boolean; onPlay: () => void }) {
+function MidiAssign({ engine, paramKey, label }: { engine: Engine; paramKey: ParamKey; label: string }) {
   const { available, devices, armed, mapped } = useMidi();
   const waiting = armed.includes(paramKey);
   const assigned = mapped.has(paramKey);
@@ -375,13 +408,6 @@ function MidiAssign({ engine, paramKey, label, held, onPlay }: { engine: Engine;
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [waiting]);
 
-  if (held) {
-    return (
-      <button className="midi-play" title="MIDI stopped this range at this value. Click to play the range again." aria-label={`Play the ${label.toLowerCase()} range again`} onClick={onPlay}>
-        <Play size={12} weight="fill" />
-      </button>
-    );
-  }
   if (NOT_MAPPABLE.includes(paramKey) || (!assigned && (!available || devices.length === 0))) return null;
   /** Where this slider's control is, and the other sliders that the same control moves. */
   const where = assigned ? midi.mappings([paramKey]).map(({ device, control }) => {
@@ -396,11 +422,6 @@ function MidiAssign({ engine, paramKey, label, held, onPlay }: { engine: Engine;
       : "Assign a MIDI knob or fader to this slider";
   return (
     <>
-      {waiting && assigned && (
-        <button className="midi-remove" title="Remove the MIDI control" aria-label={`Remove the MIDI control from ${label}`} onClick={() => midi.clear(paramKey)}>
-          <X size={10} weight="bold" />
-        </button>
-      )}
       <button
         className={`midi-assign ${assigned ? "on" : ""} ${waiting ? "waiting" : ""}`}
         title={title}

@@ -72,6 +72,20 @@ function fullHue(degrees: number): [number, number, number] {
 if (import.meta.hot) import.meta.hot.accept(() => window.location.reload());
 
 /** Owns the parameters, the animation clock and the render loop. */
+/**
+ * The Julia point: the point at angle "shape" on the edge of the Mandelbrot
+ * set's main body (e^it / 2 - e^2it / 4), moved out from the center by "edge".
+ */
+export function juliaPoint(shape: number, edge: number): [number, number] {
+  return [edge * (Math.cos(shape) / 2 - Math.cos(2 * shape) / 4), edge * (Math.sin(shape) / 2 - Math.sin(2 * shape) / 4)];
+}
+
+/**
+ * Images that repeat seamlessly (the repeating test patterns). With auto
+ * tiling, a repeating first image is repeated past its edges, not mirrored.
+ */
+export const repeatingImages = new WeakSet<object>();
+
 export class Engine {
   readonly params = createParams();
   readonly state = createPlayState();
@@ -608,6 +622,8 @@ export class Engine {
       }
     }
     const kaleidoscope = (key: ParamKey, neutral: number) => on.kaleidoscope ? this.live(key) : neutral;
+    /* The Möbius point lies on the X axis: its direction would only turn the picture, as Rotation does. */
+    const mapPoint = this.state.mapMode === 2 ? [this.live("mobiusPoint"), 0] : juliaPoint(this.live("juliaShape") * DEGREES, this.live("juliaEdge"));
     this.renderer.render({
       fxOrder: this.state.fxOrder,
       shapeActive: { warp: on.warp, map: on.map, kaleidoscope: on.kaleidoscope },
@@ -639,18 +655,27 @@ export class Engine {
       warpAngle: this.live("warpAngle") * DEGREES,
       mapMode: on.map ? this.state.mapMode : 0,
       mapMix: this.live("mapMix"),
-      mapScale: this.live("mapScale"),
+      /* Möbius and Julia have their own zoom settings, which take the place of the map zoom. */
+      mapScale: this.state.mapMode === 2 ? 1 : this.state.mapMode === 3 ? this.live("juliaZoom") : this.live("mapScale"),
       mapPower: this.live("mapPower"),
-      mapPointX: this.live("mapPointX"),
-      mapPointY: this.live("mapPointY"),
+      mapPointX: mapPoint[0],
+      mapPointY: mapPoint[1],
       mapSteps: this.params.mapSteps.value,
       mapArms: this.live("mapArms"),
       spiralCopies: this.spiralCopies,
       mapTwist: this.live("mapTwist") * DEGREES,
       mapAngle: this.live("mapAngle") * DEGREES,
+      /* Möbius has its own pan, roll and twist. */
+      mapPanX: this.state.mapMode === 2 ? 0 : this.live("mapPanX"),
+      mapPanY: this.state.mapMode === 2 ? 0 : this.live("mapPanY"),
+      mapRoll: this.live("mapRoll") * DEGREES,
+      mapCurl: this.live("mapCurl"),
       mapTravel: this.state.mapTravel,
       tunnelTwist: this.live("tunnelTwist") * DEGREES,
-      mapFog: this.live("mapFog"),
+      /* Möbius and Julia have their own depth fade settings. */
+      mapFog: this.live(this.state.mapMode === 2 ? "mobiusFog" : this.state.mapMode === 3 ? "juliaFog" : "mapFog"),
+      mapFogSoftness: this.live(this.state.mapMode === 2 ? "mobiusFogSoftness" : this.state.mapMode === 3 ? "juliaFogSoftness" : "mapFogSoftness"),
+      mobiusTurn: this.live("mobiusTurn") * DEGREES,
       mobiusRotation: this.live("mobiusRotation") * DEGREES,
       mobiusTwist: this.live("mobiusTwist"),
       mobiusZoom: this.live("mobiusZoom"),
@@ -715,6 +740,44 @@ export class Engine {
       skyColor: hexToRgb(this.state.skyColor),
       cameraShine: this.live("cameraShine"),
       cameraSmooth: this.live("cameraSmooth"),
+      sort: on.sort ? this.live("sortAmount") : 0,
+      sortOrder: this.state.sortOrder,
+      sortLow: this.live("sortLow"),
+      sortHigh: this.live("sortHigh"),
+      sortAngle: this.live("sortAngle") * DEGREES,
+      sortLength: this.live("sortLength"),
+      sortThickness: this.live("sortThickness"),
+      reaction: on.reaction ? this.live("reactionAmount") : 0,
+      reactionLook: this.state.reactionLook,
+      reactionFeed: this.live("reactionFeed"),
+      reactionKill: this.live("reactionKill"),
+      reactionFollow: this.live("reactionFollow"),
+      reactionSpeed: this.live("reactionSpeed"),
+      reactionSize: this.params.reactionSize.value,
+      particles: on.particles ? this.live("particleAmount") : 0,
+      particleBlend: this.state.particleBlend,
+      particleBackground: this.live("particleBackground"),
+      particleCount: this.live("particleCount"),
+      particleLevel: this.live("particleLevel"),
+      particleSize: this.live("particleSize"),
+      particleLife: this.live("particleLife"),
+      particleSpeed: this.live("particleSpeed"),
+      particleGravity: this.live("particleGravity"),
+      particleAngle: this.live("particleAngle") * DEGREES,
+      particleTurbulence: this.live("particleTurbulence"),
+      particleDrag: this.live("particleDrag"),
+      particleSeconds: animated,
+      particleTime: this.state.time,
+      rays: on.rays ? this.live("raysAmount") : 0,
+      raysThreshold: this.live("raysThreshold"),
+      raysLength: this.live("raysLength"),
+      raysFade: this.live("raysFade"),
+      raysX: this.live("raysX"),
+      raysY: this.live("raysY"),
+      bloom: on.bloom ? this.live("bloomAmount") : 0,
+      bloomThreshold: this.live("bloomThreshold"),
+      bloomSoftness: this.live("bloomSoftness"),
+      bloomSize: this.live("bloomSize"),
       smear: on.smear ? this.live("smearAmount") : 0,
       smearDelay: this.live("smearDelay"),
       smearShape: this.state.smearShape,
@@ -733,7 +796,8 @@ export class Engine {
       contourColor: this.state.contourTone === "black" ? [0, 0, 0] : this.state.contourTone === "white" ? [1, 1, 1] : fullHue(this.live("contourHue")),
       contourBlend: this.state.contourBlend,
       imageBlend: this.hasSecondImage ? this.live("imageBlend") : 0,
-      blendMode: this.state.blendMode
+      blendMode: this.state.blendMode,
+      tileRepeat: this.state.tiling === 2 || (this.state.tiling === 0 && !!this.sources[0] && repeatingImages.has(this.sources[0]))
     });
   }
 }

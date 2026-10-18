@@ -143,20 +143,31 @@ button { border: 0; }
 .menubar-dropdown small { color: #7f8595; font-size: 11px; }
 .menubar-divider { height: 1px; margin: 4px 7px; background: #3a3f4d; }
 
-/* The toolbar under the menu bar. */
-/* The main toolbar: the Designer toolbar's button groups, with 4px padding on a dark strip. */
-/* Three parts: Save at the left, Stop and Play in the middle of the window, the view buttons at the right. */
-.toolbar {
-  flex: 0 0 auto;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+/*
+ * The bars over the picture: Stop and Play at the bottom center, and
+ * Full screen at the top right, each a button group on a
+ * see-through glass strip. They fade in while the mouse is over the picture (or a key
+ * moves focus into them), and fade out when the mouse leaves.
+ */
+.stage-controls {
+  position: absolute;
+  z-index: 5;
+  display: flex;
   align-items: center;
-  gap: 8px;
   padding: 4px;
-  background: #272b36;
+  border: 1px solid rgba(57, 61, 77, .85);
+  border-radius: 8px;
+  background: rgba(29, 32, 41, .4);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s;
 }
-.toolbar > .panel-buttons:first-child { justify-self: start; }
-.toolbar-end { justify-self: end; }
+.stage-controls.play { left: 50%; bottom: 14px; transform: translateX(-50%); }
+.stage-controls.view { top: 14px; right: 14px; }
+/* Each bar's button group has round outer corners. */
+.stage-controls .panel-buttons { border-radius: 5px; }
+.stage:hover .stage-controls, .stage-controls:has(:focus-visible) { opacity: 1; pointer-events: auto; }
 
 /* The Patterns drop-down list. */
 .toolbar-menu { position: relative; }
@@ -258,13 +269,14 @@ button { border: 0; }
 .side-panel-action { display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 7px; border-radius: 5px; color: var(--muted); background: transparent; font-size: 11px; cursor: pointer; }
 .side-panel-action:hover { color: #f1f2f4; background: rgba(255,255,255,.08); }
 
-/* MIDI: each slider's button before its value. Dim until assigned, lit (orange) while a control is assigned, pulsing while it waits for a control. */
+/* MIDI: each slider's button after its name. Dim until assigned, orange while a control is assigned, pulsing orange while it waits for a control. */
 .panel-row-end { display: flex; align-items: center; gap: 4px; }
 .midi-assign, .midi-remove { display: grid; flex: 0 0 auto; place-items: center; width: 18px; height: 18px; margin: 0; padding: 0; border-radius: 4px; color: #5d6272; background: transparent; cursor: pointer; }
 .midi-assign:hover { color: #c3c7d0; background: rgba(255,255,255,.07); }
+/* Assigned: an orange icon with no button face. */
 .midi-assign.on { color: var(--midi-on); }
-.midi-assign.waiting { color: #fff; background: var(--accent); animation: midi-wait 1s ease-in-out infinite alternate; }
-@keyframes midi-wait { to { background: rgba(75,118,247,.35); } }
+.midi-assign.waiting { color: #fff; background: var(--midi-on); animation: midi-wait 1s ease-in-out infinite alternate; }
+@keyframes midi-wait { to { background: rgba(255,138,31,.35); } }
 /* A range that a MIDI control stopped: an orange play button plays it again. */
 .midi-play { display: grid; flex: 0 0 auto; place-items: center; width: 18px; height: 18px; margin: 0; padding: 0; border-radius: 4px; color: var(--midi-on); background: rgba(255,138,31,.14); cursor: pointer; }
 .midi-play svg { filter: drop-shadow(0 0 2px rgba(255,138,31,.8)); }
@@ -283,7 +295,8 @@ button { border: 0; }
 /* The Effects panel does not scroll as a whole: its top stays, and only .panel-scroll under it scrolls. */
 /* The left panel, darker than the cards on it. */
 .control-panel { flex: 0 0 400px; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; border-right: 1px solid var(--border); background: #14161c; }
-.control-panel > :not(.panel-scroll) { flex: 0 0 auto; }
+/* The FX card is left out: it fills the rest of the panel, so its list scrolls inside it. */
+.control-panel > :not(.panel-scroll):not(.fx-card) { flex: 0 0 auto; }
 /* A soft black glow inside the panel's edge, drawn above the panel's content so the cards in it do not cover it. */
 .control-panel { position: relative; }
 .control-panel::after { content: ""; position: absolute; z-index: 60; inset: 0; border-radius: inherit; box-shadow: inset 0 0 5px 1px rgba(0,0,0,.8); pointer-events: none; }
@@ -325,6 +338,9 @@ button { border: 0; }
 /* With no line between them, the Crossfade row needs no top padding of its own: the images' bottom padding is enough. */
 .source-images + .panel-row { padding-top: 0; }
 .source-section .panel-header-bar { margin: 0; }
+/* The tiling button at the right of the Source title bar; its menu drops down below it. */
+.source-tiling { display: grid; place-items: center; width: 28px; height: 26px; padding: 0; border-radius: 4px; color: #8a8fa0; background: transparent; cursor: pointer; }
+.source-tiling:hover, .source-tiling.open { color: #fff; background: rgba(255,255,255,.08); }
 /* The Source well fills the section with no space around it; the section's own lines are its borders. */
 .source-section .source-well { margin: 0; border: 0; border-radius: 0; }/* The MIDI panel: it slides up at the bottom of the window (its height grows), so the panels and the picture above get shorter. */
 .midi-panel { position: relative; flex: 0 0 auto; overflow: hidden; transition: height .25s ease; }
@@ -438,18 +454,18 @@ button { border: 0; }
 .panel-group-header .panel-group-dice:not(:hover), .panel-group-header .panel-group-remove:not(:hover), .panel-group-header .panel-group-grip:not(:hover):not(.dragging), .panel-group-header .panel-group-lock:not(.locked) { color: #8f99bd; }
 .panel-group-remove { display: grid; place-items: center; width: 22px; height: 20px; border-radius: 4px; color: #5d6272; background: transparent; cursor: pointer; }
 .panel-group-remove:hover { color: #f87171; background: rgba(255,255,255,.07); }
-/* Under the effect list: a note while the list is empty. The Add New button is at the end of the FX title bar, with a copy under the list. */
+/* Under the effect list: a note while the list is empty. The New button is at the end of the FX title bar, with a copy under the list. */
 .stage-empty { margin: 10px 2px 10px; color: var(--muted); font-size: 12px; }
-/* The Add New button at the end of the FX title bar, styled like the icon buttons, with a space after the All buttons. */
+/* The New button at the end of the FX title bar, styled like the icon buttons, with a space after the All buttons. */
 /* An outline button: a dashed border and no fill, with a blue border and a light blue fill on hover or while its menu is open. */
 .panel-buttons.add-effect { margin-left: 10px; border: 1px dashed #5d6378; background: transparent; }
 .panel-buttons.add-effect:has(.panel-button:hover:not(:disabled)), .panel-buttons.add-effect:has(.panel-button.active) { border-style: solid; border-color: var(--accent); }
 .add-effect .panel-button { background: transparent; }
 .add-effect .panel-button:hover:not(:disabled), .add-effect .panel-button.active { color: #fff; background: rgba(75,118,247,.12); }
-/* The copy at the end of the effect list. */
-.add-effect-end { margin: 8px 0 4px; }
+/* The copy at the end of the effect list, at the right. */
+.add-effect-end { display: flex; justify-content: flex-end; margin: 8px 0 4px; }
 .add-effect-end .panel-buttons.add-effect { margin-left: 0; }
-/* The FX title bar's button groups have round outer corners: Add New, the left of Random and the right of Clear. */
+/* The FX title bar's button groups have round outer corners: New, the left of Random and the right of Clear. */
 .fx-card .panel-title-buttons { border-radius: 5px; }
 .panel-group-grip { display: grid; place-items: center; width: 20px; height: 30px; color: #5d6272; cursor: grab; touch-action: none; }
 .panel-group-grip:hover { color: #c3c7d0; }
@@ -509,6 +525,36 @@ button { border: 0; }
 .panel-group-title { transition: color .25s ease; }
 .panel-group.midi-touched .panel-group-title, .panel-group.midi-touched.disabled .panel-group-title { color: var(--midi-on); transition: none; }
 /* The same for the name of each slider the control moves. */
+/* The setting's name. */
+.panel-row-label { display: flex; align-items: center; gap: 4px; min-width: 0; }
+/*
+ * The MIDI view (the MIDI button before the FX title): each setting has two
+ * columns, a narrow one with its MIDI button beside the name and its play
+ * button (a range that MIDI stopped) beside the slider, then the name and
+ * slider. Without it, the MIDI column is hidden; the play button in the FX
+ * title then plays every range that MIDI stopped.
+ */
+.midi-hidden .panel-row-midi { display: none; }
+.control-panel:not(.midi-hidden) .panel-row.has-midi { display: grid; grid-template-columns: 18px minmax(0, 1fr); column-gap: 22px; padding-left: 8px; }
+.control-panel:not(.midi-hidden) .panel-row.has-midi > * { grid-column: 2; }
+/*
+ * A line at the right of the MIDI column, the full height of the setting, in
+ * the space between the columns: the MIDI button has 8px at its left (the
+ * row's padding) and at its right, and the controls have 14px after the line.
+ */
+.control-panel:not(.midi-hidden) .panel-row.has-midi { position: relative; }
+.control-panel:not(.midi-hidden) .panel-row.has-midi::before { content: ""; position: absolute; top: 0; bottom: 0; left: 34px; width: 1px; background: var(--border); }
+.control-panel:not(.midi-hidden) .panel-row.has-midi > .panel-row-midi { grid-column: 1; align-self: center; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.control-panel:not(.midi-hidden) .panel-row.has-midi > .panel-row-midi.top { grid-row: 1; margin-bottom: 6px; }
+.control-panel:not(.midi-hidden) .panel-row.has-midi > .panel-row-midi.bottom { grid-row: 2; }
+/*
+ * The Show MIDI button before the FX title: a gray icon, orange while on,
+ * with no button face. Its icon lines up with the header's left edge, and
+ * it is 2px down, so it is level with the middle of the capital letters.
+ */
+.panel-title-midi { position: relative; top: 2px; display: grid; place-items: center; width: 24px; height: 22px; margin: 0 4px 0 -4px; padding: 0; border-radius: 4px; color: #5d6272; background: transparent; cursor: pointer; }
+.panel-title-midi:hover { color: #c3c7d0; }
+.panel-title-midi.on { color: var(--midi-on); }
 .panel-row-name { transition: color .25s ease; }
 .panel-row-name.midi-touched { color: var(--midi-on); transition: none; }
 /* A setting held at no effect (Ctrl + hold on its name). */
@@ -533,7 +579,7 @@ button { border: 0; }
 /* Length on one line: the name, then the slider (and the video's Crossfade), then the value. The top row's box steps aside so its parts line up with the slider. Length has no range, so it needs no space for the range buttons. */
 .panel-root-row > .panel-row { display: flex; align-items: center; gap: 10px; }
 .panel-root-row .panel-row-top { display: contents; }
-.panel-root-row .panel-row-name { order: 1; }
+.panel-root-row .panel-row-label { order: 1; }
 .panel-root-row .panel-row-control { order: 2; flex: 1; min-width: 0; }
 .panel-root-row .panel-row-control > .slider { margin-top: 0; }
 .panel-root-row .panel-row-end { order: 3; }
@@ -541,8 +587,8 @@ button { border: 0; }
 /* A row with only a menu: the menu nearly fills the row. */
 .panel-select-row { padding: 6px; }
 /* A layer's blend mode: the name at the left, the menu filling the rest of the row. */
-.panel-layer-blend { display: flex; align-items: center; gap: 10px; padding: 6px 14px; }
-.panel-layer-blend .dropdown-button { flex: 1; min-width: 0; }
+.panel-layer-blend, .panel-select-named { display: flex; align-items: center; gap: 10px; padding: 6px 14px; }
+.panel-layer-blend .dropdown-button, .panel-select-named .dropdown-button { flex: 1; min-width: 0; }
 /* The name at the left, the current value at the right. */
 .panel-row-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: 12px; }
 /* Control names: small capitals like the group headers, but quieter. */
@@ -665,6 +711,8 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .panel-row-time .slider-well .slider-fill { background: linear-gradient(180deg, #27b457, #3ddc6e); }
 .panel-row-time .slider input[type=range]::-webkit-slider-thumb { border-color: var(--own-time); }
 .panel-row-time .slider input[type=range]:hover::-webkit-slider-thumb { border-color: #8dffb6; }
+/* "Loop" before a range's own time slider, in the setting names' small capitals and the own-time green. */
+.panel-time-label { flex: 0 0 auto; color: var(--own-time); font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; }
 .panel-time-value { flex: 0 0 94px; color: var(--own-time); font-size: 11px; font-variant-numeric: tabular-nums; }
 /* The easing list, on the page body under its button. */
 .toolbar-dropdown.ease-menu { position: fixed; z-index: 100; min-width: 0; }

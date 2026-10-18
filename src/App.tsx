@@ -18,7 +18,7 @@ import { OpenDialog, type OpenKind } from "./components/OpenDialog";
 import { StatsOverlay } from "./components/StatsOverlay";
 import { TitleBar } from "./components/TitleBar";
 import { DocumentTab } from "./components/DocumentTab";
-import { Toolbar } from "./components/Toolbar";
+import { StageControls } from "./components/StageControls";
 import { Engine } from "./engine/engine";
 import { createParams, createPlayState, nudgeParams, randomizeGroup, randomizeParams, resetEffects, type GroupKey } from "./engine/params";
 import { SettingsHistory } from "./engine/history";
@@ -950,17 +950,6 @@ export default function App() {
             dirty={dirty}
           />
           <MenuBar menus={menus} />
-          {!startScreen && (
-            <Toolbar
-              paused={paused}
-              onTogglePause={togglePause}
-              onStop={stop}
-              onSaveScene={() => void saveScene()}
-              statsOpen={statsOpen}
-              onToggleStats={() => setStatsOpen((open) => !open)}
-              onFullscreen={() => void toggleFullscreen()}
-            />
-          )}
         </>
       )}
       <div className="workspace">
@@ -1000,6 +989,14 @@ export default function App() {
           <main className={`stage ${cursorIdle ? "cursor-idle" : ""}`}>
             <canvas ref={canvasRef} onDoubleClick={() => void toggleFullscreen()} />
             {engine && statsOpen && <StatsOverlay engine={engine} />}
+            {engine && !startScreen && !fullscreen && (
+              <StageControls
+                paused={paused}
+                onTogglePause={togglePause}
+                onStop={stop}
+                onFullscreen={() => void toggleFullscreen()}
+              />
+            )}
             {fullscreen && (
               /* In full screen the title bar and toolbar are gone; these buttons show while the mouse moves. */
               <div className={`fullscreen-controls ${cursorIdle && !panelOpen ? "hidden" : ""}`}>
