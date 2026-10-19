@@ -1,9 +1,12 @@
-import { Fragment, useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { CaretRight, DiceFive, DotsSixVertical, Eye, EyeSlash, LockSimple, LockSimpleOpen, Play, Trash, Wind, X } from "@phosphor-icons/react";
+import { CaretRight, DiceFive, DotsSixVertical, Eye, EyeSlash, LockSimple, LockSimpleOpen, Play, SpeakerSimpleHigh, Trash, Wind, X } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
 import { GROUP_PARAMS, addEffect, createParams, removeEffect, type GroupKey, type ParamKey, type PlayState } from "../engine/params";
 import { midi } from "../lib/midi";
+import { audioInput } from "../lib/audioInput";
+import { settingButtons } from "../lib/settingButtons";
+import { EmptyState } from "./EmptyState";
 import { BLUR_KEYS, BLUR_MASKS, EFFECT_NAMES, FOLD_MODES, KALEIDOSCOPE_KEYS, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
 import type { BlurMask, FoldMode, FxStep, MapMode, ShapeStep, SmearShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
@@ -14,6 +17,8 @@ import { MidiIcon } from "./MidiIcon";
 import { RedDice } from "./RedDice";
 import { useMidi } from "./useMidi";
 import { useParamRows } from "./useParamRows";
+import { help } from "../help/topics";
+import { HelpButton } from "./HelpButton";
 
 interface Props {
   engine: Engine;
@@ -30,14 +35,17 @@ interface Props {
   hasVideo: boolean;
   /** The Source section (see SourcePanel), at the top of the panel, above the Designer. */
   source: ReactNode;
+  /** The file name of the Driver effect's own video, or null, and the button that picks one. */
+  driverVideoName: string | null;
+  onPickDriverVideo: () => void;
 }
 
 const TRAIL_KEYS: ParamKey[] = ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"];
 const CONTOUR_KEYS: ParamKey[] = ["contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady"];
 const RELIEF_KEYS: ParamKey[] = ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"];
+const DRIVER_KEYS: ParamKey[] = ["driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast"];
 const CAMERA_KEYS: ParamKey[] = ["cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth"];
 const SORT_KEYS: ParamKey[] = ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"];
-const REACTION_KEYS: ParamKey[] = ["reactionAmount", "reactionFeed", "reactionKill", "reactionFollow", "reactionSpeed", "reactionSize"];
 const PARTICLE_KEYS: ParamKey[] = ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag"];
 const RAYS_KEYS: ParamKey[] = ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"];
 const BLOOM_KEYS: ParamKey[] = ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"];
@@ -49,12 +57,14 @@ const LAYER_BLENDS = [
 const TRAIL_MODES = [[1, "Mix (smoky)"], [2, "Lighten (glowing)"]] as const;
 const PARTICLE_BLENDS = [[0, "Glow (add)"], [1, "Normal"]] as const;
 const SORT_ORDERS = [[0, "Dark to bright"], [1, "Bright to dark"]] as const;
-const REACTION_LOOKS = [[0, "Mask"], [1, "Bend"]] as const;
+const DRIVER_SOURCES = [[0, "Caustics"], [1, "Smoke"], [2, "Ink"], [3, "Fire"], [4, "Ripples"], [5, "Video"]] as const;
+const DRIVER_MODES = [[0, "Bend"], [1, "Reveal"], [2, "Light"]] as const;
 /** How the camera's land goes on past the picture. Mirror is seamless for every picture; Tile is seamless only for a picture that tiles. */
 const CAMERA_REPEATS = [[0, "Mirror"], [1, "Tile"], [2, "None"]] as const;
 
 /** The left panel: the Source section, then the Designer: its toolbar, the scene length, and the effect groups. */
-export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, hasVideo, source }: Props) {
+
+export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, hasVideo, source, driverVideoName, onPickDriverVideo }: Props) {
   const row = useParamRows(engine);
   /** True while MIDI holds any range: the Effects header then shows a play button that plays them all again. */
   const [anyHeld, setAnyHeld] = useState(engine.anyHeld);
@@ -68,13 +78,37 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
    */
   const { available, devices, mapped } = useMidi();
   const midiReady = mapped.size > 0 || (available && devices.length > 0);
-  const [showMidi, setShowMidi] = useState(false);
+  /* Whether the settings show their MIDI and audio buttons: kept in settingButtons, so it outlives this panel. */
+  const showMidi = useSyncExternalStore(settingButtons.subscribe, () => settingButtons.shown("midi"));
+  const setShowMidi = (show: boolean) => settingButtons.set("midi", show);
   const toggleMidi = () => {
     if (showMidi) {
       midi.setLearning(false);
       engine.resumeAll();
     }
+    else openFirstIfAllClosed();
     setShowMidi(!showMidi);
+  };
+  /**
+   * The audio button before the FX title shows the settings' audio buttons
+   * (see AudioLinkButton), in the same column as the MIDI buttons. It shows
+   * while the app listens to an input or the scene has an audio link.
+   */
+  const audioOn = useSyncExternalStore((listener) => audioInput.subscribe(listener), () => audioInput.settings.kind !== "none");
+  const [linkCount, setLinkCount] = useState(() => Object.keys(engine.state.audioLinks).length);
+  useEffect(() => engine.onParamChange(() => setLinkCount(Object.keys(engine.state.audioLinks).length)), [engine]);
+  const audioReady = audioOn || linkCount > 0;
+  const showAudio = useSyncExternalStore(settingButtons.subscribe, () => settingButtons.shown("audio"));
+  const setShowAudio = (show: boolean) => settingButtons.set("audio", show);
+  const midiButtons = showMidi && midiReady;
+  const audioButtons = showAudio && audioReady;
+  /**
+   * Turning on the MIDI or audio buttons while every effect is closed opens
+   * the first effect of the list, so the new buttons are in view at once.
+   */
+  const openFirstIfAllClosed = () => {
+    const first = fxOrder[0];
+    if (first && !(fxOrder as readonly string[]).includes(openGroup ?? "")) onOpenGroup(first);
   };
   /** Opening a group closes the others; clicking the open group closes it. Each group's dice randomizes that group. */
   const accordion = (key: GroupKey) => ({
@@ -174,9 +208,9 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       trails: () => start("trailAmount", 0.85),
       smear: () => start("smearAmount", 1),
       relief: () => start("reliefAmount", 0.6),
+      driver: () => start("driverAmount", 1),
       camera: () => start("cameraAmount", 1),
       sort: () => start("sortAmount", 1),
-      reaction: () => start("reactionAmount", 1),
       particles: () => start("particleAmount", 1),
       rays: () => start("raysAmount", 1.5),
       bloom: () => start("bloomAmount", 1)
@@ -237,6 +271,11 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
         {RELIEF_KEYS.map(row)}
       </Group>
     ),
+    driver: (grip) => (
+      <Group engine={engine} group="driver" title="Driver" grip={grip} {...accordion("driver")}>
+        <DriverSection engine={engine} row={row} videoName={driverVideoName} onPickVideo={onPickDriverVideo} />
+      </Group>
+    ),
     camera: (grip) => (
       <Group engine={engine} group="camera" title="Camera" grip={grip} {...accordion("camera")}>
         <CameraBlend engine={engine} />
@@ -248,12 +287,6 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       <Group engine={engine} group="sort" title="Pixel sort" grip={grip} {...accordion("sort")}>
         <ModeSelect engine={engine} stateKey="sortOrder" options={SORT_ORDERS} name="Order" />
         {SORT_KEYS.map(row)}
-      </Group>
-    ),
-    reaction: (grip) => (
-      <Group engine={engine} group="reaction" title="Reaction-diffusion" grip={grip} {...accordion("reaction")}>
-        <ModeSelect engine={engine} stateKey="reactionLook" options={REACTION_LOOKS} name="Look" />
-        {REACTION_KEYS.map(row)}
       </Group>
     ),
     particles: (grip) => (
@@ -280,11 +313,11 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
   };
 
   return (
-    <aside className={`side-panel control-panel ${showMidi && midiReady ? "" : "midi-hidden"}`}>
+    <aside className={`side-panel control-panel ${midiButtons || audioButtons ? "" : "midi-hidden"} ${midiButtons ? "" : "no-midi-buttons"} ${audioButtons ? "" : "no-audio-buttons"}`}>
       {/* The scene length (the cycle): at the very top and always in view, because its timing affects the sources and every effect below. A video source adds its crossfade after the slider. */}
       <div className="panel-root-row">
         {row.with("cycle", { after: hasVideo && (
-          <label className="panel-check-inline" title="A source video fades its end into its start, so it never jumps. Off, the video starts again at the start of each loop. A seamless video export always crossfades.">
+          <label className="panel-check-inline" data-tip="A source video fades its end into its start, so it never jumps. Off, the video starts again at the start of each loop. A seamless video export always crossfades.">
             <input
               type="checkbox"
               checked={videoCrossfade}
@@ -299,12 +332,26 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       </div>
       {source}
       {/* The FX card: its title bar (Random all, Nudge, Clear all, then New), then the effect groups, which scroll. */}
-      <section className="panel-card fx-card">
+      <section className="panel-card fx-card" {...help("fx")}>
         <div className="side-panel-header panel-header-bar">
+          {audioReady && (
+            <button
+              className={`panel-title-midi panel-title-audio ${showAudio ? "on" : ""}`}
+              data-tip={showAudio ? "Hide the audio buttons of the settings" : "Show the audio buttons of the settings, to make them move with the sound"}
+              aria-label="Show audio buttons"
+              aria-pressed={showAudio}
+              onClick={() => {
+                if (!showAudio) openFirstIfAllClosed();
+                setShowAudio(!showAudio);
+              }}
+            >
+              <SpeakerSimpleHigh size={17} weight={showAudio ? "fill" : "regular"} />
+            </button>
+          )}
           {midiReady && (
             <button
               className={`panel-title-midi ${showMidi ? "on" : ""}`}
-              title={showMidi ? "Hide the MIDI buttons of the settings" : "Show the MIDI buttons of the settings, to assign knobs and faders"}
+              data-tip={showMidi ? "Hide the MIDI buttons of the settings" : "Show the MIDI buttons of the settings, to assign knobs and faders"}
               aria-label="Show MIDI buttons"
               aria-pressed={showMidi}
               onClick={toggleMidi}
@@ -313,11 +360,12 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
             </button>
           )}
           <h2 className="side-panel-title">FX</h2>
+          <HelpButton topic="fx" />
           {/* While MIDI holds any range: a play button that plays them all again (Esc does the same). */}
           {anyHeld && (
             <button
               className="midi-play panel-title-play"
-              title="MIDI stopped some ranges. Click (or press Esc) to play them all again."
+              data-tip="MIDI stopped some ranges. Click (or press Esc) to play them all again."
               aria-label="Play every range that MIDI stopped"
               aria-keyshortcuts="Escape"
               onClick={() => engine.resumeAll()}
@@ -328,13 +376,13 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
           {/* "All" Random, Nudge and Clear as icon buttons, at the right of the title. Stop and Play are in the app toolbar. */}
           <span className="panel-title-all">All</span>
           <div className="panel-buttons panel-title-buttons">
-            <button className="panel-button icon" onClick={onRandomize} title="Random all (X): new random settings for every unlocked effect" aria-label="Random all">
+            <button className="panel-button icon" onClick={onRandomize} data-tip="Random all (X): new random settings for every unlocked effect" aria-label="Random all">
               <RedDice size={16} />
             </button>
             <button
               className="panel-button icon"
               onClick={onNudge}
-              title="Nudge all (N): move every unlocked value a little, up or down at random. Values at 0 stay at 0."
+              data-tip="Nudge all (N): move every unlocked value a little, up or down at random. Values at 0 stay at 0."
               aria-label="Nudge all"
             >
               <Wind size={16} />
@@ -342,7 +390,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
             <button
               className="panel-button icon"
               onClick={onReset}
-              title="Clear all: remove every effect from the list and set its controls back to no effect. Locked groups stay as they are."
+              data-tip="Clear all: remove every effect from the list and set its controls back to no effect. Locked groups stay as they are."
               aria-label="Clear all"
             >
               <Trash size={16} />
@@ -362,7 +410,11 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
             onRemove={remove}
             render={(key, grip) => groups[key](grip)}
           />
-          {fxOrder.length === 0 && <p className="stage-empty">No effects yet. Add one to start.</p>}
+          {fxOrder.length === 0 && (
+            <EmptyState text="Add an effect to change the picture.">
+              <AddEffectMenu options={EFFECT_NAMES} onAdd={add} />
+            </EmptyState>
+          )}
           {/* A copy of the title bar's New button, at the end of the list, while an effect group is open. */}
           {fxOrder.some((step) => step === openGroup) && (
             <div className="add-effect-end">
@@ -527,10 +579,10 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   const [removing, setRemoving] = useState<ReturnType<typeof midi.mappings> | null>(null);
 
   return (
-    <section className={`panel-group ${showing ? "" : "disabled"} ${open ? "open" : ""} ${touched ? "midi-touched" : ""}`}>
+    <section className={`panel-group ${showing ? "" : "disabled"} ${open ? "open" : ""} ${touched ? "midi-touched" : ""}`} {...help("fx.group")}>
       <header
         className="panel-group-header"
-        title={engine && group ? "Ctrl+hold to bypass; Ctrl+Shift+hold to solo this effect. Right-click to enable or disable, lock, or remove MIDI." : undefined}
+        data-tip={engine && group ? "Ctrl+hold to bypass; Ctrl+Shift+hold to solo this effect. Right-click to enable or disable, lock, or remove MIDI." : undefined}
         onContextMenu={(event) => {
           if (!engine || !group) return;
           event.preventDefault();
@@ -566,18 +618,20 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
         </button>
         {/* Lock and Remove MIDI are in the header's right-click menu; a locked group shows its lock. */}
         {locked && (
-          <span className="panel-group-lock locked" title="Locked against Randomize. Right-click the header to unlock.">
+          <span className="panel-group-lock locked" data-tip="Locked against Randomize. Right-click the header to unlock.">
             <LockSimple size={13} weight="fill" />
           </span>
         )}
         {/* The empty part of the header opens and closes the group too. */}
         <span className="panel-group-fill" onClick={onToggle} aria-hidden="true" />
+        {/* An open effect has a help button; closed ones keep the header short. */}
+        {open && <HelpButton topic="fx.group" />}
         {/* A locked group cannot be randomized, so its dice hides. */}
         {engine && group && onRandomize && !locked && (
           <button
             className="panel-group-dice"
             aria-label={`Random settings for ${title.toLowerCase()}`}
-            title={`New random settings for ${title.toLowerCase()} only`}
+            data-tip={`New random settings for ${title.toLowerCase()} only`}
             onClick={onRandomize}
           >
             <DiceFive size={14} />
@@ -644,14 +698,14 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
           <button
             className="panel-group-remove"
             aria-label={`Remove ${title.toLowerCase()}`}
-            title={`Remove ${title.toLowerCase()} from the list. Its settings stay for when you add it again.`}
+            data-tip={`Remove ${title.toLowerCase()} from the list. Its settings stay for when you add it again.`}
             onClick={grip.onRemove}
           >
             <X size={13} weight="bold" />
           </button>
         )}
         {grip && (
-          <span className={`panel-group-grip ${grip.dragging ? "dragging" : ""}`} onPointerDown={grip.onPointerDown} title="Drag to change the order">
+          <span className={`panel-group-grip ${grip.dragging ? "dragging" : ""}`} onPointerDown={grip.onPointerDown} data-tip="Drag to change the order">
             <DotsSixVertical size={14} weight="bold" />
           </span>
         )}
@@ -663,7 +717,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "reactionLook" | "particleBlend";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "driverSource" | "driverMode";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange }: {
@@ -692,7 +746,7 @@ export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name,
         value={mode}
         options={options}
         marks={marks}
-        mark={<span className="dropdown-mark" title="MIDI controls move sliders that only this choice shows"><MidiIcon size={11} /></span>}
+        mark={<span className="dropdown-mark" data-tip="MIDI controls move sliders that only this choice shows"><MidiIcon size={11} /></span>}
         onChange={(next) => {
           engine.state[stateKey] = next;
           setMode(next);
@@ -780,6 +834,38 @@ function CameraBlend({ engine }: { engine: Engine }) {
         }}
       />
     </div>
+  );
+}
+
+/**
+ * The Driver group's menus and sliders. With Video as the driver, a row
+ * shows the video's name and a button that picks another; picking Video
+ * with no video yet opens the picker at once.
+ */
+function DriverSection({ engine, row, videoName, onPickVideo }: { engine: Engine; row: (key: ParamKey) => ReactNode; videoName: string | null; onPickVideo: () => void }) {
+  const [source, setSource] = useState(engine.state.driverSource);
+  return (
+    <>
+      <ModeSelect
+        engine={engine}
+        stateKey="driverSource"
+        options={DRIVER_SOURCES}
+        name="Driver"
+        onChange={(next) => {
+          setSource(next);
+          if (next === 5 && !videoName) onPickVideo();
+        }}
+      />
+      {source === 5 && (
+        <div className="panel-select-row panel-select-named driver-video-row">
+          <span className="panel-row-name">Video</span>
+          <span className="driver-video-name" data-tip={videoName ? `The driver video: ${videoName}` : "No driver video yet"}>{videoName ?? "None"}</span>
+          <button className="button secondary small" onClick={onPickVideo} data-tip="Pick a video file. Its brightness drives the effect; the scene file keeps a copy of it.">Choose…</button>
+        </div>
+      )}
+      <ModeSelect engine={engine} stateKey="driverMode" options={DRIVER_MODES} name="Mode" />
+      {DRIVER_KEYS.map(row)}
+    </>
   );
 }
 

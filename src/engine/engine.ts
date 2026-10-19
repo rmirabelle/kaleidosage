@@ -1,5 +1,6 @@
 import { NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, defaultValue, hexToRgb, liveValue, rangeClock, startRangeAt, type GroupKey, type ParamKey } from "./params";
 import { KaleidoRenderer, type ImageSource } from "./renderer";
+import { followPush, levelAbove, pushRange, pushedValue, type AudioLink, type AudioSignal } from "./audio";
 import { copyVideo, cueVideo, releaseVideo, seekVideo, syncVideo, videoLoopPlan, videoLoopTime } from "./video";
 
 const DEGREES = Math.PI / 180;
@@ -41,6 +42,12 @@ function springStep(follower: Follower, current: number, target: number, elapsed
   follower.speed = (follower.speed - omega * push) * decay;
   return target + (change + push) * decay;
 }
+/** A link's state (see followAudio): the beat count it last saw, and its push now (0 to 1), after its release. */
+interface LinkFollower {
+  beats: number;
+  push: number;
+}
+
 /** A held range plays on again over this time: the held value curves into the playing range (see planResume). */
 const RESUME_SECONDS = 2;
 
@@ -85,6 +92,21 @@ export function juliaPoint(shape: number, edge: number): [number, number] {
  * tiling, a repeating first image is repeated past its edges, not mirrored.
  */
 export const repeatingImages = new WeakSet<object>();
+
+/** The Droste spiral's length of one copy in the shader's log space: log(1 / size). */
+const drosteCopy = (size: number) => -Math.log(Math.min(0.95, Math.max(0.05, size)));
+
+/**
+ * The Droste spiral's travel for the shader. For the Droste spiral the
+ * travel counts copies (see step), so a moving copy size only changes the
+ * size of the frames and does not move them. Only the part of a copy goes
+ * to the shader: the picture repeats at each copy, so this does not show,
+ * and the shader's exp() of a large travel would be too small for 32-bit
+ * floats (the whole picture would read one point and turn gray).
+ */
+function drosteTravel(copies: number, size: number) {
+  return (copies - Math.floor(copies)) * drosteCopy(size);
+}
 
 export class Engine {
   readonly params = createParams();
@@ -137,12 +159,58 @@ export class Engine {
           copy.setImage(source, slot);
         }
       }
+      if (this.driverVideo) {
+        const video = await copyVideo(this.driverVideo);
+        copy.ownVideos.push(video);
+        copy.setDriverVideo(video);
+      }
     } catch (error) {
       copy.dispose();
       throw error;
     }
     copy.hasSecondImage = this.hasSecondImage;
     return copy;
+  }
+
+  /**
+   * A crossfade from one scene to the next (see fadeOut): the last frame of
+   * the old scene, drawn over the new scene, which plays under it, until it
+   * has faded away.
+   */
+  private fade: { texture: WebGLTexture; start: number; seconds: number } | null = null;
+  /** Calls waiting for the frame that a crossfade starts from, and the fade time they asked for. */
+  private fadeWaiters: { resolve: () => void; seconds: number }[] = [];
+
+  /**
+   * Starts a crossfade: the next frame is kept as a still picture, and the
+   * promise resolves right after it, so the caller can put the next scene
+   * in the engine before the frame after. That still picture then fades out
+   * over the new scene in "seconds" of real time. A crossfade during a
+   * crossfade starts from the mixed picture, so nothing jumps. With the
+   * render loop stopped, it resolves at once, with no crossfade.
+   */
+  fadeOut(seconds: number): Promise<void> {
+    if (!this.frameId || seconds <= 0) return Promise.resolve();
+    return new Promise((resolve) => this.fadeWaiters.push({ resolve, seconds }));
+  }
+
+  /** Draws the crossfade's still picture over the frame (see fadeOut), and keeps a new one when a crossfade waits for it. */
+  private drawFade() {
+    if (this.fade) {
+      const t = (this.realTime - this.fade.start) / this.fade.seconds;
+      if (t >= 1) {
+        this.renderer.releaseFrame(this.fade.texture);
+        this.fade = null;
+      } else {
+        this.renderer.drawFrameOver(this.fade.texture, 1 - t * t * (3 - 2 * t));
+      }
+    }
+    if (!this.fadeWaiters.length) return;
+    const waiters = this.fadeWaiters;
+    this.fadeWaiters = [];
+    if (this.fade) this.renderer.releaseFrame(this.fade.texture);
+    this.fade = { texture: this.renderer.captureFrame(), start: this.realTime, seconds: waiters[waiters.length - 1].seconds };
+    for (const { resolve } of waiters) resolve();
   }
 
   /** Videos this engine made itself (see forExport); dispose lets them go. */
@@ -157,6 +225,9 @@ export class Engine {
   stop() {
     cancelAnimationFrame(this.frameId);
     this.frameId = 0;
+    /* No frame comes to start a crossfade from; the callers go on with no crossfade. */
+    for (const { resolve } of this.fadeWaiters) resolve();
+    this.fadeWaiters = [];
     for (const video of [...this.videos, ...this.partners]) video?.pause();
   }
 
@@ -180,6 +251,44 @@ export class Engine {
   }
 
   /** Sets the first (slot 0) or the second (slot 1) image. A video plays in step with the loop. */
+  /** The Driver effect's own video (driver 5), or null. Its owner (the scene) keeps it; the engine plays it while it is in use. */
+  private driverVideo: HTMLVideoElement | null = null;
+
+  setDriverVideo(video: HTMLVideoElement | null) {
+    if (this.driverVideo && this.driverVideo !== video) this.driverVideo.pause();
+    this.driverVideo = video;
+    this.renderer.setDriverVideo(video);
+  }
+
+  /**
+   * Where the driver video should be: the driver's run time (seconds ×
+   * Speed) around the video's length, so Speed sets its play rate and a
+   * paused scene holds it. Null while the Driver effect does not use it.
+   */
+  private driverVideoTarget() {
+    const video = this.driverVideo;
+    if (!video || !(video.duration > 0) || !this.state.groups.driver || this.state.driverSource !== 5) return null;
+    return this.state.driverTime % video.duration;
+  }
+
+  /** Keeps the driver video at its place: it plays at Speed, waits while paused or at Speed 0, and stops while it is not used. */
+  private syncDriverVideo(paused: boolean) {
+    const video = this.driverVideo;
+    if (!video) return;
+    const target = this.driverVideoTarget();
+    if (target === null) {
+      if (!video.paused) video.pause();
+      return;
+    }
+    const speed = this.live("driverSpeed");
+    if (speed < 0.0625) {
+      cueVideo(video, target);
+      return;
+    }
+    video.playbackRate = Math.min(16, speed);
+    syncVideo(video, target, paused);
+  }
+
   setImage(source: ImageSource, slot: 0 | 1 = 0) {
     this.renderer.setImage(source, slot);
     this.sources[slot] = source;
@@ -294,6 +403,80 @@ export class Engine {
   private realTime = 0;
 
   /**
+   * The sound that audio links follow (see docs/AUDIO.md), or null, when
+   * links have no effect. The app sets it; a video export's copy has none,
+   * so a video plays the ranges with no sound.
+   */
+  audio: AudioSignal | null = null;
+  /** The links' states (see LinkFollower). */
+  private readonly linkFollowers = new Map<ParamKey, LinkFollower>();
+
+  /** Links "key" to the sound, or (null) removes its link. The row and the Audio panel hear of it through paramChanged. */
+  setAudioLink(key: ParamKey, link: AudioLink | null) {
+    if (link) this.state.audioLinks[key] = { ...link };
+    else delete this.state.audioLinks[key];
+    this.linkFollowers.delete(key);
+    this.paramChanged(key);
+  }
+
+  /** How far the sound pushes the setting now, from 0 to 1, before its amount: for the row's audio button, which pulses with it. */
+  audioPush(key: ParamKey) {
+    if (!this.state.audioLinks[key] || !this.audio) return 0;
+    return this.linkFollowers.get(key)?.push ?? 0;
+  }
+
+  /**
+   * Moves every link on by "elapsed" real seconds: its push goes up at
+   * once to what the sound gives (a band's level above the link's own
+   * threshold, or 1 on a new beat for a kick), and falls back over the scene's Release times the link's factor
+   * (see followPush). Real time, so the links react while the animation is
+   * paused too.
+   */
+  private followAudio(elapsed: number) {
+    const audio = this.audio;
+    for (const key of this.linkFollowers.keys()) {
+      if (!this.state.audioLinks[key]) this.linkFollowers.delete(key);
+    }
+    for (const [key, link] of Object.entries(this.state.audioLinks) as [ParamKey, AudioLink][]) {
+      let follower = this.linkFollowers.get(key);
+      if (!follower) {
+        follower = { beats: audio?.beats ?? 0, push: 0 };
+        this.linkFollowers.set(key, follower);
+      }
+      const beat = audio !== null && audio.beats !== follower.beats;
+      if (audio) follower.beats = audio.beats;
+      /* The link's own threshold: the app's Threshold plus its offset. A beat counts for it only when the bass is above it. */
+      const threshold = (audio?.thresholdDb ?? 0) + (link.threshold ?? 0);
+      const target = !audio ? 0
+        : link.source === "kick" ? (beat && audio.decibels.bass >= threshold ? 1 : 0)
+        : levelAbove(audio.decibels[link.source], threshold);
+      follower.push = followPush(follower.push, target, elapsed, this.state.audioRelease * (link.release ?? 1));
+    }
+  }
+
+  /**
+   * True when the sound moves this setting now: it has an audio link, the
+   * app listens, and no MIDI hold has it (a hold wins: the link waits
+   * until the range plays again).
+   */
+  private audioMoves(key: ParamKey) {
+    return Boolean(this.state.audioLinks[key] && this.audio && !this.isHeld(key));
+  }
+
+  /**
+   * The value with its audio link (see docs/AUDIO.md, part 3): from "base"
+   * (a range's start handle, or the slider's value) toward the end that
+   * pushRange picks, by the link's amount times the push. With no sound
+   * the value is at rest.
+   */
+  private withAudio(key: ParamKey, base: number) {
+    const link = this.state.audioLinks[key];
+    if (!link || !this.audioMoves(key)) return base;
+    const param = this.params[key];
+    return pushedValue(param, base, pushRange(param).end, link.amount * this.audioPush(key));
+  }
+
+  /**
    * A MIDI control moves a range's playhead: the value goes to "target" (a
    * value between the range's handles) and stays there. The range stops
    * playing for this value, but its handles stay, and its clock runs on
@@ -343,6 +526,17 @@ export class Engine {
     this.holds.clear();
     this.followers.clear();
     for (const key of keys) this.paramChanged(key);
+  }
+
+  /**
+   * Forgets the glided values, so each value shows its slider value at once.
+   * For a scene that comes back from its tab: its values must not glide
+   * from the values of the scene that was shown before it.
+   */
+  settle() {
+    this.glided.clear();
+    this.followers.clear();
+    this.linkFollowers.clear();
   }
 
   /** True while a MIDI control holds any range (see isHeld). */
@@ -415,14 +609,16 @@ export class Engine {
     const param = this.params[key];
     const value = liveValue(param, this.state);
     if (!param.drift) return value;
-    /* A range keeps its last value here, so a range turned off glides from where it was. */
+    /* A range keeps its last value here, so a range turned off glides from where it was. The sound's push comes after, and is not kept. */
     const shown = this.glided.get(key);
     if (param.on || shown === undefined) {
-      const held = param.on ? this.holds.get(key)?.value ?? value : value;
+      /* A range with an audio link stops playing while the app listens: it rests at its start handle, and the sound moves it (see pushRange). */
+      const resting = param.on && this.audioMoves(key) ? pushRange(param).rest : value;
+      const held = param.on ? this.holds.get(key)?.value ?? resting : resting;
       this.glided.set(key, held);
-      return held;
+      return this.withAudio(key, held);
     }
-    return shown;
+    return this.withAudio(key, shown);
   }
 
   /** From one value to another; for an angle that turns all the way round, the short way round the circle. */
@@ -503,6 +699,7 @@ export class Engine {
     this.state.clock = 0;
     for (const key of PARAM_KEYS) if (this.params[key].drift) startRangeAt(this.params[key], 0);
     this.state.warpTime = 0;
+    this.state.driverTime = 0;
     this.state.mapTravel = 0;
     this.state.cameraX = 0;
     this.state.cameraY = 0;
@@ -517,6 +714,8 @@ export class Engine {
   /** Stops the render loop and frees the GPU context. The engine cannot be used after this. */
   dispose() {
     this.stop();
+    if (this.fade) this.renderer.releaseFrame(this.fade.texture);
+    this.fade = null;
     this.renderer.dispose();
     this.disposed = true;
     for (const video of [...this.ownVideos, ...this.partners]) if (video) releaseVideo(video);
@@ -568,8 +767,10 @@ export class Engine {
     this.state.time += animated;
     /** Flow is a speed, so its live value is added up over time; a drifting flow speeds up and slows down smoothly. */
     this.state.warpTime += animated * (this.live("warpFlow") + this.warpFlowOffset);
+    this.state.driverTime += animated * this.live("driverSpeed");
     /* Tunnel speed is a speed too, so the distance flown is added up the same way. */
-    this.state.mapTravel += animated * this.live("mapSpeed");
+    const mapSpeed = this.live("mapSpeed");
+    this.state.mapTravel += animated * (this.state.mapMode === 8 ? mapSpeed / drosteCopy(this.live("drosteSize")) : mapSpeed);
     /* Camera speed too: the aim point flies over the land the way the camera looks (see CAMERA_SHADER: the eye is on the Turn side of the aim point). */
     const heading = this.live("cameraTurn") * DEGREES;
     const flight = animated * this.live("cameraSpeed");
@@ -581,6 +782,8 @@ export class Engine {
   /** For video export: moves each video copy to its exact place, waits for it, and uploads its frame. */
   async seekVideos() {
     for (const slot of [0, 1] as const) await Promise.all(this.placeVideo(slot, (video, target) => seekVideo(video, target)));
+    const driverTarget = this.driverVideoTarget();
+    if (this.driverVideo && driverTarget !== null) await seekVideo(this.driverVideo, driverTarget);
     this.renderer.updateVideos(true);
   }
 
@@ -591,15 +794,18 @@ export class Engine {
     this.lastTime = now;
     const animated = this.step(elapsed);
     this.glide(elapsed);
+    this.followAudio(elapsed);
 
     const paused = this.state.paused;
     for (const slot of [0, 1] as const) {
       this.placeVideo(slot, (video, target, waiting) => waiting ? cueVideo(video, target) : syncVideo(video, target, paused));
     }
+    this.syncDriverVideo(paused);
     this.renderer.updateVideos();
 
     const renderStart = performance.now();
     this.draw(animated, elapsed);
+    this.drawFade();
     this.stats.cpuMs += (performance.now() - renderStart - this.stats.cpuMs) * 0.1;
 
     if (this.snapshotWaiters.length) {
@@ -663,6 +869,8 @@ export class Engine {
       mapSteps: this.params.mapSteps.value,
       mapArms: this.live("mapArms"),
       spiralCopies: this.spiralCopies,
+      drosteSize: this.live("drosteSize"),
+      drosteSpirals: Math.round(this.params.drosteSpirals.value),
       mapTwist: this.live("mapTwist") * DEGREES,
       mapAngle: this.live("mapAngle") * DEGREES,
       /* Möbius has its own pan, roll and twist. */
@@ -670,7 +878,7 @@ export class Engine {
       mapPanY: this.state.mapMode === 2 ? 0 : this.live("mapPanY"),
       mapRoll: this.live("mapRoll") * DEGREES,
       mapCurl: this.live("mapCurl"),
-      mapTravel: this.state.mapTravel,
+      mapTravel: this.state.mapMode === 8 ? drosteTravel(this.state.mapTravel, this.live("drosteSize")) : this.state.mapTravel,
       tunnelTwist: this.live("tunnelTwist") * DEGREES,
       /* Möbius and Julia have their own depth fade settings. */
       mapFog: this.live(this.state.mapMode === 2 ? "mobiusFog" : this.state.mapMode === 3 ? "juliaFog" : "mapFog"),
@@ -716,6 +924,13 @@ export class Engine {
       blackLevel: on.finish ? this.live("blackLevel") : 0,
       overlayColor: hexToRgb(this.state.overlayColor),
       overlayOpacity: on.finish ? this.live("overlayOpacity") : 0,
+      driver: on.driver ? this.live("driverAmount") : 0,
+      driverSource: this.state.driverSource,
+      driverMode: this.state.driverMode,
+      driverStrength: this.live("driverStrength"),
+      driverScale: this.live("driverScale"),
+      driverContrast: this.live("driverContrast"),
+      driverTime: this.state.driverTime,
       relief: on.relief ? this.live("reliefAmount") : 0,
       reliefDepth: this.live("reliefDepth"),
       reliefSize: this.live("reliefSize"),
@@ -747,13 +962,6 @@ export class Engine {
       sortAngle: this.live("sortAngle") * DEGREES,
       sortLength: this.live("sortLength"),
       sortThickness: this.live("sortThickness"),
-      reaction: on.reaction ? this.live("reactionAmount") : 0,
-      reactionLook: this.state.reactionLook,
-      reactionFeed: this.live("reactionFeed"),
-      reactionKill: this.live("reactionKill"),
-      reactionFollow: this.live("reactionFollow"),
-      reactionSpeed: this.live("reactionSpeed"),
-      reactionSize: this.params.reactionSize.value,
       particles: on.particles ? this.live("particleAmount") : 0,
       particleBlend: this.state.particleBlend,
       particleBackground: this.live("particleBackground"),

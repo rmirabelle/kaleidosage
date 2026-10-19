@@ -76,7 +76,7 @@ export function ImageSearchDialog({ letter, onPick, onCancel }: {
             <h2 id="image-search-title">Search Photos for Source {letter}</h2>
             <p>4K photos from Wikimedia Commons. Detailed architecture, patterns and abstract pictures work best.</p>
           </div>
-          <button className="about-dialog-close" onClick={onCancel} aria-label="Close" title="Close"><X size={18} /></button>
+          <button className="about-dialog-close" onClick={onCancel} aria-label="Close" data-tip="Close"><X size={18} /></button>
         </header>
         <div className="video-dialog-body">
           <div className="image-search-bar">
@@ -98,7 +98,7 @@ export function ImageSearchDialog({ letter, onPick, onCancel }: {
           </label>
           <div className="image-search-results" aria-busy={searching}>
             {photos.map((photo) => (
-              <button key={photo.title} className="image-search-result" title={`${photo.label} (${photo.width} × ${photo.height})`} onClick={() => onPick(photo)}>
+              <button key={photo.title} className="image-search-result" data-tip={`${photo.label} (${photo.width} × ${photo.height})`} onClick={() => onPick(photo)}>
                 <img src={photo.thumb} alt={photo.label} loading="lazy" />
               </button>
             ))}

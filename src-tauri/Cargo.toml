@@ -1,6 +1,6 @@
 [package]
 name = "kaleidosage"
-version = "0.7.0"
+version = "0.8.0"
 description = "Turn any image into a moving kaleidoscope"
 authors = ["Rob Mirabelle"]
 edition = "2021"
@@ -28,6 +28,13 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 [target.'cfg(windows)'.dependencies]
 tauri-plugin-single-instance = "2"
 windows = { version = "0.61.3", features = [
+  "Win32_Devices_FunctionDiscovery",
+  "Win32_Media_Audio",
+  "Win32_Security",
+  "Win32_System_Threading",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_Variant",
+  "Win32_UI_Shell_PropertiesSystem",
   "Media_MediaProperties",
   "Media_Transcoding",
   "Storage",

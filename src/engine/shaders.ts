@@ -63,6 +63,9 @@ uniform int u_mapSteps;
 /* Seamless spiral: the twist, and the whole number of image copies one turn holds, 0 for a slant (see seamlessSpiral). */
 uniform float u_mapArms;
 uniform float u_spiralCopies;
+/* Droste spiral: the size of the copy inside the picture, and the whole number of spiral arms (see drosteMap). */
+uniform float u_drosteSize;
+uniform float u_drosteSpirals;
 uniform float u_mapTwist;
 /* The direction of the axis that power, log spiral and tunnel fold over (see complexMap). */
 uniform vec2 u_mapAxis;
@@ -267,7 +270,8 @@ vec2 warpOffset(vec2 p) {
  * Bends the screen point through a complex function before the fold.
  * 1 = power z^n, 2 = Mobius (moves the point "a" to the center), 3 = Julia
  * (z = z^2 + c, a few steps), 4 = log spiral (an endless tunnel), 5 = sine,
- * 6 = tunnel (a tube that the view flies through).
+ * 6 = tunnel (a tube that the view flies through), 7 = seamless spiral,
+ * 8 = Droste spiral (the picture inside itself, along a spiral).
  * Map mix blends from the plain point (0) to the bent point (1).
  */
 /**
@@ -309,6 +313,47 @@ vec2 mobiusInput(vec2 z) {
  * like mobiusStretch, so fast-growing points blur instead of breaking into noise.
  */
 float juliaStretch;
+
+/**
+ * How much the last Droste map stretched the picture at the point (the size
+ * of its derivative). Set by drosteMap, for the texture detail.
+ */
+float drosteStretch;
+
+/**
+ * Droste spiral: the picture holds a smaller copy of itself at its center
+ * (u_drosteSize of its size), which holds a smaller copy, and so on, with no
+ * end inward or outward. Each copy is the whole picture as a rectangle, so
+ * its edges show as frames in frames.
+ *
+ * In log space (L = log of the image point: log distance, angle) that
+ * picture repeats each time the distance grows by s = 1 / size (L.x moves
+ * by log s) and each full turn (L.y moves by 2 pi). The screen point's log
+ * (W) is multiplied by beta = 1 - i * arms * log s / (2 pi): one turn
+ * around the screen center then moves L by one full turn and by "arms"
+ * copies, which is one of the picture's own repeats, so the picture meets
+ * itself with no seam. With 0 arms the frames are plain, with no spiral.
+ *
+ * The image point is then moved by whole copies into the space between
+ * the picture's edge and its copy's edge, where the picture shows.
+ * The speed moves in L, toward the center: one copy per log s.
+ */
+vec2 drosteMap(vec2 z) {
+  float size = clamp(u_drosteSize, 0.05, 0.95);
+  float logS = -log(size);
+  vec2 wLog = vec2(log(max(length(z), 1e-6)), atan(z.y, z.x));
+  vec2 beta = vec2(1.0, -u_drosteSpirals * logS / TAU);
+  vec2 l = cmul(wLog, beta) - vec2(u_mapTravel, 0.0);
+  vec2 q = exp(l.x) * vec2(cos(l.y), sin(l.y));
+  /* How far out the point is, by the picture's own rectangle: 1 at its edge, "size" at its copy's edge. */
+  float aspect = u_imgRes.x / u_imgRes.y;
+  float m = max(abs(q.x) / (0.5 * aspect), abs(q.y) / 0.5);
+  /* The whole number of copies (j) that brings m between size and 1. */
+  float j = 1.0 - ceil(log(max(m, 1e-12)) / log(size));
+  q *= pow(size, j);
+  drosteStretch = length(beta) * length(q) / max(length(z), 1e-6);
+  return q;
+}
 
 /**
  * How far the last Tunnel or Möbius map's point was from the far end (the
@@ -416,6 +461,11 @@ vec2 complexMap(vec2 p) {
     vec2 l = vec2(log(max(length(onAxis), 1e-6)) - u_mapTravel, atan(onAxis.y, onAxis.x));
     w = seamlessSpiral(l, n == 0.0 ? k : (abs(k) < 1e-4 ? 1e-4 : k), n);
     depthDistance = length(onAxis);
+  } else if (u_mapMode == 8) {
+    /* The picture stays upright: the map rotation, which only turns a fold axis, is not used. */
+    w = drosteMap(z);
+    drosteStretch /= u_mapScale;
+    depthDistance = length(z);
   } else if (u_mapMode == 5) {
     w = csin(onAxis * PI) / PI;
   } else if (u_mapMode == 6) {
@@ -614,7 +664,7 @@ vec3 shapeColor(vec2 screen, int skip, float g0) {
    * it (a fold or warp after it would not repeat the way it does), so it is
    * always the last step to move the point, whatever the order in the list.
    */
-  bool spiralLast = u_mapMode == 7 && (skip & 2) == 0;
+  bool spiralLast = (u_mapMode == 7 || u_mapMode == 8) && (skip & 2) == 0;
   /* During the radial crossfade (see fold), a second point, with no fold, goes through the later steps too. */
   bool fading = false;
   vec2 p2 = p;
@@ -660,14 +710,20 @@ vec3 shapeColor(vec2 screen, int skip, float g0) {
   float stretch = 1.0;
   if (spiralLast) {
     p = complexMap(p);
+    farDistance = depthDistance;
     if (fading) p2 = complexMap(p2);
     mapped = true;
-    /* The spiral's size, larger where the stretch squeezes the image or the slant tilts it. */
-    float aspect = u_imgRes.x / u_imgRes.y;
-    float twist = abs(u_mapArms);
-    float squeeze = u_spiralCopies == 0.0 ? sqrt(1.0 + aspect * aspect * twist * twist) : max(1.0, u_spiralCopies / max(twist, 0.5));
-    float spiralSize = length(vec2(2.0 * aspect * twist, 2.0)) / TAU * squeeze;
-    stretch = mix(1.0, spiralSize / max(length(beforeSpiral), 1e-4), u_mapMix);
+    if (u_mapMode == 8) {
+      /* The Droste map measures its own stretch (see drosteMap). */
+      stretch = mix(1.0, drosteStretch, u_mapMix);
+    } else {
+      /* The spiral's size, larger where the stretch squeezes the image or the slant tilts it. */
+      float aspect = u_imgRes.x / u_imgRes.y;
+      float twist = abs(u_mapArms);
+      float squeeze = u_spiralCopies == 0.0 ? sqrt(1.0 + aspect * aspect * twist * twist) : max(1.0, u_spiralCopies / max(twist, 0.5));
+      float spiralSize = length(vec2(2.0 * aspect * twist, 2.0)) / TAU * squeeze;
+      stretch = mix(1.0, spiralSize / max(length(beforeSpiral), 1e-4), u_mapMix);
+    }
   }
   /**
    * Texture detail follows how much the steps stretch the screen; with a
@@ -687,12 +743,13 @@ vec3 shapeColor(vec2 screen, int skip, float g0) {
    * e^-(depth^power), and the depth is 1 / distance from the far end.
    * Darkness sets where the fade starts (the brightness is 95% there, at a
    * distance of 1 at full darkness), so all the darkening stays inside that
-   * distance. Softness sets the power (8 at 0, 1 at 1): a high power keeps
-   * the picture bright almost to the start and then goes to black fast; a
-   * low one goes darker slowly, and is black only close to the far end.
+   * distance. Softness sets the power, 1 / softness^2 (1 at 1, 4 at 0.5, up
+   * to 1000 near 0): a high power keeps the picture bright almost to the
+   * start and then goes to black fast (near 0 it is a hard edge); a low one
+   * goes darker slowly, and is black only close to the far end.
    */
   if (mapped && u_mapMode >= 2 && u_mapMode != 5 && u_mapFog > 0.0) {
-    float power = exp2(3.0 - 3.0 * u_mapFogSoftness);
+    float power = 1.0 / max(u_mapFogSoftness * u_mapFogSoftness, 1e-3);
     color *= mix(1.0, exp(-0.0513 * pow(u_mapFog / max(farDistance, 1e-4), power)), u_mapMix);
   }
   return color;
@@ -943,6 +1000,173 @@ void main() {
  * Black level then makes every color at or below it black, and stretches
  * the rest, so white stays white.
  */
+/**
+ * Driver: a moving gray pattern (the driver, 0 to 1) acts on the picture.
+ * The drivers are drawn here, from noise, so they never repeat and need no
+ * files:
+ * - 0 caustics: the bright web of light on the floor of a pool: lines where
+ *   moving cells meet, in two layers, bent by noise.
+ * - 1 smoke: noise bent by noise twice (domain warping), rising slowly.
+ * - 2 ink: the same, cut at a level, so it shows as blots with curling edges.
+ * - 3 fire: ridges of stretched noise that rise and flicker.
+ * - 4 ripples: rain on water: rings that grow from random points and fade.
+ * - 5 video: the brightness of the user's video (u_video, u_videoAspect
+ *   wide). At Size 1 it fills the screen's height; it repeats mirrored past
+ *   its edges. With no video yet (u_hasVideo 0) it is a flat gray, which
+ *   does nothing.
+ * u_scale sets the size (3 / u_scale driver units across the screen
+ * height), u_time the motion, and u_contrast pushes the driver away from
+ * its middle gray. The modes:
+ * - 0 bend: the picture is pushed along the driver's slopes, by up to
+ *   0.05 of the screen height at full strength.
+ * - 1 reveal: the picture shows where the driver is bright and is black
+ *   where it is dark.
+ * - 2 light: the driver lights the picture, from dark at its dark parts to
+ *   1.5 times brighter at its bright parts, with a white glint at the
+ *   brightest; strength mixes in that light.
+ * The result mixes with the picture by u_amount.
+ */
+export const DRIVER_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform vec2 u_res;
+uniform int u_source;
+uniform int u_mode;
+uniform float u_amount;
+uniform float u_strength;
+uniform float u_scale;
+uniform float u_contrast;
+uniform float u_time;
+uniform sampler2D u_video;
+uniform int u_hasVideo;
+uniform float u_videoAspect;
+
+float hash12(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+vec2 hash22(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.xx + p3.yz) * p3.zy);
+}
+float noise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), u.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+/* Five octaves, each turned and moved, so their grids do not line up. */
+float fbm(vec2 p) {
+  float sum = 0.0;
+  float amp = 0.5;
+  mat2 turn = mat2(0.8, 0.6, -0.6, 0.8);
+  for (int i = 0; i < 5; i++) {
+    sum += amp * noise(p);
+    p = turn * p * 2.02 + 17.0;
+    amp *= 0.5;
+  }
+  return sum / 0.96875;
+}
+/* 1 on the lines where moving cells meet, falling to 0 inside the cells. */
+float cellEdges(vec2 p, float t) {
+  vec2 cell = floor(p);
+  vec2 f = fract(p);
+  float nearest = 8.0;
+  float second = 8.0;
+  for (int y = -1; y <= 1; y++) {
+    for (int x = -1; x <= 1; x++) {
+      vec2 offset = vec2(float(x), float(y));
+      vec2 h = hash22(cell + offset);
+      vec2 point = offset + 0.5 + 0.4 * sin(t * (0.6 + h) + h * 6.2831);
+      float d = length(point - f);
+      if (d < nearest) {
+        second = nearest;
+        nearest = d;
+      } else if (d < second) {
+        second = d;
+      }
+    }
+  }
+  return 1.0 - smoothstep(0.0, 0.18, second - nearest);
+}
+float caustics(vec2 p, float t) {
+  vec2 bend = vec2(noise(p * 0.7 + t * 0.1), noise(p * 0.7 + 9.1 - t * 0.1)) - 0.5;
+  vec2 q = p * 1.6 + bend * 1.2;
+  float a = cellEdges(q, t);
+  float b = cellEdges(q * 1.7 + 3.3, t * 1.3);
+  return clamp(a * a * 0.8 + b * b * 0.45, 0.0, 1.0);
+}
+float smoke(vec2 p, float t) {
+  vec2 rise = vec2(0.0, -t * 0.15);
+  vec2 q = vec2(fbm(p + rise), fbm(p + vec2(5.2, 1.3) + rise * 0.7 + t * 0.03));
+  vec2 r = vec2(fbm(p + 3.0 * q + vec2(1.7, 9.2) + t * 0.05), fbm(p + 3.0 * q + vec2(8.3, 2.8) - t * 0.04));
+  return fbm(p + 3.0 * r + rise);
+}
+float ink(vec2 p, float t) {
+  return smoothstep(0.47, 0.57, smoke(p * 0.8, t * 0.6));
+}
+float fire(vec2 p, float t) {
+  vec2 q = vec2(p.x * 2.0, p.y * 0.5 - t * 0.9);
+  float warp = fbm(q * 1.3 + vec2(0.0, -t * 0.4));
+  float n = fbm(q + vec2(warp * 1.5, 0.0));
+  float ridge = 1.0 - abs(2.0 * n - 1.0);
+  return ridge * ridge * ridge;
+}
+/* Each cell has one drop that falls again and again at its own time; its ring grows to 1.5 cells and fades. */
+float ripples(vec2 p, float t) {
+  vec2 cell = floor(p);
+  float sum = 0.0;
+  for (int y = -2; y <= 2; y++) {
+    for (int x = -2; x <= 2; x++) {
+      vec2 id = cell + vec2(float(x), float(y));
+      vec2 h = hash22(id);
+      float phase = fract(t * 0.35 + h.x);
+      float d = length(p - id - h) - phase * 1.5;
+      float fade = (1.0 - phase) * (1.0 - phase);
+      sum += exp(-d * d / 0.015) * cos(d * 30.0) * fade;
+    }
+  }
+  return 0.5 + 0.5 * clamp(sum, -1.0, 1.0);
+}
+float driverAt(vec2 p) {
+  float t = u_time;
+  float value;
+  if (u_source == 0) value = caustics(p, t);
+  else if (u_source == 1) value = smoke(p, t);
+  else if (u_source == 2) value = ink(p, t);
+  else if (u_source == 3) value = fire(p, t);
+  else if (u_source == 4) value = ripples(p, t);
+  else if (u_hasVideo == 1) value = dot(texture(u_video, p / 3.0 * vec2(1.0 / u_videoAspect, 1.0) + 0.5).rgb, vec3(0.2126, 0.7152, 0.0722));
+  else value = 0.5;
+  return clamp((value - 0.5) * u_contrast + 0.5, 0.0, 1.0);
+}
+
+void main() {
+  vec3 picture = texture(u_tex, v_uv).rgb;
+  float aspect = u_res.x / u_res.y;
+  vec2 p = (v_uv - 0.5) * vec2(aspect, 1.0) * 3.0 / u_scale;
+  float here = driverAt(p);
+  vec3 color;
+  if (u_mode == 0) {
+    /* The slope is measured across a wide step (0.12 driver units, on both sides), so fine detail does not tear the picture. */
+    float step = 0.12;
+    vec2 slope = vec2(driverAt(p + vec2(step, 0.0)) - driverAt(p - vec2(step, 0.0)), driverAt(p + vec2(0.0, step)) - driverAt(p - vec2(0.0, step))) / (2.0 * step);
+    /* Steep and gentle drivers both bend by a useful amount: the push grows with the slope, but never past 1. */
+    vec2 push = slope / (1.0 + length(slope)) * u_strength * 0.05;
+    color = texture(u_tex, v_uv + push * vec2(1.0 / aspect, 1.0)).rgb;
+  } else if (u_mode == 1) {
+    color = picture * smoothstep(0.35, 0.65, here);
+  } else {
+    float light = mix(1.0, 0.25 + 1.25 * here, u_strength);
+    color = picture * light + vec3(pow(here, 8.0) * u_strength * 0.3);
+  }
+  o = vec4(mix(picture, color, u_amount), 1.0);
+}`;
+
 /**
  * Relief: brightness is height. The slope between neighbor pixels gives a
  * surface direction, lit by a light at u_lightAngle, 45 degrees above the
@@ -1571,105 +1795,6 @@ void main() {
   float peak = max(color.r, max(color.g, color.b));
   float band = max(u_softness, 0.002) * 0.5;
   o = vec4(color * smoothstep(u_threshold - band, u_threshold + band, peak), 1.0);
-}`;
-
-/**
- * Reaction-diffusion, start: the grid is full of chemical A (red), with
- * small random blocks of chemical B (green) as seeds.
- */
-export const REACTION_START_SHADER = `#version 300 es
-precision highp float;
-out vec4 o;
-void main() {
-  vec2 block = floor(gl_FragCoord.xy / 5.0);
-  float r = fract(sin(dot(block, vec2(12.9898, 78.233))) * 43758.5453);
-  o = r > 0.92 ? vec4(0.5, 0.25, 0.0, 1.0) : vec4(1.0, 0.0, 0.0, 1.0);
-}`;
-
-/**
- * Reaction-diffusion, one step (the Gray-Scott model): both chemicals
- * spread to their neighbor cells, A twice as fast as B; B turns A into
- * more B; A is fed in at the feed rate and B is taken out at the feed plus
- * kill rate. The feed moves with the picture's brightness under the cell
- * (u_follow), so bright and dark areas grow different patterns. The grid
- * is u_grid cells; its edges act as walls.
- */
-export const REACTION_STEP_SHADER = `#version 300 es
-precision highp float;
-precision highp int;
-out vec4 o;
-uniform highp sampler2D u_state;
-uniform sampler2D u_picture;
-uniform vec2 u_grid;
-uniform float u_feed;
-uniform float u_kill;
-uniform float u_follow;
-float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
-void main() {
-  ivec2 cell = ivec2(gl_FragCoord.xy);
-  ivec2 last = ivec2(u_grid) - 1;
-  vec2 here = texelFetch(u_state, cell, 0).rg;
-  vec2 sides = vec2(0.0);
-  vec2 corners = vec2(0.0);
-  for (int dy = -1; dy <= 1; dy++) {
-    for (int dx = -1; dx <= 1; dx++) {
-      if (dx == 0 && dy == 0) continue;
-      vec2 next = texelFetch(u_state, clamp(cell + ivec2(dx, dy), ivec2(0), last), 0).rg;
-      if (dx == 0 || dy == 0) sides += next; else corners += next;
-    }
-  }
-  vec2 spread = 0.2 * sides + 0.05 * corners - here;
-  float bright = luma(texture(u_picture, (vec2(cell) + 0.5) / u_grid).rgb);
-  float feed = clamp(u_feed + u_follow * (bright - 0.5) * 0.04, 0.0, 0.12);
-  float a = here.r;
-  float b = here.g;
-  float react = a * b * b;
-  a += spread.r - react + feed * (1.0 - a);
-  b += 0.5 * spread.g + react - (feed + u_kill) * b;
-  o = vec4(clamp(a, 0.0, 1.0), clamp(b, 0.0, 1.0), 0.0, 1.0);
-}`;
-
-/**
- * Reaction-diffusion, display. The amount of chemical B is read between
- * grid cells (a bilinear mix of the four nearest). Look 0 (mask): the
- * picture shows where the pattern is and goes dark between, by u_amount.
- * Look 1 (bend): the picture is pushed along the pattern's slopes, by
- * u_amount times a quarter of the screen height for each unit of slope
- * (about 0.08 of the screen height at the steepest slopes).
- */
-export const REACTION_SHADER = `#version 300 es
-precision highp float;
-in vec2 v_uv;
-out vec4 o;
-uniform highp sampler2D u_state;
-uniform sampler2D u_picture;
-uniform vec2 u_grid;
-uniform vec2 u_res;
-uniform float u_amount;
-uniform int u_look;
-float patternAt(vec2 uv) {
-  vec2 p = uv * u_grid - 0.5;
-  vec2 f = fract(p);
-  ivec2 c = ivec2(floor(p));
-  ivec2 last = ivec2(u_grid) - 1;
-  float a = texelFetch(u_state, clamp(c, ivec2(0), last), 0).g;
-  float b = texelFetch(u_state, clamp(c + ivec2(1, 0), ivec2(0), last), 0).g;
-  float d = texelFetch(u_state, clamp(c + ivec2(0, 1), ivec2(0), last), 0).g;
-  float e = texelFetch(u_state, clamp(c + ivec2(1, 1), ivec2(0), last), 0).g;
-  return mix(mix(a, b, f.x), mix(d, e, f.x), f.y);
-}
-void main() {
-  if (u_look == 1) {
-    vec2 across = 1.0 / u_grid;
-    vec2 slope = vec2(patternAt(v_uv + vec2(across.x, 0.0)) - patternAt(v_uv - vec2(across.x, 0.0)),
-                      patternAt(v_uv + vec2(0.0, across.y)) - patternAt(v_uv - vec2(0.0, across.y)));
-    vec2 push = slope * u_amount * 0.25 * vec2(u_res.y / u_res.x, 1.0);
-    o = vec4(texture(u_picture, v_uv + push).rgb, 1.0);
-    return;
-  }
-  vec3 color = texture(u_picture, v_uv).rgb;
-  float mask = smoothstep(0.1, 0.3, patternAt(v_uv));
-  o = vec4(mix(color, color * mask, u_amount), 1.0);
 }`;
 
 /**

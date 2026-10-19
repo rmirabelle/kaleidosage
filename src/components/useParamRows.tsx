@@ -4,12 +4,15 @@ import type { Engine } from "../engine/engine";
 import { MAX_CUSTOM_SECONDS, NO_EFFECT, SLIDER_STEPS, defaultValue, formatValue, fromSlider, fullRange, setCustomTime, toSlider, type ContourTone, type Param, type ParamKey } from "../engine/params";
 import { ColorPicker } from "./ColorPicker";
 import { EaseMenu } from "./EaseMenu";
-import { RangeSlider, Slider, rangePosition } from "./Slider";
+import { RangeSlider, Slider, rangePosition, trackPosition } from "./Slider";
 import { createPortal } from "react-dom";
 import { NOT_MAPPABLE, midi } from "../lib/midi";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { MidiIcon } from "./MidiIcon";
 import { useMidi } from "./useMidi";
+import { AudioLinkButton } from "./AudioLinkButton";
+import { audioLinkable } from "../engine/audio";
+import { help } from "../help/topics";
 
 /**
  * This file holds the hook and its row component, apart from the panels, so
@@ -23,6 +26,8 @@ import { useMidi } from "./useMidi";
 export function useParamRows(engine: Engine) {
   const readouts = useRef(new Map<ParamKey, HTMLSpanElement>());
   const markers = useRef(new Map<ParamKey, HTMLDivElement>());
+  /** The live lines of single-value sliders: they show only while the sound moves the value away from its handle. */
+  const singleMarkers = useRef(new Map<ParamKey, HTMLDivElement>());
   /** The value of a drift handle that is being dragged. Its readout shows it instead of the live value. */
   const held = useRef(new Map<ParamKey, number>());
 
@@ -34,10 +39,19 @@ export function useParamRows(engine: Engine) {
       if (element.textContent !== text) element.textContent = text;
       element.classList.toggle("held", heldValue !== undefined);
     }
+    /* A line is blue while the sound moves its setting (the audio color), else the drift color. */
     for (const [key, element] of markers.current) {
       const param = engine.params[key];
       const [min, max] = sliderLimits(param);
       element.style.left = rangePosition(toSlider(param, engine.live(key)), min, max);
+      element.classList.toggle("audio", engine.audioPush(key) > 1e-3);
+    }
+    for (const [key, element] of singleMarkers.current) {
+      const param = engine.params[key];
+      const [min, max] = sliderLimits(param);
+      const moving = engine.audioPush(key) > 1e-3;
+      element.classList.toggle("idle", !moving);
+      if (moving) element.style.left = trackPosition(toSlider(param, engine.live(key)), min, max);
     }
   }), [engine]);
 
@@ -49,6 +63,10 @@ export function useParamRows(engine: Engine) {
     if (element) markers.current.set(key, element);
     else markers.current.delete(key);
   };
+  const registerSingleMarker = (key: ParamKey) => (element: HTMLDivElement | null) => {
+    if (element) singleMarkers.current.set(key, element);
+    else singleMarkers.current.delete(key);
+  };
 
   const rowWith = (key: ParamKey, { after, menu }: { after?: ReactNode; menu?: MenuItem[] } = {}) => (
     <ParamRow
@@ -57,6 +75,7 @@ export function useParamRows(engine: Engine) {
       paramKey={key}
       readout={register(key)}
       marker={registerMarker(key)}
+      singleMarker={registerSingleMarker(key)}
       after={after}
       menu={menu}
       onHold={(value) => { if (value === null) held.current.delete(key); else held.current.set(key, value); }}
@@ -84,7 +103,7 @@ const HUE_KEYS: ParamKey[] = ["contourHue"];
  * live value. The readout and the line are written by the frame loop, not by
  * React, because drifting values change every frame.
  */
-function ParamRow({ engine, paramKey, readout, marker, after, menu, onHold }: {
+function ParamRow({ engine, paramKey, readout, marker, singleMarker, after, menu, onHold }: {
   engine: Engine;
   paramKey: ParamKey;
   /** A control after the slider, in the slider's row. */
@@ -93,6 +112,8 @@ function ParamRow({ engine, paramKey, readout, marker, after, menu, onHold }: {
   menu?: MenuItem[];
   readout: (element: HTMLSpanElement | null) => void;
   marker: (element: HTMLDivElement | null) => void;
+  /** The single-value slider's live line, for a setting with an audio link. */
+  singleMarker: (element: HTMLDivElement | null) => void;
   onHold: (value: number | null) => void;
 }) {
   const param = engine.params[paramKey];
@@ -211,6 +232,7 @@ function ParamRow({ engine, paramKey, readout, marker, after, menu, onHold }: {
   return (
     <div
       className={`panel-row ${HUE_KEYS.includes(paramKey) ? "hue-track" : ""} ${NOT_MAPPABLE.includes(paramKey) ? "" : "has-midi"}`}
+      {...help("row")}
       onContextMenu={menu && ((event) => {
         event.preventDefault();
         setMenuAt({ left: event.clientX, top: event.clientY });
@@ -219,19 +241,21 @@ function ParamRow({ engine, paramKey, readout, marker, after, menu, onHold }: {
       {menu && menuAt && createPortal(<ContextMenu position={menuAt} items={menu} onClose={() => setMenuAt(null)} />, document.body)}
       {/**
         * The MIDI column, at the left of the setting while the MIDI view is
-        * on: the MIDI button beside the name, and under it, beside the
-        * slider, the remove button (while it waits) and the play button of
-        * a range that MIDI stopped.
+        * on: the MIDI button beside the name, with the remove button (while
+        * it waits) at its right, and under it, beside the slider, the audio
+        * button (while the audio view is on) and the play button of a range
+        * that MIDI stopped.
         */}
       {!NOT_MAPPABLE.includes(paramKey) && (
         <>
           <div className="panel-row-midi top">
             <MidiAssign engine={engine} paramKey={paramKey} label={param.label} />
+            <MidiRemove paramKey={paramKey} label={param.label} />
           </div>
           <div className="panel-row-midi bottom">
-            <MidiRemove paramKey={paramKey} label={param.label} />
+            {audioLinkable(paramKey, param) && <AudioLinkButton engine={engine} paramKey={paramKey} label={param.label} />}
             {held && (
-              <button className="midi-play" title="MIDI stopped this range at this value. Click to play the range again." aria-label={`Play the ${param.label.toLowerCase()} range again`} onClick={() => engine.resumeRange(paramKey)}>
+              <button className="midi-play" data-tip="MIDI stopped this range at this value. Click to play the range again." aria-label={`Play the ${param.label.toLowerCase()} range again`} onClick={() => engine.resumeRange(paramKey)}>
                 <Play size={12} weight="fill" />
               </button>
             )}
@@ -243,7 +267,7 @@ function ParamRow({ engine, paramKey, readout, marker, after, menu, onHold }: {
           {/* Double-click on the name: back to the default value, or the full range. */}
           <span
             className={`panel-row-name ${touched ? "midi-touched" : ""} ${bypassed ? "bypassed" : ""}`}
-            title={`Double-click: back to the default. Ctrl + hold: no effect while held.${menu ? " Right-click: more choices." : ""}`}
+            data-tip={`Double-click: back to the default. Ctrl + hold: no effect while held.${menu ? " Right-click: more choices." : ""}`}
             onDoubleClick={(event) => { if (!event.ctrlKey) reset(); }}
             onPointerDown={(event) => {
               if (!event.ctrlKey || event.button !== 0) return;
@@ -268,7 +292,7 @@ function ParamRow({ engine, paramKey, readout, marker, after, menu, onHold }: {
         {paramKey === "contourHue" && <ToneChips tone={tone} onChange={pickTone} />}
         {toned ? (
           /* A click on the dimmed slider goes back to the hue. */
-          <div className="slider-off" title="Click to use the Color slider again" onPointerDown={() => pickTone("hue")}>
+          <div className="slider-off" data-tip="Click to use the Color slider again" onPointerDown={() => pickTone("hue")}>
             <Slider label={param.label} min={sliderMin} max={sliderMax} step={sliderStep} value={at(value)} onChange={() => {}} />
           </div>
         ) : drifting ? (
@@ -292,6 +316,7 @@ function ParamRow({ engine, paramKey, readout, marker, after, menu, onHold }: {
             step={sliderStep}
             value={at(value)}
             detent={detent}
+            markerRef={param.drift ? singleMarker : undefined}
             onChange={(position) => {
               const next = fromSlider(param, position);
               param.value = next;
@@ -307,7 +332,7 @@ function ParamRow({ engine, paramKey, readout, marker, after, menu, onHold }: {
               className={`panel-drift ${drifting ? "on" : ""}`}
               aria-pressed={drifting}
               aria-label={`${param.label} range`}
-              title={drifting ? "Range on: the value moves between two handles. Click for a single value." : "Move the value between two handles"}
+              data-tip={drifting ? "Range on: the value moves between two handles. Click for a single value." : "Move the value between two handles"}
               onClick={() => toggleDrift(!drifting)}
             >
               <BracketsSquare size={13} weight="bold" />
@@ -315,7 +340,7 @@ function ParamRow({ engine, paramKey, readout, marker, after, menu, onHold }: {
             {/* Hidden, not removed, while the range is off, so the slider does not move. */}
             <button
               className={`panel-reverse ${range[1] < range[0] ? "on" : ""}`}
-              title={range[1] < range[0] ? "Reversed: the value moves from the right handle to the left. Click to reverse." : "Reverse the range"}
+              data-tip={range[1] < range[0] ? "Reversed: the value moves from the right handle to the left. Click to reverse." : "Reverse the range"}
               aria-label={`Reverse the ${param.label.toLowerCase()} range`}
               aria-pressed={range[1] < range[0]}
               disabled={!drifting}
@@ -334,7 +359,7 @@ function ParamRow({ engine, paramKey, readout, marker, after, menu, onHold }: {
               className={`panel-custom ${custom ? "on" : ""}`}
               aria-pressed={custom}
               aria-label={`${param.label} own time`}
-              title={custom ? "Own time: this range ignores the scene length. Click to follow the scene length again." : "Give this range its own time instead of the scene length"}
+              data-tip={custom ? "Own time: this range ignores the scene length. Click to follow the scene length again." : "Give this range its own time instead of the scene length"}
               disabled={!drifting}
               onClick={toggleCustom}
             >
@@ -362,7 +387,7 @@ function ParamRow({ engine, paramKey, readout, marker, after, menu, onHold }: {
               setSeconds(next);
             }}
           />
-          <span className="panel-time-value" title="Seconds from the start handle to the end handle">{seconds} s</span>
+          <span className="panel-time-value" data-tip="Seconds from the start handle to the end handle">{seconds} s</span>
         </div>
       )}
     </div>
@@ -374,7 +399,7 @@ function MidiRemove({ paramKey, label }: { paramKey: ParamKey; label: string }) 
   const { armed, mapped } = useMidi();
   if (!armed.includes(paramKey) || !mapped.has(paramKey)) return null;
   return (
-    <button className="midi-remove" title="Remove the MIDI control" aria-label={`Remove the MIDI control from ${label}`} onClick={() => midi.clear(paramKey)}>
+    <button className="midi-remove" data-tip="Remove the MIDI control" aria-label={`Remove the MIDI control from ${label}`} onClick={() => midi.clear(paramKey)}>
       <Trash size={12} weight="bold" />
     </button>
   );
@@ -424,7 +449,7 @@ function MidiAssign({ engine, paramKey, label }: { engine: Engine; paramKey: Par
     <>
       <button
         className={`midi-assign ${assigned ? "on" : ""} ${waiting ? "waiting" : ""}`}
-        title={title}
+        data-tip={title}
         aria-label={waiting ? `Stop waiting for a MIDI control for ${label}` : `Assign a MIDI control to ${label}`}
         aria-pressed={waiting}
         onClick={() => waiting ? midi.setLearning(false) : midi.assign(paramKey)}
@@ -453,7 +478,7 @@ function ToneChips({ tone, onChange }: { tone: ContourTone; onChange: (tone: Con
           className={`tone-chip ${chip} ${tone === chip ? "on" : ""}`}
           aria-pressed={tone === chip}
           aria-label={`${chip === "black" ? "Black" : "White"} lines`}
-          title={tone === chip ? `The lines are ${chip}. Click to use the Color slider again.` : `Make the lines ${chip}`}
+          data-tip={tone === chip ? `The lines are ${chip}. Click to use the Color slider again.` : `Make the lines ${chip}`}
           onClick={() => onChange(tone === chip ? "hue" : chip)}
         />
       ))}

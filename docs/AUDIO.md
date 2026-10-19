@@ -1,0 +1,281 @@
+# Audio design: settings that move with music
+
+A design note, written 2026-10-18, before any code. It builds on the MIDI
+code (`src/lib/midi.ts`, `Engine.holdRange`, `Engine.follow`) and the
+range code in `src/engine/params.ts` as they are today.
+
+## Goal
+
+Music moves the picture. The first source is the sound that the PC plays
+now (any app: Spotify, a browser, a DJ program). An audio file and the
+microphone come later and use the same analysis and the same links.
+
+## Rule
+
+An audio link connects one band of the sound to one setting, the way a MIDI
+mapping connects one knob to one setting. A setting with no link plays as
+it does today. When the music stops, every linked setting goes back to its
+normal motion. So a scene still looks right with no sound.
+
+## 1. Capture the sound (Rust)
+
+Built in `src-tauri/src/sound_capture.rs`. One Sound source menu lists both
+kinds of device (decided 2026-10-18): "PC sound" (each output device, what
+plays on it, in loopback mode) and "Microphones and line inputs" (each
+input device, a plain capture stream). The code is the same for both, but
+for the loopback flag. A sound card can show in both groups, because its
+output and its line-in are separate Windows devices.
+
+Windows gives the PC's output sound through WASAPI loopback: open a capture
+stream, in shared mode, on the render (output) device, with the flag
+`AUDCLNT_STREAMFLAGS_LOOPBACK`. Windows cannot capture one app only; the
+capture is everything the output device plays.
+
+- New file `src-tauri/src/pc_audio.rs`. Use the `windows` crate that the
+  app already has (add the `Win32_Media_Audio` and `Win32_System_Com`
+  features), not a new audio crate. The cpal crate may also do loopback
+  (an input stream on an output device), but I could not confirm it.
+  Check cpal's issues before you pick it.
+- A capture thread reads the buffer every 10 ms (timer, not event mode: a
+  loopback stream in event mode gives no events). When nothing plays,
+  Windows sends no packets; the thread then sends silence, so the levels
+  fall to zero and do not freeze.
+- The thread mixes the channels to mono and sends blocks of samples (32-bit
+  float, about 480 samples per block) to the webview through a
+  `tauri::ipc::Channel` with a raw byte body, not JSON. At 48 kHz that is
+  about 190 KB per second.
+- Commands: `pc_audio_devices` (the output devices, the default one first),
+  `pc_audio_start(device, channel)` (returns the sample rate) and
+  `pc_audio_stop`. If the output device changes (headphones in), stop and
+  start on the new default device.
+
+Why raw samples and not levels from Rust: the file and microphone sources
+come later through Web Audio in the webview. With raw samples, one
+analysis in TypeScript serves all three sources, and vitest can test it
+with made-up signals.
+
+## 2. Analysis (TypeScript, no React)
+
+New file `src/engine/audio.ts`, pure and testable, like `params.ts`.
+
+- Delay budget (measured 2026-10-18): Windows wakes the capture thread for
+  each block (event mode, every 10 ms or less); the analysis shows a new
+  sound in 3 to 4 ms (bass: 10 ms, a part of its own cycle). The screen
+  adds up to one frame. A first version read every 20 ms and used a
+  2048-sample FFT, whose window gave the newest sound almost no weight:
+  the meters reacted 80 to 100 ms after the sound.
+- The bands are chains of second-order filters (four in a row at each
+  edge, so a tone does not leak into the next band), run sample by
+  sample, each with an envelope that rises in 2 ms and falls in 150 ms.
+- Four bands, each a level from 0 to 1:
+
+  | Band   | Range          | Good for                        |
+  |--------|----------------|---------------------------------|
+  | Level  | all            | general size or brightness      |
+  | Bass   | 20 to 150 Hz   | kick drum, zoom, pulse          |
+  | Mids   | 150 to 2000 Hz | voice, melody, rotation         |
+  | Highs  | 2 to 12 kHz    | hi-hats, sparkle, particles     |
+
+- Peaks, in dBFS (decided 2026-10-18): each band's level is its peak, as
+  on a DAW's peak meter and in a compressor's peak mode, so 0 dB means the
+  same here as there. The peak rises with each sample and falls over
+  about 50 ms. (History: first each band's share of its recent peak, with
+  auto gain, which sat near full in compressed music; then RMS in dBFS,
+  which sat 3 to 10 dB under the peaks, so a threshold of 0 dB never moved
+  anything.) Gain adds dB. A band's level is 0 at the Threshold (sound
+  below it moves nothing) and 1 at 0 dBFS, with at least 6 dB of room
+  above a high threshold. The meters show dBFS from -60 to 0, with a mark
+  at the threshold.
+- Beat (automatic since 2026-10-18; a Beat sensitivity slider came first,
+  and the user saw no use for it): the bass peak is above the threshold,
+  and the bass RMS (over about 10 ms) jumps
+  within about 10 ms by at least half the largest jump of the last few
+  seconds (and at least 3 dB). So the clear hits count in compressed and
+  in dynamic music alike, and the small ones between them do not. A jump
+  out of silence does not set that size, or a song's start would block the
+  beats. No second beat within 100 ms. The check uses the plain RMS, so a
+  softer hit right after a hard one still counts.
+
+The analysis puts its latest result in one object that the engine reads in
+each frame. It does not use React state.
+
+## 3. Links (what a setting does with a band)
+
+```ts
+type AudioBand = "level" | "bass" | "mids" | "highs" | "beat";
+interface AudioLink {
+  band: AudioBand;
+  /** How far the sound can move the value, from 0 to 1: the sensitivity. */
+  amount: number;
+  /** For "beat" only: see Beat styles below. */
+  beatStyle?: "kick";
+}
+```
+
+What a link does, with the band at level `a` (0 to 1):
+
+- **Range on** (changed 2026-10-18): while the app listens, the range
+  stops playing. The value rests at the start handle, and the sound pushes
+  it toward the end handle: `value = start + amount × a × (end − start)`.
+  So the handles are the span the music moves in, and the Reverse button
+  sets the direction. (The first rule pushed from the playing value toward
+  the end handle: near that handle there was almost no motion.) With no
+  input, the range plays as normal.
+- **Range off:** the slider's value is the home, and the sound pushes it
+  toward the end of the slider with more room (the maximum on a tie),
+  `amount × a` of the way. See `pushRange` in `src/engine/audio.ts`.
+
+Beat styles below. */
+  beatStyle?: "kick";
+}
+```
+
+What a link does, with the band at level `a` (0 to 1):
+
+- **Range on (the main case):** the range plays as normal, and the sound
+  pushes the value from where the range is now toward the end handle:
+  `value = drift + amount × a × (end handle − drift)`. Silence gives the
+  normal range; loud sound with amount 1 gives the end handle. The value
+  never leaves the handles.
+- **Range off:** the slider's value is the rest point, and the sound pushes
+  it toward the slider's maximum by `amount × a` of the way. (Option: push
+  toward the minimum instead, with a "reverse" switch on the link.)
+
+Beat styles (a link on the "beat" band):
+
+- **Kick:** on each beat the value jumps toward the end handle and falls
+  back smoothly (about 250 ms), like a drum hit.
+- **Jump** (removed 2026-10-18; the user did not want it): on each beat the value went to a new random place between the
+  handles and glides there with the MIDI spring (`MIDI_SMOOTH_SECONDS`).
+  This is your "random point on each beat" idea. A plain jump with no glide
+  looks jerky, so it glides.
+
+Engine change: `Engine.live(key)` applies the link last, after the range,
+the glide and a MIDI hold. A MIDI hold wins: while a knob holds a range,
+the audio link has no effect on it. The engine gets a read-only
+`audio: AudioLevels | null` field that the audio code sets.
+
+Response curve (decided 2026-10-18): a link's push rises at once and falls
+back over the scene's Release (in the scene file; default 0.25 s, from 20
+ms to 3 s), times the link's own factor (×0.25 to ×4, default ×1). So the
+Release sets the scene's general feel, and a factor keeps a link faster
+or slower than it when the feel changes. The analysis itself falls in
+20 ms, so the meters show the sound as it is. Both sliders are in the
+Audio panel's list of links, not in the setting rows.
+
+Per-link threshold (decided 2026-10-18): each link has a threshold offset
+in dB (-24 to +24, default 0), added to the app's Threshold, in the same
+way the release factor scales the scene's Release. A band link follows
+its band's loudness above that sum; a beat counts for a Beat link only
+when the bass is above it. The link's "amount" shows as "Range" in the
+Audio panel: how far the sound can move the setting.
+
+## 4. Where links are kept
+
+Recommendation: in the scene. A link is part of the look, so it goes in the
+`.ksage` file (a new `audio` entry; older versions skip it), in Undo, and
+in the unsaved-changes fingerprint. The MIDI map stays global, because it
+belongs to the controller, not to the scene.
+
+The source (PC sound on or off, the device) and the global Gain and Beat
+sensitivity are app settings, kept in `localStorage`, not in the scene.
+The capture and the analysis belong to the app, not to a tab: they keep
+running when the user selects another scene tab, and that scene's links
+react to the same sound at once. So one stream of music can play while
+the user switches from scene to scene. (Decided 2026-10-18.)
+
+Note for live switching: today a tab switch starts the trails again from
+the still picture, so the change of scene is a hard cut. A crossfade
+between two scenes is a separate, later feature.
+
+## 5. Controls
+
+- **Setting rows:** an audio button (a small speaker or wave icon) next to
+  the MIDI button. A click opens a small menu: Off, Level, Bass, Mids,
+  Highs, Beat (the kick). A pick closes the menu; the Audio panel's list sets each link's amount. The icon is lit
+  while the row has a link, and it moves with the band's level, so the user
+  sees that it works.
+- **Audio panel:** a second tab in the bottom panel, next to MIDI (the
+  panel already slides up with M). It has the source (PC sound, the device
+  menu, an on/off switch), live meters for the four bands, a light that
+  flashes on each beat, the Gain and Threshold sliders, and a list
+  of every link in the scene, one line each (setting, band, amount, X), as
+  the MIDI panel lists its mappings.
+- **Per effect:** the effect's header could get one Audio amount that
+  scales every link inside the effect. This is not in the first version;
+  each link's own amount covers it.
+
+## 6. Video export
+
+Live sound cannot be played again, so a video export plays the ranges
+with no audio links. Later, with an audio file as the source, the export
+can analyze the file frame by frame and put the music in the MP4.
+
+## 7. Files (decided 2026-10-18; first named "Playlist", then "Tracks"; the code still says "tracks")
+
+A third kind of input, under its own heading in the Input menu: the app
+plays audio files itself, through the speakers, and the same sound goes to
+the analysis. The playlist then runs the show.
+
+- Files: picked in the Open dialog (several at once), kept in
+  `localStorage` (paths only), shown in the Audio panel under the Input
+  menu: click a track to play it, X removes it, Add files adds more. The
+  playlist repeats forever.
+- Playback: an `<audio>` element streams each file through the app's
+  `video://` protocol (no bytes through IPC). Web Audio sends it to the
+  speakers and to an AudioWorklet tap, which mixes to mono and posts blocks
+  of 512 samples to the analyzer.
+- Play controls: while the playlist is the input, the controls under the
+  picture are Previous, Play/Pause and Next, with the track name and a
+  bar to seek in the track. Play/Pause (Space) starts and stops the music
+  and the animation together. Stop (Shift+Space) also goes back to the
+  start of the track.
+- Scenes: at each new track (the end of a track, Next or Previous), the
+  show crossfades to the next scene tab: track 1 to tab 1, track 2 to tab
+  2, and round again. Later: a choice to change the scene every 16 or 32
+  beats instead.
+- The app does not play music at its start; the user starts it.
+
+## 8. Playlist files (decided 2026-10-18)
+
+"Playlist" names the file that holds a whole show; the list of audio
+files in it is "Tracks" (part 7), so one word means one thing.
+
+- A .ksplaylist is a ZIP64 archive, entries stored: playlist.json (the
+  audio settings: input, device, gain, threshold, beat sensitivity; and
+  the tab that was selected), then a copy of each scene file in tab order
+  (scenes/<n>/<name>.ksage) and of each track (tracks/<n>/<name>). The user
+  wants portability, not small files: one file goes to another PC and
+  plays there. A device that the other PC does not have becomes the
+  default device of its kind.
+- Open Playlist (File menu) first asks "Save changes?" for each scene and
+  the playlist, closes the open scenes, unpacks the file into a folder of
+  its own in the temp folder, opens its scenes, puts its tracks in
+  (stopped), and applies its audio settings. Old unpacked folders go at
+  the next Open Playlist and at the app's start.
+- Scopes (changed 2026-10-18; first, Save Playlist asked to write each
+  changed scene over its own file, which felt wrong): a scene in an open
+  playlist is the playlist's. Save Playlist stores each scene as it is
+  now, in the playlist, and never writes over the scene's own file on
+  disk, so a scene can change in one playlist and stay as it was in the
+  others. The first Save Playlist gives each scene a copy of its own in
+  the temp folder (playlist_scene_path); from then on Ctrl+S saves the
+  playlist, Save Scene gives way to Export Scene As (a copy on disk), a
+  tab closes with no question, and the playlist's unsaved mark counts
+  every scene's changes too. Closing the window asks once, for the
+  playlist. The title bar shows "Show.ksplaylist › Scene.ksage".
+
+## Order of work
+
+1. Rust capture and the Audio panel with meters only. Check that the
+   meters follow the music and that silence gives zero.
+2. The analysis module with tests (sine waves for the bands, clicks for
+   the beat).
+3. Links on the rows, the engine change, scene file, Undo, fingerprint.
+4. Beat style (Kick).
+5. Later: audio file and microphone sources, export with a file's music.
+
+## Open questions
+
+- One link per setting (recommended for the first version), or several
+  bands on one setting?

@@ -1,28 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import {
-  ArrowClockwise,
-  ArrowUp,
-  CaretDown,
-  CaretRight,
-  CaretUp,
-  CheckCircle,
-  Copy,
-  Desktop,
-  DownloadSimple,
-  FileImage,
-  FilmSlate,
-  Folder,
-  FolderOpen,
-  HardDrive,
-  House,
-  Images,
-  MagnifyingGlass,
-  PencilSimple,
-  SpinnerGap,
-  Trash,
-  WarningCircle,
-  X
-} from "@phosphor-icons/react";
+import { ArrowClockwise, ArrowUp, CaretDown, CaretRight, CaretUp, CheckCircle, Copy, Desktop, DownloadSimple, FileImage, FilmSlate, Folder, FolderOpen, HardDrive, House, Images, MagnifyingGlass, MusicNote, MusicNotes, PencilSimple, SpinnerGap, Trash, WarningCircle, X } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Engine } from "../engine/engine";
 import { createParams, createPlayState, type GroupKey, type Params, type PlayState } from "../engine/params";
@@ -33,8 +10,8 @@ import { isVideoPath, loadVideoFile } from "../lib/videos";
 import { loadSceneMedia, readScene } from "../lib/scenes";
 import { ColorFolder } from "./ColorFolder";
 
-/** The kind of file the dialog opens: an image, or a scene (.ksage). */
-export type OpenKind = "image" | "scene";
+/** The kind of file the dialog opens: an image (or a video), a scene (.ksage), or an audio file for the tracks. */
+export type OpenKind = "image" | "scene" | "audio" | "playlist";
 
 interface Props {
   kind: OpenKind;
@@ -42,6 +19,12 @@ interface Props {
   title: string;
   onCancel: () => void;
   onOpen: (path: string) => void;
+  /**
+   * When set, several files can be picked (Ctrl + click, Shift + click,
+   * Shift + arrow keys, Ctrl + A), and Open passes them all, in list order.
+   * One picked file still goes to onOpen.
+   */
+  onOpenMany?: (paths: string[]) => void;
 }
 
 type EntryKind = "folder" | OpenKind;
@@ -142,9 +125,9 @@ const EFFECT_GROUPS: [GroupKey, string][] = [
   ["smear", "Time smear"],
   ["contours", "Contours"],
   ["relief", "Relief"],
+  ["driver", "Driver"],
   ["camera", "Camera"],
   ["sort", "Pixel sort"],
-  ["reaction", "Reaction-diffusion"],
   ["particles", "Particles"],
   ["rays", "Light rays"],
   ["bloom", "Bloom"],
@@ -159,7 +142,9 @@ const IMAGE_TYPES: Record<string, string> = {
 
 const TEXT: Record<OpenKind, { hint: string; empty: string; startPlace: PlaceKind }> = {
   image: { hint: "Choose a PNG, JPEG, WebP, GIF, BMP or AVIF image, or an MP4, M4V, WebM, MOV or AVI video.", empty: "This folder has no images or videos.", startPlace: "pictures" },
-  scene: { hint: "Choose a Kaleido Sage scene (.ksage).", empty: "This folder has no scenes.", startPlace: "documents" }
+  scene: { hint: "Choose a Kaleido Sage scene (.ksage).", empty: "This folder has no scenes.", startPlace: "documents" },
+  audio: { hint: "Choose MP3, WAV, FLAC, OGG, Opus, M4A or AAC audio files for the Files list.", empty: "This folder has no audio files.", startPlace: "home" },
+  playlist: { hint: "Choose a Kaleido Sage playlist (.ksplaylist): its scenes, audio files and audio settings open together.", empty: "This folder has no playlists.", startPlace: "documents" }
 };
 
 interface DialogFrame {
@@ -300,6 +285,8 @@ const formatSize = (bytes: number) => {
 const typeLabel = (entry: BrowseEntry) => {
   if (entry.kind === "folder") return "Folder";
   if (entry.kind === "scene") return "Kaleido Sage scene";
+  if (entry.kind === "audio") return "Audio file";
+  if (entry.kind === "playlist") return "Kaleido Sage playlist";
   return IMAGE_TYPES[entry.name.split(".").pop()?.toLowerCase() ?? ""] ?? "Image";
 };
 
@@ -440,6 +427,8 @@ const placeIcon = (kind: PlaceKind) => {
 const entryIcon = (entry: BrowseEntry) => {
   if (entry.kind === "folder") return <Folder size={17} weight="fill" className="open-entry-icon folder" />;
   if (entry.kind === "scene") return <img className="open-entry-icon" src="/icon.ico" alt="" />;
+  if (entry.kind === "audio") return <MusicNote size={17} weight="duotone" className="open-entry-icon image" />;
+  if (entry.kind === "playlist") return <MusicNotes size={17} weight="duotone" className="open-entry-icon image" />;
   if (isVideoPath(entry.path)) return <FilmSlate size={17} weight="duotone" className="open-entry-icon image" />;
   return <FileImage size={17} weight="duotone" className="open-entry-icon image" />;
 };
@@ -450,7 +439,8 @@ const entryIcon = (entry: BrowseEntry) => {
  * and it remembers its size, column widths, sort order and the last folder
  * for each kind of file. Right-click a file to rename, copy or delete it.
  */
-export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
+export function OpenDialog({ kind, title, onCancel, onOpen, onOpenMany }: Props) {
+  const multiple = Boolean(onOpenMany);
   const directoryKey = `${DIRECTORY_KEY}.${kind}`;
   const text = TEXT[kind];
   const [places, setPlaces] = useState<BrowsePlace[]>([]);
@@ -491,7 +481,18 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
       return next;
     });
   }, []);
+  /** The entry with the focus: it shows in the preview, and the keys move from it. */
   const [selected, setSelected] = useState<BrowseEntry | null>(null);
+  /** The picked files (paths); with one file, the one with the focus. Folders are never picked. */
+  const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set());
+  /** Where a Shift + click range starts: the last entry picked without Shift. */
+  const anchorRef = useRef<string | null>(null);
+  /** Gives the focus to one entry and picks only it (a plain click, the arrow keys). */
+  const selectOne = useCallback((entry: BrowseEntry | null) => {
+    setSelected(entry);
+    setPicked(new Set(entry && entry.kind !== "folder" ? [entry.path] : []));
+    anchorRef.current = entry?.path ?? null;
+  }, []);
   const [preview, setPreview] = useState<PreviewState>({ status: "idle" });
   const [frame, setFrame] = useState<DialogFrame | null>(null);
   const [columns, setColumns] = useState<ColumnWidths>(() => loadStoredState().columns ?? DEFAULT_COLUMNS);
@@ -647,7 +648,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
       if (request !== directoryRequest.current) return false;
       setListing(next);
       setNotice(null);
-      setSelected(next.entries.find((entry) => entry.path === selectPath) ?? null);
+      selectOne(next.entries.find((entry) => entry.path === selectPath) ?? null);
       try {
         localStorage.setItem(directoryKey, next.path);
       } catch {
@@ -660,13 +661,13 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
     } finally {
       if (request === directoryRequest.current) setLoadingDirectory(false);
     }
-  }, [directoryKey, setNotice]);
+  }, [directoryKey, selectOne, setNotice]);
 
   const beginRename = useCallback((entry: BrowseEntry) => {
     setContextMenu(null);
-    setSelected(entry);
+    selectOne(entry);
     setRenaming({ path: entry.path, value: entry.name });
-  }, []);
+  }, [selectOne]);
 
   const commitRename = useCallback(async () => {
     const current = renaming;
@@ -708,7 +709,9 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
 
   const openContextMenu = (entry: BrowseEntry) => (event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
-    setSelected(entry);
+    /* A right-click on a picked file keeps the other picks. */
+    if (picked.has(entry.path)) setSelected(entry);
+    else selectOne(entry);
     setRenaming(null);
     setContextMenu({ x: event.clientX, y: event.clientY, entry });
   };
@@ -797,17 +800,56 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
   const onSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowDown" || (event.key === "Enter" && visibleEntries.length > 0)) {
       event.preventDefault();
-      if (!selected || !visibleEntries.some((entry) => entry.path === selected.path)) setSelected(visibleEntries[0] ?? null);
+      if (!selected || !visibleEntries.some((entry) => entry.path === selected.path)) selectOne(visibleEntries[0] ?? null);
       listRef.current?.focus();
     }
   };
 
+  /* A search that hides the focused entry clears it; hidden picks are dropped. */
   useEffect(() => {
     if (selected && !visibleEntries.some((entry) => entry.path === selected.path)) setSelected(null);
+    setPicked((current) => {
+      const shown = [...current].filter((path) => visibleEntries.some((entry) => entry.path === path));
+      return shown.length === current.size ? current : new Set(shown);
+    });
   }, [selected, visibleEntries]);
 
+  /**
+   * A click with Ctrl adds the file to the picks or takes it out; with
+   * Shift, it picks every file from the anchor to it. Folders, and every
+   * click when only one file can be picked, pick only that entry.
+   */
+  const selectWith = (entry: BrowseEntry, { ctrlKey, shiftKey }: { ctrlKey: boolean; shiftKey: boolean }) => {
+    if (!multiple || entry.kind === "folder" || (!ctrlKey && !shiftKey)) {
+      selectOne(entry);
+      return;
+    }
+    if (shiftKey) {
+      const from = visibleEntries.findIndex((candidate) => candidate.path === anchorRef.current);
+      const to = visibleEntries.findIndex((candidate) => candidate.path === entry.path);
+      if (from < 0 || to < 0) {
+        selectOne(entry);
+        return;
+      }
+      const range = visibleEntries.slice(Math.min(from, to), Math.max(from, to) + 1);
+      setPicked(new Set(range.filter((candidate) => candidate.kind !== "folder").map((candidate) => candidate.path)));
+      setSelected(entry);
+      return;
+    }
+    const next = new Set(picked);
+    if (next.has(entry.path)) next.delete(entry.path);
+    else next.add(entry.path);
+    setPicked(next);
+    setSelected(entry);
+    anchorRef.current = entry.path;
+  };
+
+  /** The picked files, in list order. */
+  const pickedPaths = visibleEntries.filter((entry) => picked.has(entry.path)).map((entry) => entry.path);
+
   useEffect(() => {
-    if (!selected || selected.kind === "folder") {
+    /* Audio files have no preview. */
+    if (!selected || selected.kind === "folder" || selected.kind === "audio" || selected.kind === "playlist") {
       previewRequest.current++;
       setPreview({ status: "idle" });
       return;
@@ -853,6 +895,12 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
     else onOpen(entry.path);
   }, [navigate, onOpen]);
 
+  /** Open and Enter: every picked file when there are several, else the focused entry. */
+  const openPicked = () => {
+    if (onOpenMany && pickedPaths.length > 1) onOpenMany(pickedPaths);
+    else if (selected) activate(selected);
+  };
+
   const goUp = useCallback(() => {
     if (listing?.parent) void navigate(listing.parent);
   }, [listing, navigate]);
@@ -861,10 +909,18 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
     if (renaming) return;
     if (visibleEntries.length === 0 && event.key !== "Backspace") return;
     const index = selected ? visibleEntries.findIndex((entry) => entry.path === selected.path) : -1;
+    /* Shift + an arrow key picks every file from the anchor, as Shift + click does. */
     const moveTo = (next: number) => {
       event.preventDefault();
-      setSelected(visibleEntries[Math.min(visibleEntries.length - 1, Math.max(0, next))]);
+      const target = visibleEntries[Math.min(visibleEntries.length - 1, Math.max(0, next))];
+      if (event.shiftKey) selectWith(target, { ctrlKey: false, shiftKey: true });
+      else selectOne(target);
     };
+    if (multiple && event.ctrlKey && event.key.toLowerCase() === "a") {
+      event.preventDefault();
+      setPicked(new Set(visibleEntries.filter((entry) => entry.kind !== "folder").map((entry) => entry.path)));
+      return;
+    }
     switch (event.key) {
       case "ArrowDown": moveTo(index + 1); break;
       case "ArrowUp": moveTo(index <= 0 ? 0 : index - 1); break;
@@ -873,9 +929,9 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
       case "PageDown": moveTo(index + 10); break;
       case "PageUp": moveTo(index - 10); break;
       case "Enter":
-        if (selected) {
+        if (selected || pickedPaths.length > 0) {
           event.preventDefault();
-          activate(selected);
+          openPicked();
         }
         break;
       case "Backspace":
@@ -926,7 +982,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
       className={`open-sort-button ${sort.key === key ? "active" : ""}`}
       onClick={() => sortBy(key)}
       aria-sort={sort.key === key ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
-      title={`Sort by ${label.toLowerCase()}`}
+      data-tip={`Sort by ${label.toLowerCase()}`}
     >
       <span>{label}</span>
       {sortIndicator(key)}
@@ -963,7 +1019,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
       type="button"
       className={`open-place ${currentPath === place.path ? "active" : ""}`}
       onClick={() => void navigate(place.path)}
-      title={place.path}
+      data-tip={place.path}
     >
       {placeIcon(place.kind)} <span>{place.name}</span>
     </button>
@@ -986,13 +1042,13 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
         ))}
         <header className="open-dialog-header" onPointerDown={startMove}>
           <div className="open-dialog-title-icon">
-            {kind === "scene" ? <FilmSlate size={22} weight="fill" /> : <FolderOpen size={22} weight="fill" />}
+            {kind === "scene" ? <FilmSlate size={22} weight="fill" /> : kind === "audio" ? <MusicNotes size={22} weight="fill" /> : <FolderOpen size={22} weight="fill" />}
           </div>
           <div>
             <h2 id="open-file-title">{title}</h2>
             <p>{text.hint}</p>
           </div>
-          <button className="open-dialog-close" onClick={onCancel} aria-label="Close" title="Close">
+          <button className="open-dialog-close" onClick={onCancel} aria-label="Close" data-tip="Close">
             <X size={18} />
           </button>
         </header>
@@ -1030,11 +1086,11 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
                   onClick={goUp}
                   disabled={!listing?.parent}
                   aria-label="Go to the parent folder"
-                  title="Parent folder (Backspace)"
+                  data-tip="Parent folder (Backspace)"
                 >
                   <ArrowUp size={15} weight="bold" />
                 </button>
-                <div className="open-breadcrumbs" title={currentPath ?? undefined}>
+                <div className="open-breadcrumbs" data-tip={currentPath ?? undefined}>
                   {crumbs.map((crumb, index) => (
                     <span className="open-crumb" key={crumb.path}>
                       {index > 0 && <CaretRight size={11} className="open-crumb-separator" />}
@@ -1063,7 +1119,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
                     spellCheck={false}
                   />
                   {search !== "" && (
-                    <button type="button" onClick={() => setSearch("")} aria-label="Clear search" title="Clear">
+                    <button type="button" onClick={() => setSearch("")} aria-label="Clear search" data-tip="Clear">
                       <X size={12} weight="bold" />
                     </button>
                   )}
@@ -1074,7 +1130,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
                   onClick={() => { if (currentPath) void navigate(currentPath); }}
                   disabled={!currentPath}
                   aria-label="Refresh this folder"
-                  title="Refresh"
+                  data-tip="Refresh"
                 >
                   <ArrowClockwise size={15} weight="bold" />
                 </button>
@@ -1087,7 +1143,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
                   ? <WarningCircle size={15} weight="fill" />
                   : <CheckCircle size={15} weight="fill" />}
                 <span className={notice.tone === "error" ? "selectable" : undefined}>{notice.message}</span>
-                <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss" title="Dismiss">
+                <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss" data-tip="Dismiss">
                   <X size={12} weight="bold" />
                 </button>
               </div>
@@ -1103,6 +1159,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
               className="open-list"
               role="listbox"
               aria-label="Folder contents"
+              aria-multiselectable={multiple || undefined}
               aria-activedescendant={selectedId}
               tabIndex={0}
               onKeyDown={onListKeyDown}
@@ -1116,15 +1173,16 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
                 </div>
               )}
               {visibleEntries.map((entry) => {
-                const active = selected?.path === entry.path;
+                const focused = selected?.path === entry.path;
+                const active = picked.has(entry.path) || (focused && entry.kind === "folder");
                 return (
                   <div
                     key={entry.path}
                     id={`open-entry-${entry.path}`}
                     role="option"
                     aria-selected={active}
-                    className={`open-entry ${active ? "selected" : ""}`}
-                    onClick={() => setSelected(entry)}
+                    className={`open-entry ${active ? "selected" : ""} ${focused && multiple ? "focused" : ""}`}
+                    onClick={(event) => selectWith(entry, event)}
                     onDoubleClick={() => activate(entry)}
                     onContextMenu={openContextMenu(entry)}
                   >
@@ -1169,8 +1227,8 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
             <div className="open-preview-frame">
               {preview.status === "idle" && (
                 <div className="open-preview-placeholder">
-                  {kind === "scene" ? <FilmSlate size={34} weight="duotone" /> : <FileImage size={34} weight="duotone" />}
-                  <span>{selected?.kind === "folder" ? "Double-click a folder to open it." : "Select a file to preview it."}</span>
+                  {kind === "scene" ? <FilmSlate size={34} weight="duotone" /> : kind === "audio" ? <MusicNotes size={34} weight="duotone" /> : <FileImage size={34} weight="duotone" />}
+                  <span>{selected?.kind === "folder" ? "Double-click a folder to open it." : kind === "audio" ? "Pick one or more audio files." : "Select a file to preview it."}</span>
                 </div>
               )}
               {preview.status === "loading" && (
@@ -1188,7 +1246,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
             {selected && (
               <dl className="open-preview-details">
                 <dt>Name</dt>
-                <dd className="open-preview-name" title={selected.name}>{selected.name}</dd>
+                <dd className="open-preview-name" data-tip={selected.name}>{selected.name}</dd>
                 <dt>Type</dt>
                 <dd>{typeLabel(selected)}</dd>
                 {ready && (
@@ -1243,13 +1301,14 @@ export function OpenDialog({ kind, title, onCancel, onOpen }: Props) {
         )}
 
         <footer className="open-dialog-actions">
+          {multiple && <span className="open-dialog-hint">Ctrl + click or Shift + click to pick several. {kind === "scene" ? "Each opens in its own tab." : "They go to the end of the Files list."}</span>}
           <button className="button secondary" onClick={onCancel}>Cancel</button>
           <button
             className="button primary"
-            disabled={!selected}
-            onClick={() => { if (selected) activate(selected); }}
+            disabled={!selected && pickedPaths.length === 0}
+            onClick={openPicked}
           >
-            <ColorFolder size={19} /> Open
+            <ColorFolder size={19} /> {pickedPaths.length > 1 ? `Open ${pickedPaths.length} ${kind === "scene" ? "scenes" : "files"}` : "Open"}
           </button>
         </footer>
       </div>

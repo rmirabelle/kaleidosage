@@ -22,6 +22,22 @@ pub(crate) fn is_video_path(path: &Path) -> bool {
         .is_some_and(|extension| VIDEO_EXTENSIONS.contains(&extension.to_ascii_lowercase().as_str()))
 }
 
+/// Audio files for the playlist (see docs/AUDIO.md, part 7); decoding support is determined by the webview.
+const AUDIO_EXTENSIONS: [&str; 7] = ["mp3", "wav", "flac", "ogg", "opus", "m4a", "aac"];
+
+pub(crate) fn is_audio_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| AUDIO_EXTENSIONS.contains(&extension.to_ascii_lowercase().as_str()))
+}
+
+/// A playlist file (see playlist_archive): the scenes, the tracks and the audio settings of a show.
+pub(crate) fn is_playlist_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("ksplaylist"))
+}
+
 pub(crate) fn is_scene_path(path: &Path) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())

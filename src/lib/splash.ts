@@ -15,6 +15,16 @@ let revealed = false;
 export async function revealMainWindow() {
   if (revealed || !isTauri()) return;
   revealed = true;
+  const main = getCurrentWindow();
+  /**
+   * A page reload (in dev, after an engine or MIDI edit) finds the window
+   * already shown. It must not take the focus from another app, such as a
+   * game the user is playing.
+   */
+  if (await main.isVisible()) {
+    await (await Window.getByLabel("splash"))?.close();
+    return;
+  }
   /* performance.now() counts from page start, which is about when the splash opened. */
   const remaining = MIN_SPLASH_MS - performance.now();
   if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
@@ -23,7 +33,6 @@ export async function revealMainWindow() {
     new Promise((resolve) => requestAnimationFrame(resolve)),
     new Promise((resolve) => setTimeout(resolve, 100))
   ]);
-  const main = getCurrentWindow();
   await main.show();
   await main.setFocus();
   const splash = await Window.getByLabel("splash");

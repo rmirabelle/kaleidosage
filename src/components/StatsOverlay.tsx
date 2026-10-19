@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import type { Engine } from "../engine/engine";
 import type { PassName } from "../engine/gpuTimer";
 
-const PASS_LABELS: Record<PassName, string> = { fold: "Warp, map, fold", refold: "Later shape FX", blur: "Blur", trails: "Trails", smear: "Time smear", contours: "Contours", relief: "Relief", camera: "Camera", sort: "Pixel sort", reaction: "Reaction-diffusion", particles: "Particles", rays: "Light rays", bloom: "Bloom", finish: "Final effects" };
+const PASS_LABELS: Record<PassName, string> = { fold: "Warp, map, fold", refold: "Later shape FX", blur: "Blur", trails: "Trails", smear: "Time smear", contours: "Contours", relief: "Relief", driver: "Driver", camera: "Camera", sort: "Pixel sort", particles: "Particles", rays: "Light rays", bloom: "Bloom", finish: "Final effects" };
 /** The display updates a few times per second, so the numbers can be read. */
 const UPDATE_MS = 250;
 

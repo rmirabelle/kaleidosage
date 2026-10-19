@@ -1,12 +1,12 @@
 import { GpuTimer } from "./gpuTimer";
-import { BLUR_SHADER, CAMERA_FIELD_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, REACTION_SHADER, REACTION_START_SHADER, REACTION_STEP_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 
 /** The blur mask: circle with a sharp or a blurred center, gradient, bright areas, dark areas, noise. */
 export type BlurMask = 0 | 1 | 2 | 3 | 4 | 5;
 /** 0 = no trails, 1 = mix, 2 = lighten. */
 export type TrailMode = 0 | 1 | 2;
 /** 0 = none, 1 = power, 2 = Mobius, 3 = Julia, 4 = log spiral, 5 = sine, 6 = tunnel. */
-export type MapMode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export type MapMode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 /** 0 = no warp, 1 = warp the screen (breaks the symmetry), 2 = warp the image (keeps it). */
 export type WarpMode = 0 | 1 | 2;
 /** 0 = radial wedges around one center, 1 = triangle tiles, 2 = hexagon tiles. */
@@ -17,7 +17,7 @@ export type ShapeStep = "warp" | "map" | "kaleidoscope";
 /** The kind of warp: noise, ripple, waves, swirl, bulge and pinch, cells. */
 export type WarpType = 0 | 1 | 2 | 3 | 4 | 5;
 /** The steps that change the drawn picture. The user sets their order. */
-export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "camera" | "sort" | "reaction" | "particles" | "rays" | "bloom" | "finish";
+export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "sort" | "particles" | "rays" | "bloom" | "finish";
 /**
  * Any effect step. The user sets one order for all of them. Shape steps
  * that are next to each other run in one pass; a shape step after a
@@ -25,7 +25,7 @@ export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | 
  */
 export type FxStep = ShapeStep | PictureStep;
 export const SHAPE_STEPS: readonly ShapeStep[] = ["warp", "map", "kaleidoscope"];
-export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "camera", "sort", "reaction", "particles", "rays", "bloom", "finish"];
+export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "camera", "sort", "particles", "rays", "bloom", "finish"];
 export const isShapeStep = (step: FxStep): step is ShapeStep => (SHAPE_STEPS as readonly FxStep[]).includes(step);
 /** The time smear's pattern: 0 linear, 1 rings, 2 sweep, 3 brightness, 4 noise (see SMEAR_SHADER). */
 export type SmearShape = 0 | 1 | 2 | 3 | 4;
@@ -35,10 +35,12 @@ const SHAPE_CODES: Record<ShapeStep, number> = { warp: 0, map: 1, kaleidoscope: 
 export type LayerBlend = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 /** How the camera's land goes on past the picture: 0 mirrored, 1 repeated as it is, 2 not at all (sky around the picture). */
 export type CameraRepeat = 0 | 1 | 2;
+/** The Driver effect's driver: 0 caustics, 1 smoke, 2 ink, 3 fire, 4 rain ripples, 5 the user's video (see DRIVER_SHADER). */
+export type DriverSource = 0 | 1 | 2 | 3 | 4 | 5;
+/** What the driver does to the picture: 0 bends it, 1 reveals it through the driver, 2 lights it. */
+export type DriverMode = 0 | 1 | 2;
 /** The pixel sort's order along each run: 0 dark to bright, 1 bright to dark. */
 export type SortOrder = 0 | 1;
-/** How the reaction-diffusion pattern shows: 0 as a mask over the picture, 1 bending the picture. */
-export type ReactionLook = 0 | 1;
 /** How the particles combine with the picture: 0 glow (they add their light), 1 normal (they cover it). */
 export type ParticleBlend = 0 | 1;
 /** How the two images fade: 0 = crossfade, 1 = dissolve by brightness (light areas change first). */
@@ -92,6 +94,9 @@ export interface FrameValues {
   /** Seamless spiral: the twist (negative turns the other way; 0 gives rings), and the whole number of image copies one turn holds. */
   mapArms: number;
   spiralCopies: number;
+  /** Droste spiral: the size of the copy inside the picture (0 to 1), and the whole number of spiral arms. */
+  drosteSize: number;
+  drosteSpirals: number;
   mapTwist: number;
   /** The angle (radians) of the axis that power, log spiral and tunnel fold over. */
   mapAngle: number;
@@ -178,6 +183,18 @@ export interface FrameValues {
   /** The lines' color, and how they combine with the picture (see LayerBlend). */
   contourColor: [number, number, number];
   contourBlend: LayerBlend;
+  /**
+   * Driver (see DRIVER_SHADER): opacity (0 = off), the driver and the mode,
+   * how strongly it acts, its size, its contrast, and how far its motion
+   * has run (seconds × speed).
+   */
+  driver: number;
+  driverSource: DriverSource;
+  driverMode: DriverMode;
+  driverStrength: number;
+  driverScale: number;
+  driverContrast: number;
+  driverTime: number;
   /** Relief lighting: strength (0 = off), height of the bumps, pixel size, light angle (radians) and gloss. */
   relief: number;
   reliefDepth: number;
@@ -226,18 +243,6 @@ export interface FrameValues {
   sortAngle: number;
   sortLength: number;
   sortThickness: number;
-  /**
-   * Reaction-diffusion (see REACTION_STEP_SHADER): opacity (0 = off), the
-   * look, feed and kill rates, how much the picture's brightness moves the
-   * feed, steps per 1/60 s, and the grid cell in pixels at 1080p.
-   */
-  reaction: number;
-  reactionLook: ReactionLook;
-  reactionFeed: number;
-  reactionKill: number;
-  reactionFollow: number;
-  reactionSpeed: number;
-  reactionSize: number;
   /**
    * Particles (see PARTICLE_STEP_SHADER): opacity (0 = off), how they
    * combine with the picture, how many there are, the brightness a spot
@@ -397,6 +402,11 @@ export class KaleidoRenderer {
   private readonly copy: Program;
   private readonly finish: Program;
   private readonly relief: Program;
+  private readonly driver: Program;
+  /** The Driver effect's own video (driver 5), its texture, and the video time of the frame in it. */
+  private driverVideo: HTMLVideoElement | null = null;
+  private driverTexture: WebGLTexture | null = null;
+  private driverVideoTime = -1;
   private readonly camera: Program;
   private readonly cameraField: Program;
   private readonly maxPass: Program;
@@ -436,14 +446,6 @@ export class KaleidoRenderer {
   private readonly particleVertices: WebGLVertexArrayObject;
   /** True when the GPU can draw to 32-bit float textures, which the particle state needs. */
   private readonly floatTargets: boolean;
-  private readonly reactionStart: Program;
-  private readonly reactionStep: Program;
-  private readonly reactionShow: Program;
-  /** The reaction-diffusion grid of the last step and of the next one (32-bit float), and its size in cells. Made on first use. */
-  private reactionStates: [Target, Target] | null = null;
-  private reactionGrid: [number, number] = [0, 0];
-  private reactionIndex = 0;
-  private reactionWasOn = false;
   /** The pixel sort's passes, in order (see drawSort). */
   private readonly sortPrograms: { turn: Program; start: Program; jump: Program; pack: Program; step: Program; show: Program };
   /** Three square pictures for the pixel sort, made on first use, and their side. */
@@ -523,6 +525,7 @@ export class KaleidoRenderer {
     this.copy = this.createProgram(COPY_SHADER);
     this.finish = this.createProgram(FINISH_SHADER);
     this.relief = this.createProgram(RELIEF_SHADER);
+    this.driver = this.createProgram(DRIVER_SHADER);
     this.camera = this.createProgram(CAMERA_SHADER);
     this.cameraField = this.createProgram(CAMERA_FIELD_SHADER);
     this.maxPass = this.createProgram(MAX_SHADER);
@@ -535,9 +538,6 @@ export class KaleidoRenderer {
     this.bloomBright = this.createProgram(BLOOM_BRIGHT_SHADER);
     this.bloomDown = this.createProgram(BLOOM_DOWN_SHADER);
     this.rays = this.createProgram(RAYS_SHADER);
-    this.reactionStart = this.createProgram(REACTION_START_SHADER);
-    this.reactionStep = this.createProgram(REACTION_STEP_SHADER);
-    this.reactionShow = this.createProgram(REACTION_SHADER);
     this.sortPrograms = {
       turn: this.createProgram(SORT_TURN_SHADER),
       start: this.createProgram(SORT_START_SHADER),
@@ -753,13 +753,12 @@ export class KaleidoRenderer {
       smear: v.smear > 0,
       contours: v.contours > 0,
       relief: v.relief > 0,
+      driver: v.driver > 0,
       /* The camera's view always shows while it is on: at opacity 0 it is the flat floor, seen by the camera. */
       camera: v.cameraOn,
       particles: v.particles > 0 && this.floatTargets,
       /* The sort keeps column numbers in half floats, so it needs float textures. */
       sort: v.sort > 0 && this.floatTargets,
-      /* The chemicals change by tiny amounts each step, so they need 32-bit float textures. */
-      reaction: v.reaction > 0 && this.floatTargets,
       rays: v.rays > 0,
       bloom: v.bloom > 0,
       finish: v.sharpen > 0 || v.exposure !== 0 || v.blackLevel > 0 || v.overlayOpacity > 0
@@ -837,13 +836,13 @@ export class KaleidoRenderer {
         const target = last ? null : scratchFor(source);
         if (step === "blur") this.drawBlur(v, source, padded, target, true);
         else if (step === "relief") this.drawRelief(v, source, target, width, height);
+        else if (step === "driver") this.drawDriver(v, source, target, width, height);
         else if (step === "camera") this.drawCamera(v, source, target, width, height);
         else if (step === "contours") this.drawContours(v, source, target, width, height);
         else if (step === "smear") this.drawSmear(v, source, target, width, height);
         else if (step === "particles") this.drawParticles(v, source, target, width, height);
         else if (step === "rays") this.drawRays(v, source, target, width, height);
         else if (step === "sort") this.drawSort(v, source, target, width, height);
-        else if (step === "reaction") this.drawReaction(v, source, target, width, height);
         else if (step === "bloom") this.drawBloom(v, source, target, width, height);
         else this.drawFinish(v, source, target, width, height);
         if (target) source = target.texture;
@@ -855,7 +854,6 @@ export class KaleidoRenderer {
     this.contoursWereOn = active.contours;
     this.smearWasOn = active.smear;
     this.particlesWereOn = active.particles;
-    this.reactionWasOn = active.reaction;
   }
 
   /**
@@ -910,6 +908,8 @@ export class KaleidoRenderer {
     gl.uniform1i(k.uniforms.u_mapSteps, Math.round(v.mapSteps));
     gl.uniform1f(k.uniforms.u_mapArms, v.mapArms);
     gl.uniform1f(k.uniforms.u_spiralCopies, v.spiralCopies);
+    gl.uniform1f(k.uniforms.u_drosteSize, v.drosteSize);
+    gl.uniform1f(k.uniforms.u_drosteSpirals, v.drosteSpirals);
     gl.uniform1f(k.uniforms.u_mapTwist, v.mapTwist);
     gl.uniform2f(k.uniforms.u_mapAxis, Math.cos(v.mapAngle), Math.sin(v.mapAngle));
     gl.uniform1f(k.uniforms.u_mapTravel, v.mapTravel);
@@ -988,6 +988,71 @@ export class KaleidoRenderer {
       gl.bindTexture(gl.TEXTURE_2D, source);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     }
+  }
+
+  /** Driver: a moving pattern drawn in the shader (DRIVER_SHADER) bends, reveals or lights the picture. */
+  private drawDriver(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+    const gl = this.gl;
+    const d = this.driver;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(d.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.uniform1i(d.uniforms.u_tex, 0);
+    gl.uniform2f(d.uniforms.u_res, width, height);
+    gl.uniform1i(d.uniforms.u_source, v.driverSource);
+    gl.uniform1i(d.uniforms.u_mode, v.driverMode);
+    gl.uniform1f(d.uniforms.u_amount, Math.min(1, Math.max(0, v.driver)));
+    gl.uniform1f(d.uniforms.u_strength, v.driverStrength);
+    gl.uniform1f(d.uniforms.u_scale, Math.max(0.05, v.driverScale));
+    gl.uniform1f(d.uniforms.u_contrast, v.driverContrast);
+    gl.uniform1i(d.uniforms.u_video, 1);
+    gl.uniform1i(d.uniforms.u_hasVideo, v.driverSource === 5 ? this.uploadDriverVideo() : 0);
+    gl.uniform1f(d.uniforms.u_videoAspect, this.driverVideo && this.driverVideo.videoHeight > 0 ? this.driverVideo.videoWidth / this.driverVideo.videoHeight : 1);
+    /* The shader's noise loses detail at large times, so the time wraps; a wrap shows as one small jump every few hours. */
+    gl.uniform1f(d.uniforms.u_time, v.driverTime % 10000);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /** The Driver effect's own video, or null. The engine plays it; the renderer only reads its frames. */
+  setDriverVideo(video: HTMLVideoElement | null) {
+    this.driverVideo = video;
+    this.driverVideoTime = -1;
+  }
+
+  /**
+   * Puts the driver video's frame in its texture (on texture unit 1) when
+   * the frame changed. Returns 1 when the texture holds a frame, else 0. It
+   * repeats mirrored past the video's edges, for a small Size.
+   */
+  private uploadDriverVideo() {
+    const gl = this.gl;
+    const video = this.driverVideo;
+    gl.activeTexture(gl.TEXTURE1);
+    if (!this.driverTexture) {
+      this.driverTexture = gl.createTexture()!;
+      gl.bindTexture(gl.TEXTURE_2D, this.driverTexture);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
+    }
+    gl.bindTexture(gl.TEXTURE_2D, this.driverTexture);
+    let ready = 0;
+    if (video && video.readyState >= 2 && video.videoWidth > 0) {
+      if (video.currentTime !== this.driverVideoTime) {
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        this.driverVideoTime = video.currentTime;
+      }
+      ready = 1;
+    } else if (this.driverVideoTime >= 0 && video) {
+      ready = 1;
+    }
+    gl.activeTexture(gl.TEXTURE0);
+    return ready;
   }
 
   private drawRelief(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
@@ -1310,90 +1375,6 @@ export class KaleidoRenderer {
     gl.drawArrays(gl.POINTS, 0, Math.round(Math.min(PARTICLE_SIDE * PARTICLE_SIDE, Math.max(0, v.particleCount))));
     gl.disable(gl.BLEND);
     gl.bindVertexArray(null);
-  }
-
-  /**
-   * Reaction-diffusion. The grid has one cell per "Size" pixels (at
-   * 1080p). It starts again (REACTION_START_SHADER) when the effect starts
-   * or the grid size changes. Each frame it takes Speed steps per 1/60 s
-   * of animation time (REACTION_STEP_SHADER), none while paused, then
-   * masks or bends the picture (REACTION_SHADER).
-   */
-  private drawReaction(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
-    const gl = this.gl;
-    const cell = Math.max(0.5, v.reactionSize * height / 1080);
-    const grid: [number, number] = [Math.max(8, Math.round(width / cell)), Math.max(8, Math.round(height / cell))];
-    const states = this.ensureReaction(grid);
-    gl.viewport(0, 0, ...grid);
-    if (!this.reactionWasOn) {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, states[this.reactionIndex].framebuffer);
-      gl.useProgram(this.reactionStart.program);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-    }
-    const steps = Math.min(120, Math.round(Math.max(0, v.reactionSpeed) * v.frameScale));
-    if (steps > 0) {
-      const s = this.reactionStep;
-      gl.useProgram(s.program);
-      gl.uniform2f(s.uniforms.u_grid, ...grid);
-      gl.uniform1f(s.uniforms.u_feed, v.reactionFeed);
-      gl.uniform1f(s.uniforms.u_kill, v.reactionKill);
-      gl.uniform1f(s.uniforms.u_follow, v.reactionFollow);
-      gl.activeTexture(gl.TEXTURE1);
-      gl.bindTexture(gl.TEXTURE_2D, source);
-      gl.uniform1i(s.uniforms.u_picture, 1);
-      gl.uniform1i(s.uniforms.u_state, 0);
-      gl.activeTexture(gl.TEXTURE0);
-      for (let index = 0; index < steps; index++) {
-        gl.bindFramebuffer(gl.FRAMEBUFFER, states[1 - this.reactionIndex].framebuffer);
-        gl.bindTexture(gl.TEXTURE_2D, states[this.reactionIndex].texture);
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
-        this.reactionIndex = 1 - this.reactionIndex;
-      }
-    }
-
-    const d = this.reactionShow;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
-    gl.viewport(0, 0, width, height);
-    gl.useProgram(d.program);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, states[this.reactionIndex].texture);
-    gl.uniform1i(d.uniforms.u_state, 0);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, source);
-    gl.uniform1i(d.uniforms.u_picture, 1);
-    gl.uniform2f(d.uniforms.u_grid, ...grid);
-    gl.uniform2f(d.uniforms.u_res, width, height);
-    gl.uniform1f(d.uniforms.u_amount, Math.min(1, Math.max(0, v.reaction)));
-    gl.uniform1i(d.uniforms.u_look, v.reactionLook);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-  }
-
-  /** The reaction-diffusion grid pair at "grid" cells. A new size makes them again, and the pattern starts again. */
-  private ensureReaction(grid: [number, number]) {
-    if (this.reactionStates && this.reactionGrid[0] === grid[0] && this.reactionGrid[1] === grid[1]) return this.reactionStates;
-    const gl = this.gl;
-    if (this.reactionStates) {
-      for (const state of this.reactionStates) {
-        gl.deleteTexture(state.texture);
-        gl.deleteFramebuffer(state.framebuffer);
-      }
-    }
-    const make = (): Target => {
-      const texture = gl.createTexture()!;
-      gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA32F, ...grid);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-      const framebuffer = gl.createFramebuffer()!;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
-      return { texture, framebuffer };
-    };
-    this.reactionStates = [make(), make()];
-    this.reactionGrid = grid;
-    this.reactionIndex = 0;
-    this.reactionWasOn = false;
-    return this.reactionStates;
   }
 
   /**
@@ -1820,7 +1801,6 @@ export class KaleidoRenderer {
     this.contoursWereOn = false;
     this.smearWasOn = false;
     this.particlesWereOn = false;
-    this.reactionWasOn = false;
     this.trailsWereOn = false;
   }
 

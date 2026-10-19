@@ -1,12 +1,13 @@
 import { PARAM_KEYS, type Param, type Params, type PlayState } from "./params";
 import { sceneFingerprint } from "./scene";
+import { audioLinkList } from "./audio";
 
 /** The most steps that Undo can go back. */
 const LIMIT = 200;
 
 type SavedParam = Pick<Param, "value" | "low" | "high" | "on" | "ease" | "custom" | "seconds" | "startTime">;
 type SavedState = Pick<PlayState, "groups" | "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode"
-  | "overlayColor" | "trailColor" | "smearShape" | "contourTone" | "contourBlend" | "cameraBlend" | "skyColor" | "cameraRepeat" | "videoCrossfade" | "fxOrder" | "layerBlend">;
+  | "overlayColor" | "trailColor" | "smearShape" | "contourTone" | "contourBlend" | "cameraBlend" | "skyColor" | "cameraRepeat" | "videoCrossfade" | "fxOrder" | "layerBlend" | "audioLinks" | "audioRelease">;
 
 /** The settings at one step, and their fingerprint, to tell whether two steps differ. */
 interface Snapshot {
@@ -42,14 +43,16 @@ function take(params: Params, state: PlayState): Snapshot {
       cameraRepeat: state.cameraRepeat,
       videoCrossfade: state.videoCrossfade,
       fxOrder: [...state.fxOrder],
-      layerBlend: { ...state.layerBlend }
+      layerBlend: { ...state.layerBlend },
+      audioLinks: Object.fromEntries(audioLinkList(state.audioLinks).map(([key, source, amount, release, threshold]) => [key, { source, amount, release, threshold }])),
+      audioRelease: state.audioRelease
     }
   };
 }
 
 /**
  * Undo and redo for the settings: every parameter and range, the modes, the
- * groups that are on, the colors and the step orders. The images, the
+ * groups that are on, the colors, the step orders and the audio links. The images, the
  * animation time and the locks are not part of it.
  *
  * The owner calls commit() when a change is complete (not during a drag);
@@ -113,8 +116,8 @@ export class SettingsHistory {
 
   private restore(step: Snapshot) {
     for (const key of PARAM_KEYS) Object.assign(this.params[key], step.params[key]);
-    const { groups, layerBlend, fxOrder, ...modes } = step.state;
-    Object.assign(this.state, modes, { fxOrder: [...fxOrder] });
+    const { groups, layerBlend, fxOrder, audioLinks, ...modes } = step.state;
+    Object.assign(this.state, modes, { fxOrder: [...fxOrder], audioLinks: structuredClone(audioLinks) });
     Object.assign(this.state.groups, groups);
     Object.assign(this.state.layerBlend, layerBlend);
     this.current = step;

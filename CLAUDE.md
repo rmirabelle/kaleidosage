@@ -28,7 +28,10 @@ plays it full screen. Tauri 2 + React + WebGL 2.
 
 ## Development process
 
-- Start the dev app with `npm run tauri dev` (Vite on port 14510).
+- Start the dev app with `npm run tauri dev -- --no-watch` (Vite on port 14510).
+  Without `--no-watch`, every Rust edit restarts the app, and the new window
+  takes the focus from the user's other apps (a game exits). Restart the dev
+  app only when the user agrees.
 - Stop it with `.\kill-dev.ps1` (tree-kills `kaleidosage.exe` and frees ports
   14510 and 14511).
 - Do not start the dev app while an installed KaleidoSage is running; the

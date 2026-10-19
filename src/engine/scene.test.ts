@@ -51,7 +51,7 @@ describe("scene files", () => {
     expect(params.zoom.value).toBe(params.zoom.max);
     expect(params.zoom.low).toBe(params.zoom.min);
     expect(params.segments.value).toBe(0);
-    expect(state.mapMode).toBe(1);
+    expect(state.mapMode).toBe(8);
     /* A speed of 50 is far above 1×, so the cycle is as short as it goes. */
     expect(params.cycle.value).toBe(params.cycle.min);
   });
@@ -94,7 +94,7 @@ describe("scene files", () => {
     /* Earlier versions of the app read a full order inside each kind: the list's order first. */
     const savedState = JSON.parse(text).state;
     expect(savedState.shapeStack).toEqual(["warp", "map", "kaleidoscope"]);
-    expect(savedState.pictureOrder).toEqual(["relief", "blur", "trails", "smear", "contours", "camera", "sort", "reaction", "particles", "rays", "bloom", "finish"]);
+    expect(savedState.pictureOrder).toEqual(["relief", "blur", "trails", "smear", "contours", "driver", "camera", "sort", "particles", "rays", "bloom", "finish"]);
 
     /* Scenes from before the effect list: every effect that is on and changes the picture, in their order. */
     const showing = { warpAmount: { value: 0.3 }, blurAmount: { value: 10 }, trailAmount: { value: 0.5 }, smearAmount: { value: 1 }, contourOpacity: { value: 1 }, reliefAmount: { value: 1 }, sharpen: { value: 1 } };
@@ -164,5 +164,22 @@ describe("scene files", () => {
     const back = new Uint8Array(await sceneImageToBlob(image).arrayBuffer());
     expect(image.type).toBe("image/jpeg");
     expect([...back]).toEqual([...bytes]);
+  });
+});
+
+describe("scene audio links", () => {
+  it("are saved, read back, and count as a change", () => {
+    const params = createParams();
+    const state = createPlayState();
+    const before = sceneFingerprint(params, state, [1, null]);
+    state.audioLinks = { zoom: { source: "kick", amount: 0.8, release: 2, threshold: -6 } };
+    expect(sceneFingerprint(params, state, [1, null])).not.toBe(before);
+    const linked = sceneFingerprint(params, state, [1, null]);
+    state.audioRelease = 0.6;
+    expect(sceneFingerprint(params, state, [1, null])).not.toBe(linked);
+    const loadedState = createPlayState();
+    applyScene(serializeScene(params, state, { image: IMAGE }), createParams(), loadedState);
+    expect(loadedState.audioLinks).toEqual({ zoom: { source: "kick", amount: 0.8, release: 2, threshold: -6 } });
+    expect(loadedState.audioRelease).toBe(0.6);
   });
 });

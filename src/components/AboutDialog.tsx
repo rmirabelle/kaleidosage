@@ -93,7 +93,7 @@ export function AboutDialog({ version, initialUpdateInfo, onClose, beforeInstall
         onPointerDown={(event) => event.stopPropagation()}
       >
         {!downloading && (
-          <button className="about-dialog-close" onClick={onClose} aria-label="Close About Kaleido Sage" data-help="Close">
+          <button className="about-dialog-close" onClick={onClose} aria-label="Close About Kaleido Sage" data-tip="Close">
             <X size={18} />
           </button>
         )}

@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { EASES, easeCurve, easeOf, type Ease, type Param } from "../engine/params";
 
 /** A small drawing of an easing curve, from the start handle (bottom left) to the end handle (top right), over one trip. */
-function Curve({ kind, width = 16, height = 12 }: { kind: Ease; width?: number; height?: number }) {
+export function Curve({ kind, width = 16, height = 12 }: { kind: Ease; width?: number; height?: number }) {
   const points = Array.from({ length: 49 }, (_, index) => {
     const t = index / 48;
     return `${(1 + t * (width - 2)).toFixed(2)},${(height - 1 - easeCurve(kind, t) * (height - 2)).toFixed(2)}`;
@@ -67,7 +67,7 @@ export function EaseMenu({ param, disabled }: { param: Param; disabled: boolean 
         ref={buttonRef}
         className={`panel-ease ${position ? "active" : ""}`}
         disabled={disabled}
-        title={`Easing: ${label}`}
+        data-tip={`Easing: ${label}`}
         aria-label={`${param.label} easing: ${label}`}
         aria-haspopup="menu"
         aria-expanded={Boolean(position)}

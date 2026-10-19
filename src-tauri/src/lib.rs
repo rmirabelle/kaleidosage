@@ -1,5 +1,7 @@
 mod browse;
 mod files;
+mod playlist_archive;
+mod sound_capture;
 mod screen;
 mod updater;
 mod video_import;
@@ -50,6 +52,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(video_stream::Videos::default())
         .manage(video_stream::Uploads::default())
+        .manage(sound_capture::SoundCapture::default())
         .register_asynchronous_uri_scheme_protocol("video", |ctx, request, responder| {
             let id = request.uri().path().trim_start_matches('/');
             let source = ctx.app_handle().state::<video_stream::Videos>().get(id);
@@ -68,6 +71,7 @@ pub fn run() {
         )
         .setup(|app| {
             end_splash_after_time_limit(app.handle().clone());
+            playlist_archive::clean_at_start();
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -86,9 +90,15 @@ pub fn run() {
             files::default_export_folder,
             scene_archive::save_scene,
             scene_archive::read_scene,
+            playlist_archive::save_playlist,
+            playlist_archive::open_playlist,
+            playlist_archive::playlist_scene_path,
             files::reveal_file,
             files::cursor_position,
             screen::screen_color_at_cursor,
+            sound_capture::sound_devices,
+            sound_capture::sound_start,
+            sound_capture::sound_stop,
             files::log_frontend_error,
             updater::check_for_update,
             updater::download_and_run_installer,

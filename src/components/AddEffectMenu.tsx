@@ -84,7 +84,7 @@ export function AddEffectMenu<K extends string>({ options, onAdd }: {
           aria-haspopup="menu"
           aria-expanded={open}
           disabled={options.length === 0}
-          title={options.length === 0 ? "Every effect is in the list" : "Add an effect at the end of the list"}
+          data-tip={options.length === 0 ? "Every effect is in the list" : "Add an effect at the end of the list"}
           onClick={() => {
             setActive(0);
             setOpen(!open);

@@ -1,4 +1,5 @@
 :root {
+  --audio-on: #3fd0ff;
   font-family: "Inter", "Segoe UI", system-ui, sans-serif;
   color: #d4d4d8;
   background: #000;
@@ -77,6 +78,9 @@ button { border: 0; }
 }
 .titlebar-file-name { overflow: hidden; text-overflow: ellipsis; }
 .titlebar-dirty { margin-left: 2px; color: #ff5c5c; font-weight: 800; }
+/* The open playlist, then the scene, in one group: "Show.ksplaylist › Scene.ksage". Each part can shorten with an ellipsis. */
+.titlebar-part { display: flex; align-items: center; min-width: 0; }
+.titlebar-separator { flex: 0 0 auto; margin: 0 8px; color: var(--muted); }
 .window-controls { display: flex; align-items: stretch; }
 .window-controls button {
   width: 46px;
@@ -165,6 +169,13 @@ button { border: 0; }
 }
 .stage-controls.play { left: 50%; bottom: 14px; transform: translateX(-50%); }
 .stage-controls.view { top: 14px; right: 14px; }
+/* While the tracks run the show: the track's name, time and seek bar after the buttons. */
+.stage-controls.with-track { gap: 10px; padding-right: 12px; }
+.stage-track { display: flex; flex-direction: column; gap: 2px; width: 260px; }
+.stage-track-text { display: flex; justify-content: space-between; gap: 10px; color: #e4e6ec; font-size: 11px; }
+.stage-track-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stage-track-time { flex: 0 0 auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.stage-track-bar { width: 100%; height: 14px; margin: 0; accent-color: var(--accent); cursor: pointer; }
 /* Each bar's button group has round outer corners. */
 .stage-controls .panel-buttons { border-radius: 5px; }
 .stage:hover .stage-controls, .stage-controls:has(:focus-visible) { opacity: 1; pointer-events: auto; }
@@ -225,9 +236,11 @@ button { border: 0; }
 .workspace:has(.document-tabs) > .control-panel, .workspace:has(.document-tabs) > .document { overflow: hidden; border: 1px solid var(--border); border-radius: 8px; }
 .stage { position: relative; flex: 1; min-width: 0; min-height: 0; background: #000; }
 
-/* The open scene as one tab button above the picture: bright blue with white text. */
-.document-tabs { flex: 0 0 auto; display: flex; align-items: center; padding: 7px 6px; border-bottom: 1px solid var(--border); background: #1b1e25; }
+/* The open scenes as tab buttons above the picture: the selected one bright blue with white text. */
+.document-tabs { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; padding: 7px 6px; overflow: hidden; border-bottom: 1px solid var(--border); background: #1b1e25; }
 .document-tab {
+  flex: 0 1 auto;
+  min-width: 90px;
   height: 27px;
   max-width: 350px;
   display: flex;
@@ -235,15 +248,18 @@ button { border: 0; }
   gap: 2px;
   padding: 0 4px 0 12px;
   border-radius: 5px;
-  color: #fff;
-  background: #3b63dc;
+  color: #c3c7d4;
+  background: #2a2e3a;
   font-size: 13px;
   white-space: nowrap;
+  cursor: pointer;
 }
+.document-tab:hover { color: #fff; background: #343947; }
+.document-tab.active { color: #fff; background: #3b63dc; cursor: default; }
 .document-tab-name { overflow: hidden; text-overflow: ellipsis; }
-.document-tab .titlebar-dirty { color: #fff; }
+.document-tab.active .titlebar-dirty { color: #fff; }
 /* The close button is half transparent until the pointer is on it. */
-.document-tab-close { display: grid; place-items: center; width: 22px; height: 22px; margin-left: 7px; border-radius: 4px; color: #fff; background: transparent; opacity: .5; cursor: pointer; }
+.document-tab-close { flex: 0 0 auto; display: grid; place-items: center; width: 22px; height: 22px; margin-left: 7px; border-radius: 4px; color: inherit; background: transparent; opacity: .5; cursor: pointer; }
 .document-tab-close:hover { background: rgba(255,255,255,.2); opacity: 1; }
 .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .stage.cursor-idle, .stage.cursor-idle canvas { cursor: none; }
@@ -345,8 +361,28 @@ button { border: 0; }
 .source-section .source-well { margin: 0; border: 0; border-radius: 0; }/* The MIDI panel: it slides up at the bottom of the window (its height grows), so the panels and the picture above get shorter. */
 .midi-panel { position: relative; flex: 0 0 auto; overflow: hidden; transition: height .25s ease; }
 .midi-panel.resizing { transition: none; }
-.midi-panel-body { display: flex; flex-direction: column; height: 100%; border-top: 4px solid var(--border); background: #1d2029; }
+/* The bottom panel is a rounded card like the two above it: the same frame color around it, a 6 px gap, a thin border and 8 px corners. */
+.midi-panel.open { padding: 6px; background: #272b36; }
+/* Every scroll area in the bottom panel has the side panels' thin, dark scrollbar. */
+.midi-panel-body, .midi-panel-body * { scrollbar-width: thin; scrollbar-color: #474c5e transparent; }
+/* Headings and setting rows keep their height in a short panel; only the lists get shorter and scroll. */
+.midi-panel-columns > div > .stage-label, .midi-map-heading, .audio-source > .audio-setting, .audio-setting.audio-release, .audio-meters, .audio-link-head { flex-shrink: 0; }
+/**
+ * The 6 px gap between the work area and the open bottom panel belongs to
+ * the panel (its top padding), so the whole gap is the grip that resizes it
+ * (.midi-panel-grip, 6 px high at the panel's top).
+ */
+.app:has(.midi-panel.open) .workspace:has(.document-tabs) { padding-bottom: 0; }
+.midi-panel-body { display: flex; flex-direction: column; height: 100%; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: #1d2029; }
 /* The top edge: a drag makes the panel taller or shorter. */
+/**
+ * The help line: a one-line card under the panels, in the same frame (6 px
+ * gap, thin border, 8 px corners), with the toolbar color and white text.
+ * It is above the dialogs' dark cover, so a dialog's tips show there too.
+ */
+.help-line-frame { position: relative; z-index: 170; flex: 0 0 auto; padding: 0 6px 6px; background: #272b36; }
+.help-line { height: 28px; padding: 0 12px; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; color: #fff; background: #252832; font-size: 12px; line-height: 26px; text-overflow: ellipsis; white-space: nowrap; }
+.help-line.empty { color: var(--muted); }
 .midi-panel-grip { position: absolute; z-index: 2; top: 0; left: 0; right: 0; height: 6px; cursor: ns-resize; }
 .midi-panel-grip:hover, .midi-panel.resizing .midi-panel-grip { background: rgba(75,118,247,.5); }
 /* Two columns: the controllers at the left, the mappings at the right. */
@@ -361,17 +397,20 @@ button { border: 0; }
 .midi-device-count { color: var(--muted); font-size: 11px; white-space: nowrap; }
 /* A controller with no mappings is grayed out. */
 .midi-device-row.unused .midi-device-name { color: #6b7080; font-weight: 400; }
-.midi-panel-header { display: flex; flex: 0 0 auto; align-items: center; gap: 14px; padding: 0 10px 0 16px; border-bottom: 1px solid var(--border); background: #252832; }
+.midi-panel-header { display: flex; flex: 0 0 auto; align-items: center; gap: 14px; padding: 0 10px 0 6px; border-bottom: 1px solid var(--border); background: #252832; }
 .midi-panel-header .side-panel-title { padding: 9px 2px 8px; }
 .midi-panel-count { color: #a2a7b5; font-size: 12px; }
-/* The header: MIDI, then the count and Clear all at the left; the close button stays at the right. */
-.midi-panel-header > :last-child { margin-left: auto; }
 /* The column headings (Connected devices, Device: ...): a full-width dark box with a divider under it, as in the destination dialog. */
-.midi-panel-devices > .stage-label, .midi-map-heading { display: flex; align-items: center; height: 33px; margin: 0 0 8px; padding: 0 16px; line-height: 1; border-bottom: 1px solid #3a3e4d; background: #1b1e25; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.midi-panel-devices > .stage-label, .midi-map-heading, .stage-label.audio-levels-label { display: flex; align-items: center; height: 33px; margin: 0 0 8px; padding: 0 16px; line-height: 1; border-bottom: 1px solid #3a3e4d; background: #1b1e25; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .midi-panel-devices > .stage-label + .midi-panel-empty { margin-top: 6px; }
-.midi-panel-header .panel-button { display: inline-flex; align-items: center; gap: 6px; }
 .midi-panel-waiting { padding: 3px 9px; border: 1px solid var(--midi-on); border-radius: 5px; color: #fff; background: rgba(255,138,31,.15); font-size: 12px; }
 .midi-panel-empty { margin: 14px 16px; color: #a2a7b5; font-size: 12px; }
+/* An empty place that teaches (EmptyState): one sentence, then the button that fills it. */
+.empty-state { margin: 14px 16px; color: #a2a7b5; font-size: 12px; line-height: 1.45; }
+.empty-state p { max-width: 460px; margin: 0; }
+.empty-state-action { display: flex; gap: 6px; margin-top: 8px; }
+.audio-files-body .empty-state { margin: 8px 6px; }
+.fx-card .empty-state { margin: 12px 4px; }
 /* One row per mapping, under its controller's name: activity icon, control, arrow, setting menu, remove button. */
 .midi-map-list { flex: 1; min-height: 0; margin: 0; padding: 0 10px 10px; overflow-y: auto; list-style: none; scrollbar-width: thin; scrollbar-color: #474c5e transparent; }
 /* A device heading spans the whole column, over the list's side padding; the next device's heading has space above it. */
@@ -392,9 +431,119 @@ button { border: 0; }
 .midi-map-clear:hover { color: #fff; background: #c83232; }
 /* A control just moved over the panel, waiting for its setting. */
 .midi-learn-toggle { display: inline-flex; align-items: center; gap: 6px; }
-.midi-learn-toggle.on { color: #fff; background: var(--midi-on); }
+.button.midi-learn-toggle.on, .button.midi-learn-toggle.on:hover { color: #fff; background: var(--midi-on); border-color: var(--midi-on); }
 .midi-map-row.pending { border: 1px dashed var(--midi-on); background: rgba(255,138,31,.08); }
 .midi-map-choose { color: var(--midi-on); font-size: 12px; font-style: italic; }
+
+/* The bottom panel's top row: the tabs (Audio, MIDI) at the left, as buttons like the document tabs (the selected one bright blue), and the close button at the right. */
+.bottom-panel-tab-row { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; padding: 7px 10px 7px 6px; border-bottom: 1px solid var(--border); background: #1b1e25; }
+.bottom-panel-tabs { display: flex; align-items: center; gap: 4px; }
+.bottom-panel-tab { height: 27px; display: flex; align-items: center; gap: 7px; padding: 0 12px 0 10px; border: 0; border-radius: 5px; color: #c3c7d4; background: #2a2e3a; font-size: 13px; white-space: nowrap; cursor: pointer; }
+.bottom-panel-tab:hover { color: #fff; background: #343947; }
+.bottom-panel-tab.active { color: #fff; background: #3b63dc; cursor: default; }
+/* A tab's page: its toolbar, then its columns. */
+.bottom-panel-page { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.midi-panel-header { min-height: 38px; }
+
+/* The Audio tab: the source at the left, the band meters at the right. */
+
+/* A setting's audio button, under its MIDI button: lit blue while linked, and it glows with the sound that moves the setting (--audio-push, 0 to 1). */
+.audio-link { display: grid; flex: 0 0 auto; place-items: center; width: 18px; height: 18px; margin: 0; padding: 0; border-radius: 4px; color: #5d6272; background: transparent; cursor: pointer; }
+.audio-link:hover, .audio-link.active { color: #c3c7d0; background: rgba(255,255,255,.07); }
+.audio-link.on { color: var(--audio-on); background: rgba(63,208,255, calc(var(--audio-push, 0) * .45)); box-shadow: 0 0 calc(var(--audio-push, 0) * 8px) rgba(63,208,255,.6); }
+.no-audio-buttons .audio-link, .no-midi-buttons .midi-assign, .no-midi-buttons .midi-remove { display: none; }
+/* Heavier than .panel-title-midi.on (later in this file), so the lit audio button is audio blue, not MIDI orange. */
+.panel-title-midi.panel-title-audio.on { color: var(--audio-on); }
+.panel-title-midi + .panel-title-midi { margin-left: 0; }
+.toolbar-dropdown.audio-link-menu { position: fixed; z-index: 100; width: 220px; min-width: 0; }
+.audio-link-item { display: flex; align-items: center; gap: 9px; }
+.audio-link-menu-mark { width: 13px; }
+/* A link row: the setting, what it follows, its range, its release factor, its threshold offset, and X. */
+.audio-link-row { grid-template-columns: minmax(140px, 220px) minmax(120px, 150px) repeat(3, minmax(170px, 230px)) 26px; }
+/* A link control's output: the worked-out value, then the slider's own value, smaller and gray. */
+/* Left-aligned, so the readout sits right after its slider and the free space comes after it. */
+.audio-link-row .audio-link-worked { display: flex; flex-direction: column; align-items: flex-start; width: 64px; margin-left: 6px; line-height: 1.15; text-align: left; }
+.audio-link-worked b { color: #e4e6ec; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.audio-link-worked small { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+/* A Threshold or Release that is the global one as it is shows no readout, but keeps its place. */
+.audio-link-worked.same { visibility: hidden; }
+/* The scene's Release: a row like the Source column's, with a line under it before the links. */
+.audio-setting.audio-release { margin: 0 0 6px; padding: 11px 16px 10px; border-bottom: 1px solid #343843; }
+.audio-release > span:first-child, .audio-release .slider { max-width: 420px; }
+.audio-link-row.audio-link-head { padding-top: 0; padding-bottom: 2px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.audio-link-row.audio-link-head:hover { background: transparent; }
+.audio-link-row .midi-map-control { overflow: hidden; text-overflow: ellipsis; }
+.audio-link-amount { display: flex; align-items: center; gap: 4px; }
+.audio-link-row output { margin-left: 6px; color: var(--muted); }
+.audio-link-amount .slider { flex: 1; margin-top: 0; }
+.audio-link-amount output { width: 36px; text-align: right; }
+.audio-levels-label + .midi-panel-empty { margin-top: 6px; }
+/* The links heading, under the meters, has a line above it too. */
+.stage-label.audio-levels-label:not(:first-child) { border-top: 1px solid #3a3e4d; }
+/* The track list under the Input menu: its buttons, then the tracks, which scroll. The track that plays is blue. */
+.tracks-buttons { display: flex; gap: 6px; }
+.tracks-empty { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+.tracks-tracks { max-height: 180px; margin: 2px 0 0; padding: 0; overflow-y: auto; list-style: none; scrollbar-width: thin; scrollbar-color: #474c5e transparent; }
+.tracks-track { display: flex; align-items: center; gap: 4px; border-radius: 5px; }
+.tracks-track:hover { background: rgba(255,255,255,.04); }
+.tracks-track.current { background: rgba(75,118,247,.22); }
+.tracks-track-name { display: flex; flex: 1; align-items: center; gap: 7px; min-width: 0; padding: 4px 6px; border: 0; color: #c3c7d0; background: transparent; font-size: 12px; text-align: left; cursor: pointer; }
+.tracks-track-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tracks-track.current .tracks-track-name { color: #fff; }
+.tracks-track .midi-map-clear { width: 20px; height: 20px; }
+.audio-link-menu-note { margin: 6px 9px 4px; color: var(--muted); font-size: 11px; }
+.audio-error { margin: 0; color: #ff7a7a; }
+/* The Source column's settings are rows like the FX panel's: the same padding, and a thin line between two rows. */
+.audio-source { gap: 0; }
+.audio-source > .audio-setting { padding: 11px 16px 10px; }
+.audio-source > .audio-setting + .audio-setting { border-top: 1px solid #343843; }
+/**
+ * Their names look like the FX panel's setting names: small light-blue
+ * capitals, with the value at the right in a small box, as on the FX
+ * panel's rows (.panel-row-value). The scene's Release has the same look.
+ */
+.audio-source > .audio-setting > span:first-child, .audio-release > span:first-child { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--secondary); font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
+.audio-source > .audio-setting > span:first-child output, .audio-release > span:first-child output { margin-left: 0; padding: 1px 6px; border: 1px solid rgba(255,255,255,.06); border-radius: 4px; color: #a9aebb; background: rgba(255,255,255,.05); font-size: 11px; font-variant-numeric: tabular-nums; font-weight: 400; letter-spacing: 0; line-height: 15px; text-transform: none; }
+/* Input and its menu on one row. */
+.audio-source > .audio-setting.inline { flex-direction: row; align-items: center; gap: 10px; }
+.audio-setting.inline .dropdown-button { flex: 1; min-width: 0; }
+/* The Levels heading at the bottom of the Source column: a full-width box, as the column's first heading. */
+/* Levels sits at the bottom of the Source column: the free space goes above its heading. */
+.audio-source > .audio-source-levels { margin: auto 0 0; border-top: 1px solid #3a3e4d; }
+/* The Audio panel's headings have an icon before the name, in the heading's own color. */
+.audio-source > .stage-label, .audio-tracks-column > .stage-label, .audio-sensors-label { gap: 6px; }
+/* The Source column (with its Levels) is a little brighter than the panel, so its settings and meters stand out. */
+.midi-panel-devices.audio-source { background: #262a35; }
+/* The Audio sensors heading and its column: the same top border and brighter body as Source and Levels. */
+.stage-label.audio-levels-label.audio-sensors-label { border-top: 1px solid #3a3e4d; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.midi-panel-mappings.audio-sensors-column { background: #262a35; }
+/* The scene's file name as the tabs and the title bar show it: plain, not in capitals. */
+.audio-sensors-scene { margin-left: 5px; overflow: hidden; color: #e4e6ec; font-size: 12px; font-weight: 400; letter-spacing: 0; text-overflow: ellipsis; text-transform: none; }
+.audio-source .audio-meters { padding-top: 10px; }
+/* The Files column: its heading, a toolbar (Add files, Clear), then a body on the FX panel's dark blue, which fills the rest and scrolls. */
+.audio-tracks-column { gap: 0; padding-bottom: 0; overflow: hidden; }
+.audio-tracks-column > .stage-label { margin-bottom: 0; }
+/* The Files heading holds its buttons at the right, in normal type (the heading itself is in small capitals). */
+.stage-label.audio-files-head { padding-right: 6px; }
+.audio-files-head-buttons { display: flex; gap: 4px; margin-left: auto; letter-spacing: 0; text-transform: none; }
+.audio-files-head-buttons .button.small { min-height: 24px; font-weight: 400; }
+.button.small.icon-only { width: 28px; padding: 0; }
+.audio-files-body { flex: 1; min-height: 0; padding: 6px 8px; overflow-y: auto; background: #253049; }
+.audio-files-body .tracks-tracks { max-height: none; margin: 0; }
+.audio-files-body .tracks-empty, .audio-files-body .audio-error { margin: 4px 6px 8px; }
+.audio-source > .stage-label { margin-bottom: 0; }
+.audio-setting { display: flex; flex-direction: column; gap: 5px; padding: 0 16px; color: #c3c7d0; font-size: 12px; }
+.audio-setting output { margin-left: 6px; color: var(--muted); }
+.audio-meters { display: grid; gap: 9px; max-width: 640px; margin: 0; padding: 2px 16px 12px; list-style: none; }
+.audio-meter { display: grid; grid-template-columns: 56px 1fr 58px; align-items: center; gap: 10px; color: #c3c7d0; font-size: 12px; }
+/* A meter from -60 dBFS (left) to 0 dBFS (right). Below the threshold mark the bar is gray: that sound moves nothing. */
+.audio-meter-well { position: relative; height: 10px; overflow: hidden; border-radius: 3px; background: #15171d; box-shadow: inset 0 1px 2px rgba(0,0,0,.4); }
+.audio-meter-well i.under { background: #4a4f5e; }
+.audio-meter-threshold { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--midi-on); }
+.audio-meter-db { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; text-align: right; }
+.audio-meter-well i { display: block; width: 0; height: 100%; background: linear-gradient(90deg, #3a62e0, #4ef08a); }
+.audio-beat-light { width: 14px; height: 14px; border-radius: 50%; background: #3a3e4d; transition: background .15s ease, box-shadow .15s ease; }
+.audio-beat-light.lit { background: var(--midi-on); box-shadow: 0 0 10px var(--midi-on); transition: none; }
 /* The destination dialog: the groups at the left, the picked group's settings at the right. */
 .about-dialog.destination-dialog { width: min(620px, 100%); border-radius: 8px; }
 .destination-dialog .video-dialog-header { padding-left: 24px; }
@@ -545,7 +694,10 @@ button { border: 0; }
 .control-panel:not(.midi-hidden) .panel-row.has-midi { position: relative; }
 .control-panel:not(.midi-hidden) .panel-row.has-midi::before { content: ""; position: absolute; top: 0; bottom: 0; left: 34px; width: 1px; background: var(--border); }
 .control-panel:not(.midi-hidden) .panel-row.has-midi > .panel-row-midi { grid-column: 1; align-self: center; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.control-panel:not(.midi-hidden) .panel-row.has-midi > .panel-row-midi.top { grid-row: 1; margin-bottom: 6px; }
+.control-panel:not(.midi-hidden) .panel-row.has-midi > .panel-row-midi.top { position: relative; grid-row: 1; margin-bottom: 6px; }
+/* The remove button floats at the right of the MIDI button, over the name, so the narrow MIDI column does not grow. */
+.panel-row-midi.top > .midi-remove { position: absolute; z-index: 1; top: 50%; left: 100%; margin-left: 2px; transform: translateY(-50%); background: #2a2e3a; }
+.panel-row-midi.top > .midi-remove:hover { background: #c83232; }
 .control-panel:not(.midi-hidden) .panel-row.has-midi > .panel-row-midi.bottom { grid-row: 2; }
 /*
  * The Show MIDI button before the FX title: a gray icon, orange while on,
@@ -820,6 +972,11 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
   box-shadow: 0 0 4px rgba(255,176,32,.7);
   pointer-events: none;
 }
+/* The live line of a single-value slider shows only while the sound moves the value (see useParamRows). */
+.slider-marker.idle { display: none; }
+.slider-marker.audio, .slider-marker.single { background: var(--audio-on); box-shadow: 0 0 4px rgba(63,208,255,.7); }
+/* On a link's Threshold slider: the band's peak is gray while it is under the link's threshold (it moves nothing). */
+.slider-marker.single.under { background: #8c91a1; box-shadow: none; }
 .panel-select {
   width: 100%;
   padding: 5px 8px;
@@ -834,6 +991,19 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .fx-card .dropdown-button:hover, .fx-card .dropdown-button.open { border-color: #5a6890; }
 /* The themed mode menus: the button looks like the old menu box, the list like the toolbar dropdowns. */
 .dropdown-button { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; }
+/* A list that sizes to its longest option (see Dropdown's noWrap). */
+.dropdown-list.no-wrap { width: max-content; max-width: calc(100vw - 16px); }
+.dropdown-list.no-wrap .toolbar-dropdown-item { white-space: nowrap; }
+/**
+ * A group heading in a dropdown list (the Input list's "PC sound" and
+ * "Microphones"): a dark band with blue capitals, not a choice, and a line
+ * over every group after the first. The choices under a heading are
+ * indented, so they read as its members.
+ */
+.dropdown-list .toolbar-dropdown-heading { margin: 0 -5px 3px; padding: 7px 14px 6px; color: var(--secondary); background: #1b1e25; cursor: default; }
+.dropdown-list .toolbar-dropdown-heading:first-child { margin-top: -5px; border-radius: 8px 8px 0 0; }
+.dropdown-list .toolbar-dropdown-heading:not(:first-child) { margin-top: 5px; border-top: 1px solid #3a3f4d; }
+.dropdown-list .toolbar-dropdown-heading ~ .toolbar-dropdown-item { padding-left: 21px; }
 .dropdown-button:hover, .dropdown-button.open { border-color: #626a7d; }
 .dropdown-button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dropdown-caret { flex: 0 0 auto; color: var(--muted); transition: transform .15s ease; }
@@ -996,6 +1166,10 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .button.secondary { color: #d4d4d8; background: #343844; border: 1px solid #474c5e; }
 .button.secondary:hover { background: #3d4251; }
 .button.large { min-height: 40px; padding: 0 17px; font-size: 13px; }
+/* A toolbar button (the bottom panel's Listen, Learn and Clear all). */
+.button.small { min-height: 26px; padding: 0 10px; font-size: 12px; }
+.button.secondary:disabled { color: rgba(212,212,216,.4); background: #343844; cursor: default; }
+.button.secondary:disabled svg { opacity: .45; }
 
 /* The start screen covers the work area until a scene starts. It matches the Image Sage start screen. */
 .start-screen {
@@ -1016,10 +1190,12 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 /* The app icon stands alone, with no frame around it. */
 .start-icon { position: relative; z-index: 1; width: 128px; height: 128px; display: grid; place-items: center; }
 .start-icon img { width: 128px; height: 128px; object-fit: contain; }
-.start-above { z-index: 1; align-self: end; padding-bottom: 14px; }
+.start-above { z-index: 1; display: flex; flex-direction: column; align-items: center; align-self: end; padding-bottom: 14px; }
 .start-below { z-index: 1; align-self: start; display: flex; flex-direction: column; align-items: center; padding-top: 8px; }
+/* The app name: hero size, in a quiet gray, so the title under it still leads. */
+.start-name { position: relative; z-index: 1; margin-top: 18px; color: #4a4f5e; font-size: 56px; font-weight: 700; line-height: 1; letter-spacing: -.035em; }
 .start-screen h1 { z-index: 1; margin: 0; color: #fafafa; font-size: 28px; line-height: 1.2; letter-spacing: -.025em; }
-.start-copy { z-index: 1; max-width: 460px; margin: 0 0 22px; color: #9ca1af; font-size: 13px; line-height: 1.55; }
+.start-copy { z-index: 1; max-width: 460px; margin: 8px 0 22px; color: #9ca1af; font-size: 13px; line-height: 1.55; }
 .start-actions { z-index: 1; display: flex; gap: 10px; }
 
 /* About dialog, the same as the other Sage apps. */
@@ -1033,6 +1209,50 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
   background: rgba(12,14,19,.76);
   backdrop-filter: blur(4px);
 }
+/**
+ * A panel's help badge: a bright green circle with a black "?", fixed to
+ * the panel's top-right corner and hanging a little over its edges (see
+ * HelpButton). Above the panels, under menus, cards and dialogs.
+ */
+.help-badge { position: fixed; z-index: 90; place-items: center; padding: 0; border: 0; border-radius: 50%; color: #000; background: #39ff14; box-shadow: 0 0 10px rgba(57,255,20,.65), 0 2px 6px rgba(0,0,0,.5); cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; }
+/* A badge in a title or after the last tab, in the line, not at a corner. */
+.help-badge.inline { position: static; display: inline-grid; flex: 0 0 auto; margin-left: 4px; box-shadow: 0 0 6px rgba(57,255,20,.5); }
+.help-badge:hover, .help-badge.active { transform: scale(1.12); box-shadow: 0 0 16px rgba(57,255,20,.9), 0 2px 8px rgba(0,0,0,.55); }
+/* A help card: under its badge, on the page, above the panels. */
+/* As wide as its longest tip, so a tip never wraps; the text wraps to that width. */
+.help-card { position: fixed; z-index: 150; min-width: 300px; max-width: calc(100vw - 16px); box-sizing: border-box; padding: 26px 28px 24px; border: 1px solid #3e4a6c; border-radius: 10px; color: #d4d8e2; background: #253049; box-shadow: 0 14px 40px rgba(0,0,0,.55); font-size: 12px; line-height: 1.45; letter-spacing: 0; text-transform: none; }
+.help-card h3 { margin: 0 0 12px; color: #fff; font-size: 16px; font-weight: 600; }
+/* The gap between the text and the tips is set here only: two margins that meet would merge into the larger one. */
+.help-card p { width: 0; min-width: 100%; margin: 0 0 22px; }
+/* A text that ends in a colon leads into the list under it, so the list sits close. */
+.help-card p.leads { margin-bottom: 4px; }
+/* A card's close button sits in its corner, outside the card's padding. */
+.help-card-close { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; color: #9aa6c8; background: transparent; cursor: pointer; }
+.help-card-close:hover { color: #fff; background: rgba(255,255,255,.12); }
+.help-card h3 { padding-right: 18px; }
+.help-card ul { margin: 0 0 4px; padding: 0; list-style: none; }
+.help-card li { display: flex; gap: 8px; margin-top: 8px; white-space: nowrap; }
+/* A plain bullet, not an icon: the tips show button icons, and an icon bullet would look like one more button. */
+.help-card .help-buttons li::before { content: "\2022"; flex: 0 0 auto; color: #9aa6c8; }
+/* A true tip (a key, a gesture, no button) keeps the lightbulb. */
+.help-card .help-tips li > svg { flex: 0 0 auto; margin-top: 3px; color: #f5c84b; }
+.help-card .help-buttons + .help-tips { margin-top: 18px; }
+/* A button's icon named in a help text, in a small box like the button. */
+.help-icon { display: inline-grid; place-items: center; min-width: 20px; height: 18px; margin: 0 2px; padding: 0 3px; border: 1px solid #47557a; border-radius: 4px; color: #d4d8e2; background: #1b2337; vertical-align: -4px; }
+.help-icon svg { display: block; }
+/* The keyboard shortcuts sheet: the About dialog's frame, wider, with the groups in two columns that scroll. */
+.about-dialog.shortcuts-dialog { width: min(900px, 100%); max-height: calc(100vh - 56px); display: flex; flex-direction: column; }
+.shortcuts-title { display: flex; align-items: center; gap: 10px; margin: 0; padding: 20px 24px 12px; color: #fff; font-size: 18px; }
+.shortcuts-groups { columns: 2 340px; column-gap: 32px; padding: 4px 24px 22px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #474c5e transparent; }
+.shortcuts-group { break-inside: avoid; margin-bottom: 18px; }
+.shortcuts-group h3 { margin: 0 0 6px; color: var(--secondary); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.shortcuts-group dl { margin: 0; }
+.shortcuts-row { display: grid; grid-template-columns: minmax(130px, 45%) 1fr; gap: 12px; padding: 5px 0; border-top: 1px solid #30343f; font-size: 12px; }
+.shortcuts-row dt { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.shortcuts-row dd { margin: 0; color: #c3c7d0; }
+.shortcuts-row kbd { padding: 1px 6px; border: 1px solid #474c5e; border-bottom-width: 2px; border-radius: 4px; color: #e4e6ec; background: #30343f; font-family: inherit; font-size: 11px; white-space: nowrap; }
+.shortcuts-gesture { color: #e4e6ec; font-style: italic; }
+.shortcuts-or { margin: 0 4px 0 0; color: var(--muted); font-size: 11px; }
 .about-dialog {
   width: min(460px, 100%);
   position: relative;
@@ -1497,6 +1717,9 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .open-entry:hover { background: rgba(255,255,255,.04); }
 .open-entry.selected { color: #f4f6f9; background: rgba(169,221,248,.14); }
 .open-list:focus-within .open-entry.selected { background: rgba(169,221,248,.2); }
+/* With several picks, the entry with the focus (the one in the preview) has a thin frame. */
+.open-list:focus-within .open-entry.focused { box-shadow: inset 0 0 0 1px rgba(169,221,248,.5); }
+.open-dialog-hint { margin-right: auto; color: var(--muted); font-size: 12px; }
 .open-entry-name { min-width: 0; display: flex; align-items: center; gap: 9px; }
 .open-entry-name > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .open-entry-icon { width: 17px; height: 17px; flex: 0 0 17px; object-fit: contain; }
@@ -1642,3 +1865,19 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 }
 .open-preview-canvas[hidden] { display: none; }
 
+
+/**
+ * The FX title bar's Show audio and Show MIDI buttons fill the bar's height,
+ * each with a line at its right, so they look like two buttons built into
+ * the bar. The first one starts at the card's left edge.
+ */
+.fx-card .panel-header-bar { align-items: stretch; }
+.fx-card .panel-header-bar > :not(.panel-title-midi) { align-self: center; }
+.fx-card .panel-header-bar > .panel-title-midi { top: 0; width: 32px; height: auto; margin: 0; border: 0; border-right: 1px solid var(--border); border-radius: 0; }
+.fx-card .panel-header-bar > .panel-title-midi:first-child { margin-left: -14px; }
+.fx-card .panel-header-bar > .panel-title-midi:hover { background: rgba(255,255,255,.05); }
+.fx-card .panel-header-bar > .panel-title-midi + .side-panel-title { margin-left: 10px; }
+
+/* The Driver group's video row: the video's name, cut short when long, then the Choose button. */
+.driver-video-row { gap: 8px; }
+.driver-video-name { flex: 1; min-width: 0; overflow: hidden; color: #c3c7d0; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }

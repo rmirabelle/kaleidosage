@@ -26,10 +26,12 @@ export function rangePosition(value: number, min: number, max: number) {
  * One handle in a recessed well. A click anywhere on the well moves the
  * handle there. The filled part runs from the start to the handle.
  */
-export function Slider({ min, max, step, value, onChange, label, detent }: Bounds & {
+export function Slider({ min, max, step, value, onChange, label, detent, markerRef }: Bounds & {
   value: number;
   onChange: (value: number) => void;
   label: string;
+  /** A thin line at the live value, which the caller moves each frame (and hides while the value is at the handle). */
+  markerRef?: Ref<HTMLDivElement>;
   /** The value with no effect: a tick mark shows it, and the handle snaps to it. */
   detent?: number;
 }) {
@@ -39,6 +41,7 @@ export function Slider({ min, max, step, value, onChange, label, detent }: Bound
       <div className="slider-well">
         <div className="slider-fill" style={{ left: 0, width: trackPosition(value, min, max) }} />
       </div>
+      {markerRef && <div className="slider-marker single idle" ref={markerRef} />}
       <input
         type="range"
         aria-label={label}
@@ -165,7 +168,7 @@ export function RangeSlider({ min, max, step, low, high, onChange, onHold, label
         className={`range-grab ${movingRange ? "moving" : ""}`}
         style={{ left: rangePosition(left, min, max), width: `calc(${rangePosition(right, min, max)} - ${rangePosition(left, min, max)})` }}
         onPointerDown={startRangeMove}
-        title="Drag to move the whole range. Ctrl + drag a handle to mirror it."
+        data-tip="Drag to move the whole range. Ctrl + drag a handle to mirror it."
       >
         <div className="slider-fill" />
       </div>
@@ -179,7 +182,7 @@ export function RangeSlider({ min, max, step, low, high, onChange, onHold, label
         step={step}
         value={low}
         style={{ zIndex: lowOnTop ? 2 : 1 }}
-        title="Ctrl + drag: the other handle mirrors this one"
+        data-tip="Ctrl + drag: the other handle mirrors this one"
         onPointerDown={(event) => startDrag("low", low, event.ctrlKey)}
         onChange={(event) => changeLow(Number(event.target.value))}
       />
@@ -192,7 +195,7 @@ export function RangeSlider({ min, max, step, low, high, onChange, onHold, label
         step={step}
         value={high}
         style={{ zIndex: lowOnTop ? 1 : 2 }}
-        title="Ctrl + drag: the other handle mirrors this one"
+        data-tip="Ctrl + drag: the other handle mirrors this one"
         onPointerDown={(event) => startDrag("high", high, event.ctrlKey)}
         onChange={(event) => changeHigh(Number(event.target.value))}
       />

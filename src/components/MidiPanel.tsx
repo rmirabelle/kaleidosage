@@ -8,6 +8,8 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { DestinationDialog, destinationName } from "./DestinationDialog";
 import { MidiIcon } from "./MidiIcon";
 import { useMidi } from "./useMidi";
+import { EmptyState } from "./EmptyState";
+import { help } from "../help/topics";
 
 const LABELS = createParams();
 
@@ -58,7 +60,7 @@ function ActivityIcon({ id }: { id: string }) {
  * end removes the row. Clear all removes every
  * mapping. A new mapping starts at a setting's own MIDI icon.
  */
-export function MidiPanel({ engine, open, onClose }: { engine: Engine; open: boolean; onClose: () => void }) {
+export function MidiPanel({ engine, open }: { engine: Engine; open: boolean }) {
   const { available, devices, armed } = useMidi();
   const mappings = midi.allMappings();
   /** The controllers, connected or with mappings: the ones with mappings first, then the connected ones, each with its mapping count. */
@@ -130,40 +132,36 @@ export function MidiPanel({ engine, open, onClose }: { engine: Engine; open: boo
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [learning]);
   return (
-    <section className="midi-panel-body" aria-label="MIDI mappings">
-      <header className="midi-panel-header">
-        <h2 className="side-panel-title">MIDI</h2>
+    <section className="bottom-panel-page" aria-label="MIDI mappings" {...help("midi")}>
+      <div className="midi-panel-header" role="toolbar" aria-label="MIDI">
         <button
-          className={`panel-button text-only midi-learn-toggle ${learning ? "on" : ""}`}
+          className={`button secondary small midi-learn-toggle ${learning ? "on" : ""}`}
           aria-pressed={learning}
-          title={learning ? "Learn is on: move a knob or fader that has no mapping to map it. Click or Esc to stop." : "Learn: move a knob or fader that has no mapping, then pick its setting"}
+          data-tip={learning ? "Learn is on: move a knob or fader that has no mapping to map it. Click or Esc to stop." : "Learn: move a knob or fader that has no mapping, then pick its setting"}
           onClick={() => setLearning(!learning)}
         >
           <MidiIcon size={12} /> {learning ? "Learning" : "Learn"}
         </button>
         <span className="midi-panel-count">{mappings.length === 1 ? "1 mapping" : `${mappings.length} mappings`}</span>
-        <button className="panel-button text-only" disabled={mappings.length === 0} onClick={() => setClearAsked(true)} title="Remove every MIDI mapping">
+        <button className="button secondary small" disabled={mappings.length === 0} onClick={() => setClearAsked(true)} data-tip="Remove every MIDI mapping">
           <Trash size={13} /> Clear all
         </button>
         {armed.length > 0 && (
           <span className="midi-panel-waiting">Move a knob or fader for {armed.map((key) => LABELS[key].label).join(", ")}. Esc stops.</span>
         )}
-        <button className="side-panel-action" onClick={onClose} title="Close the MIDI panel (M)" aria-label="Close the MIDI panel">
-          <X size={13} weight="bold" />
-        </button>
-      </header>
+      </div>
       <div className="midi-panel-columns">
         <div className="midi-panel-devices">
           <div className="stage-label">Connected devices</div>
           {!available ? (
             <p className="midi-panel-empty">MIDI is not available.</p>
           ) : controllers.length === 0 ? (
-            <p className="midi-panel-empty">No MIDI controller is connected.</p>
+            <EmptyState text="Connect a MIDI controller. It shows here at once." />
           ) : (
             <ul className="midi-device-list">
               {controllers.map(({ device, connected, count }) => (
-                <li key={device} className={`midi-device-row ${count === 0 ? "unused" : ""}`} title={count === 0 ? `${device}: no mappings` : device}>
-                  <span className={`midi-device-state ${connected ? "connected" : ""}`} title={connected ? "Connected" : "Not connected"} />
+                <li key={device} className={`midi-device-row ${count === 0 ? "unused" : ""}`} data-tip={count === 0 ? `${device}: no mappings` : device}>
+                  <span className={`midi-device-state ${connected ? "connected" : ""}`} data-tip={connected ? "Connected" : "Not connected"} />
                   <span className="midi-device-name">{deviceName(device)}</span>
                   {count > 0 && <span className="midi-device-count">{count === 1 ? "1 mapping" : `${count} mappings`}</span>}
                 </li>
@@ -173,7 +171,11 @@ export function MidiPanel({ engine, open, onClose }: { engine: Engine; open: boo
         </div>
         <div className="midi-panel-mappings">
           {mappings.length === 0 && !picking ? (
-            <p className="midi-panel-empty">No MIDI mappings yet. Click Learn and move a knob or fader, or click the MIDI icon after a setting's value.</p>
+            <EmptyState text="Click Learn, then move a knob or fader and pick its setting. Or click the MIDI icon beside a setting.">
+              <button className="button secondary small" onClick={() => setLearning(true)}>
+                <MidiIcon size={12} /> Learn
+              </button>
+            </EmptyState>
           ) : (
             <ul className="midi-map-list">
               {/* A control the user just moved over the panel, waiting for its setting. */}
@@ -183,7 +185,7 @@ export function MidiPanel({ engine, open, onClose }: { engine: Engine; open: boo
                   <span className="midi-map-control">{deviceName(picking.device)} {controlName(picking.device, picking.control)}</span>
                   <ArrowRight size={13} className="midi-map-arrow" aria-hidden="true" />
                   <span className="midi-map-choose">Pick a setting</span>
-                  <button className="midi-map-clear" title="Do not map this control" aria-label="Do not map this control" onClick={() => setPicking(null)}>
+                  <button className="midi-map-clear" data-tip="Do not map this control" aria-label="Do not map this control" onClick={() => setPicking(null)}>
                     <X size={12} weight="bold" />
                   </button>
                 </li>
@@ -193,19 +195,19 @@ export function MidiPanel({ engine, open, onClose }: { engine: Engine; open: boo
                 const kind = midi.controlKind(device, control);
                 return (
                   <Fragment key={`${device}|${control}|${key}`}>
-                    {device !== mappings[index - 1]?.device && <li className="midi-map-heading" title={device}>Device: <strong>{deviceName(device)}</strong></li>}
+                    {device !== mappings[index - 1]?.device && <li className="midi-map-heading" data-tip={device}>Device: <strong>{deviceName(device)}</strong></li>}
                     <li className="midi-map-row">
                       <ActivityIcon id={`${device}|${control}`} />
                       <span className="midi-map-control">
                         {controlName(device, control)}
-                        {kind.relative && <em title="This knob sends relative steps, so it turns with no end">relative</em>}
-                        {kind.fine && <em title="This control sends 14-bit values, with 16384 places">14-bit</em>}
+                        {kind.relative && <em data-tip="This knob sends relative steps, so it turns with no end">relative</em>}
+                        {kind.fine && <em data-tip="This control sends 14-bit values, with 16384 places">14-bit</em>}
                       </span>
                       {/* One way only: the control moves the setting; the app sends nothing back to the controller. */}
                       <ArrowRight size={13} className="midi-map-arrow" aria-hidden="true" />
                       <button
                         className="panel-select dropdown-button"
-                        title="Pick another setting for this control"
+                        data-tip="Pick another setting for this control"
                         aria-label={`Setting that ${controlName(device, control)} moves: ${destinationName(key)}`}
                         onClick={() => setPicking({ device, control, key })}
                       >
@@ -214,7 +216,7 @@ export function MidiPanel({ engine, open, onClose }: { engine: Engine; open: boo
                       </button>
                       <button
                         className="midi-map-clear"
-                        title="Remove this mapping"
+                        data-tip="Remove this mapping"
                         aria-label={`Remove the mapping from ${controlName(device, control)} to ${LABELS[key].label}`}
                         onClick={() => midi.unmapOne(device, control, key)}
                       >

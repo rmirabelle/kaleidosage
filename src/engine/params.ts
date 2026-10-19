@@ -1,4 +1,5 @@
-import type { BlendMode, BlurMask, CameraRepeat, Tiling, FoldMode, FxStep, LayerBlend, MapMode, ParticleBlend, PictureStep, ReactionLook, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
+import type { BlendMode, BlurMask, CameraRepeat, DriverMode, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, ParticleBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
+import type { AudioLink } from "./audio";
 
 export const PARAM_KEYS = [
   "cycle",
@@ -6,6 +7,7 @@ export const PARAM_KEYS = [
   "warpOpacity", "mapOpacity", "foldOpacity",
   "warpAmount", "warpScale", "warpCellSize", "warpCellAngle", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle",
   "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl",
+  "drosteSize", "drosteSpirals",
   "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness",
   "segments", "tileSize", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl",
   "blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel",
@@ -13,9 +15,9 @@ export const PARAM_KEYS = [
   "smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade",
   "contourHue", "contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady",
   "reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine",
+  "driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast",
   "cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth",
   "sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness",
-  "reactionAmount", "reactionFeed", "reactionKill", "reactionFollow", "reactionSpeed", "reactionSize",
   "particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag",
   "raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY",
   "bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize",
@@ -249,7 +251,7 @@ export type Params = Record<ParamKey, Param>;
 export type ContourTone = "hue" | "black" | "white";
 export const CONTOUR_TONES: readonly ContourTone[] = ["hue", "black", "white"];
 
-export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "camera" | "sort" | "reaction" | "particles" | "rays" | "bloom" | "finish";
+export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "sort" | "particles" | "rays" | "bloom" | "finish";
 
 export interface PlayState {
   /** Which groups are on. A group that is off has no effect, but keeps its settings. */
@@ -284,6 +286,13 @@ export interface PlayState {
   /** How each shape step's result combines with the picture without it. Randomize does not change it. */
   layerBlend: Record<ShapeStep, LayerBlend>;
   /**
+   * The settings that move with the sound, and how (see docs/AUDIO.md). Part
+   * of the scene: each scene reacts in its own way to the same sound.
+   */
+  audioLinks: Partial<Record<ParamKey, AudioLink>>;
+  /** How long a linked setting takes to fall back after a hit, in seconds: the scene's feel (see followPush). Each link can be faster or slower (AudioLink.release). */
+  audioRelease: number;
+  /**
    * The blur mask, which sets where the picture is blurred: 0 a circle with
    * a sharp center, 1 a circle with a blurred center, 2 a straight gradient,
    * 3 bright areas, 4 dark areas, 5 noise blotches.
@@ -306,10 +315,13 @@ export interface PlayState {
   cameraRepeat: CameraRepeat;
   /** The pixel sort's order along each run: dark to bright, or bright to dark. */
   sortOrder: SortOrder;
-  /** How the reaction-diffusion pattern shows: as a mask over the picture, or bending it. */
-  reactionLook: ReactionLook;
   /** How the particles combine with the picture under them: they add light (glow), or cover it. */
   particleBlend: ParticleBlend;
+  /** The Driver effect's driver (caustics, smoke, ink, fire, ripples), and what it does to the picture. */
+  driverSource: DriverSource;
+  driverMode: DriverMode;
+  /** How far the driver's motion has run; it grows with time × driver speed. */
+  driverTime: number;
   /**
    * A source video crossfades its end into its start (see video.ts). Off,
    * the video starts again at the start of each loop, with a jump.
@@ -397,6 +409,18 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * complexMap), so it can drift like the other ranges.
    */
   mapArms: { label: "Twist", min: -8, max: 8, step: 0.05, value: 2, drift: "wave", low: 1, high: 3, on: false },
+  /**
+   * Droste spiral: the size of the picture's copy inside itself, as a share
+   * of the picture (0.4: the copy is 40% as wide and high). Any size meets
+   * itself, so it can drift.
+   */
+  drosteSize: { label: "Copy size", min: 0.1, max: 0.8, step: 0.01, value: 0.4, drift: "wave", low: 0.3, high: 0.5, on: false },
+  /**
+   * Droste spiral: how many spiral arms one turn around the center has; 0
+   * gives plain frames in frames. Only a whole number meets itself with no
+   * seam, so it has no range. (A negative count only mirrors the spiral.)
+   */
+  drosteSpirals: { label: "Spirals", min: 0, max: 4, step: 1, value: 1 },
   mapTwist: { label: "Twist", min: -80, max: 80, step: 1, value: 0, unit: "°", drift: "wave", low: 10, high: 50, on: false },
   /**
    * Turns the whole map on the screen (Möbius has its own). With a mirrored
@@ -405,7 +429,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    */
   mapAngle: { label: "Rotation", min: 0, max: 360, step: 1, value: 270, unit: "°", drift: "spin", low: 153, high: 207, on: false, ease: "organic" },
   /** Tunnel, Log spiral and Seamless spiral: forward speed into the far end (backward below 0). */
-  mapSpeed: { label: "Speed", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: 0.1, high: 0.5, on: false },
+  mapSpeed: { label: "Speed", min: -2, max: 2, step: 0.01, value: 0.15, drift: "wave", low: 0.1, high: 0.5, on: false },
   /** Tunnel only: how far the wall turns per tube length, so the tube becomes a spiral. Log spiral keeps its own wider twist. */
   tunnelTwist: { label: "Twist", min: -90, max: 90, step: 0.1, value: 0, unit: "°", drift: "wave", low: -5, high: 5, on: false },
   /** Moves the map's center on the screen, for every map but Möbius (which has its own pan). */
@@ -431,17 +455,17 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * center, it sets the size of the picture around the pole: near 0 the
    * picture blows out, and at 1 it shrinks to one color and then flips.
    */
-  mobiusPoint: { label: "Point", min: 0.66, max: 0.99, step: 0.01, value: 0.86, drift: "wave", low: 0.66, high: 0.99, on: true },
+  mobiusPoint: { label: "Point", min: 0.66, max: 0.99, step: 0.01, value: 0.98, drift: "wave", low: 0.94, high: 0.98, on: true },
   /** Rotation turns the whole Möbius picture on the screen; Roll turns the image inside the map's shapes. */
-  mobiusTurn: { label: "Rotation", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 165, high: 211, on: false },
-  mobiusRotation: { label: "Roll", min: 0, max: 360, step: 1, value: 199, unit: "°", drift: "spin", low: 0, high: 66, on: true, ease: "organic" },
+  mobiusTurn: { label: "Rotation", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 165, on: true, ease: "organic" },
+  mobiusRotation: { label: "Roll", min: 0, max: 360, step: 1, value: 66, unit: "°", drift: "spin", low: 0, high: 66, on: true, ease: "organic" },
   mobiusTwist: { label: "Twist", min: 0, max: 1, step: 0.001, value: 0, drift: "wave", low: 0, high: 0.207, on: false },
   mobiusZoom: { label: "Zoom", min: 1, max: 5, step: 0.01, value: 1, drift: "wave", low: 1, high: 5, on: false },
   mobiusPanX: { label: "Pan X", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -0.35, high: 0.35, on: false },
   mobiusPanY: { label: "Pan Y", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -0.35, high: 0.35, on: false },
   /** Möbius has its own Darkness and Softness (see mapFog), so it and Tunnel can have different defaults. */
-  mobiusFog: { label: "Darkness", min: 0, max: 1, step: 0.01, value: 0.17, drift: "wave", low: 0.33, high: 0.15, on: true },
-  mobiusFogSoftness: { label: "Softness", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.3, high: 0.7, on: false },
+  mobiusFog: { label: "Darkness", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.14, on: false },
+  mobiusFogSoftness: { label: "Softness", min: 0, max: 1, step: 0.01, value: 0.1, drift: "wave", low: 0, high: 1, on: false },
   /** The handles are whole numbers, but a drifting count moves smoothly between them (see fold() in shaders.ts). */
   segments: { label: "Segments", min: 0, max: 24, step: 1, value: 0, drift: "wave", low: 3, high: 8, on: false },
   /** Tile modes only: screen heights between neighbor cell centers. */
@@ -558,22 +582,6 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   sortLength: { label: "Length", min: 0.02, max: 1, step: 0.01, value: 1, drift: "wave", low: 0.1, high: 0.5, on: false },
   sortThickness: { label: "Thickness", min: 1, max: 64, step: 0.1, scale: "log", value: 1, unit: "px", drift: "wave", low: 2, high: 16, on: false },
   /**
-   * Reaction-diffusion (see REACTION_STEP_SHADER): two chemicals on a grid
-   * that grow spots, stripes and mazes. Feed and Kill pick the kind of
-   * pattern; Follow lets the picture's brightness raise the feed (below 0,
-   * lower it), so bright and dark areas grow different patterns. Speed is
-   * the steps of growth per 1/60 s; Size is the grid cell, in pixels at
-   * 1080p (a larger cell makes a larger pattern; a new size starts the
-   * pattern again). Opacity is how strongly the pattern masks or bends the
-   * picture.
-   */
-  reactionAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
-  reactionFeed: { label: "Feed", min: 0.01, max: 0.1, step: 0.0005, value: 0.0545, drift: "wave", low: 0.035, high: 0.06, on: false },
-  reactionKill: { label: "Kill", min: 0.045, max: 0.07, step: 0.0005, value: 0.062, drift: "wave", low: 0.059, high: 0.065, on: false },
-  reactionFollow: { label: "Follow", min: -1, max: 1, step: 0.01, value: 0.5, drift: "wave", low: -0.5, high: 1, on: false },
-  reactionSpeed: { label: "Speed", min: 0, max: 30, step: 0.5, value: 10, drift: "wave", low: 4, high: 16, on: false },
-  reactionSize: { label: "Size", min: 1, max: 8, step: 0.5, value: 2, unit: "px" },
-  /**
    * Particles (see PARTICLE_STEP_SHADER): their opacity, how many there are,
    * and the brightness a spot of the picture needs to emit one (0 = any
    * spot). Each particle takes the color of the spot it came from. Size is
@@ -596,6 +604,12 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   particleAngle: { label: "Direction", min: 0, max: 360, step: 1, value: 270, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   particleTurbulence: { label: "Turbulence", min: 0, max: 2, step: 0.01, value: 0.3, drift: "wave", low: 0.1, high: 0.8, on: false },
   particleDrag: { label: "Drag", min: 0, max: 5, step: 0.01, value: 1, drift: "wave", low: 0.5, high: 2, on: false },
+  /** Driver (see DRIVER_SHADER): opacity, how strongly the driver bends, reveals or lights, its size, its speed, and its contrast. */
+  driverAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
+  driverStrength: { label: "Strength", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.3, high: 0.8, on: false },
+  driverScale: { label: "Size", min: 0.25, max: 4, step: 0.01, scale: "log", value: 1, drift: "wave", low: 0.7, high: 1.5, on: false },
+  driverSpeed: { label: "Speed", min: 0, max: 3, step: 0.01, value: 1, drift: "wave", low: 0.5, high: 1.5, on: false },
+  driverContrast: { label: "Contrast", min: 0.5, max: 3, step: 0.01, value: 1, drift: "wave", low: 0.8, high: 1.6, on: false },
   /**
    * Light rays (see RAYS_SHADER): the bright parts of the picture shine
    * out in rays, away from a center. Strength is how much light the rays
@@ -644,12 +658,12 @@ export const NO_EFFECT: Partial<Record<ParamKey, number>> = {
   blurMaskX: 0, blurMaskY: 0,
   trailTurn: 0, trailHue: 0, trailFlow: 0,
   particleGravity: 0,
-  reactionFollow: 0,
   raysX: 0, raysY: 0,
   exposure: 0
 };
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
+
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 export function createParams(): Params {
@@ -658,9 +672,9 @@ export function createParams(): Params {
   return params;
 }
 
-/** The start-up orders: the fold, then the map bends the folded picture, then the warp; and blur, trails, time smear, contours, relief, camera, pixel sort, reaction-diffusion, particles, light rays, bloom, final effects. */
+/** The start-up orders: the fold, then the map bends the folded picture, then the warp; and blur, trails, time smear, contours, relief, driver, camera, pixel sort, particles, light rays, bloom, final effects. */
 export const defaultShapeOrder = (): ShapeStep[] => ["kaleidoscope", "map", "warp"];
-export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "camera", "sort", "reaction", "particles", "rays", "bloom", "finish"];
+export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "driver", "camera", "sort", "particles", "rays", "bloom", "finish"];
 export const defaultFxOrder = (): FxStep[] => [...defaultShapeOrder(), ...defaultPictureOrder()];
 
 /**
@@ -700,8 +714,8 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
     case "smear": return used("smearAmount");
     case "contours": return used("contourOpacity");
     case "relief": return used("reliefAmount");
+    case "driver": return used("driverAmount");
     case "sort": return used("sortAmount");
-    case "reaction": return used("reactionAmount");
     case "particles": return used("particleAmount");
     case "rays": return used("raysAmount");
     case "bloom": return used("bloomAmount");
@@ -713,9 +727,9 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
 export function createPlayState(): PlayState {
   return {
     /* No effect is in the list at start-up, so every effect group is off. */
-    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, camera: false, sort: false, reaction: false, particles: false, rays: false, bloom: false, finish: false },
-    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, camera: false, sort: false, reaction: false, particles: false, rays: false, bloom: false, finish: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 1, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, sortOrder: 0, reactionLook: 0, particleBlend: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, sort: false, particles: false, rays: false, bloom: false, finish: false },
+    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, sort: false, particles: false, rays: false, bloom: false, finish: false },
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, audioLinks: {}, audioRelease: 0.25, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, sortOrder: 0, particleBlend: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -942,8 +956,11 @@ export function resetEffects(params: Params, state: PlayState) {
     state.cameraRepeat = fresh.cameraRepeat;
   }
   if (!state.locks.sort) state.sortOrder = fresh.sortOrder;
-  if (!state.locks.reaction) state.reactionLook = fresh.reactionLook;
   if (!state.locks.particles) state.particleBlend = fresh.particleBlend;
+  if (!state.locks.driver) {
+    state.driverSource = fresh.driverSource;
+    state.driverMode = fresh.driverMode;
+  }
   if (!state.locks.finish) state.overlayColor = fresh.overlayColor;
   for (const step of ["warp", "map", "kaleidoscope"] as const) if (!state.locks[step]) state.layerBlend[step] = 0;
   /* The unlocked effects leave the list (their groups are off now); the locked ones stay, in their order. */
@@ -957,7 +974,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   /** The images are the user's choice; Randomize does not change the blend. */
   source: ["imageBlend"],
   warp: ["warpOpacity", "warpAmount", "warpScale", "warpCellSize", "warpCellAngle", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle"],
-  map: ["mapOpacity", "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl",
+  map: ["mapOpacity", "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl", "drosteSize", "drosteSpirals",
     "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness"],
   kaleidoscope: ["foldOpacity", "segments", "tileSize", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl"],
   blur: ["blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel"],
@@ -965,9 +982,9 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   smear: ["smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade"],
   contours: ["contourHue", "contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady"],
   relief: ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"],
+  driver: ["driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast"],
   camera: ["cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth"],
   sort: ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"],
-  reaction: ["reactionAmount", "reactionFeed", "reactionKill", "reactionFollow", "reactionSpeed", "reactionSize"],
   particles: ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag"],
   rays: ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"],
   bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
@@ -985,8 +1002,8 @@ const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   contours: ["contourTone", "contourBlend"],
   camera: ["skyColor", "cameraBlend", "cameraRepeat"],
   sort: ["sortOrder"],
-  reaction: ["reactionLook"],
   particles: ["particleBlend"],
+  driver: ["driverSource", "driverMode"],
   finish: ["overlayColor"]
 };
 
@@ -1006,14 +1023,14 @@ export function randomizeGroup(params: Params, state: PlayState, group: GroupKey
 
 /** The chance that Randomize puts each effect in the list. Blur looks the least good, so Randomize leaves it out. */
 const EFFECT_CHANCE: Record<FxStep, number> = {
-  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.25, relief: 0.4, camera: 0.3, sort: 0.2, reaction: 0.2, particles: 0.25, rays: 0.25, bloom: 0.3, finish: 0.4
+  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.25, relief: 0.4, driver: 0.3, camera: 0.3, sort: 0.2, particles: 0.25, rays: 0.25, bloom: 0.3, finish: 0.4
 };
 
 function randomizeAll(params: Params, state?: PlayState) {
   if (state) {
     state.overlayColor = hslToHex(rand(0, 360), rand(0.5, 1), rand(0.35, 0.6));
     state.skyColor = hslToHex(Math.random() < 0.6 ? rand(190, 250) : rand(0, 360), rand(0.3, 0.8), rand(0.45, 0.8));
-    state.mapMode = (1 + Math.floor(Math.random() * 7)) as MapMode;
+    state.mapMode = (1 + Math.floor(Math.random() * 8)) as MapMode;
     /* Noise is the most common warp; the other kinds share the rest. */
     state.warpType = (Math.random() < 0.4 ? 0 : 1 + Math.floor(Math.random() * 5)) as WarpType;
     /**
@@ -1085,6 +1102,8 @@ function randomizeAll(params: Params, state?: PlayState) {
   setAngle("juliaShape", 0.3);
   set("juliaEdge", rand(0.8, 1.2), rand(0.03, 0.1));
   set("mapSteps", Math.round(rand(2, 8)));
+  set("drosteSize", rand(0.25, 0.6), rand(0.02, 0.1));
+  set("drosteSpirals", [1, 1, 1, 2][Math.floor(Math.random() * 4)]);
   set("mapTwist", rand(-60, 60), rand(5, 25));
   set("mapSpeed", (Math.random() < 0.8 ? 1 : -1) * rand(0.1, 0.6), rand(0, 0.2));
   set("mapFog", rand(0.3, 0.8), rand(0, 0.15));
@@ -1144,8 +1163,9 @@ function randomizeAll(params: Params, state?: PlayState) {
     state.cameraBlend = (Math.random() < 0.6 ? 0 : Math.floor(Math.random() * 8)) as LayerBlend;
     state.cameraRepeat = (Math.random() < 0.7 ? 0 : Math.random() < 0.7 ? 1 : 2) as CameraRepeat;
     state.particleBlend = (Math.random() < 0.7 ? 0 : 1) as ParticleBlend;
+    state.driverSource = Math.floor(Math.random() * 5) as DriverSource;
+    state.driverMode = Math.floor(Math.random() * 3) as DriverMode;
     state.sortOrder = (Math.random() < 0.5 ? 0 : 1) as SortOrder;
-    state.reactionLook = (Math.random() < 0.6 ? 0 : 1) as ReactionLook;
   }
   set("reliefAmount", rand(0.3, 1), rand(0.1, 0.3));
   set("reliefDepth", rand(3, 12), rand(0, 3));
@@ -1172,12 +1192,6 @@ function randomizeAll(params: Params, state?: PlayState) {
   setAngle("sortAngle", 0.15);
   set("sortLength", Math.random() < 0.5 ? 1 : rand(0.1, 0.6), rand(0.05, 0.2));
   set("sortThickness", Math.random() < 0.5 ? 1 : rand(2, 24), rand(0.5, 4));
-  set("reactionAmount", rand(0.6, 1), rand(0, 0.2));
-  set("reactionFeed", rand(0.03, 0.06), rand(0.001, 0.005));
-  set("reactionKill", rand(0.058, 0.065), rand(0.0005, 0.002));
-  set("reactionFollow", rand(-0.5, 1), rand(0.1, 0.3));
-  set("reactionSpeed", rand(5, 20), rand(1, 4));
-  set("reactionSize", [1.5, 2, 2, 3, 4][Math.floor(Math.random() * 5)]);
   set("particleAmount", rand(0.6, 1), rand(0, 0.2));
   set("particleCount", Math.round(rand(1500, 15000)), rand(200, 2000));
   set("particleLevel", rand(0.3, 0.8), rand(0.05, 0.15));
@@ -1188,6 +1202,11 @@ function randomizeAll(params: Params, state?: PlayState) {
   setAngle("particleAngle", 0.2);
   set("particleTurbulence", rand(0, 1), rand(0.05, 0.3));
   set("particleDrag", rand(0.3, 2.5), rand(0, 0.5));
+  set("driverAmount", rand(0.6, 1), rand(0, 0.2));
+  set("driverStrength", rand(0.3, 0.9), rand(0.05, 0.2));
+  set("driverScale", rand(0.6, 2), rand(0.1, 0.4));
+  set("driverSpeed", rand(0.3, 1.5), rand(0.1, 0.4));
+  set("driverContrast", rand(0.8, 1.8), rand(0.1, 0.3));
   set("raysAmount", rand(0.8, 2.5), rand(0.2, 0.5));
   set("raysThreshold", rand(0.4, 0.8), rand(0, 0.1));
   set("raysLength", rand(0.2, 0.8), rand(0.05, 0.2));

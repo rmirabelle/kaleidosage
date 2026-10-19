@@ -2,6 +2,7 @@ import { FilmStrip, X } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import type { Engine } from "../engine/engine";
 import { TITLE_HOLD, formatLength, loopSeconds, seamlessChanges, type VideoFps, type VideoOptions, type VideoQuality, type VideoStyle } from "../lib/videoExport";
+import { help } from "../help/topics";
 
 /** The choices made last time, so the dialog opens with them. */
 const STORE_KEY = "kaleidosage.video-export";
@@ -65,14 +66,14 @@ export function ExportVideoDialog({ engine, size, onCancel, onExport }: Props) {
 
   return (
     <div className="about-dialog-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
-      <div className="about-dialog video-dialog" role="dialog" aria-modal="true" aria-labelledby="video-dialog-title">
+      <div className="about-dialog video-dialog" role="dialog" aria-modal="true" aria-labelledby="video-dialog-title" {...help("export")}>
         <header className="video-dialog-header">
           <div className="open-dialog-title-icon"><FilmStrip size={22} weight="duotone" /></div>
           <div>
             <h2 id="video-dialog-title">Export Video</h2>
             <p>MP4, {size.width} × {size.height}. The video starts where Stop puts the scene.</p>
           </div>
-          <button className="about-dialog-close" onClick={onCancel} aria-label="Close" title="Close"><X size={18} /></button>
+          <button className="about-dialog-close" onClick={onCancel} aria-label="Close" data-tip="Close"><X size={18} /></button>
         </header>
         <div className="video-dialog-body">
           <div className="video-row">

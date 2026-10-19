@@ -19,7 +19,7 @@ fn save(path: &Path, contents: &[u8], videos: &Videos) -> Result<(), String> {
     let mut scene: serde_json::Value =
         serde_json::from_slice(contents).map_err(|e| e.to_string())?;
     let mut media = Vec::new();
-    for slot in ["image", "image2"] {
+    for slot in ["image", "image2", "driverVideo"] {
         if let Some(id) = scene[slot]["video"].as_str() {
             let source = videos.get(id)?;
             let name = format!("media/{}.video", media.len());
@@ -58,11 +58,12 @@ fn save(path: &Path, contents: &[u8], videos: &Videos) -> Result<(), String> {
     temp.as_file().sync_all().map_err(|e| e.to_string())?;
     // Replace only after the complete scene is written. Existing players retain
     // handles to their original file, including when Save replaces that scene.
-    persist_scene(temp, path)?;
+    persist_file(temp, path)?;
     Ok(())
 }
 
-fn persist_scene(temp: tempfile::NamedTempFile, path: &Path) -> Result<(), String> {
+/** Puts a complete temp file in the place of "path": for scenes, and for playlists (see playlist_archive). */
+pub(crate) fn persist_file(temp: tempfile::NamedTempFile, path: &Path) -> Result<(), String> {
     // Close the writable handle before Windows opens the replacement file.
     let temp = temp.into_temp_path();
     #[cfg(windows)]
@@ -118,7 +119,7 @@ fn read(path: &Path, videos: &Videos) -> Result<Vec<u8>, String> {
         serde_json::from_reader(entry).map_err(|e| e.to_string())?
     };
     let mut media = Vec::new();
-    for slot in ["image", "image2"] {
+    for slot in ["image", "image2", "driverVideo"] {
         if let Some(name) = scene[slot]["video"].as_str() {
             if !scene[slot]["type"]
                 .as_str()
@@ -229,6 +230,34 @@ mod tests {
         assert_eq!(bytes, b"test-video-bytes");
         assert!(read(&moved, &videos).is_ok());
     }
+    #[test]
+    fn the_driver_video_is_embedded_and_read_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let original = dir.path().join("driver.mp4");
+        std::fs::write(&original, b"driver-bytes").unwrap();
+        let videos = Videos::default();
+        let info = videos.add(VideoSource::open(&original).unwrap()).unwrap();
+        let contents = serde_json::to_vec(&serde_json::json!({
+            "app": "KaleidoSage", "version": 2,
+            "image": {"type": "image/png", "data": "AA=="},
+            "driverVideo": {"type": "video/mp4", "video": info.id, "name": "driver.mp4"}
+        }))
+        .unwrap();
+        let path = dir.path().join("scene.ksage");
+        save(&path, &contents, &videos).unwrap();
+        std::fs::remove_file(original).unwrap();
+        let videos = Videos::default();
+        let loaded = read(&path, &videos).unwrap();
+        let scene: serde_json::Value = serde_json::from_slice(&loaded).unwrap();
+        assert_eq!(scene["driverVideo"]["name"], "driver.mp4");
+        let source = videos
+            .get(scene["driverVideo"]["video"].as_str().unwrap())
+            .unwrap();
+        let mut bytes = Vec::new();
+        source.reader().read_to_end(&mut bytes).unwrap();
+        assert_eq!(bytes, b"driver-bytes");
+    }
+
     #[test]
     fn failed_media_copy_preserves_the_existing_scene() {
         let dir = tempfile::tempdir().unwrap();

@@ -8,14 +8,14 @@ use std::{
 };
 use tauri::Manager;
 
-use crate::files::{is_image_path, is_scene_path, is_video_path};
+use crate::files::{is_audio_path, is_image_path, is_playlist_path, is_scene_path, is_video_path};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowseEntry {
     name: String,
     path: String,
-    /// One of "folder", "scene" (a .ksage file) or "image".
+    /// One of "folder", "scene" (a .ksage file), "image" (an image or a video), "audio" or "playlist".
     kind: &'static str,
     size: u64,
     modified_ms: Option<u64>,
@@ -48,6 +48,10 @@ fn file_kind(path: &Path) -> Option<&'static str> {
     } else if is_image_path(path) || is_video_path(path) {
         // Videos are listed as images: the Open Image dialog opens both.
         Some("image")
+    } else if is_audio_path(path) {
+        Some("audio")
+    } else if is_playlist_path(path) {
+        Some("playlist")
     } else {
         None
     }

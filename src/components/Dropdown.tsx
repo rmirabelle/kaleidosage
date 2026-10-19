@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { CaretDown } from "@phosphor-icons/react";
 
@@ -8,15 +8,20 @@ import { CaretDown } from "@phosphor-icons/react";
  * body, as wide as the button, below it or above it when there is no room.
  * Keys: Up and Down move, Enter or Space picks, Esc closes. A click outside
  * closes it. The options in "marks" show "mark" after their name; the
- * button shows it too while any marked option is not the picked one.
+ * button shows it too while any marked option is not the picked one. An
+ * option in "headings" has a group heading over it in the list. With
+ * "noWrap", the list is as wide as its longest option (at least as wide as
+ * the button), so long names stay on one line.
  */
-export function Dropdown<V extends string | number>({ value, options, onChange, label, marks, mark }: {
+export function Dropdown<V extends string | number>({ value, options, onChange, label, marks, mark, headings, noWrap }: {
   value: V;
   options: readonly (readonly [V, string])[];
   onChange: (value: V) => void;
   label?: string;
   marks?: ReadonlySet<V>;
   mark?: ReactNode;
+  headings?: ReadonlyMap<V, string>;
+  noWrap?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -49,7 +54,9 @@ export function Dropdown<V extends string | number>({ value, options, onChange, 
     const height = listRef.current?.offsetHeight ?? 0;
     const below = button.bottom + 4;
     const top = below + height > window.innerHeight - 8 ? Math.max(8, button.top - 4 - height) : below;
-    setPosition({ left: button.left, top, width: button.width });
+    /* A list wider than the button stays inside the window. */
+    const width = noWrap ? Math.max(button.width, listRef.current?.offsetWidth ?? 0) : button.width;
+    setPosition({ left: Math.max(8, Math.min(button.left, window.innerWidth - 8 - width)), top, width });
   }, [open]);
 
   useEffect(() => {
@@ -112,23 +119,25 @@ export function Dropdown<V extends string | number>({ value, options, onChange, 
       {open && createPortal(
         <div
           ref={listRef}
-          className="toolbar-dropdown dropdown-list"
+          className={`toolbar-dropdown dropdown-list ${noWrap ? "no-wrap" : ""}`}
           role="listbox"
           aria-label={label}
-          style={position ? { left: position.left, top: position.top, width: position.width } : { visibility: "hidden" }}
+          style={position ? { left: position.left, top: position.top, ...(noWrap ? { minWidth: position.width } : { width: position.width }) } : { visibility: "hidden" }}
         >
           {options.map(([option, text], index) => (
-            <button
-              key={String(option)}
-              role="option"
-              aria-selected={option === value}
-              className={`toolbar-dropdown-item ${option === value ? "selected" : ""} ${index === active ? "active" : ""}`}
-              onPointerEnter={() => setActive(index)}
-              onClick={() => pick(index)}
-            >
-              {text}
-              {marks?.has(option) && mark}
-            </button>
+            <Fragment key={String(option)}>
+              {headings?.has(option) && <div className="toolbar-dropdown-heading" role="presentation">{headings.get(option)}</div>}
+              <button
+                role="option"
+                aria-selected={option === value}
+                className={`toolbar-dropdown-item ${option === value ? "selected" : ""} ${index === active ? "active" : ""}`}
+                onPointerEnter={() => setActive(index)}
+                onClick={() => pick(index)}
+              >
+                {text}
+                {marks?.has(option) && mark}
+              </button>
+            </Fragment>
           ))}
         </div>,
         document.body

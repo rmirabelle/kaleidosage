@@ -7,6 +7,8 @@ import { ContextMenu } from "./ContextMenu";
 import { TilingIcon } from "./TilingIcon";
 import { useParamRows } from "./useParamRows";
 import { SourceImages, type SourceImagesProps } from "./SourceImages";
+import { help } from "../help/topics";
+import { HelpButton } from "./HelpButton";
 
 /** How the picture fades from A to B: an even crossfade, or B appearing by brightness. */
 const BLEND_MODES: readonly (readonly [BlendMode, string, ReactNode])[] = [
@@ -36,12 +38,13 @@ export function SourcePanel({ engine, ...sources }: SourceImagesProps & { engine
   const [tilingMenu, setTilingMenu] = useState<{ left: number; top: number } | null>(null);
   const tilingName = TILINGS.find(([mode]) => mode === tiling)?.[1] ?? "Auto";
   return (
-    <section className="panel-card source-section">
+    <section className="panel-card source-section" {...help("source")}>
       <div className="panel-header-bar">
         <h2 className="side-panel-title">Source</h2>
+        <HelpButton topic="source" />
         <button
           className={`source-tiling ${tilingMenu ? "open" : ""}`}
-          title={`Tiling: ${tilingName}. How the images go on past their edges.`}
+          data-tip={`Tiling: ${tilingName}. How the images go on past their edges.`}
           aria-label={`Tiling: ${tilingName}`}
           aria-haspopup="menu"
           onClick={(event) => {

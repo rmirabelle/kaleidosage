@@ -351,6 +351,7 @@ export async function encodeVideo(
     state.time = 0;
     state.clock = 0;
     state.warpTime = 0;
+    state.driverTime = 0;
     state.mapTravel = 0;
     state.cameraX = 0;
     state.cameraY = 0;

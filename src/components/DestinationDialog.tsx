@@ -75,7 +75,7 @@ export function DestinationDialog({ current, mapped, control, groupsOn, onPick, 
             <h2 id="destination-title">Map MIDI: <span className="destination-title-control">{control}</span></h2>
             <p>Pick a group, then the setting the control moves.</p>
           </div>
-          <button className="about-dialog-close" onClick={onCancel} aria-label="Close" title="Close"><X size={18} /></button>
+          <button className="about-dialog-close" onClick={onCancel} aria-label="Close" data-tip="Close"><X size={18} /></button>
         </header>
         <div className="destination-columns">
           <div className="destination-column destination-groups">
@@ -89,7 +89,7 @@ export function DestinationDialog({ current, mapped, control, groupsOn, onPick, 
                     className={`destination-item ${key === group ? "selected" : ""} ${current && key === groupOf(current) ? "current" : ""}`}
                     onClick={() => setGroup(key)}
                   >
-                    <span className="destination-power" title={key === "source" ? undefined : groupsOn[key] ? "On" : "Off"}>
+                    <span className="destination-power" data-tip={key === "source" ? undefined : groupsOn[key] ? "On" : "Off"}>
                       {key !== "source" && <PowerIcon on={groupsOn[key]} size={15} />}
                     </span>
                     <span className="destination-group-title">{title}</span>
@@ -117,7 +117,7 @@ export function DestinationDialog({ current, mapped, control, groupsOn, onPick, 
                     {mapped.includes(key) && (
                       <button
                         className="destination-remove"
-                        title={`Remove the mapping to ${LABELS[key].label}`}
+                        data-tip={`Remove the mapping to ${LABELS[key].label}`}
                         aria-label={`Remove the mapping to ${LABELS[key].label}`}
                         onClick={() => onRemove(key)}
                       >

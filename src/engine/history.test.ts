@@ -61,3 +61,27 @@ describe("settings history", () => {
     expect(history.commit()).toBe(false);
   });
 });
+
+describe("settings history and audio links", () => {
+  it("undoes a change of the scene's Release", () => {
+    const params = createParams();
+    const state = createPlayState();
+    const history = new SettingsHistory(params, state);
+    state.audioRelease = 1.5;
+    history.commit();
+    expect(history.undo()).toBe(true);
+    expect(state.audioRelease).toBe(0.25);
+  });
+
+  it("undoes a new audio link", () => {
+    const params = createParams();
+    const state = createPlayState();
+    const history = new SettingsHistory(params, state);
+    state.audioLinks.zoom = { source: "bass", amount: 0.5 };
+    history.commit();
+    expect(history.undo()).toBe(true);
+    expect(state.audioLinks).toEqual({});
+    expect(history.redo()).toBe(true);
+    expect(state.audioLinks).toEqual({ zoom: { source: "bass", amount: 0.5, release: 1, threshold: 0 } });
+  });
+});

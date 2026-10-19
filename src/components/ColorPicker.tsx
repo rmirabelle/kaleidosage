@@ -29,7 +29,7 @@ export function ColorPicker({ color, onChange, label }: {
         style={{ background: color }}
         aria-label={label}
         aria-expanded={open}
-        title={label}
+        data-tip={label}
         onClick={() => setOpen((value) => !value)}
       />
       {open && swatchRef.current && (
@@ -233,7 +233,7 @@ function ColorPopup({ anchor, color, onChange, onClose }: {
           onBlur={() => setText(hex)}
           onKeyDown={(event) => { if (event.key === "Enter") onClose(); }}
         />
-        <button className="color-close" onClick={onClose} aria-label="Close" title="Close (Esc)">
+        <button className="color-close" onClick={onClose} aria-label="Close" data-tip="Close (Esc)">
           <X size={13} weight="bold" />
         </button>
       </div>
@@ -244,7 +244,7 @@ function ColorPopup({ anchor, color, onChange, onClose }: {
             className={`color-preset ${preset === hex ? "selected" : ""}`}
             style={{ background: preset }}
             aria-label={preset}
-            title={preset}
+            data-tip={preset}
             onClick={() => apply(hexToHsv(preset)!)}
           />
         ))}

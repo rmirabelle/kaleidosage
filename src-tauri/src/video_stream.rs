@@ -23,9 +23,10 @@ pub struct VideoSource {
 }
 
 impl VideoSource {
+    /** A video file, or an audio file for the playlist: both stream through the video:// protocol. */
     pub fn open(path: &Path) -> Result<Self, String> {
-        if !crate::files::is_video_path(path) {
-            return Err("This file is not an accepted video container.".into());
+        if !crate::files::is_video_path(path) && !crate::files::is_audio_path(path) {
+            return Err("This file is not an accepted video or audio file.".into());
         }
         let file = File::open(path).map_err(|e| format!("Could not open the video: {e}"))?;
         let metadata = file.metadata().map_err(|e| e.to_string())?;
@@ -42,6 +43,11 @@ impl VideoSource {
             "webm" => "video/webm",
             "mov" => "video/quicktime",
             "avi" => "video/x-msvideo",
+            "mp3" => "audio/mpeg",
+            "wav" => "audio/wav",
+            "flac" => "audio/flac",
+            "ogg" | "opus" => "audio/ogg",
+            "m4a" | "aac" => "audio/mp4",
             _ => "video/mp4",
         };
         Ok(Self {

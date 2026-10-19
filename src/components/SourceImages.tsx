@@ -54,7 +54,7 @@ export function SourceImages({ images, randomLoading, onOpenImage, onRandomImage
         className="source-swap"
         disabled={!images[0] || !images[1]}
         onClick={onSwapImages}
-        title={images[0] && images[1] ? "Swap A and B" : "Load both sources to swap them"}
+        data-tip={images[0] && images[1] ? "Swap A and B" : "Load both sources to swap them"}
         aria-label="Swap sources A and B"
       >
         <ArrowsLeftRight size={16} weight="bold" />
@@ -80,7 +80,7 @@ function ImageCard({ slot, image, loading, onOpen, onRandom, onSearch, onPattern
     /* App reads data-image-slot to send a dropped file to this slot. */
     <div className="source-card" data-image-slot={slot}>
       {/* The file name, above the image; an empty slot keeps the line's height, so both cards line up. */}
-      <div className="source-label" title={image?.label}>{image?.label ?? " "}</div>
+      <div className="source-label" data-tip={image?.label}>{image?.label ?? " "}</div>
       <div className={`source-thumb ${image ? "" : "empty"}`}>
         {image?.under ? (
           /* A pattern over an image: the image's left half, then the pattern's right half. A click on the image half takes the pattern off. */
@@ -89,7 +89,7 @@ function ImageCard({ slot, image, loading, onOpen, onRandom, onSearch, onPattern
               className="source-half under"
               style={{ backgroundImage: `url(${image.under.thumbnail})` }}
               onClick={onRestore}
-              title={`Back to ${image.under.label}`}
+              data-tip={`Back to ${image.under.label}`}
               aria-label={`Take the pattern off and show ${image.under.label} again`}
             >
               <ArrowCounterClockwise size={16} weight="bold" />
@@ -103,21 +103,21 @@ function ImageCard({ slot, image, loading, onOpen, onRandom, onSearch, onPattern
         )}
         <span className="source-letter">{letter}</span>
         {onRemove && image && (
-          <button className="source-remove" onClick={onRemove} title={`Remove source ${letter}`} aria-label={slot === 0 ? "Remove source A; source B moves up" : "Remove source B"}>
+          <button className="source-remove" onClick={onRemove} data-tip={`Remove source ${letter}`} aria-label={slot === 0 ? "Remove source A; source B moves up" : "Remove source B"}>
             <X size={13} weight="bold" />
           </button>
         )}
         {/* The slot's four buttons, over the bottom of its image: shown while the mouse is over the slot. */}
         <div className="source-actions">
-          <button onClick={onRandom} title="Load a random 4K photo: architecture, patterns or fractal art" aria-label={`Load a random photo as source ${letter}`}>
+          <button onClick={onRandom} data-tip="Load a random 4K photo: architecture, patterns or fractal art" aria-label={`Load a random photo as source ${letter}`}>
             <RedDice size={17} className={loading ? "spin" : undefined} />
           </button>
-          <button onClick={onSearch} title="Search 4K photos on Wikimedia Commons" aria-label={`Search for a photo as source ${letter}`}>
+          <button onClick={onSearch} data-tip="Search 4K photos on Wikimedia Commons" aria-label={`Search for a photo as source ${letter}`}>
             <MagnifyingGlass size={16} weight="bold" />
           </button>
           <PatternMenu letter={letter} selected={image?.patternId} onPattern={onPattern} />
           {isTauri() && (
-            <button onClick={onOpen} title="Open an image or video file" aria-label={`Open an image or video file as source ${letter}`}>
+            <button onClick={onOpen} data-tip="Open an image or video file" aria-label={`Open an image or video file as source ${letter}`}>
               <ColorFolder size={18} />
             </button>
           )}
@@ -189,7 +189,7 @@ function PatternMenu({ letter, selected, onPattern }: {
         ref={buttonRef}
         className={position ? "active" : undefined}
         onClick={toggle}
-        title="Use a test pattern"
+        data-tip="Use a test pattern"
         aria-label={`Use a test pattern as source ${letter}`}
         aria-haspopup="menu"
         aria-expanded={Boolean(position)}
