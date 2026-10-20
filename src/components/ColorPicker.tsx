@@ -50,7 +50,7 @@ export function ColorPicker({ color, onChange, label }: {
  * the picker. Without the app (in a plain browser) there is no screen
  * reader, so a click outside closes.
  */
-function ColorPopup({ anchor, color, onChange, onClose }: {
+export function ColorPopup({ anchor, color, onChange, onClose }: {
   anchor: HTMLElement;
   color: string;
   onChange: (color: string) => void;
@@ -233,7 +233,7 @@ function ColorPopup({ anchor, color, onChange, onClose }: {
           onBlur={() => setText(hex)}
           onKeyDown={(event) => { if (event.key === "Enter") onClose(); }}
         />
-        <button className="color-close" onClick={onClose} aria-label="Close" data-tip="Close (Esc)">
+        <button className="color-close" onClick={onClose} aria-label="Close" data-tip="Close `Esc`">
           <X size={13} weight="bold" />
         </button>
       </div>

@@ -7,7 +7,7 @@ export const PARAM_KEYS = [
   "warpOpacity", "mapOpacity", "foldOpacity",
   "warpAmount", "warpScale", "warpCellSize", "warpCellAngle", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle",
   "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl",
-  "drosteSize", "drosteSpirals",
+  "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
   "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness",
   "segments", "tileSize", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl",
   "blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel",
@@ -18,7 +18,7 @@ export const PARAM_KEYS = [
   "driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast",
   "cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth",
   "sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness",
-  "particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag",
+  "particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost",
   "raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY",
   "bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize",
   "sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel"
@@ -251,7 +251,7 @@ export type Params = Record<ParamKey, Param>;
 export type ContourTone = "hue" | "black" | "white";
 export const CONTOUR_TONES: readonly ContourTone[] = ["hue", "black", "white"];
 
-export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "sort" | "particles" | "rays" | "bloom" | "finish";
+export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "sort" | "particles" | "rays" | "bloom" | "sharpen" | "color" | "levels";
 
 export interface PlayState {
   /** Which groups are on. A group that is off has no effect, but keeps its settings. */
@@ -299,8 +299,9 @@ export interface PlayState {
    */
   blurMask: BlurMask;
   trailMode: TrailMode;
-  /** The color overlay color, as "#rrggbb". */
+  /** The color overlay color, as "#rrggbb", and how it combines with the picture (see blendLayer in FINISH_SHADER). */
   overlayColor: string;
+  colorBlend: LayerBlend;
   /** The color the trails are tinted toward (see trailTint), as "#rrggbb". */
   trailColor: string;
   /** The time smear's pattern of delays (see SMEAR_SHADER). */
@@ -317,6 +318,12 @@ export interface PlayState {
   sortOrder: SortOrder;
   /** How the particles combine with the picture under them: they add light (glow), or cover it. */
   particleBlend: ParticleBlend;
+  /**
+   * The particles' life gradient (see particleGradient): its color stops,
+   * from 2 to MAX_GRADIENT_STOPS, in order of place. A new array replaces
+   * the old one on each change, so an Undo step keeps its own stops.
+   */
+  particleStops: GradientStop[];
   /** The Driver effect's driver (caustics, smoke, ink, fire, ripples), and what it does to the picture. */
   driverSource: DriverSource;
   driverMode: DriverMode;
@@ -417,10 +424,27 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   drosteSize: { label: "Copy size", min: 0.1, max: 0.8, step: 0.01, value: 0.4, drift: "wave", low: 0.3, high: 0.5, on: false },
   /**
    * Droste spiral: how many spiral arms one turn around the center has; 0
-   * gives plain frames in frames. Only a whole number meets itself with no
-   * seam, so it has no range. (A negative count only mirrors the spiral.)
+   * gives plain frames in frames, and a negative count turns the spiral the
+   * other way. Only a whole number meets itself with no seam, so a count
+   * between two whole numbers (a value or a drifting range) crossfades
+   * between the two nearest whole counts (see shapeColor in shaders.ts),
+   * like a twist.
    */
-  drosteSpirals: { label: "Spirals", min: 0, max: 4, step: 1, value: 1 },
+  drosteSpirals: { label: "Spirals", min: -4, max: 4, step: 0.01, value: 1, drift: "wave", low: -1, high: 1, on: false },
+  /**
+   * Droste spiral: how far each frame fades into the smaller copy next to
+   * it, as a share of the space between two frames; 0 is a hard edge.
+   */
+  drosteSoftness: { label: "Edge softness", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.6, on: false },
+  /** Droste spiral: the frames' shape, from the picture's rectangle (0) to a circle (1). */
+  drosteRound: { label: "Frame shape", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 1, on: false },
+  /** Droste spiral: turns the whole spiral and its frames around the map's center. */
+  drosteRotation: { label: "Rotate (post)", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  /**
+   * Droste spiral: turns the picture inside the frames; the frames and the
+   * spiral stay. The picture's corners come in from outside it as it turns.
+   */
+  drostePictureTurn: { label: "Rotate (pre)", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   mapTwist: { label: "Twist", min: -80, max: 80, step: 1, value: 0, unit: "°", drift: "wave", low: 10, high: 50, on: false },
   /**
    * Turns the whole map on the screen (Möbius has its own). With a mirrored
@@ -595,8 +619,8 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    */
   particleAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
   particleBackground: { label: "Background", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0, high: 1, on: false },
-  particleCount: { label: "Count", min: 100, max: 262144, step: 1, scale: "log", value: 4000, drift: "wave", low: 1000, high: 10000, on: false },
-  particleLevel: { label: "Emit level", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.4, high: 0.8, on: false },
+  particleCount: { label: "Count", min: 100, max: 1048576, step: 1, scale: "log", value: 4000, drift: "wave", low: 1000, high: 10000, on: false },
+  particleLevel: { label: "Threshold", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.4, high: 0.8, on: false },
   particleSize: { label: "Size", min: 0.5, max: 40, step: 0.1, scale: "log", value: 4, unit: "px", drift: "wave", low: 2, high: 8, on: false },
   particleLife: { label: "Life", min: 0.2, max: 10, step: 0.1, value: 2.5, unit: " s", drift: "wave", low: 1, high: 4, on: false },
   particleSpeed: { label: "Speed", min: 0, max: 0.2, step: 0.001, value: 0.15, drift: "wave", low: 0.05, high: 0.2, on: false },
@@ -604,6 +628,32 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   particleAngle: { label: "Direction", min: 0, max: 360, step: 1, value: 270, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   particleTurbulence: { label: "Turbulence", min: 0, max: 2, step: 0.01, value: 0.3, drift: "wave", low: 0.1, high: 0.8, on: false },
   particleDrag: { label: "Drag", min: 0, max: 5, step: 0.01, value: 1, drift: "wave", low: 0.5, high: 2, on: false },
+  /**
+   * How fast each particle turns to the edge of the picture under it: at 0
+   * a particle turns about an eighth of the way in each frame, and at 1 it
+   * takes the edge's direction at once (see the follow in PARTICLE_STEP_SHADER).
+   */
+  particleFollow: { label: "Follow", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 1, on: false },
+  /**
+   * How strongly each particle is pulled to the middle of the edge it
+   * follows (where the brightness changes fastest), so it stays on the
+   * line instead of drifting off it; 0 is off.
+   */
+  /**
+   * How much each particle takes its color from the life gradient instead
+   * of from the picture where it was born. The gradient runs over the
+   * particle's life, from birth to end; its colors are state.particleStops
+   * (see PARTICLE_VERTEX_SHADER).
+   */
+  /**
+   * How much light each particle gives: its dot covers more and gets a
+   * firmer center, and its color gets brighter up to full with no change of
+   * hue, so few small particles still show (see PARTICLE_SHADER). 1 is a
+   * plain soft dot.
+   */
+  particleBoost: { label: "Boost", min: 1, max: 8, step: 0.01, value: 1, drift: "wave", low: 1, high: 4, on: false },
+  particleGradient: { label: "Gradient", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 1, on: false },
+  particleCling: { label: "Focus", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 1, on: false },
   /** Driver (see DRIVER_SHADER): opacity, how strongly the driver bends, reveals or lights, its size, its speed, and its contrast. */
   driverAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
   driverStrength: { label: "Strength", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.3, high: 0.8, on: false },
@@ -674,7 +724,7 @@ export function createParams(): Params {
 
 /** The start-up orders: the fold, then the map bends the folded picture, then the warp; and blur, trails, time smear, contours, relief, driver, camera, pixel sort, particles, light rays, bloom, final effects. */
 export const defaultShapeOrder = (): ShapeStep[] => ["kaleidoscope", "map", "warp"];
-export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "driver", "camera", "sort", "particles", "rays", "bloom", "finish"];
+export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "driver", "camera", "sort", "particles", "rays", "bloom", "sharpen", "color", "levels"];
 export const defaultFxOrder = (): FxStep[] => [...defaultShapeOrder(), ...defaultPictureOrder()];
 
 /**
@@ -719,7 +769,9 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
     case "particles": return used("particleAmount");
     case "rays": return used("raysAmount");
     case "bloom": return used("bloomAmount");
-    case "finish": return used("sharpen") || used("exposure") || used("blackLevel") || used("overlayOpacity");
+    case "sharpen": return used("sharpen");
+    case "color": return used("overlayOpacity");
+    case "levels": return used("exposure") || used("blackLevel");
     default: return true;
   }
 }
@@ -727,9 +779,9 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
 export function createPlayState(): PlayState {
   return {
     /* No effect is in the list at start-up, so every effect group is off. */
-    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, sort: false, particles: false, rays: false, bloom: false, finish: false },
-    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, sort: false, particles: false, rays: false, bloom: false, finish: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, audioLinks: {}, audioRelease: 0.25, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, sortOrder: 0, particleBlend: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, sort: false, particles: false, rays: false, bloom: false, sharpen: false, color: false, levels: false },
+    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, sort: false, particles: false, rays: false, bloom: false, sharpen: false, color: false, levels: false },
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, audioLinks: {}, audioRelease: 0.25, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, sortOrder: 0, particleBlend: 0, particleStops: defaultGradientStops(), driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -834,6 +886,44 @@ export function hslToHex(hue: number, saturation: number, lightness: number): st
   return `#${f(0)}${f(8)}${f(4)}`;
 }
 
+/** One color stop of a gradient: its place from 0 to 1, and its color as "#rrggbb". */
+export interface GradientStop {
+  at: number;
+  color: string;
+}
+
+/** The most color stops a gradient can have (the particle shader's arrays have this size). */
+export const MAX_GRADIENT_STOPS = 8;
+
+/** The gradient a new scene starts with: red to blue. */
+export const defaultGradientStops = (): GradientStop[] => [{ at: 0, color: "#ff0000" }, { at: 1, color: "#0000ff" }];
+
+/**
+ * The gradient's color at a place from 0 to 1, as red, green and blue from
+ * 0 to 1: the stops' colors mixed in a straight line between the two stops
+ * around it, and the end stops' colors past them. The particle shader
+ * mixes the same way (see lifeColor).
+ */
+export function gradientColorAt(stops: readonly GradientStop[], at: number): [number, number, number] {
+  const sorted = [...stops].sort((a, b) => a.at - b.at);
+  if (at <= sorted[0].at) return hexToRgb(sorted[0].color);
+  for (let index = 1; index < sorted.length; index++) {
+    const next = sorted[index];
+    if (at <= next.at) {
+      const before = sorted[index - 1];
+      const t = next.at > before.at ? (at - before.at) / (next.at - before.at) : 1;
+      const [a, b] = [hexToRgb(before.color), hexToRgb(next.color)];
+      return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+    }
+  }
+  return hexToRgb(sorted[sorted.length - 1].color);
+}
+
+/** Red, green and blue from 0 to 1, to "#rrggbb". */
+export function rgbToHex([red, green, blue]: readonly [number, number, number]): string {
+  return `#${[red, green, blue].map((value) => Math.round(clamp(value, 0, 1) * 255).toString(16).padStart(2, "0")).join("")}`;
+}
+
 /** The value a parameter has when the app starts. Double-click on a slider goes back to it. */
 export function defaultValue(key: ParamKey): number {
   return SPECS[key].value;
@@ -901,6 +991,7 @@ export function randomizeParams(params: Params, state?: PlayState) {
     mapMode: state.mapMode,
     foldMode: state.foldMode,
     overlayColor: state.overlayColor,
+    colorBlend: state.colorBlend,
     skyColor: state.skyColor
   };
   randomizeAll(params, state);
@@ -913,8 +1004,31 @@ export function randomizeParams(params: Params, state?: PlayState) {
     }
     if (state.locks.map) state.mapMode = keptState.mapMode;
     if (state.locks.kaleidoscope) state.foldMode = keptState.foldMode;
-    if (state.locks.finish) state.overlayColor = keptState.overlayColor;
+    if (state.locks.color) {
+      state.overlayColor = keptState.overlayColor;
+      state.colorBlend = keptState.colorBlend;
+    }
     if (state.locks.camera) state.skyColor = keptState.skyColor;
+  }
+}
+
+/** The Radial look that differs from the start-up defaults: ten segments, a slow turn, a small pan. */
+const RADIAL_START: Partial<Record<ParamKey, Partial<Param>>> = {
+  segments: { value: 10 },
+  rotation: { low: 0, high: 45, on: true, ease: "organic" },
+  panX: { low: -0.15, high: 0.15, on: true },
+  panY: { low: -0.15, high: 0.15, on: true }
+};
+
+/**
+ * Picking Radial in the Kaleidoscope Type menu: the sliders that Radial
+ * shows go to the start-up defaults with RADIAL_START on top. The tile
+ * types keep the values they have.
+ */
+export function applyRadialStart(params: Params) {
+  for (const key of ["segments", "panX", "panY", "rotation", "zoom", "twirl", "centerX", "centerY"] as const) {
+    const { value, low, high, on, ease } = { ...SPECS[key], ...RADIAL_START[key] };
+    Object.assign(params[key], { value, low, high, on, ease, custom: false, startTime: 0 });
   }
 }
 
@@ -956,12 +1070,18 @@ export function resetEffects(params: Params, state: PlayState) {
     state.cameraRepeat = fresh.cameraRepeat;
   }
   if (!state.locks.sort) state.sortOrder = fresh.sortOrder;
-  if (!state.locks.particles) state.particleBlend = fresh.particleBlend;
+  if (!state.locks.particles) {
+    state.particleBlend = fresh.particleBlend;
+    state.particleStops = fresh.particleStops;
+  }
   if (!state.locks.driver) {
     state.driverSource = fresh.driverSource;
     state.driverMode = fresh.driverMode;
   }
-  if (!state.locks.finish) state.overlayColor = fresh.overlayColor;
+  if (!state.locks.color) {
+    state.overlayColor = fresh.overlayColor;
+    state.colorBlend = fresh.colorBlend;
+  }
   for (const step of ["warp", "map", "kaleidoscope"] as const) if (!state.locks[step]) state.layerBlend[step] = 0;
   /* The unlocked effects leave the list (their groups are off now); the locked ones stay, in their order. */
   state.fxOrder = state.fxOrder.filter((step) => state.locks[step]);
@@ -974,7 +1094,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   /** The images are the user's choice; Randomize does not change the blend. */
   source: ["imageBlend"],
   warp: ["warpOpacity", "warpAmount", "warpScale", "warpCellSize", "warpCellAngle", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle"],
-  map: ["mapOpacity", "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl", "drosteSize", "drosteSpirals",
+  map: ["mapOpacity", "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl", "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
     "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness"],
   kaleidoscope: ["foldOpacity", "segments", "tileSize", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl"],
   blur: ["blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel"],
@@ -985,10 +1105,12 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   driver: ["driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast"],
   camera: ["cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth"],
   sort: ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"],
-  particles: ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag"],
+  particles: ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost"],
   rays: ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"],
   bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
-  finish: ["sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel"]
+  sharpen: ["sharpen", "sharpenRadius"],
+  color: ["overlayOpacity"],
+  levels: ["exposure", "blackLevel"]
 };
 
 /** The play-state settings of each group that Randomize sets: a group's own Randomize changes these too. */
@@ -1004,7 +1126,7 @@ const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   sort: ["sortOrder"],
   particles: ["particleBlend"],
   driver: ["driverSource", "driverMode"],
-  finish: ["overlayColor"]
+  color: ["overlayColor", "colorBlend"]
 };
 
 /**
@@ -1023,12 +1145,13 @@ export function randomizeGroup(params: Params, state: PlayState, group: GroupKey
 
 /** The chance that Randomize puts each effect in the list. Blur looks the least good, so Randomize leaves it out. */
 const EFFECT_CHANCE: Record<FxStep, number> = {
-  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.25, relief: 0.4, driver: 0.3, camera: 0.3, sort: 0.2, particles: 0.25, rays: 0.25, bloom: 0.3, finish: 0.4
+  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.25, relief: 0.4, driver: 0.3, camera: 0.3, sort: 0.2, particles: 0.25, rays: 0.25, bloom: 0.3, sharpen: 0.3, color: 0.15, levels: 0.25
 };
 
 function randomizeAll(params: Params, state?: PlayState) {
   if (state) {
     state.overlayColor = hslToHex(rand(0, 360), rand(0.5, 1), rand(0.35, 0.6));
+    state.colorBlend = (Math.random() < 0.5 ? 0 : Math.floor(Math.random() * 8)) as LayerBlend;
     state.skyColor = hslToHex(Math.random() < 0.6 ? rand(190, 250) : rand(0, 360), rand(0.3, 0.8), rand(0.45, 0.8));
     state.mapMode = (1 + Math.floor(Math.random() * 8)) as MapMode;
     /* Noise is the most common warp; the other kinds share the rest. */

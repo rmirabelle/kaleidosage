@@ -19,12 +19,11 @@ export function WindowControls() {
   useEffect(() => {
     if (!isTauri()) return;
     const appWindow = getCurrentWindow();
-    let stop: (() => void) | undefined;
-    void appWindow.isMaximized().then(setMaximized);
-    void appWindow
-      .onResized(() => void appWindow.isMaximized().then(setMaximized))
-      .then((unlisten) => { stop = unlisten; });
-    return () => stop?.();
+    const check = () => void appWindow.isMaximized().then(setMaximized);
+    check();
+    /* The page's own resize event, not onResized, which outlives a page reload (see the full screen check in App). */
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
   }, []);
 
   /**

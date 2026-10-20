@@ -2,12 +2,13 @@ import { Fragment, useCallback, useEffect, useRef, useState, useSyncExternalStor
 import { createPortal } from "react-dom";
 import { CaretRight, DiceFive, DotsSixVertical, Eye, EyeSlash, LockSimple, LockSimpleOpen, Play, SpeakerSimpleHigh, Trash, Wind, X } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
-import { GROUP_PARAMS, addEffect, createParams, removeEffect, type GroupKey, type ParamKey, type PlayState } from "../engine/params";
+import { GROUP_PARAMS, addEffect, applyRadialStart, createParams, removeEffect, type GroupKey, type ParamKey, type PlayState } from "../engine/params";
 import { midi } from "../lib/midi";
 import { audioInput } from "../lib/audioInput";
 import { settingButtons } from "../lib/settingButtons";
+import { GradientEditor } from "./GradientEditor";
 import { EmptyState } from "./EmptyState";
-import { BLUR_KEYS, BLUR_MASKS, EFFECT_NAMES, FOLD_MODES, KALEIDOSCOPE_KEYS, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
+import { BLUR_KEYS, BLUR_MASKS, FOLD_MODES, KALEIDOSCOPE_KEYS, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
 import type { BlurMask, FoldMode, FxStep, MapMode, ShapeStep, SmearShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -38,6 +39,8 @@ interface Props {
   /** The file name of the Driver effect's own video, or null, and the button that picks one. */
   driverVideoName: string | null;
   onPickDriverVideo: () => void;
+  /** The FX audio button was turned on while the app listens to nothing: the app opens the Audio panel at its Input. */
+  onNeedAudioInput: () => void;
 }
 
 const TRAIL_KEYS: ParamKey[] = ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"];
@@ -46,10 +49,13 @@ const RELIEF_KEYS: ParamKey[] = ["reliefAmount", "reliefDepth", "reliefSize", "l
 const DRIVER_KEYS: ParamKey[] = ["driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast"];
 const CAMERA_KEYS: ParamKey[] = ["cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth"];
 const SORT_KEYS: ParamKey[] = ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"];
-const PARTICLE_KEYS: ParamKey[] = ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag"];
+/* The Blend menu and the Opacity slider (particleAmount) come after these, at the bottom of the group. */
+const PARTICLE_KEYS: ParamKey[] = ["particleLevel", "particleBackground", "particleCount", "particleSize", "particleLife", "particleSpeed", "particleFollow", "particleCling", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleGradient", "particleBoost"];
 const RAYS_KEYS: ParamKey[] = ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"];
 const BLOOM_KEYS: ParamKey[] = ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"];
-const FINISH_KEYS: ParamKey[] = ["sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel"];
+const SHARPEN_KEYS: ParamKey[] = ["sharpen", "sharpenRadius"];
+const COLOR_KEYS: ParamKey[] = ["overlayOpacity"];
+const LEVELS_KEYS: ParamKey[] = ["exposure", "blackLevel"];
 
 const LAYER_BLENDS = [
   [0, "Normal"], [1, "Screen"], [2, "Multiply"], [3, "Overlay"], [4, "Difference"], [5, "Lighten"], [6, "Darken"], [7, "Add"]
@@ -64,7 +70,7 @@ const CAMERA_REPEATS = [[0, "Mirror"], [1, "Tile"], [2, "None"]] as const;
 
 /** The left panel: the Source section, then the Designer: its toolbar, the scene length, and the effect groups. */
 
-export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, hasVideo, source, driverVideoName, onPickDriverVideo }: Props) {
+export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, hasVideo, source, driverVideoName, onPickDriverVideo, onNeedAudioInput }: Props) {
   const row = useParamRows(engine);
   /** True while MIDI holds any range: the Effects header then shows a play button that plays them all again. */
   const [anyHeld, setAnyHeld] = useState(engine.anyHeld);
@@ -91,17 +97,14 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
   };
   /**
    * The audio button before the FX title shows the settings' audio buttons
-   * (see AudioLinkButton), in the same column as the MIDI buttons. It shows
-   * while the app listens to an input or the scene has an audio link.
+   * (see AudioLinkButton), in the same column as the MIDI buttons. It
+   * always shows. Turned on while the app listens to nothing, it also opens
+   * the Audio panel with a tip at its Input menu.
    */
-  const audioOn = useSyncExternalStore((listener) => audioInput.subscribe(listener), () => audioInput.settings.kind !== "none");
-  const [linkCount, setLinkCount] = useState(() => Object.keys(engine.state.audioLinks).length);
-  useEffect(() => engine.onParamChange(() => setLinkCount(Object.keys(engine.state.audioLinks).length)), [engine]);
-  const audioReady = audioOn || linkCount > 0;
   const showAudio = useSyncExternalStore(settingButtons.subscribe, () => settingButtons.shown("audio"));
   const setShowAudio = (show: boolean) => settingButtons.set("audio", show);
   const midiButtons = showMidi && midiReady;
-  const audioButtons = showAudio && audioReady;
+  const audioButtons = showAudio;
   /**
    * Turning on the MIDI or audio buttons while every effect is closed opens
    * the first effect of the list, so the new buttons are in view at once.
@@ -291,8 +294,10 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     ),
     particles: (grip) => (
       <Group engine={engine} group="particles" title="Particles" grip={grip} {...accordion("particles")}>
+        {/* The life gradient's colors, under its Gradient slider, in the same row block (no line between them). */}
+        {PARTICLE_KEYS.map((key) => key === "particleGradient" ? <Fragment key={key}>{row(key)}<GradientEditor engine={engine} /></Fragment> : row(key))}
         <ModeSelect engine={engine} stateKey="particleBlend" options={PARTICLE_BLENDS} name="Blend" />
-        {PARTICLE_KEYS.map(row)}
+        {row("particleAmount")}
       </Group>
     ),
     rays: (grip) => (
@@ -305,9 +310,20 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
         {BLOOM_KEYS.map(row)}
       </Group>
     ),
-    finish: (grip) => (
-      <Group engine={engine} group="finish" title="Final effects" grip={grip} {...accordion("finish")}>
-        {FINISH_KEYS.map(row)}
+    sharpen: (grip) => (
+      <Group engine={engine} group="sharpen" title="Sharpen" grip={grip} {...accordion("sharpen")}>
+        {SHARPEN_KEYS.map(row)}
+      </Group>
+    ),
+    color: (grip) => (
+      <Group engine={engine} group="color" title="Color" grip={grip} {...accordion("color")}>
+        {COLOR_KEYS.map(row)}
+        <ColorBlend engine={engine} />
+      </Group>
+    ),
+    levels: (grip) => (
+      <Group engine={engine} group="levels" title="Levels" grip={grip} {...accordion("levels")}>
+        {LEVELS_KEYS.map(row)}
       </Group>
     )
   };
@@ -334,20 +350,21 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       {/* The FX card: its title bar (Random all, Nudge, Clear all, then New), then the effect groups, which scroll. */}
       <section className="panel-card fx-card" {...help("fx")}>
         <div className="side-panel-header panel-header-bar">
-          {audioReady && (
-            <button
-              className={`panel-title-midi panel-title-audio ${showAudio ? "on" : ""}`}
-              data-tip={showAudio ? "Hide the audio buttons of the settings" : "Show the audio buttons of the settings, to make them move with the sound"}
-              aria-label="Show audio buttons"
-              aria-pressed={showAudio}
-              onClick={() => {
-                if (!showAudio) openFirstIfAllClosed();
-                setShowAudio(!showAudio);
-              }}
-            >
-              <SpeakerSimpleHigh size={17} weight={showAudio ? "fill" : "regular"} />
-            </button>
-          )}
+          <button
+            className={`panel-title-midi panel-title-audio ${showAudio ? "on" : ""}`}
+            data-tip={showAudio ? "Hide the audio buttons of the settings" : "Show the audio buttons of the settings, to make them move with the sound"}
+            aria-label="Show audio buttons"
+            aria-pressed={showAudio}
+            onClick={() => {
+              if (!showAudio) {
+                openFirstIfAllClosed();
+                if (audioInput.settings.kind === "none") onNeedAudioInput();
+              }
+              setShowAudio(!showAudio);
+            }}
+          >
+            <SpeakerSimpleHigh size={17} weight={showAudio ? "fill" : "regular"} />
+          </button>
           {midiReady && (
             <button
               className={`panel-title-midi ${showMidi ? "on" : ""}`}
@@ -365,7 +382,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
           {anyHeld && (
             <button
               className="midi-play panel-title-play"
-              data-tip="MIDI stopped some ranges. Click (or press Esc) to play them all again."
+              data-tip="MIDI stopped some ranges. Click (or press `Esc`) to play them all again."
               aria-label="Play every range that MIDI stopped"
               aria-keyshortcuts="Escape"
               onClick={() => engine.resumeAll()}
@@ -376,13 +393,13 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
           {/* "All" Random, Nudge and Clear as icon buttons, at the right of the title. Stop and Play are in the app toolbar. */}
           <span className="panel-title-all">All</span>
           <div className="panel-buttons panel-title-buttons">
-            <button className="panel-button icon" onClick={onRandomize} data-tip="Random all (X): new random settings for every unlocked effect" aria-label="Random all">
+            <button className="panel-button icon" onClick={onRandomize} data-tip="Random all `x`: new random settings for every unlocked effect" aria-label="Random all">
               <RedDice size={16} />
             </button>
             <button
               className="panel-button icon"
               onClick={onNudge}
-              data-tip="Nudge all (N): move every unlocked value a little, up or down at random. Values at 0 stay at 0."
+              data-tip="Nudge all `n`: move every unlocked value a little, up or down at random. Values at 0 stay at 0."
               aria-label="Nudge all"
             >
               <Wind size={16} />
@@ -396,7 +413,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
               <Trash size={16} />
             </button>
           </div>
-          <AddEffectMenu options={EFFECT_NAMES.filter(([step]) => !fxOrder.includes(step))} onAdd={add} />
+          <AddEffectMenu taken={fxOrder} onAdd={add} />
         </div>
 
         {/* Only the effect groups scroll; the scene length, the Source section and the FX title stay in view. */}
@@ -412,13 +429,13 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
           />
           {fxOrder.length === 0 && (
             <EmptyState text="Add an effect to change the picture.">
-              <AddEffectMenu options={EFFECT_NAMES} onAdd={add} />
+              <AddEffectMenu taken={fxOrder} onAdd={add} />
             </EmptyState>
           )}
           {/* A copy of the title bar's New button, at the end of the list, while an effect group is open. */}
           {fxOrder.some((step) => step === openGroup) && (
             <div className="add-effect-end">
-              <AddEffectMenu options={EFFECT_NAMES.filter(([step]) => !fxOrder.includes(step))} onAdd={add} />
+              <AddEffectMenu taken={fxOrder} onAdd={add} />
             </div>
           )}
         </div>
@@ -582,7 +599,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
     <section className={`panel-group ${showing ? "" : "disabled"} ${open ? "open" : ""} ${touched ? "midi-touched" : ""}`} {...help("fx.group")}>
       <header
         className="panel-group-header"
-        data-tip={engine && group ? "Ctrl+hold to bypass; Ctrl+Shift+hold to solo this effect. Right-click to enable or disable, lock, or remove MIDI." : undefined}
+        data-tip={engine && group ? "`Ctrl` + hold to bypass; `Ctrl+Shift` + hold to solo this effect. Right-click to enable or disable, lock, or remove MIDI." : undefined}
         onContextMenu={(event) => {
           if (!engine || !group) return;
           event.preventDefault();
@@ -799,6 +816,25 @@ function SmearSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =>
   );
 }
 
+/** How the Color effect's overlay color combines with the picture under it. */
+function ColorBlend({ engine }: { engine: Engine }) {
+  const [blend, setBlend] = useState(engine.state.colorBlend);
+  return (
+    <div className="panel-select-row panel-layer-blend">
+      <span className="panel-row-name">Blend</span>
+      <Dropdown
+        value={blend}
+        options={LAYER_BLENDS}
+        label="Color blend mode"
+        onChange={(next) => {
+          engine.state.colorBlend = next;
+          setBlend(next);
+        }}
+      />
+    </div>
+  );
+}
+
 /** How the contour lines combine with the picture under them. */
 function ContourBlend({ engine }: { engine: Engine }) {
   const [blend, setBlend] = useState(engine.state.contourBlend);
@@ -912,10 +948,19 @@ function LayerRows({ engine, step, row }: { engine: Engine; step: ShapeStep; row
 /** The mirror mode picker, and the sliders for the picked mode. */
 function KaleidoscopeSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
   const [mode, setMode] = useState<FoldMode>(engine.state.foldMode);
+  /** Picking Radial sets the Radial start values. The sliders then reload to show them. */
+  const [revision, setRevision] = useState(0);
+  const pick = (next: FoldMode) => {
+    if (next === 0 && mode !== 0) {
+      applyRadialStart(engine.params);
+      setRevision((value) => value + 1);
+    }
+    setMode(next);
+  };
   return (
     <>
-      <ModeSelect engine={engine} stateKey="foldMode" options={FOLD_MODES} name="Type" onChange={setMode} />
-      {KALEIDOSCOPE_KEYS[mode].map(row)}
+      <ModeSelect engine={engine} stateKey="foldMode" options={FOLD_MODES} name="Type" onChange={pick} />
+      <Fragment key={revision}>{KALEIDOSCOPE_KEYS[mode].map(row)}</Fragment>
       <LayerRows engine={engine} step="kaleidoscope" row={row} />
     </>
   );

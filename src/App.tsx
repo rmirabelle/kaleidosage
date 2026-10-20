@@ -222,6 +222,13 @@ export default function App() {
   const toggleMidiPanel = useCallback(() => showBottomTab("midi"), [showBottomTab]);
   const toggleAudioPanel = useCallback(() => showBottomTab("audio"), [showBottomTab]);
   const closeBottomPanel = useCallback(() => setMidiPanelOpen(false), []);
+  /** True while the Audio panel shows its tip at the Input menu (see onNeedAudioInput). */
+  const [inputTip, setInputTip] = useState(false);
+  const askForAudioInput = useCallback(() => {
+    setBottomTab("audio");
+    setMidiPanelOpen(true);
+    setInputTip(true);
+  }, []);
   /* The PC sound starts again at the app's start if it was on when the app closed. */
   useEffect(() => { audioInput.init(); }, []);
   const [midiPanelHeight, setMidiPanelHeight] = useState(() => {
@@ -1351,12 +1358,15 @@ export default function App() {
       return () => document.removeEventListener("fullscreenchange", onChange);
     }
     const appWindow = getCurrentWindow();
-    let stop: (() => void) | undefined;
-    void appWindow.isFullscreen().then(setFullscreen);
-    void appWindow
-      .onResized(() => void appWindow.isFullscreen().then(setFullscreen))
-      .then((unlisten) => { stop = unlisten; });
-    return () => stop?.();
+    const check = () => void appWindow.isFullscreen().then(setFullscreen);
+    check();
+    /**
+     * The page's own resize event, not the window's onResized: Tauri keeps a
+     * window listener after a page reload (it removes them only when the
+     * window closes), and the old page's listener then warns on each resize.
+     */
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
   }, []);
 
   /** Full screen shows only the picture; leaving it brings the panel back. */
@@ -1583,6 +1593,7 @@ export default function App() {
             hasVideo={images.some((image) => image?.source instanceof HTMLVideoElement)}
             driverVideoName={driverVideoName}
             onPickDriverVideo={() => setOpenRequest({ kind: "image", slot: 0, target: "driver" })}
+            onNeedAudioInput={askForAudioInput}
             source={(
               <SourcePanel
                 engine={engine}
@@ -1620,13 +1631,13 @@ export default function App() {
                 <button
                   className={panelOpen ? "active" : ""}
                   onClick={() => setPanelOpen((open) => !open)}
-                  data-tip="Settings (H)"
+                  data-tip="Settings `h`"
                   aria-label="Settings"
                   aria-pressed={panelOpen}
                 >
                   <SlidersHorizontal size={18} />
                 </button>
-                <button onClick={() => void exitFullscreen()} data-tip="Exit full screen (Esc)" aria-label="Exit full screen">
+                <button onClick={() => void exitFullscreen()} data-tip="Exit full screen `Esc`" aria-label="Exit full screen">
                   <ArrowsIn size={18} />
                 </button>
               </div>
@@ -1664,7 +1675,7 @@ export default function App() {
           <div className="midi-panel-grip" onPointerDown={resizeMidiPanel} data-tip="Drag to make the MIDI panel taller or shorter" />
           <div className="midi-panel-body">
             <BottomPanelTabs tab={bottomTab} onTab={setBottomTab} onClose={closeBottomPanel} />
-            {bottomTab === "midi" ? <MidiPanel engine={engine} open={midiPanelOpen} /> : <AudioPanel engine={engine} sceneName={sceneFileName} onAddTracks={() => setOpenRequest({ kind: "audio", slot: 0 })} />}
+            {bottomTab === "midi" ? <MidiPanel engine={engine} open={midiPanelOpen} /> : <AudioPanel engine={engine} sceneName={sceneFileName} onAddTracks={() => setOpenRequest({ kind: "audio", slot: 0 })} inputTip={inputTip && midiPanelOpen} onInputTipDone={() => setInputTip(false)} />}
           </div>
         </div>
       )}

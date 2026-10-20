@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { KeyText } from "./HelpText";
 
 const EMPTY = "Point at a control to see what it does.";
 
@@ -43,7 +44,7 @@ export function HelpLine() {
 
   return (
     <div className="help-line-frame">
-      <div className={`help-line ${tip ? "" : "empty"}`} role="status" aria-live="polite">{tip ?? EMPTY}</div>
+      <div className={`help-line ${tip ? "" : "empty"}`} role="status" aria-live="polite">{tip ? <KeyText text={tip} /> : EMPTY}</div>
     </div>
   );
 }

@@ -1,8 +1,8 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ArrowRight, CaretDown, Trash, X } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
-import { createParams, type ParamKey } from "../engine/params";
+import { PARAM_KEYS, createParams, type ParamKey } from "../engine/params";
 import { midi, type MidiMapping } from "../lib/midi";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DestinationDialog, destinationName } from "./DestinationDialog";
@@ -30,8 +30,22 @@ function deviceName(device: string) {
   return (daw ? `${daw[1]} (DAW port)` : device).replace(/\s*MIDI(?= \(DAW port\)|$)/i, "");
 }
 
-/** A row's MIDI icon: gray, and orange for a moment each time its control sends a step. */
-function ActivityIcon({ id }: { id: string }) {
+/**
+ * The settings that controls other than this one move, each with the names
+ * of those controls; a control of another device names its device too.
+ */
+function mappedElsewhere(device: string, control: string): Partial<Record<ParamKey, string[]>> {
+  const names: Partial<Record<ParamKey, string[]>> = {};
+  for (const mapping of midi.mappings(PARAM_KEYS)) {
+    if (mapping.device === device && mapping.control === control) continue;
+    const name = mapping.device === device ? controlName(mapping.device, mapping.control) : `${deviceName(mapping.device)} ${controlName(mapping.device, mapping.control)}`;
+    (names[mapping.key] ??= []).push(name);
+  }
+  return names;
+}
+
+/** True for a moment each time the control sends a step (in Learn too). */
+function useActivity(id: string) {
   const [lit, setLit] = useState(false);
   useEffect(() => {
     let timer = 0;
@@ -46,7 +60,17 @@ function ActivityIcon({ id }: { id: string }) {
       window.clearTimeout(timer);
     };
   }, [id]);
-  return <span className={`midi-map-activity ${lit ? "lit" : ""}`}><MidiIcon size={13} /></span>;
+  return lit;
+}
+
+/** A row's MIDI icon: gray, and orange for a moment each time its control sends a step. */
+function ActivityIcon({ id }: { id: string }) {
+  return <span className={`midi-map-activity ${useActivity(id) ? "lit" : ""}`}><MidiIcon size={13} /></span>;
+}
+
+/** A row's control name, orange with its icon for a moment each time the control sends a step. */
+function ActivityLabel({ id, children }: { id: string; children: ReactNode }) {
+  return <span className={`midi-map-control ${useActivity(id) ? "lit" : ""}`}>{children}</span>;
 }
 
 /**
@@ -77,6 +101,24 @@ export function MidiPanel({ engine, open }: { engine: Engine; open: boolean }) {
   const [picking, setPicking] = useState<(Omit<MidiMapping, "key"> & { key: ParamKey | null }) | null>(null);
   const pickingRef = useRef(picking);
   pickingRef.current = picking;
+  /** A picked setting that other controls move already: the question whether the new mapping replaces theirs or is added. */
+  const [conflict, setConflict] = useState<{ to: ParamKey; others: string[] } | null>(null);
+  /**
+   * Points the picked row (or a new mapping) at "to". With "replace", the
+   * other controls stop moving "to" first, so only this control moves it.
+   */
+  const applyPick = (to: ParamKey, replace: boolean) => {
+    if (!picking) return;
+    if (replace) {
+      for (const other of midi.mappings([to])) {
+        if (other.device !== picking.device || other.control !== picking.control) midi.unmapOne(other.device, other.control, to);
+      }
+    }
+    if (picking.key === null) midi.addMapping(picking.device, picking.control, to);
+    else midi.remap(picking.device, picking.control, picking.key, to);
+    setConflict(null);
+    setPicking(null);
+  };
   /**
    * Learn mode (the Learn button, or Esc to stop): a control with no
    * mapping that the user moves gets a new row at the top of the list, and
@@ -137,7 +179,7 @@ export function MidiPanel({ engine, open }: { engine: Engine; open: boolean }) {
         <button
           className={`button secondary small midi-learn-toggle ${learning ? "on" : ""}`}
           aria-pressed={learning}
-          data-tip={learning ? "Learn is on: move a knob or fader that has no mapping to map it. Click or Esc to stop." : "Learn: move a knob or fader that has no mapping, then pick its setting"}
+          data-tip={learning ? "Learn is on: move a knob or fader that has no mapping to map it. Click or `Esc` to stop." : "Learn: move a knob or fader that has no mapping, then pick its setting"}
           onClick={() => setLearning(!learning)}
         >
           <MidiIcon size={12} /> {learning ? "Learning" : "Learn"}
@@ -198,11 +240,11 @@ export function MidiPanel({ engine, open }: { engine: Engine; open: boolean }) {
                     {device !== mappings[index - 1]?.device && <li className="midi-map-heading" data-tip={device}>Device: <strong>{deviceName(device)}</strong></li>}
                     <li className="midi-map-row">
                       <ActivityIcon id={`${device}|${control}`} />
-                      <span className="midi-map-control">
+                      <ActivityLabel id={`${device}|${control}`}>
                         {controlName(device, control)}
                         {kind.relative && <em data-tip="This knob sends relative steps, so it turns with no end">relative</em>}
                         {kind.fine && <em data-tip="This control sends 14-bit values, with 16384 places">14-bit</em>}
-                      </span>
+                      </ActivityLabel>
                       {/* One way only: the control moves the setting; the app sends nothing back to the controller. */}
                       <ArrowRight size={13} className="midi-map-arrow" aria-hidden="true" />
                       <button
@@ -234,6 +276,7 @@ export function MidiPanel({ engine, open }: { engine: Engine; open: boolean }) {
         <DestinationDialog
           current={picking.key}
           mapped={midi.sliders(picking.device, picking.control)}
+          mappedElsewhere={mappedElsewhere(picking.device, picking.control)}
           groupsOn={engine.state.groups}
           onRemove={(key) => {
             midi.unmapOne(picking.device, picking.control, key);
@@ -241,12 +284,26 @@ export function MidiPanel({ engine, open }: { engine: Engine; open: boolean }) {
             if (key === picking.key) setPicking(null);
           }}
           control={`${deviceName(picking.device)} ${controlName(picking.device, picking.control)}`}
-          onCancel={() => setPicking(null)}
+          /* While the Replace or Add question is open, its Esc closes only the question. */
+          onCancel={() => { if (!conflict) setPicking(null); }}
           onPick={(to) => {
-            if (picking.key === null) midi.addMapping(picking.device, picking.control, to);
-            else midi.remap(picking.device, picking.control, picking.key, to);
-            setPicking(null);
+            const others = mappedElsewhere(picking.device, picking.control)[to];
+            if (others && !midi.sliders(picking.device, picking.control).includes(to)) setConflict({ to, others });
+            else applyPick(to, false);
           }}
+        />,
+        document.body
+      )}
+      {picking && conflict && createPortal(
+        <ConfirmDialog
+          title={`${LABELS[conflict.to].label} is already mapped`}
+          message={<><span className="midi-name">{destinationName(conflict.to)}</span> is mapped to {conflict.others.map((other, index) => <Fragment key={other}>{index > 0 && ", "}<span className="midi-name">{other}</span></Fragment>)}.</>}
+          confirmLabel="Replace"
+          otherLabel="Add"
+          onConfirm={() => applyPick(conflict.to, true)}
+          onOther={() => applyPick(conflict.to, false)}
+          onCancel={() => setConflict(null)}
+          closeButton
         />,
         document.body
       )}

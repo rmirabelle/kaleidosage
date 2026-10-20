@@ -26,7 +26,7 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   return (
     <div className="about-dialog-overlay" role="presentation" onPointerDown={onClose}>
       <div className="about-dialog shortcuts-dialog" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title" onPointerDown={(event) => event.stopPropagation()}>
-        <button className="about-dialog-close" onClick={onClose} aria-label="Close the keyboard shortcuts" data-tip="Close (Esc)">
+        <button className="about-dialog-close" onClick={onClose} aria-label="Close the keyboard shortcuts" data-tip="Close `Esc`">
           <X size={18} />
         </button>
         <h2 id="shortcuts-title" className="shortcuts-title"><Keyboard size={20} /> Keyboard shortcuts</h2>

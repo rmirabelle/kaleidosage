@@ -1,7 +1,12 @@
 import { NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, defaultValue, hexToRgb, liveValue, rangeClock, startRangeAt, type GroupKey, type ParamKey } from "./params";
-import { KaleidoRenderer, type ImageSource } from "./renderer";
+import { KaleidoRenderer, type FrameValues, type ImageSource } from "./renderer";
 import { followPush, levelAbove, pushRange, pushedValue, type AudioLink, type AudioSignal } from "./audio";
 import { copyVideo, cueVideo, releaseVideo, seekVideo, syncVideo, videoLoopPlan, videoLoopTime } from "./video";
+
+/** While paused, how long the same frame values must last before the picture counts as still and frames stop (see needsDraw). */
+const SETTLE_MS = 1000;
+/** The same with a Time smear, whose oldest frames take longer to leave it. */
+const SMEAR_SETTLE_MS = 6000;
 
 const DEGREES = Math.PI / 180;
 
@@ -121,9 +126,14 @@ export class Engine {
   private readonly frameListeners = new Set<() => void>();
   private snapshotWaiters: ((blob: Blob | null) => void)[] = [];
   private frameId = 0;
+  /** See needsDraw: a change that the frame's values do not show asks for a frame; and the paused picture's values and since when they are the same. */
+  private awake = true;
+  private stillKey: string | null = null;
+  private stillSince = 0;
   private lastTime = 0;
   /** Smoothed time between frames and smoothed CPU time of one render call, in milliseconds. */
-  readonly stats = { frameMs: 0, cpuMs: 0 };
+  /** For the performance panel: the smoothed time between frames and the CPU time of a frame, and whether the last frame drew (see needsDraw). */
+  readonly stats = { frameMs: 0, cpuMs: 0, drawing: true };
 
   /** "size" fixes the picture size in pixels, for an engine that renders off the screen (see forExport). */
   constructor(readonly canvas: HTMLCanvasElement, size: [number, number] | null = null) {
@@ -255,6 +265,7 @@ export class Engine {
   private driverVideo: HTMLVideoElement | null = null;
 
   setDriverVideo(video: HTMLVideoElement | null) {
+    this.wake();
     if (this.driverVideo && this.driverVideo !== video) this.driverVideo.pause();
     this.driverVideo = video;
     this.renderer.setDriverVideo(video);
@@ -290,6 +301,7 @@ export class Engine {
   }
 
   setImage(source: ImageSource, slot: 0 | 1 = 0) {
+    this.wake();
     this.renderer.setImage(source, slot);
     this.sources[slot] = source;
     this.setVideo(slot, source instanceof HTMLVideoElement ? source : null);
@@ -298,6 +310,7 @@ export class Engine {
 
   /** Removes the second image; the picture shows only the first. */
   clearSecondImage() {
+    this.wake();
     this.hasSecondImage = false;
     this.sources[1] = null;
     this.renderer.stopVideo(1);
@@ -356,6 +369,11 @@ export class Engine {
 
   get renderInfo() {
     return this.renderer.info;
+  }
+
+  /** An estimate of the GPU memory the picture uses, in bytes (see trackTextureMemory). */
+  get gpuBytes() {
+    return this.renderer.memory.bytes();
   }
 
   /**
@@ -704,11 +722,50 @@ export class Engine {
     this.state.cameraX = 0;
     this.state.cameraY = 0;
     this.renderer.resetTrails();
+    this.wake();
   }
 
   /** Starts the trails again from the still picture, for example after a new scene. */
   resetTrails() {
     this.renderer.resetTrails();
+    this.wake();
+  }
+
+  /**
+   * Draws the next frame even when the paused picture has not changed (see
+   * needsDraw): for a change that the frame's values do not show, such as a
+   * new image.
+   */
+  wake() {
+    this.awake = true;
+  }
+
+  /**
+   * While paused, a frame that would draw the same picture as the last one
+   * is not drawn, and the GPU rests; the canvas keeps showing the last
+   * picture. The picture is the same when the frame's values (less the
+   * frame time) and the canvas size have not changed for SETTLE_MS: in that
+   * time the picture settles (a value that glides to rest, a video frame
+   * that arrives after a seek). A Time smear settles for SMEAR_SETTLE_MS,
+   * as its old frames leave it. Trails always draw, as they fade on while
+   * paused. A crossfade, a snapshot or wake() draws at once.
+   */
+  private needsDraw(values: FrameValues, now: number) {
+    const trails = values.fxOrder.includes("trails") && values.trailMode !== 0;
+    const forced = this.awake || Boolean(this.fade) || this.fadeWaiters.length > 0 || this.snapshotWaiters.length > 0;
+    this.awake = false;
+    if (!this.state.paused || trails || forced) {
+      this.stillKey = null;
+      return true;
+    }
+    const key = `${this.canvas.clientWidth}x${this.canvas.clientHeight}@${window.devicePixelRatio} ${JSON.stringify({ ...values, fadeScale: 0 })}`;
+    if (key !== this.stillKey) {
+      this.stillKey = key;
+      this.stillSince = now;
+      return true;
+    }
+    const settle = values.fxOrder.includes("smear") && values.smear > 0 ? SMEAR_SETTLE_MS : SETTLE_MS;
+    return now - this.stillSince < settle;
   }
 
   /** Stops the render loop and frees the GPU context. The engine cannot be used after this. */
@@ -801,11 +858,15 @@ export class Engine {
       this.placeVideo(slot, (video, target, waiting) => waiting ? cueVideo(video, target) : syncVideo(video, target, paused));
     }
     this.syncDriverVideo(paused);
-    this.renderer.updateVideos();
+    if (this.renderer.updateVideos()) this.wake();
 
     const renderStart = performance.now();
-    this.draw(animated, elapsed);
-    this.drawFade();
+    const values = this.frameValues(animated, elapsed);
+    this.stats.drawing = this.needsDraw(values, now);
+    if (this.stats.drawing) {
+      this.renderer.render(values);
+      this.drawFade();
+    }
     this.stats.cpuMs += (performance.now() - renderStart - this.stats.cpuMs) * 0.1;
 
     if (this.snapshotWaiters.length) {
@@ -819,6 +880,11 @@ export class Engine {
 
   /** Draws the picture for the current time. "animated" and "elapsed" are the times since the last frame (see step). */
   draw(animated: number, elapsed: number) {
+    this.renderer.render(this.frameValues(animated, elapsed));
+  }
+
+  /** Everything the renderer needs for one frame (see draw). */
+  private frameValues(animated: number, elapsed: number): FrameValues {
     /** A group that is off gets neutral values, so it has no effect. */
     const on = { ...this.state.groups };
     for (const group of this.bypassedGroups) on[group] = false;
@@ -830,7 +896,7 @@ export class Engine {
     const kaleidoscope = (key: ParamKey, neutral: number) => on.kaleidoscope ? this.live(key) : neutral;
     /* The Möbius point lies on the X axis: its direction would only turn the picture, as Rotation does. */
     const mapPoint = this.state.mapMode === 2 ? [this.live("mobiusPoint"), 0] : juliaPoint(this.live("juliaShape") * DEGREES, this.live("juliaEdge"));
-    this.renderer.render({
+    return {
       fxOrder: this.state.fxOrder,
       shapeActive: { warp: on.warp, map: on.map, kaleidoscope: on.kaleidoscope },
       /* A group that is off does nothing, so full opacity in normal mode costs no extra picture. */
@@ -862,7 +928,8 @@ export class Engine {
       mapMode: on.map ? this.state.mapMode : 0,
       mapMix: this.live("mapMix"),
       /* Möbius and Julia have their own zoom settings, which take the place of the map zoom. */
-      mapScale: this.state.mapMode === 2 ? 1 : this.state.mapMode === 3 ? this.live("juliaZoom") : this.live("mapScale"),
+      /* Möbius has its own zoom; the Droste spiral has none. */
+      mapScale: this.state.mapMode === 2 || this.state.mapMode === 8 ? 1 : this.state.mapMode === 3 ? this.live("juliaZoom") : this.live("mapScale"),
       mapPower: this.live("mapPower"),
       mapPointX: mapPoint[0],
       mapPointY: mapPoint[1],
@@ -870,7 +937,11 @@ export class Engine {
       mapArms: this.live("mapArms"),
       spiralCopies: this.spiralCopies,
       drosteSize: this.live("drosteSize"),
-      drosteSpirals: Math.round(this.params.drosteSpirals.value),
+      drosteSpirals: this.live("drosteSpirals"),
+      drosteSoftness: this.live("drosteSoftness"),
+      drosteRound: this.live("drosteRound"),
+      drosteRotation: this.live("drosteRotation") * DEGREES,
+      drostePictureTurn: this.live("drostePictureTurn") * DEGREES,
       mapTwist: this.live("mapTwist") * DEGREES,
       mapAngle: this.live("mapAngle") * DEGREES,
       /* Möbius has its own pan, roll and twist. */
@@ -880,8 +951,8 @@ export class Engine {
       mapCurl: this.live("mapCurl"),
       mapTravel: this.state.mapMode === 8 ? drosteTravel(this.state.mapTravel, this.live("drosteSize")) : this.state.mapTravel,
       tunnelTwist: this.live("tunnelTwist") * DEGREES,
-      /* Möbius and Julia have their own depth fade settings. */
-      mapFog: this.live(this.state.mapMode === 2 ? "mobiusFog" : this.state.mapMode === 3 ? "juliaFog" : "mapFog"),
+      /* Möbius and Julia have their own depth fade settings; the Droste spiral has none, so its center never darkens. */
+      mapFog: this.state.mapMode === 8 ? 0 : this.live(this.state.mapMode === 2 ? "mobiusFog" : this.state.mapMode === 3 ? "juliaFog" : "mapFog"),
       mapFogSoftness: this.live(this.state.mapMode === 2 ? "mobiusFogSoftness" : this.state.mapMode === 3 ? "juliaFogSoftness" : "mapFogSoftness"),
       mobiusTurn: this.live("mobiusTurn") * DEGREES,
       mobiusRotation: this.live("mobiusRotation") * DEGREES,
@@ -918,12 +989,13 @@ export class Engine {
       trailColor: hexToRgb(this.state.trailColor),
       frameScale: animated * 60,
       fadeScale: (animated > 0 ? animated : elapsed) * 60,
-      sharpen: on.finish ? this.live("sharpen") : 0,
+      sharpen: on.sharpen ? this.live("sharpen") : 0,
       sharpenRadius: this.live("sharpenRadius"),
-      exposure: on.finish ? this.live("exposure") : 0,
-      blackLevel: on.finish ? this.live("blackLevel") : 0,
+      exposure: on.levels ? this.live("exposure") : 0,
+      blackLevel: on.levels ? this.live("blackLevel") : 0,
       overlayColor: hexToRgb(this.state.overlayColor),
-      overlayOpacity: on.finish ? this.live("overlayOpacity") : 0,
+      colorBlend: this.state.colorBlend,
+      overlayOpacity: on.color ? this.live("overlayOpacity") : 0,
       driver: on.driver ? this.live("driverAmount") : 0,
       driverSource: this.state.driverSource,
       driverMode: this.state.driverMode,
@@ -974,6 +1046,12 @@ export class Engine {
       particleAngle: this.live("particleAngle") * DEGREES,
       particleTurbulence: this.live("particleTurbulence"),
       particleDrag: this.live("particleDrag"),
+      particleFollow: this.live("particleFollow"),
+      particleCling: this.live("particleCling"),
+      particleGradient: this.live("particleGradient"),
+      particleBoost: this.live("particleBoost"),
+      particleStopAt: new Float32Array(this.state.particleStops.map((stop) => stop.at)),
+      particleStopColor: new Float32Array(this.state.particleStops.flatMap((stop) => hexToRgb(stop.color))),
       particleSeconds: animated,
       particleTime: this.state.time,
       rays: on.rays ? this.live("raysAmount") : 0,
@@ -1006,6 +1084,6 @@ export class Engine {
       imageBlend: this.hasSecondImage ? this.live("imageBlend") : 0,
       blendMode: this.state.blendMode,
       tileRepeat: this.state.tiling === 2 || (this.state.tiling === 0 && !!this.sources[0] && repeatingImages.has(this.sources[0]))
-    });
+    };
   }
 }

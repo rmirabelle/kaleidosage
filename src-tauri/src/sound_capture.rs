@@ -16,6 +16,7 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 use tauri::ipc::{Channel, InvokeResponseBody};
+use tauri::Manager;
 
 /**
  * The longest wait for the next block. An output device sends no blocks
@@ -135,6 +136,24 @@ pub async fn sound_start(
         Err(_) => {
             capture.end();
             Err("The sound did not start in time.".to_string())
+        }
+    }
+}
+
+/**
+ * A page starts to load (in development, a reload): the running capture
+ * stops. Its channels belong to the page before, so each sound buffer
+ * would go to a callback that no longer exists and make the new page warn
+ * about it. The new page starts its own capture.
+ */
+pub fn stop_on_page_load<R: tauri::Runtime>(webview: &tauri::Webview<R>, payload: &tauri::webview::PageLoadPayload<'_>) {
+    if payload.event() != tauri::webview::PageLoadEvent::Started {
+        return;
+    }
+    if let Some(state) = webview.try_state::<SoundCapture>() {
+        let old = state.0.lock().ok().and_then(|mut capture| capture.take());
+        if let Some(old) = old {
+            old.end();
         }
     }
 }

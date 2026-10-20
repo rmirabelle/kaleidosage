@@ -89,7 +89,7 @@ export function StageControls(props: Props) {
             className="panel-button icon"
             onClick={props.onStop}
             disabled={props.paused}
-            data-tip={props.tracks ? "Stop (Shift+Space): pause, and go back to the start of the file and the scene" : "Stop (Shift+Space): pause, and go back to the start"}
+            data-tip={props.tracks ? "Stop `Shift+Space`: pause, and go back to the start of the file and the scene" : "Stop `Shift+Space`: pause, and go back to the start"}
             aria-keyshortcuts="Shift+Space"
             aria-label="Stop"
           >
@@ -98,7 +98,7 @@ export function StageControls(props: Props) {
           <button
             className="panel-button icon"
             onClick={props.onTogglePause}
-            data-tip={props.paused ? "Play (Space)" : "Pause (Space)"}
+            data-tip={props.paused ? "Play `Space`" : "Pause `Space`"}
             aria-label={props.paused ? "Play" : "Pause"}
           >
             {props.paused ? <MediaIcon kind="play" size={17} /> : <MediaIcon kind="pause" size={17} />}
@@ -114,7 +114,7 @@ export function StageControls(props: Props) {
       </nav>
       <nav className="stage-controls view" aria-label="View controls">
         <div className="panel-buttons">
-          <button className="panel-button icon" onClick={props.onFullscreen} data-tip="Full screen (F)" aria-label="Full screen">
+          <button className="panel-button icon" onClick={props.onFullscreen} data-tip="Full screen `f`" aria-label="Full screen">
             <ArrowsOut size={16} weight="bold" />
           </button>
         </div>

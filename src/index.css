@@ -383,6 +383,8 @@ button { border: 0; }
 .help-line-frame { position: relative; z-index: 170; flex: 0 0 auto; padding: 0 6px 6px; background: #272b36; }
 .help-line { height: 28px; padding: 0 12px; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; color: #fff; background: #252832; font-size: 12px; line-height: 26px; text-overflow: ellipsis; white-space: nowrap; }
 .help-line.empty { color: var(--muted); }
+/* A key named in a tip or help text (see KeyText), as a small key cap that fits in the line. */
+.key { display: inline-block; min-width: 9px; margin: 0 1px; padding: 0 5px; border: 1px solid #4d5366; border-bottom-width: 2px; border-radius: 4px; color: #eef0f4; background: #313643; font-family: inherit; font-size: 11px; line-height: 15px; text-align: center; vertical-align: 0; white-space: nowrap; }
 .midi-panel-grip { position: absolute; z-index: 2; top: 0; left: 0; right: 0; height: 6px; cursor: ns-resize; }
 .midi-panel-grip:hover, .midi-panel.resizing .midi-panel-grip { background: rgba(75,118,247,.5); }
 /* Two columns: the controllers at the left, the mappings at the right. */
@@ -424,6 +426,9 @@ button { border: 0; }
 .midi-map-activity { display: grid; place-items: center; color: #5d6272; transition: color .3s ease; }
 .midi-map-activity.lit { color: var(--midi-on); transition: none; }
 .midi-map-control { display: flex; align-items: center; gap: 6px; color: #c3c7d0; font-size: 12px; white-space: nowrap; }
+/* The control name fades back like its icon (see .midi-map-activity). */
+.midi-map-control { transition: color .3s ease; }
+.midi-map-control.lit { color: var(--midi-on); transition: none; }
 .midi-map-control em { padding: 0 5px; border-radius: 3px; color: #a2a7b5; background: rgba(255,255,255,.07); font-size: 10px; font-style: normal; }
 .midi-map-row .dropdown-button { min-width: 0; }
 .midi-map-arrow { color: var(--muted); }
@@ -549,7 +554,7 @@ button { border: 0; }
 .destination-dialog .video-dialog-header { padding-left: 24px; }
 .open-dialog-title-icon.destination-title-icon { border-color: rgba(255,138,31,.35); color: var(--midi-on); background: rgba(255,138,31,.08); }
 .destination-title-control { margin-left: 6px; color: var(--midi-on); font-weight: 400; }
-.destination-columns { display: grid; grid-template-columns: 200px minmax(0, 1fr); height: min(60vh, 460px); background: linear-gradient(180deg, #292d37, #242832); }
+.destination-columns { display: grid; grid-template-columns: 200px minmax(0, 1fr); height: min(calc(100vh - 170px), 560px); background: linear-gradient(180deg, #292d37, #242832); }
 .destination-column { display: flex; flex-direction: column; min-height: 0; }
 .destination-heading { margin: 0 0 6px; padding: 10px 18px; line-height: 1.2; border-bottom: 1px solid #3a3e4d; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .destination-settings { background: #21242c; }
@@ -558,7 +563,8 @@ button { border: 0; }
 .destination-groups { border-right: 1px solid #3a3e4d; background: #1b1e25; }
 /* The groups: a power icon, then the name in capitals, as in the Designer panel. */
 .destination-groups .destination-item { justify-content: flex-start; gap: 8px; }
-.destination-power { display: grid; flex: 0 0 auto; place-items: center; width: 16px; }
+/* The bullet before each group name. */
+.destination-bullet { flex: 0 0 auto; width: 5px; height: 5px; margin: 0 3px; border-radius: 50%; background: currentColor; opacity: .55; align-self: center; }
 .destination-group-title { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .destination-item { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; width: 100%; padding: 7px 10px; border-radius: 6px; color: #d9dce3; background: transparent; font-size: 13px; text-align: left; cursor: pointer; }
 .destination-item:hover { color: #fff; background: rgba(255,255,255,.07); }
@@ -566,6 +572,10 @@ button { border: 0; }
 .destination-item.current { color: var(--midi-on); }
 .destination-item.selected.current { color: #fff; }
 .destination-item small { color: var(--muted); font-size: 11px; white-space: nowrap; }
+/* At the right of a setting: the other controls that move it (orange, like a mapped setting), then where it shows. */
+.destination-extras { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.destination-item small.destination-mapped { display: inline-flex; align-items: center; gap: 4px; overflow: hidden; color: var(--midi-on); text-overflow: ellipsis; }
+.destination-item small.destination-mapped svg { flex: 0 0 auto; }
 /* A setting the control moves: its trash button after it removes that mapping. */
 .destination-setting { display: flex; align-items: center; gap: 4px; }
 .destination-setting .destination-item { flex: 1; min-width: 0; }
@@ -741,6 +751,17 @@ button { border: 0; }
 /* A layer's blend mode: the name at the left, the menu filling the rest of the row. */
 .panel-layer-blend, .panel-select-named { display: flex; align-items: center; gap: 10px; padding: 6px 14px; }
 .panel-layer-blend .dropdown-button, .panel-select-named .dropdown-button { flex: 1; min-width: 0; }
+/* The particles' life gradient (see GradientEditor): the bar, with a handle under it for each color stop. */
+/* It sits right under the Gradient slider, as part of its row: no line above it, and the row's side padding. */
+.panel-group-inner > .gradient-row { padding: 0 14px 8px; border-top: 0; }
+.gradient-editor { position: relative; flex: 1; min-width: 0; height: 30px; margin: 0 6px; }
+.gradient-bar { position: absolute; top: 2px; right: 0; left: 0; height: 14px; border: 1px solid #474c5e; border-radius: 4px; cursor: copy; }
+.gradient-bar.full { cursor: default; }
+.gradient-stop { position: absolute; top: 18px; width: 12px; height: 12px; margin-left: -6px; padding: 0; border: 2px solid #e4e6ec; border-radius: 3px; background: var(--stop-color); box-shadow: 0 1px 3px rgba(0,0,0,.6); cursor: ew-resize; }
+/* A small point on top of the handle, up to its place on the bar. */
+.gradient-stop::before { content: ""; position: absolute; top: -6px; left: 50%; border: 4px solid transparent; border-bottom-color: #e4e6ec; transform: translateX(-50%); }
+.gradient-stop:hover, .gradient-stop.active { border-color: #fff; outline: 1px solid var(--accent); }
+.gradient-stop.removing { opacity: .35; }
 /* The name at the left, the current value at the right. */
 .panel-row-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: 12px; }
 /* Control names: small capitals like the group headers, but quieter. */
@@ -961,6 +982,8 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 /* The detent: a short tick above the track at the value with no effect, like a mark on a ruler. */
 .slider-detent { position: absolute; z-index: 0; top: -4px; width: 1px; height: 5px; margin-left: -0.5px; background: #8c91a1; pointer-events: none; }
 .slider.range .slider-detent { top: -5px; }
+/* A whole number of a count (see WHOLE_SNAP_KEYS): fainter than the zero point's mark. */
+.slider-detent.minor { background: #5d6272; }
 /* The live drift value: a thin line under the handles (they have z-index 1 and 2). */
 .slider-marker {
   position: absolute;
@@ -1124,19 +1147,53 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .fullscreen-controls button:hover { color: #fff; background: rgba(48, 52, 63, .92); }
 .fullscreen-controls button.active { color: #fff; border-color: rgba(75,118,247,.6); background: rgba(75,118,247,.35); }
 
-.stats-overlay {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  margin: 0;
-  padding: 8px 10px;
-  border: 1px solid rgba(57, 61, 77, .85);
-  border-radius: 7px;
-  color: #d9dce3;
-  background: rgba(15, 17, 22, .78);
-  font: 11px/1.5 Consolas, "Cascadia Mono", monospace;
-  white-space: pre;
-}
+/**
+ * The performance panel (see StatsOverlay): a dark glass card over the
+ * picture's top-left corner. 300px wide, so its chart is drawn at its own
+ * size (276px inside the padding). Status colors (good, warning, critical)
+ * always come with an icon and a word.
+ */
+.perf-panel { --perf-good: #0ca30c; --perf-warning: #fab219; --perf-critical: #d03b3b; --perf-series: #3987e5; --perf-ink: #eceef2; --perf-ink-2: #a9aebb; --perf-ink-3: #727789; --perf-line: #343846;
+  position: absolute; z-index: 5; top: 12px; left: 12px; width: 300px; box-sizing: border-box; padding: 10px 12px 10px; border: 1px solid rgba(57,61,77,.85); border-radius: 10px; color: var(--perf-ink); background: rgba(16,18,24,.86); backdrop-filter: blur(6px); box-shadow: 0 10px 30px rgba(0,0,0,.45); font-size: 12px; font-variant-numeric: tabular-nums; }
+.perf-header { display: flex; align-items: center; gap: 6px; color: var(--perf-ink-2); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.perf-drawing { margin-left: auto; padding: 1px 7px; border: 1px solid var(--perf-line); border-radius: 9px; color: var(--perf-ink-3); font-size: 10px; letter-spacing: .04em; }
+.perf-drawing.on { color: var(--perf-ink-2); }
+.perf-hero { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
+.perf-fps { display: flex; align-items: baseline; gap: 5px; }
+.perf-fps-value { font-size: 48px; font-weight: 600; line-height: 1; letter-spacing: -.02em; font-variant-numeric: proportional-nums; }
+.perf-fps-unit { color: var(--perf-ink-2); font-size: 14px; font-weight: 600; }
+.perf-status { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px 3px 7px; border: 1px solid var(--perf-line); border-radius: 12px; color: var(--perf-ink); font-size: 12px; font-weight: 600; }
+.perf-status.good svg { color: var(--perf-good); }
+.perf-status.warning svg { color: var(--perf-warning); }
+.perf-status.critical svg { color: var(--perf-critical); }
+.perf-sub { margin-top: 2px; color: var(--perf-ink-2); font-size: 11px; }
+.perf-chart { position: relative; margin: 8px 0 10px; }
+.perf-chart svg { display: block; overflow: visible; }
+.perf-chart-target { stroke: var(--perf-line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.perf-chart-area { fill: var(--perf-series); fill-opacity: .1; }
+.perf-chart-line { fill: none; stroke: var(--perf-series); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.perf-chart-cursor { stroke: var(--perf-ink-3); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.perf-chart-dot { fill: var(--perf-series); stroke: rgb(16,18,24); stroke-width: 2; }
+.perf-chart-target-label { position: absolute; top: -2px; right: 0; color: var(--perf-ink-3); font-size: 10px; }
+.perf-chart-tip { position: absolute; bottom: calc(100% + 4px); padding: 2px 6px; border-radius: 4px; color: var(--perf-ink); background: #2b2f3a; font-size: 10px; white-space: nowrap; transform: translateX(-50%); pointer-events: none; }
+.perf-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.perf-tile { display: flex; flex-direction: column; gap: 2px; padding: 7px 9px; border-radius: 7px; background: rgba(255,255,255,.04); }
+.perf-tile-label { color: var(--perf-ink-2); font-size: 11px; }
+.perf-tile-value { font-size: 17px; font-weight: 600; }
+.perf-tile-note { color: var(--perf-ink-3); font-size: 10px; }
+/* The track is a lighter step of the fill's own blue, so the state reads along the whole bar. */
+.perf-meter { display: block; height: 4px; margin-top: 2px; overflow: hidden; border-radius: 2px; background: rgba(57,135,229,.22); }
+.perf-meter > span { display: block; height: 100%; border-radius: 2px; background: var(--perf-series); }
+.perf-meter.warning > span { background: var(--perf-warning); }
+.perf-meter.critical > span { background: var(--perf-critical); }
+.perf-passes { margin-top: 10px; }
+.perf-section-title { margin-bottom: 4px; color: var(--perf-ink-2); font-size: 11px; }
+.perf-pass { display: grid; grid-template-columns: 96px 1fr 38px; align-items: center; gap: 8px; padding: 2px 0; }
+.perf-pass-label { overflow: hidden; color: var(--perf-ink-2); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.perf-pass-track { display: block; height: 8px; }
+.perf-pass-bar { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--perf-series); }
+.perf-pass-value { color: var(--perf-ink); font-size: 11px; text-align: right; }
+.perf-details { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--perf-line); color: var(--perf-ink-3); font-size: 10px; }
 
 .drop-overlay {
   position: absolute;
@@ -1229,6 +1286,10 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 /* A card's close button sits in its corner, outside the card's padding. */
 .help-card-close { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; color: #9aa6c8; background: transparent; cursor: pointer; }
 .help-card-close:hover { color: #fff; background: rgba(255,255,255,.12); }
+/* The tip at the right of the Audio panel's Input menu (see InputTip): help-card colors, with an arrow to the menu. */
+.input-tip { position: fixed; z-index: 150; display: flex; align-items: center; gap: 6px; max-width: 280px; padding: 9px 34px 9px 12px; border: 1px solid #3e4a6c; border-radius: 8px; color: #d4d8e2; background: #253049; box-shadow: 0 10px 30px rgba(0,0,0,.5); font-size: 12px; line-height: 1.4; }
+.input-tip::before { content: ""; position: absolute; top: 50%; left: -6px; width: 10px; height: 10px; border-left: 1px solid #3e4a6c; border-bottom: 1px solid #3e4a6c; background: #253049; transform: translateY(-50%) rotate(45deg); }
+.input-tip .help-card-close { top: 50%; transform: translateY(-50%); }
 .help-card h3 { padding-right: 18px; }
 .help-card ul { margin: 0 0 4px; padding: 0; list-style: none; }
 .help-card li { display: flex; gap: 8px; margin-top: 8px; white-space: nowrap; }
@@ -1253,6 +1314,24 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .shortcuts-row kbd { padding: 1px 6px; border: 1px solid #474c5e; border-bottom-width: 2px; border-radius: 4px; color: #e4e6ec; background: #30343f; font-family: inherit; font-size: 11px; white-space: nowrap; }
 .shortcuts-gesture { color: #e4e6ec; font-style: italic; }
 .shortcuts-or { margin: 0 4px 0 0; color: var(--muted); font-size: 11px; }
+/* The Add effect menu, at the right of the New button: a card for each effect in a grid of 5 columns (COLUMNS in AddEffectMenu) that scrolls. Above the panels and help badges, like the dialogs. */
+.add-effect-menu { position: fixed; z-index: 160; width: min(820px, calc(100vw - 16px)); max-height: calc(100vh - 16px); display: flex; flex-direction: column; box-sizing: border-box; border: 1px solid rgba(75,118,247,.3); border-radius: 10px; color: #d9dce3; background: #242832; box-shadow: 0 18px 60px rgba(0,0,0,.65); }
+.add-effect-title { margin: 0; padding: 14px 16px 10px; color: #fff; font-size: 15px; }
+.add-effect-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; padding: 2px 16px 16px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #474c5e transparent; }
+.add-effect-card { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 0 0 8px; overflow: hidden; border: 1px solid #393d4d; border-radius: 8px; color: inherit; background: #2b2f3a; font: inherit; text-align: left; cursor: pointer; outline: none; transition: border-color .12s ease, background .12s ease; }
+.add-effect-card.active:not(:disabled) { border-color: var(--accent); background: #2f3546; box-shadow: 0 0 0 1px var(--accent); }
+/* A card in the list already: everything dims but its Already added badge (an opacity on the card would dim the badge too). */
+.add-effect-card:disabled { cursor: default; }
+.add-effect-card:disabled > :not(.add-effect-thumb), .add-effect-card:disabled .add-effect-thumb > :not(img, .in-list), .add-effect-card:disabled .add-effect-thumb img.shown { opacity: .3; }
+.add-effect-thumb { position: relative; display: grid; place-items: center; aspect-ratio: 16 / 9; margin-bottom: 5px; color: #5d6378; background: repeating-linear-gradient(135deg, #252934 0 10px, #222631 10px 20px); }
+/* An effect with types stacks one image per type; the shown one fades in over the one before. */
+.add-effect-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .35s ease; }
+.add-effect-thumb img.shown { opacity: 1; }
+.add-effect-badge { position: absolute; top: 5px; right: 5px; padding: 2px 6px; border-radius: 10px; color: #fff; background: rgba(12,14,19,.8); font-size: 10px; font-weight: 600; }
+.add-effect-badge.types { right: auto; left: 5px; background: rgba(59,99,220,.9); }
+.add-effect-badge.in-list { top: 50%; right: auto; left: 50%; transform: translate(-50%, -50%); white-space: nowrap; }
+.add-effect-name { padding: 0 9px; color: #fff; font-size: 13.5px; font-weight: 600; }
+.add-effect-note { padding: 0 9px; color: #a3a8b6; font-size: 10.5px; line-height: 1.3; }
 .about-dialog {
   width: min(460px, 100%);
   position: relative;
@@ -1331,7 +1410,11 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .about-dialog.confirm-dialog { width: min(400px, 100%); }
 .confirm-dialog-content { padding: 22px 24px 18px; background: linear-gradient(180deg, #292d37, #242832); }
 .confirm-dialog-content h2 { margin: 0; color: #f1f2f4; font-size: 16px; font-weight: 700; }
+/* With a close button in the corner (closeButton), the title keeps clear of it. */
+.about-dialog-close + .confirm-dialog-content h2 { padding-right: 28px; }
 .confirm-dialog-content p { margin: 10px 0 0; color: #b9bdc8; font-size: 13px; line-height: 1.45; }
+/* A setting or MIDI control named in a question, in the MIDI orange. */
+.confirm-dialog-content .midi-name { color: var(--midi-on); }
 .confirm-dialog-actions { gap: 8px; }
 /* A list under the message, for example the MIDI controls to remove: the slider name, then where its control is. */
 .confirm-dialog-list { display: flex; flex-direction: column; gap: 6px; max-height: 240px; margin: 12px 0 0; padding: 0; overflow-y: auto; list-style: none; }

@@ -131,7 +131,9 @@ const EFFECT_GROUPS: [GroupKey, string][] = [
   ["particles", "Particles"],
   ["rays", "Light rays"],
   ["bloom", "Bloom"],
-  ["finish", "Final effects"]
+  ["sharpen", "Sharpen"],
+  ["color", "Color"],
+  ["levels", "Levels"]
 ];
 
 const IMAGE_TYPES: Record<string, string> = {

@@ -66,6 +66,13 @@ uniform float u_spiralCopies;
 /* Droste spiral: the size of the copy inside the picture, and the whole number of spiral arms (see drosteMap). */
 uniform float u_drosteSize;
 uniform float u_drosteSpirals;
+/* Droste spiral: how far each frame fades into the next copy, and the frames' shape from rectangle (0) to circle (1). */
+uniform float u_drosteSoftness;
+uniform float u_drosteRound;
+/* Droste spiral: the turn of the whole spiral, in radians. */
+uniform float u_drosteRotation;
+/* Droste spiral: the turn of the picture inside the frames, in radians. */
+uniform float u_drostePictureTurn;
 uniform float u_mapTwist;
 /* The direction of the axis that power, log spiral and tunnel fold over (see complexMap). */
 uniform vec2 u_mapAxis;
@@ -321,6 +328,19 @@ float juliaStretch;
 float drosteStretch;
 
 /**
+ * The spiral count that drosteMap uses: a whole number. shapeColor sets it
+ * to each of the two whole counts around u_drosteSpirals in turn.
+ */
+float drosteArms;
+
+/**
+ * The edge blend of the last Droste map (see drosteMap): the point in the
+ * smaller copy next to the frame, and how much of it shows (0: none).
+ */
+vec2 drosteAlt;
+float drosteAltWeight;
+
+/**
  * Droste spiral: the picture holds a smaller copy of itself at its center
  * (u_drosteSize of its size), which holds a smaller copy, and so on, with no
  * end inward or outward. Each copy is the whole picture as a rectangle, so
@@ -337,21 +357,50 @@ float drosteStretch;
  * The image point is then moved by whole copies into the space between
  * the picture's edge and its copy's edge, where the picture shows.
  * The speed moves in L, toward the center: one copy per log s.
+ *
+ * The frames' shape: how far out a point is is measured by the picture's
+ * rectangle, by a circle inside it, or by a mix of the two. Each measure
+ * grows in step with the point's distance, so the copies still repeat; and
+ * the circle's measure is never smaller than the rectangle's, so a point
+ * inside a frame is always inside the picture.
+ *
+ * The edge blend: near a frame's outer edge, the point fades into the same
+ * point one copy smaller (drosteAlt), which is what the other side of the
+ * frame shows. At the frame both sides then show the same color, so the
+ * hard edge becomes a soft fade.
  */
 vec2 drosteMap(vec2 z) {
   float size = clamp(u_drosteSize, 0.05, 0.95);
   float logS = -log(size);
   vec2 wLog = vec2(log(max(length(z), 1e-6)), atan(z.y, z.x));
-  vec2 beta = vec2(1.0, -u_drosteSpirals * logS / TAU);
+  vec2 beta = vec2(1.0, -drosteArms * logS / TAU);
   vec2 l = cmul(wLog, beta) - vec2(u_mapTravel, 0.0);
   vec2 q = exp(l.x) * vec2(cos(l.y), sin(l.y));
-  /* How far out the point is, by the picture's own rectangle: 1 at its edge, "size" at its copy's edge. */
+  /* How far out the point is, by the frame's shape: 1 at the frame, "size" at its copy's frame. */
   float aspect = u_imgRes.x / u_imgRes.y;
-  float m = max(abs(q.x) / (0.5 * aspect), abs(q.y) / 0.5);
+  float rectangle = max(abs(q.x) / (0.5 * aspect), abs(q.y) / 0.5);
+  float circle = length(q) / (0.5 * min(aspect, 1.0));
+  float m = mix(rectangle, circle, clamp(u_drosteRound, 0.0, 1.0));
   /* The whole number of copies (j) that brings m between size and 1. */
   float j = 1.0 - ceil(log(max(m, 1e-12)) / log(size));
   q *= pow(size, j);
   drosteStretch = length(beta) * length(q) / max(length(z), 1e-6);
+  /**
+   * The picture turns inside the frames: the frame was measured on the
+   * point before the turn, so the frames stay. A turn and a change of size
+   * do not affect each other, so the copies still meet.
+   */
+  q = turn(q, -u_drostePictureTurn);
+  /* The fade starts this far inside the frame, in log steps: at softness 1, at the copy's frame. */
+  float band = clamp(u_drosteSoftness, 0.0, 1.0) * logS;
+  drosteAlt = q * size;
+  /**
+   * The pan moves the picture inside the frames (in picture heights), after
+   * the size change, so the edge blend's point moves the same way.
+   */
+  q -= u_mapPan;
+  drosteAlt -= u_mapPan;
+  drosteAltWeight = band > 0.0 ? smoothstep(-band, 0.0, log(max(m * pow(size, j), 1e-12))) : 0.0;
   return q;
 }
 
@@ -365,8 +414,12 @@ float depthDistance;
 vec2 complexMap(vec2 p) {
   depthDistance = 1e9;
   if (u_mapMode == 0) return p;
-  /* The pan moves the map's center on the screen (in screen units, whatever the zoom). */
-  vec2 z = (p - u_mapPan) / u_mapScale;
+  /**
+   * The pan moves the map's center on the screen (in screen units, whatever
+   * the zoom). The Droste spiral uses the pan inside its frames instead (see
+   * drosteMap), and has no zoom.
+   */
+  vec2 z = u_mapMode == 8 ? p : (p - u_mapPan) / u_mapScale;
   vec2 w = z;
   /**
    * The point turned by the rotation, which turns the whole map. With a
@@ -462,8 +515,13 @@ vec2 complexMap(vec2 p) {
     w = seamlessSpiral(l, n == 0.0 ? k : (abs(k) < 1e-4 ? 1e-4 : k), n);
     depthDistance = length(onAxis);
   } else if (u_mapMode == 8) {
-    /* The picture stays upright: the map rotation, which only turns a fold axis, is not used. */
-    w = drosteMap(z);
+    /**
+     * The map rotation, which only turns a fold axis, is not used. The
+     * Droste rotation turns the point before the map, so the whole spiral
+     * and its frames turn on the screen; a turn of the angle keeps the
+     * spiral meeting itself.
+     */
+    w = drosteMap(turn(z, -u_drosteRotation));
     drosteStretch /= u_mapScale;
     depthDistance = length(z);
   } else if (u_mapMode == 5) {
@@ -492,6 +550,7 @@ vec2 complexMap(vec2 p) {
   }
   /* Roll and twist for the maps with no seam to keep (see mapRoll). */
   if (u_mapMode == 1 || u_mapMode == 3 || u_mapMode == 5) w = turn(w, u_mapRoll + u_mapCurl * length(w));
+  if (u_mapMode == 8) drosteAlt = mix(p, drosteAlt, u_mapMix);
   return mix(p, w, u_mapMix);
 }
 
@@ -708,8 +767,27 @@ vec3 shapeColor(vec2 screen, int skip, float g0) {
    */
   vec2 beforeSpiral = p;
   float stretch = 1.0;
+  /* The Droste edge blend's second point and its weight (see drosteMap). */
+  vec2 drosteP = p;
+  float drosteWeight = 0.0;
+  /**
+   * A spiral count between two whole numbers: the picture of the higher
+   * count (with its own edge blend and stretch) fades in over the picture
+   * of the lower count, by the part after the whole number.
+   */
+  float spiralWhole = floor(u_drosteSpirals);
+  float spiralFade = u_mapMode == 8 ? u_drosteSpirals - spiralWhole : 0.0;
+  vec2 spiralP = p;
+  vec2 spiralAlt = p;
+  float spiralAltWeight = 0.0;
+  float spiralStretch = 1.0;
+  drosteArms = spiralWhole;
   if (spiralLast) {
     p = complexMap(p);
+    if (u_mapMode == 8) {
+      drosteP = drosteAlt;
+      drosteWeight = drosteAltWeight;
+    }
     farDistance = depthDistance;
     if (fading) p2 = complexMap(p2);
     mapped = true;
@@ -724,6 +802,13 @@ vec3 shapeColor(vec2 screen, int skip, float g0) {
       float spiralSize = length(vec2(2.0 * aspect * twist, 2.0)) / TAU * squeeze;
       stretch = mix(1.0, spiralSize / max(length(beforeSpiral), 1e-4), u_mapMix);
     }
+    if (spiralFade > 1e-3) {
+      drosteArms = spiralWhole + 1.0;
+      spiralP = complexMap(beforeSpiral);
+      spiralAlt = drosteAlt;
+      spiralAltWeight = drosteAltWeight;
+      spiralStretch = mix(1.0, drosteStretch, u_mapMix);
+    }
   }
   /**
    * Texture detail follows how much the steps stretch the screen; with a
@@ -733,9 +818,19 @@ vec3 shapeColor(vec2 screen, int skip, float g0) {
    * so it is not capped. Explicit gradients avoid seams at the fold.
    */
   vec2 measured = folded ? beforeFold : (spiralLast ? beforeSpiral : p);
-  float g = max(min(max(length(dFdx(measured)), length(dFdy(measured))), g0 * 4.0) * stretch, mapDetail) / (folded ? u_zoom : 1.0);
+  float detail = min(max(length(dFdx(measured)), length(dFdy(measured))), g0 * 4.0);
+  float g = max(detail * stretch, mapDetail) / (folded ? u_zoom : 1.0);
   vec3 color = sourceColor(p, g);
   if (fading) color = mix(color, sourceColor(p2, g), fade);
+  /* The copy one size smaller has its detail smaller by the copy size too. */
+  float copySize = clamp(u_drosteSize, 0.05, 0.95);
+  if (drosteWeight > 0.0) color = mix(color, sourceColor(drosteP, g * copySize), drosteWeight);
+  if (spiralLast && spiralFade > 1e-3) {
+    float g2 = max(detail * spiralStretch, mapDetail) / (folded ? u_zoom : 1.0);
+    vec3 higher = sourceColor(spiralP, g2);
+    if (spiralAltWeight > 0.0) higher = mix(higher, sourceColor(spiralAlt, g2 * copySize), spiralAltWeight);
+    color = mix(color, higher, spiralFade);
+  }
   /**
    * Depth fade: the far end of the tunnel or a spiral (its center), the Möbius pole, or Julia's most stretched places
    * fades to black, which makes it look deep. It works as fog: each step of
@@ -1758,6 +1853,20 @@ uniform float u_exposure;
 uniform float u_black;
 uniform vec3 u_overlay;
 uniform float u_overlayOpacity;
+/* How the overlay color combines with the picture (see blendLayer). */
+uniform int u_overlayBlend;
+
+/* The same layer blends as the shape steps' (see blendLayer in KALEIDO_SHADER). */
+vec3 blendLayer(vec3 base, vec3 top, int mode) {
+  if (mode == 1) return 1.0 - (1.0 - base) * (1.0 - top);
+  if (mode == 2) return base * top;
+  if (mode == 3) return mix(2.0 * base * top, 1.0 - 2.0 * (1.0 - base) * (1.0 - top), step(0.5, base));
+  if (mode == 4) return abs(base - top);
+  if (mode == 5) return max(base, top);
+  if (mode == 6) return min(base, top);
+  if (mode == 7) return min(base + top, 1.0);
+  return top;
+}
 
 void main() {
   vec3 color = texture(u_tex, v_uv).rgb;
@@ -1770,7 +1879,8 @@ void main() {
     vec3 around = (cross + 0.5 * corners) / 6.0;
     color += u_sharpen * (color - around);
   }
-  color = mix(clamp(color, 0.0, 1.0), u_overlay, u_overlayOpacity);
+  color = clamp(color, 0.0, 1.0);
+  color = mix(color, blendLayer(color, u_overlay, u_overlayBlend), u_overlayOpacity);
   color *= exp2(u_exposure);
   color = max(color - u_black, 0.0) / (1.0 - u_black);
   o = vec4(clamp(color, 0.0, 1.0), 1.0);
@@ -2008,7 +2118,20 @@ in vec2 v_uv;
 out vec4 o;
 uniform sampler2D u_tex;
 uniform vec2 u_texel;
-vec3 at(float x, float y) { return texture(u_tex, v_uv + u_texel * vec2(x, y)).rgb; }
+/**
+ * For the first level, which reads the picture: each read keeps only the
+ * bright parts, as BLOOM_BRIGHT_SHADER does. Below 0 (the later levels),
+ * every read is kept as it is.
+ */
+uniform float u_threshold;
+uniform float u_softness;
+vec3 bright(vec3 color) {
+  if (u_threshold < 0.0) return color;
+  float peak = max(color.r, max(color.g, color.b));
+  float band = max(u_softness, 0.002) * 0.5;
+  return color * smoothstep(u_threshold - band, u_threshold + band, peak);
+}
+vec3 at(float x, float y) { return bright(texture(u_tex, v_uv + u_texel * vec2(x, y)).rgb); }
 void main() {
   vec3 corners = at(-2.0, 2.0) + at(2.0, 2.0) + at(-2.0, -2.0) + at(2.0, -2.0);
   vec3 sides = at(0.0, 2.0) + at(-2.0, 0.0) + at(2.0, 0.0) + at(0.0, -2.0);
@@ -2100,6 +2223,13 @@ uniform float u_speed;
 uniform vec2 u_gravity;
 uniform float u_turbulence;
 uniform float u_drag;
+/**
+ * How fast a particle turns to the picture's edge, from 0 (a turn rate of
+ * 8 per second) to 1 (800 per second: at once).
+ */
+uniform float u_follow;
+/* How strongly a particle is pulled to the middle of its edge (0: not at all, 1: up to "reach" in each frame). */
+uniform float u_cling;
 
 uint hashU(uint x) {
   x ^= x >> 16; x *= 0x7feb352du;
@@ -2177,7 +2307,49 @@ void main() {
   vec2 flow = swirl(place * 3.0 + vec2(0.11, -0.07) * u_time) + 0.5 * swirl(place * 6.1 + vec2(-0.13, 0.17) * u_time + 5.3);
   vec2 velocity = motion.zw + (u_gravity + u_turbulence * flow) * u_dt;
   velocity *= exp(-u_drag * u_dt);
-  vec2 next = motion.xy + velocity * u_dt * vec2(1.0 / u_aspect, 1.0);
+  /**
+   * Follow (always on): the particle turns toward the edge of the picture under it,
+   * the line of equal brightness through its place, and keeps its speed.
+   * Of the two ways along the edge it takes the one nearer its own way, so
+   * it does not turn back. Where the picture is flat there is no edge, and
+   * the particle goes on as before. The picture moves under it each frame,
+   * so it follows the animation.
+   */
+  /* Cling's move to the middle of the edge, in screen heights (see below). */
+  vec2 cling = vec2(0.0);
+  {
+    const float reach = 0.004;
+    vec2 across = vec2(reach / u_aspect, 0.0);
+    vec2 up = vec2(0.0, reach);
+    vec2 slope = vec2(
+      luma(textureLod(u_picture, motion.xy + across, 0.0).rgb) - luma(textureLod(u_picture, motion.xy - across, 0.0).rgb),
+      luma(textureLod(u_picture, motion.xy + up, 0.0).rgb) - luma(textureLod(u_picture, motion.xy - up, 0.0).rgb)) / (2.0 * reach);
+    float steepness = length(slope);
+    if (steepness > 1e-3) {
+      vec2 along = vec2(-slope.y, slope.x) / steepness;
+      if (dot(along, velocity) < 0.0) along = -along;
+      float speed = max(length(velocity), 0.5 * u_speed);
+      float turn = (1.0 - exp(-8.0 * pow(100.0, u_follow) * u_dt)) * smoothstep(0.5, 4.0, steepness);
+      velocity = mix(velocity, along * speed, turn);
+      /**
+       * Cling: the middle of the edge is where the brightness changes
+       * fastest. Across the edge (along "normal"), the change of the slope
+       * there is 0; on the side where the slope still grows, the middle is
+       * ahead. So the particle moves that way, by up to "reach" in each
+       * frame, less as the slope grows more slowly.
+       */
+      if (u_cling > 0.0) {
+        vec2 normal = slope / steepness;
+        vec2 offset = normal * reach * vec2(1.0 / u_aspect, 1.0);
+        float here = luma(textureLod(u_picture, motion.xy, 0.0).rgb);
+        float ahead = luma(textureLod(u_picture, motion.xy + offset, 0.0).rgb);
+        float behind = luma(textureLod(u_picture, motion.xy - offset, 0.0).rgb);
+        float bend = (ahead + behind - 2.0 * here) / (reach * reach);
+        cling = normal * clamp(bend * reach / steepness, -1.0, 1.0) * reach * u_cling * smoothstep(0.5, 4.0, steepness);
+      }
+    }
+  }
+  vec2 next = motion.xy + (velocity * u_dt + cling) * vec2(1.0 / u_aspect, 1.0);
   /* A particle that leaves the screen ends its life, to be born again on the next frame. */
   bool outside = any(lessThan(next, vec2(-0.05))) || any(greaterThan(next, vec2(1.05)));
   o_motion = vec4(next, velocity);
@@ -2202,7 +2374,31 @@ uniform int u_side;
 uniform float u_size;
 uniform float u_maxSize;
 uniform float u_opacity;
+/* How much the color comes from the life gradient instead of the picture (0: all from the picture). */
+uniform float u_gradient;
 out vec4 v_color;
+
+/* The life gradient's stops (2 to 8), in order of place: each stop's place from 0 to 1, and its color. */
+uniform int u_stopCount;
+uniform float u_stopAt[8];
+uniform vec3 u_stopColor[8];
+
+/**
+ * The life gradient, from birth (0) to the end of life (1): the colors of
+ * the two stops around t, mixed in a straight line, and the end stops'
+ * colors past them (as gradientColorAt in params.ts).
+ */
+vec3 lifeColor(float t) {
+  if (t <= u_stopAt[0]) return u_stopColor[0];
+  for (int i = 1; i < 8; i++) {
+    if (i >= u_stopCount) break;
+    if (t <= u_stopAt[i]) {
+      float span = u_stopAt[i] - u_stopAt[i - 1];
+      return mix(u_stopColor[i - 1], u_stopColor[i], span > 0.0 ? (t - u_stopAt[i - 1]) / span : 1.0);
+    }
+  }
+  return u_stopColor[clamp(u_stopCount - 1, 0, 7)];
+}
 void main() {
   ivec2 cell = ivec2(gl_VertexID % u_side, gl_VertexID / u_side);
   vec4 life = texelFetch(u_life, cell, 0);
@@ -2218,18 +2414,38 @@ void main() {
   float size = u_size * (0.6 + 0.8 * life.z);
   gl_Position = vec4(motion.xy * 2.0 - 1.0, 0.0, 1.0);
   gl_PointSize = clamp(size, 1.0, u_maxSize);
-  v_color = vec4(texelFetch(u_color, cell, 0).rgb, fade * u_opacity * min(1.0, size * size));
+  /**
+   * The gradient runs over the part of the life that shows: from the middle
+   * of the fade-in (t = 0.05) to t = 0.75, where the fade-out still leaves
+   * about two thirds of the light. Over the whole life, the last color
+   * would show only as the particle goes dark.
+   */
+  float sweep = clamp((t - 0.05) / 0.7, 0.0, 1.0);
+  vec3 color = mix(texelFetch(u_color, cell, 0).rgb, lifeColor(sweep), u_gradient);
+  v_color = vec4(color, fade * u_opacity * min(1.0, size * size));
 }`;
 
 /** A soft round dot, full at its center and gone at its edge, with premultiplied alpha. */
 export const PARTICLE_SHADER = `#version 300 es
 precision highp float;
 in vec4 v_color;
+/**
+ * Boost, from 1 up. The dot covers more: its strength is multiplied by the
+ * boost (up to full), and its light falls off more slowly from the center,
+ * (1 - d^2)^(2 / boost): a soft dot at 1, a firm center with a soft edge at
+ * 8. And its color gets brighter by the boost, but only until its
+ * brightest channel is full, so the color keeps its hue and does not go
+ * white.
+ */
+uniform float u_boost;
 out vec4 o;
 void main() {
   vec2 p = gl_PointCoord * 2.0 - 1.0;
   float d2 = dot(p, p);
   if (d2 > 1.0) discard;
-  float a = v_color.a * (1.0 - d2) * (1.0 - d2);
-  o = vec4(v_color.rgb * a, a);
+  float boost = max(u_boost, 1.0);
+  float a = min(1.0, v_color.a * boost) * pow(1.0 - d2, 2.0 / boost);
+  float peak = max(max(v_color.r, v_color.g), v_color.b);
+  vec3 color = v_color.rgb * min(boost, 1.0 / max(peak, 1e-3));
+  o = vec4(color * a, a);
 }`;

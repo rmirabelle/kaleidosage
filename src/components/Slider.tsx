@@ -1,5 +1,5 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent, type Ref } from "react";
-import { mirrorAround, shiftRange, snapToDetent } from "./sliderMath";
+import { mirrorAround, shiftRange, snapToPoints } from "./sliderMath";
 
 interface Bounds {
   min: number;
@@ -26,7 +26,7 @@ export function rangePosition(value: number, min: number, max: number) {
  * One handle in a recessed well. A click anywhere on the well moves the
  * handle there. The filled part runs from the start to the handle.
  */
-export function Slider({ min, max, step, value, onChange, label, detent, markerRef }: Bounds & {
+export function Slider({ min, max, step, value, onChange, label, detent, snapToDetent = true, snaps = [], markerRef }: Bounds & {
   value: number;
   onChange: (value: number) => void;
   label: string;
@@ -34,9 +34,15 @@ export function Slider({ min, max, step, value, onChange, label, detent, markerR
   markerRef?: Ref<HTMLDivElement>;
   /** The value with no effect: a tick mark shows it, and the handle snaps to it. */
   detent?: number;
+  /** Other values the handle snaps to, each with a fainter tick mark. */
+  snaps?: readonly number[];
+  /** False: the detent shows its tick mark, but the handle does not snap to it. */
+  snapToDetent?: boolean;
 }) {
+  const points = detent === undefined || !snapToDetent ? snaps : [detent, ...snaps];
   return (
     <div className="slider">
+      {snaps.filter((point) => point !== detent).map((point) => <div key={point} className="slider-detent minor" style={{ left: trackPosition(point, min, max) }} />)}
       {detent !== undefined && <div className="slider-detent" style={{ left: trackPosition(detent, min, max) }} />}
       <div className="slider-well">
         <div className="slider-fill" style={{ left: 0, width: trackPosition(value, min, max) }} />
@@ -49,7 +55,7 @@ export function Slider({ min, max, step, value, onChange, label, detent, markerR
         max={max}
         step={step}
         value={value}
-        onChange={(event) => onChange(snapToDetent(Number(event.target.value), detent, min, max))}
+        onChange={(event) => onChange(snapToPoints(Number(event.target.value), points, min, max))}
       />
     </div>
   );
@@ -67,7 +73,7 @@ export function Slider({ min, max, step, value, onChange, label, detent, markerR
  * other handle moves the same distance on the other side of the zero point
  * (or of the range's middle, for a slider with no zero point).
  */
-export function RangeSlider({ min, max, step, low, high, onChange, onHold, label, markerRef, detent }: Bounds & {
+export function RangeSlider({ min, max, step, low, high, onChange, onHold, label, markerRef, detent, snapToDetent = true, snaps = [] }: Bounds & {
   low: number;
   high: number;
   onChange: (low: number, high: number) => void;
@@ -75,7 +81,11 @@ export function RangeSlider({ min, max, step, low, high, onChange, onHold, label
   label: string;
   markerRef?: Ref<HTMLDivElement>;
   detent?: number;
+  /** Other values the handles snap to, each with a fainter tick mark. */
+  snaps?: readonly number[];
+  snapToDetent?: boolean;
 }) {
+  const points = detent === undefined || !snapToDetent ? snaps : [detent, ...snaps];
   /** While a handle is dragged with Ctrl held: the point the other handle mirrors around. */
   const mirror = useRef<number | null>(null);
   const dragging = useRef<"low" | "high" | null>(null);
@@ -136,7 +146,7 @@ export function RangeSlider({ min, max, step, low, high, onChange, onHold, label
     window.addEventListener("keyup", onKey);
   };
   const changeLow = (raw: number) => {
-    const value = snapToDetent(raw, detent, min, max);
+    const value = snapToPoints(raw, points, min, max);
     if (mirror.current !== null) {
       const [moved, other] = mirrorAround(value, mirror.current, min, max, step);
       if (dragging.current === "low") onHoldRef.current?.(moved);
@@ -147,7 +157,7 @@ export function RangeSlider({ min, max, step, low, high, onChange, onHold, label
     onChange(value, high);
   };
   const changeHigh = (raw: number) => {
-    const value = snapToDetent(raw, detent, min, max);
+    const value = snapToPoints(raw, points, min, max);
     if (mirror.current !== null) {
       const [moved, other] = mirrorAround(value, mirror.current, min, max, step);
       if (dragging.current === "high") onHoldRef.current?.(moved);
@@ -163,12 +173,13 @@ export function RangeSlider({ min, max, step, low, high, onChange, onHold, label
   const [left, right] = reversed ? [high, low] : [low, high];
   return (
     <div className={`slider range ${reversed ? "reversed" : ""}`}>
+      {snaps.filter((point) => point !== detent).map((point) => <div key={point} className="slider-detent minor" style={{ left: rangePosition(point, min, max) }} />)}
       {detent !== undefined && <div className="slider-detent" style={{ left: rangePosition(detent, min, max) }} />}
       <div
         className={`range-grab ${movingRange ? "moving" : ""}`}
         style={{ left: rangePosition(left, min, max), width: `calc(${rangePosition(right, min, max)} - ${rangePosition(left, min, max)})` }}
         onPointerDown={startRangeMove}
-        data-tip="Drag to move the whole range. Ctrl + drag a handle to mirror it."
+        data-tip="Drag to move the whole range. `Ctrl` + drag a handle to mirror it."
       >
         <div className="slider-fill" />
       </div>
@@ -182,7 +193,7 @@ export function RangeSlider({ min, max, step, low, high, onChange, onHold, label
         step={step}
         value={low}
         style={{ zIndex: lowOnTop ? 2 : 1 }}
-        data-tip="Ctrl + drag: the other handle mirrors this one"
+        data-tip="`Ctrl` + drag: the other handle mirrors this one"
         onPointerDown={(event) => startDrag("low", low, event.ctrlKey)}
         onChange={(event) => changeLow(Number(event.target.value))}
       />
@@ -195,7 +206,7 @@ export function RangeSlider({ min, max, step, low, high, onChange, onHold, label
         step={step}
         value={high}
         style={{ zIndex: lowOnTop ? 1 : 2 }}
-        data-tip="Ctrl + drag: the other handle mirrors this one"
+        data-tip="`Ctrl` + drag: the other handle mirrors this one"
         onPointerDown={(event) => startDrag("high", high, event.ctrlKey)}
         onChange={(event) => changeHigh(Number(event.target.value))}
       />

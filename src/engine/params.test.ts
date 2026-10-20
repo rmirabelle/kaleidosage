@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GROUP_PARAMS, PARAM_KEYS, createParams, createPlayState, defaultValue, fullRange, NUDGE, hexToRgb, hslToHex, liveValue, NO_EFFECT, nudgeParams, randomizeGroup, randomizeParams, resetEffects, setCustomTime, startRangeAt, withKindOrder, addEffect, removeEffect, toSlider, fromSlider, SLIDER_STEPS } from "./params";
+import { GROUP_PARAMS, PARAM_KEYS, applyRadialStart, createParams, gradientColorAt, rgbToHex, createPlayState, defaultValue, fullRange, NUDGE, hexToRgb, hslToHex, liveValue, NO_EFFECT, nudgeParams, randomizeGroup, randomizeParams, resetEffects, setCustomTime, startRangeAt, withKindOrder, addEffect, removeEffect, toSlider, fromSlider, SLIDER_STEPS } from "./params";
 
 /** A play state at this many seconds, on both clocks: animation time (the shared cycle) and real time (custom ranges). */
 const at = (time: number) => ({ ...createPlayState(), time, clock: time });
@@ -273,6 +273,31 @@ describe("overlay colors", () => {
   });
 });
 
+describe("gradientColorAt", () => {
+  it("mixes the two stops around a place, and keeps the end colors past the ends", () => {
+    const stops = [{ at: 0.25, color: "#ff0000" }, { at: 0.5, color: "#0000ff" }, { at: 1, color: "#ffffff" }];
+    expect(rgbToHex(gradientColorAt(stops, 0))).toBe("#ff0000");
+    expect(rgbToHex(gradientColorAt(stops, 0.375))).toBe("#800080");
+    expect(rgbToHex(gradientColorAt(stops, 0.75))).toBe("#8080ff");
+    /* The stops may come in any order. */
+    expect(rgbToHex(gradientColorAt([...stops].reverse(), 0.375))).toBe("#800080");
+  });
+});
+
+describe("applyRadialStart", () => {
+  it("sets the Radial look and leaves the tile size", () => {
+    const params = createParams();
+    Object.assign(params.zoom, { value: 0.6, on: true });
+    params.tileSize.value = 1.2;
+    applyRadialStart(params);
+    expect(params.segments.value).toBe(10);
+    expect(params.rotation).toMatchObject({ low: 0, high: 45, on: true, ease: "organic" });
+    expect(params.panX).toMatchObject({ low: -0.15, high: 0.15, on: true });
+    expect(params.zoom).toMatchObject({ value: 1, on: false });
+    expect(params.tileSize.value).toBe(1.2);
+  });
+});
+
 describe("resetEffects", () => {
   it("turns every unlocked effect off, and leaves locked groups and the image blend", () => {
     const params = createParams();
@@ -287,7 +312,7 @@ describe("resetEffects", () => {
     expect(params.mapPower).toMatchObject({ value: fresh.mapPower.value, low: fresh.mapPower.low, high: fresh.mapPower.high, on: fresh.mapPower.on });
     expect(params.mapAngle.ease).toBe(fresh.mapAngle.ease);
     expect(params.rotation.on).toBe(false);
-    expect(state.groups).toMatchObject({ warp: false, kaleidoscope: false, finish: false, trails: true, source: true });
+    expect(state.groups).toMatchObject({ warp: false, kaleidoscope: false, color: false, trails: true, source: true });
     expect(state.fxOrder).toEqual(["trails"]);
     expect(JSON.stringify(params.trailAmount)).toBe(trails);
     expect(params.imageBlend).toMatchObject({ value: 0.4, on: true });
@@ -322,7 +347,8 @@ describe("randomizeParams", () => {
       const state = createPlayState();
       state.locks.kaleidoscope = true;
       state.locks.map = true;
-      state.locks.finish = true;
+      state.locks.sharpen = true;
+      state.locks.color = true;
       const before = JSON.stringify({ zoom: params.zoom, segments: params.segments, mapPower: params.mapPower, sharpen: params.sharpen });
       const stateBefore = { map: state.groups.map, mapMode: state.mapMode, overlayColor: state.overlayColor };
       randomizeParams(params, state);
@@ -413,8 +439,8 @@ describe("nudgeParams", () => {
 
 describe("effect order", () => {
   it("puts one kind of step in a new order, in the places that kind has now", () => {
-    expect(withKindOrder(["blur", "warp", "trails", "map", "kaleidoscope", "finish"], ["kaleidoscope", "map", "warp"]))
-      .toEqual(["blur", "kaleidoscope", "trails", "map", "warp", "finish"]);
+    expect(withKindOrder(["blur", "warp", "trails", "map", "kaleidoscope", "levels"], ["kaleidoscope", "map", "warp"]))
+      .toEqual(["blur", "kaleidoscope", "trails", "map", "warp", "levels"]);
   });
 
   it("Randomize picks effects in a random order, and a locked effect keeps its place", () => {
@@ -430,7 +456,7 @@ describe("effect order", () => {
       expect(state.fxOrder.indexOf("trails")).toBe(Math.min(place, state.fxOrder.length - 1));
       expect(new Set(state.fxOrder).size).toBe(state.fxOrder.length);
       /* An effect in the list is on, and one that is not is off. */
-      for (const step of ["warp", "map", "kaleidoscope", "blur", "smear", "contours", "relief", "finish"] as const) {
+      for (const step of ["warp", "map", "kaleidoscope", "blur", "smear", "contours", "relief", "sharpen", "color", "levels"] as const) {
         expect(state.groups[step]).toBe(state.fxOrder.includes(step));
       }
       firsts.add(state.fxOrder[0]);

@@ -173,7 +173,7 @@ export function HelpButton({ topic, inline = false }: { topic: HelpTopicId; inli
       {active && (inline ? badgeButton : createPortal(badgeButton, document.body))}
       {active && position && createPortal(
         <div ref={cardRef} className="help-card" role="dialog" aria-label={`Help: ${title}`} style={{ left: position.left ?? 0, top: position.top, visibility: position.left === null ? "hidden" : undefined }}>
-          <button className="help-card-close" onClick={() => setPosition(null)} data-tip="Close (Esc)" aria-label="Close the help">
+          <button className="help-card-close" onClick={() => setPosition(null)} data-tip="Close `Esc`" aria-label="Close the help">
             <X size={13} weight="bold" />
           </button>
           <h3>{title}</h3>

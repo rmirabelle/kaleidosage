@@ -95,6 +95,21 @@ function sliderLimits(param: Param): [number, number, number] {
 }
 
 /** Hue sliders show the fully saturated colors along their track. */
+/**
+ * Counts that crossfade between whole numbers (the Droste spirals, the
+ * Kaleidoscope segments): each whole number has a tick mark, and the
+ * handles snap to it. The values between still work.
+ */
+const WHOLE_SNAP_KEYS: ParamKey[] = ["drosteSpirals", "segments"];
+
+/** Settings whose small values near the zero point matter (a camera height of 0.01): the zero point keeps its tick mark, with no snap. */
+const NO_DETENT_SNAP_KEYS: ParamKey[] = ["cameraHeight"];
+
+/** What a setting is, at the start of its name's tooltip, for the settings that need it. */
+const NAME_TIPS: Partial<Record<ParamKey, string>> = {
+  cycle: "Scene loop length. Individual FX settings can have their own lengths."
+};
+
 const HUE_KEYS: ParamKey[] = ["contourHue"];
 
 /**
@@ -136,6 +151,9 @@ function ParamRow({ engine, paramKey, readout, marker, singleMarker, after, menu
   const [sliderMin, sliderMax, sliderStep] = sliderLimits(param);
   const at = (number: number) => toSlider(param, number);
   const detent = noEffect === undefined ? undefined : at(noEffect);
+  const snaps = WHOLE_SNAP_KEYS.includes(paramKey)
+    ? Array.from({ length: Math.floor(param.max) - Math.ceil(param.min) + 1 }, (_, index) => at(Math.ceil(param.min) + index))
+    : undefined;
 
   /** A MIDI knob moved this parameter: show its new value. */
   /**
@@ -267,7 +285,7 @@ function ParamRow({ engine, paramKey, readout, marker, singleMarker, after, menu
           {/* Double-click on the name: back to the default value, or the full range. */}
           <span
             className={`panel-row-name ${touched ? "midi-touched" : ""} ${bypassed ? "bypassed" : ""}`}
-            data-tip={`Double-click: back to the default. Ctrl + hold: no effect while held.${menu ? " Right-click: more choices." : ""}`}
+            data-tip={`${NAME_TIPS[paramKey] ? `${NAME_TIPS[paramKey]} ` : ""}Double-click: back to the default. \`Ctrl\` + hold: no effect while held.${menu ? " Right-click: more choices." : ""}`}
             onDoubleClick={(event) => { if (!event.ctrlKey) reset(); }}
             onPointerDown={(event) => {
               if (!event.ctrlKey || event.button !== 0) return;
@@ -306,6 +324,8 @@ function ParamRow({ engine, paramKey, readout, marker, singleMarker, after, menu
             markerRef={marker}
             onHold={(held) => onHold(held === null ? null : fromSlider(param, held))}
             detent={detent}
+            snapToDetent={!NO_DETENT_SNAP_KEYS.includes(paramKey)}
+            snaps={snaps}
             onChange={(low, high) => setHandles([fromSlider(param, low), fromSlider(param, high)])}
           />
         ) : (
@@ -316,6 +336,8 @@ function ParamRow({ engine, paramKey, readout, marker, singleMarker, after, menu
             step={sliderStep}
             value={at(value)}
             detent={detent}
+            snapToDetent={!NO_DETENT_SNAP_KEYS.includes(paramKey)}
+            snaps={snaps}
             markerRef={param.drift ? singleMarker : undefined}
             onChange={(position) => {
               const next = fromSlider(param, position);
@@ -441,7 +463,7 @@ function MidiAssign({ engine, paramKey, label }: { engine: Engine; paramKey: Par
     return `Control ${number}, channel ${channel} (${device})${others.length ? `. It also moves ${others.join(", ")}` : ""}.`;
   }).join(" ") : "";
   const title = waiting
-    ? "Move a knob or fader to assign it to this slider. Click or Esc to stop."
+    ? "Move a knob or fader to assign it to this slider. Click or `Esc` to stop."
     : assigned
       ? `${where} Click to add another control; right-click to remove every control from this slider.`
       : "Assign a MIDI knob or fader to this slider";

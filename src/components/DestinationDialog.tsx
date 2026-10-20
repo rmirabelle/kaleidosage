@@ -4,7 +4,6 @@ import { GROUP_PARAMS, createParams, type GroupKey, type ParamKey } from "../eng
 import { EFFECT_NAMES, submodeNote } from "../engine/submodes";
 import { NOT_MAPPABLE } from "../lib/midi";
 import { MidiIcon } from "./MidiIcon";
-import { PowerIcon } from "./PowerIcon";
 
 /** The groups of settings, in the order the panels show them: the Source panel, then the effects. */
 export const DESTINATION_GROUPS: readonly (readonly [GroupKey, string])[] = [["source", "Source"], ...EFFECT_NAMES];
@@ -31,18 +30,21 @@ export function destinationName(key: ParamKey) {
  * setting, and it opens on the group of a setting the control already
  * moves, or on the first effect that is on. Every setting the control moves (it
  * can move several, a macro) is orange and has a trash button that
- * removes that mapping. Each effect group shows its power icon, lit when
- * the effect is on. Esc, the close button or a click outside the dialog
+ * removes that mapping. A setting that other controls move names them,
+ * so the user sees it is mapped already. Each group has a bullet before
+ * its name. Esc, the close button or a click outside the dialog
  * closes it with no change.
  */
-export function DestinationDialog({ current, mapped, control, groupsOn, onPick, onRemove, onCancel }: {
+export function DestinationDialog({ current, mapped, mappedElsewhere, control, groupsOn, onPick, onRemove, onCancel }: {
   /** The setting the row moves now, or null for a new mapping. */
   current: ParamKey | null;
   /** Every setting the control moves. */
   mapped: readonly ParamKey[];
+  /** The names of the other controls that move each setting, for the settings that other controls move. */
+  mappedElsewhere: Partial<Record<ParamKey, string[]>>;
   /** Removes the mapping from the control to one setting. */
   onRemove: (key: ParamKey) => void;
-  /** Which effect groups are on (the Source group has no power button). */
+  /** Which effect groups are on: the dialog opens on the first effect that is on. */
   groupsOn: Readonly<Record<GroupKey, boolean>>;
   /** The control's name, for the title. */
   control: string;
@@ -89,10 +91,8 @@ export function DestinationDialog({ current, mapped, control, groupsOn, onPick, 
                     className={`destination-item ${key === group ? "selected" : ""} ${current && key === groupOf(current) ? "current" : ""}`}
                     onClick={() => setGroup(key)}
                   >
-                    <span className="destination-power" data-tip={key === "source" ? undefined : groupsOn[key] ? "On" : "Off"}>
-                      {key !== "source" && <PowerIcon on={groupsOn[key]} size={15} />}
-                    </span>
-                    <span className="destination-group-title">{title}</span>
+                    <span className="destination-bullet" aria-hidden="true" />
+                    <span className="destination-group-title">{key === "source" ? "Source A/B" : title}</span>
                   </button>
                 </li>
               ))}
@@ -103,6 +103,7 @@ export function DestinationDialog({ current, mapped, control, groupsOn, onPick, 
             <ul role="listbox" aria-label="Settings">
               {destinationsOf(group).map((key) => {
                 const note = submodeNote(key);
+                const others = mappedElsewhere[key];
                 return (
                   <li key={key} className="destination-setting">
                     <button
@@ -112,7 +113,12 @@ export function DestinationDialog({ current, mapped, control, groupsOn, onPick, 
                       onClick={() => onPick(key)}
                     >
                       {LABELS[key].label}
-                      {note && <small>{note}</small>}
+                      {(others || note) && (
+                        <span className="destination-extras">
+                          {others && <small className="destination-mapped" data-tip={`Mapped to ${others.join(", ")}`}><MidiIcon size={11} /> {others.join(", ")}</small>}
+                          {note && <small>{note}</small>}
+                        </span>
+                      )}
                     </button>
                     {mapped.includes(key) && (
                       <button

@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useReducer, useRef, useState, useSyncExternalStore, type RefObject } from "react";
 import { Broadcast, Equalizer, MusicNote, MusicNotes, Plug, Plus, SpeakerHigh, SpeakerSimpleHigh, Trash, X } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
 import { formatValue } from "../engine/params";
@@ -362,12 +362,56 @@ function TrackRows({ onAddTracks }: { onAddTracks: () => void }) {
  * each beat, then the scene's audio links. The input belongs to the app,
  * and the links to the scene (see docs/AUDIO.md).
  */
-export function AudioPanel({ engine, onAddTracks, sceneName }: { engine: Engine; onAddTracks: () => void; sceneName: string }) {
+/**
+ * The tip at the right of the Input menu, with an arrow to it: the FX audio
+ * button was turned on while the app listens to nothing. It follows the
+ * menu while the panel opens (the panel grows in height).
+ */
+function InputTip({ anchor, onClose }: { anchor: RefObject<HTMLLabelElement | null>; onClose: () => void }) {
+  const tipRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    let frame = 0;
+    const place = () => {
+      const label = anchor.current?.getBoundingClientRect();
+      const tip = tipRef.current;
+      if (label && tip) {
+        tip.style.left = `${label.right + 12}px`;
+        tip.style.top = `${label.top + label.height / 2 - tip.offsetHeight / 2}px`;
+      }
+      frame = requestAnimationFrame(place);
+    };
+    place();
+    return () => cancelAnimationFrame(frame);
+  }, [anchor]);
+  return createPortal(
+    <div ref={tipRef} className="input-tip" role="status">
+      <span>Pick an Input first. Then the settings can move with the sound.</span>
+      <button className="help-card-close" onClick={onClose} aria-label="Close the tip" data-tip="Close">
+        <X size={14} />
+      </button>
+    </div>,
+    document.body
+  );
+}
+
+export function AudioPanel({ engine, onAddTracks, sceneName, inputTip, onInputTipDone }: {
+  engine: Engine;
+  onAddTracks: () => void;
+  sceneName: string;
+  /** Shows the tip at the Input menu, until an input is picked or the tip is closed. */
+  inputTip: boolean;
+  onInputTipDone: () => void;
+}) {
   useSyncExternalStore(subscribe, version);
   useSyncExternalStore(subscribeTracks, tracksVersion);
   const { status, settings, devices } = audioInput;
   const listening = status.state === "on";
+  const inputRef = useRef<HTMLLabelElement>(null);
   useEffect(() => { void audioInput.refreshDevices(); }, []);
+  /* A picked input does what the tip asks, so the tip goes. */
+  useEffect(() => {
+    if (inputTip && settings.kind !== "none") onInputTipDone();
+  }, [inputTip, settings.kind, onInputTipDone]);
   const options: [string, string][] = [[NONE, "Nothing (do not listen)"]];
   const headings = new Map<string, string>();
   for (const kind of ["output", "input"] as const) {
@@ -387,7 +431,7 @@ export function AudioPanel({ engine, onAddTracks, sceneName }: { engine: Engine;
       <div className="midi-panel-columns">
         <div className="midi-panel-devices audio-source" {...help("audio.input")}>
           <div className="stage-label"><Plug size={13} weight="bold" /> Source <HelpButton topic="audio.input" inline /></div>
-          <label className="audio-setting inline">
+          <label ref={inputRef} className="audio-setting inline" data-tip="Select an input to listen and react to.">
             <span>Input</span>
             <Dropdown
               value={picked}
@@ -403,15 +447,16 @@ export function AudioPanel({ engine, onAddTracks, sceneName }: { engine: Engine;
               }}
             />
           </label>
+          {inputTip && settings.kind === "none" && <InputTip anchor={inputRef} onClose={onInputTipDone} />}
           {/* A failure, for example a microphone that Windows blocks. */}
           {status.state === "error" && <p className="audio-error audio-setting selectable">{status.message}</p>}
-          <div className="audio-setting" data-tip="Added to the loudness of the input, before the threshold">
-            <span>Global Gain <output>{settings.gainDb > 0 ? "+" : ""}{settings.gainDb} dB</output></span>
-            <Slider min={GAIN_DB[0]} max={GAIN_DB[1]} step={1} value={settings.gainDb} detent={0} label="Global Gain" onChange={(value) => audioInput.setGain(value)} />
+          <div className="audio-setting" data-tip="Gain applied to the audio signal before threshold detection.">
+            <span>Master Gain <output>{settings.gainDb > 0 ? "+" : ""}{settings.gainDb} dB</output></span>
+            <Slider min={GAIN_DB[0]} max={GAIN_DB[1]} step={1} value={settings.gainDb} detent={0} label="Master Gain" onChange={(value) => audioInput.setGain(value)} />
           </div>
-          <div className="audio-setting" data-tip="Sound quieter than this moves nothing and gives no beats. A whisper at -26 dB needs a threshold below -26 dB.">
-            <span>Global Threshold <output>{settings.thresholdDb} dB</output></span>
-            <Slider min={THRESHOLD_DB[0]} max={THRESHOLD_DB[1]} step={1} value={settings.thresholdDb} label="Global Threshold" onChange={(value) => audioInput.setThreshold(value)} />
+          <div className="audio-setting" data-tip="The minimum loudness of the audio needed to trigger detection.">
+            <span>Master Threshold <output>{settings.thresholdDb} dB</output></span>
+            <Slider min={THRESHOLD_DB[0]} max={THRESHOLD_DB[1]} step={1} value={settings.thresholdDb} label="Master Threshold" onChange={(value) => audioInput.setThreshold(value)} />
           </div>
           {/* The levels, at the bottom of the Source column, under the settings that shape them. */}
           <div className="stage-label audio-source-levels" {...help("audio.levels")}><Equalizer size={13} weight="bold" /> Levels <HelpButton topic="audio.levels" inline /></div>

@@ -1,11 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { createParams, createPlayState } from "./params";
+import { createParams, createPlayState, defaultGradientStops } from "./params";
 import { applyScene, blobToSceneImage, sceneFingerprint, sceneImageToBlob, serializeScene } from "./scene";
 
 const IMAGE = { type: "image/png", data: "iVBORw0KGgo=" };
 const IMAGE2 = { type: "image/jpeg", data: "/9j/4AAQ" };
 
 describe("scene files", () => {
+  it("keep the particles' gradient stops, and drop stops that do not read", () => {
+    const state = createPlayState();
+    state.particleStops = [{ at: 0, color: "#112233" }, { at: 0.4, color: "#ffffff" }, { at: 1, color: "#000000" }];
+    const loaded = createPlayState();
+    applyScene(serializeScene(createParams(), state, { image: IMAGE }), createParams(), loaded);
+    expect(loaded.particleStops).toEqual(state.particleStops);
+    const broken = JSON.stringify({ app: "KaleidoSage", version: 1, params: {}, state: { particleStops: [{ at: 2, color: "#abcdef" }, { at: 0.5, color: "red" }] }, image: IMAGE });
+    applyScene(broken, createParams(), loaded);
+    expect(loaded.particleStops).toEqual(defaultGradientStops());
+  });
+
   it("round-trips embedded video handles for both slots without base64", () => {
     const images = { image: { type: "video/mp4", video: "1" }, image2: { type: "video/webm", video: "2" } };
     const saved = serializeScene(createParams(), createPlayState(), images);
@@ -94,7 +105,7 @@ describe("scene files", () => {
     /* Earlier versions of the app read a full order inside each kind: the list's order first. */
     const savedState = JSON.parse(text).state;
     expect(savedState.shapeStack).toEqual(["warp", "map", "kaleidoscope"]);
-    expect(savedState.pictureOrder).toEqual(["relief", "blur", "trails", "smear", "contours", "driver", "camera", "sort", "particles", "rays", "bloom", "finish"]);
+    expect(savedState.pictureOrder).toEqual(["relief", "blur", "trails", "smear", "contours", "driver", "camera", "sort", "particles", "rays", "bloom", "sharpen", "color", "levels"]);
 
     /* Scenes from before the effect list: every effect that is on and changes the picture, in their order. */
     const showing = { warpAmount: { value: 0.3 }, blurAmount: { value: 10 }, trailAmount: { value: 0.5 }, smearAmount: { value: 1 }, contourOpacity: { value: 1 }, reliefAmount: { value: 1 }, sharpen: { value: 1 } };
@@ -104,15 +115,18 @@ describe("scene files", () => {
       applyScene(JSON.stringify({ app: "KaleidoSage", version: 2, params, state: { groups: allOn, ...state }, image: IMAGE }), createParams(), loadedState);
       return loadedState;
     };
+    /* Their Final effects becomes the parts of it that change the picture: here only Sharpen. */
     expect(older({ fxOrder: ["blur", "kaleidoscope", "warp", "map", "trails", "smear", "contours", "relief", "finish"] }).fxOrder)
-      .toEqual(["blur", "kaleidoscope", "warp", "map", "trails", "smear", "contours", "relief", "finish"]);
+      .toEqual(["blur", "kaleidoscope", "warp", "map", "trails", "smear", "contours", "relief", "sharpen"]);
     expect(older({ shapeStack: ["warp", "map", "kaleidoscope"], pictureOrder: ["relief", "contours", "blur", "finish", "trails", "smear"] }).fxOrder)
-      .toEqual(["warp", "map", "kaleidoscope", "relief", "contours", "blur", "finish", "trails", "smear"]);
+      .toEqual(["warp", "map", "kaleidoscope", "relief", "contours", "blur", "sharpen", "trails", "smear"]);
     expect(older({ warpMode: 2, shapeOrder: ["warp", "warp", "map"] }).fxOrder.slice(0, 3)).toEqual(["warp", "kaleidoscope", "map"]);
     expect(older({ shapeOrder: ["warp", "map", "kaleidoscope"] }).fxOrder.slice(0, 3)).toEqual(["kaleidoscope", "map", "warp"]);
     /* A scene from before Time smear and Contours keeps its order, with the new steps after Trails. */
-    expect(older({ pictureOrder: ["relief", "blur", "finish", "trails"] }).fxOrder.slice(3)).toEqual(["relief", "blur", "finish", "trails", "smear", "contours"]);
+    expect(older({ pictureOrder: ["relief", "blur", "finish", "trails"] }).fxOrder.slice(3)).toEqual(["relief", "blur", "sharpen", "trails", "smear", "contours"]);
     /* An effect that was off, or on with nothing to show, is not in the list, and it is off. */
+    /* A scene with the effect list keeps the parts of its Final effects that change the picture. */
+    expect(older({ effects: ["blur", "finish"] }, { blurAmount: { value: 10 }, exposure: { value: -1 }, sharpen: { value: 0.5 } }).fxOrder).toEqual(["blur", "sharpen", "levels"]);
     const some = older({ groups: { ...allOn, map: false } }, { blurAmount: { value: 10 } });
     expect(some.fxOrder).toEqual(["kaleidoscope", "blur"]);
     expect(some.groups).toMatchObject({ map: false, warp: false, trails: false, kaleidoscope: true, blur: true });

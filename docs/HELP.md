@@ -24,7 +24,7 @@ few seconds. A live performer never sees help that they did not ask for.
    part of help (cards, the help page, the guide) reads it from there.
 5. **Plain words.** ASD-STE100 Simplified Technical English: common words,
    short sentences, active voice. Name each control exactly as the screen
-   shows it ("Global Threshold", not "the threshold slider").
+   shows it ("Master Threshold", not "the threshold slider").
 
 ## What the app has today
 
@@ -106,7 +106,7 @@ First topics:
 - Source: images A and B, patterns, random and searched photos, video
 - FX: adding, ordering (drag), removing, random, nudge, lock, solo
 - A setting's row: value, range, reverse, easing, own time, reset, bypass
-- Audio: Input kinds, Global Gain, Global Threshold, Levels
+- Audio: Input kinds, Master Gain, Master Threshold, Levels
 - Audio sensors: what follows what, Threshold, Range, Release, beats
 - MIDI: Learn, mapping, relative knobs, 14-bit controls, holds and play
 - Playlists: what a playlist holds, Save Playlist, Export Scene As

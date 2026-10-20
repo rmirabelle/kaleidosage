@@ -6,6 +6,7 @@ import { AUDIO_SOURCES, type AudioLink, type AudioSource } from "../engine/audio
 import type { ParamKey } from "../engine/params";
 import { audioInput } from "../lib/audioInput";
 import { help } from "../help/topics";
+import { KeyText } from "./HelpText";
 
 /** A new link moves its setting half way; the Audio panel sets its range. */
 const NEW_LINK: Pick<AudioLink, "amount"> = { amount: 0.5 };
@@ -129,7 +130,7 @@ export function AudioLinkButton({ engine, paramKey, label }: { engine: Engine; p
               <span className="audio-link-menu-mark" /> {text}
             </button>
           ))}
-          {!listening && <p className="audio-link-menu-note">No input is listening. Pick one in the Audio panel (A).</p>}
+          {!listening && <p className="audio-link-menu-note"><KeyText text="No input is listening. Pick one in the Audio panel `a`." /></p>}
         </div>,
         document.body
       )}

@@ -53,6 +53,7 @@ pub fn run() {
         .manage(video_stream::Videos::default())
         .manage(video_stream::Uploads::default())
         .manage(sound_capture::SoundCapture::default())
+        .on_page_load(|webview, payload| sound_capture::stop_on_page_load(webview, payload))
         .register_asynchronous_uri_scheme_protocol("video", |ctx, request, responder| {
             let id = request.uri().path().trim_start_matches('/');
             let source = ctx.app_handle().state::<video_stream::Videos>().get(id);

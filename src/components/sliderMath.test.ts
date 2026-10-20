@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mirrorAround, shiftRange, snapToDetent, snapToStep } from "./sliderMath";
+import { mirrorAround, shiftRange, snapToDetent, snapToPoints, snapToStep } from "./sliderMath";
 
 describe("snapToStep", () => {
   it("rounds to whole steps without float noise", () => {
@@ -31,6 +31,15 @@ describe("detent and mirrored ranges", () => {
     expect(snapToDetent(-0.039, 0, -1, 1)).toBe(0);
     expect(snapToDetent(0.05, 0, -1, 1)).toBe(0.05);
     expect(snapToDetent(0.5, undefined, -1, 1)).toBe(0.5);
+  });
+
+  it("snaps a value near one of several points onto the nearest one", () => {
+    /* Whole numbers on a -4 to 4 slider: within 0.16 of one snaps. */
+    const whole = [-4, -3, -2, -1, 0, 1, 2, 3, 4];
+    expect(snapToPoints(1.1, whole, -4, 4)).toBe(1);
+    expect(snapToPoints(-2.85, whole, -4, 4)).toBe(-3);
+    expect(snapToPoints(1.5, whole, -4, 4)).toBe(1.5);
+    expect(snapToPoints(0.5, [], -1, 1)).toBe(0.5);
   });
 
   it("copies a handle's distance from the center to the other side", () => {

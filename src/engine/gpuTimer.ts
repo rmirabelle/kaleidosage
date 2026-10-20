@@ -1,5 +1,5 @@
 /** "refold" is a shape pass after a picture step; with several in one frame, it shows about their average. */
-export type PassName = "fold" | "refold" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "sort" | "particles" | "rays" | "bloom" | "finish";
+export type PassName = "fold" | "refold" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "sort" | "particles" | "rays" | "bloom" | "sharpen" | "color" | "levels";
 
 interface TimerExtension {
   TIME_ELAPSED_EXT: number;
@@ -12,7 +12,14 @@ interface Pending {
 }
 
 /** How fast the shown times follow new measurements (0-1). Lower is steadier. */
-const SMOOTHING = 0.1;
+const SMOOTHING = 0.35;
+
+/**
+ * Only every this many frames is timed, and the finished times are read
+ * only in the frame halfway between: each query and each read of the GPU's
+ * state costs a little time, and a few samples a second are enough.
+ */
+const SAMPLE_EVERY = 4;
 
 /**
  * Measures how long each drawing pass takes on the GPU, with the
@@ -30,6 +37,9 @@ export class GpuTimer {
   private readonly pending: Pending[] = [];
   private readonly free: WebGLQuery[] = [];
   private active: Pending | null = null;
+  /** Counts the frames (one collect per frame), and whether this frame is timed. */
+  private frame = 0;
+  private sampling = false;
 
   constructor(private readonly gl: WebGL2RenderingContext) {
     this.extension = gl.getExtension("EXT_disjoint_timer_query_webgl2") as TimerExtension | null;
@@ -37,7 +47,7 @@ export class GpuTimer {
   }
 
   begin(pass: PassName) {
-    if (!this.enabled || !this.extension || this.active) return;
+    if (!this.sampling || !this.extension || this.active) return;
     const query = this.free.pop() ?? this.gl.createQuery()!;
     this.gl.beginQuery(this.extension.TIME_ELAPSED_EXT, query);
     this.active = { query, pass };
@@ -54,6 +64,14 @@ export class GpuTimer {
   collect() {
     const gl = this.gl;
     if (!this.extension) return;
+    this.frame = (this.frame + 1) % SAMPLE_EVERY;
+    this.sampling = this.enabled && this.frame === 0;
+    /* With the timer off and nothing waiting, there is nothing to read: the GPU setting read below waits for the GPU. */
+    if (!this.enabled && !this.pending.length) {
+      for (const key of Object.keys(this.times)) delete this.times[key as PassName];
+      return;
+    }
+    if (!this.pending.length || this.frame !== SAMPLE_EVERY / 2) return;
     const disjoint = gl.getParameter(this.extension.GPU_DISJOINT_EXT) as boolean;
     while (this.pending.length && gl.getQueryParameter(this.pending[0].query, gl.QUERY_RESULT_AVAILABLE)) {
       const { query, pass } = this.pending.shift()!;

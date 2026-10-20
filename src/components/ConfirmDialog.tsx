@@ -1,20 +1,23 @@
 import { useEffect, useRef, type ReactNode } from "react";
+import { X } from "@phosphor-icons/react";
 
 /**
  * A question with Cancel and a confirm button, in the About dialog's style,
  * and an optional third choice between them. Enter confirms; Esc, Cancel or
  * a click outside the dialog cancels. While it is open, keys do not reach
  * the app's shortcuts. "details" shows under the message, for example a list.
+ * With "closeButton", an X in the corner takes the place of Cancel.
  */
-export function ConfirmDialog({ title, message, details, confirmLabel, onConfirm, onCancel, otherLabel, onOther }: {
+export function ConfirmDialog({ title, message, details, confirmLabel, onConfirm, onCancel, otherLabel, onOther, closeButton }: {
   title: string;
-  message: string;
+  message: ReactNode;
   details?: ReactNode;
   confirmLabel: string;
   onConfirm: () => void;
   onCancel: () => void;
   otherLabel?: string;
   onOther?: () => void;
+  closeButton?: boolean;
 }) {
   const confirmRef = useRef<HTMLButtonElement>(null);
   const handlers = useRef({ onConfirm, onCancel });
@@ -40,13 +43,14 @@ export function ConfirmDialog({ title, message, details, confirmLabel, onConfirm
   return (
     <div className="about-dialog-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
       <div className="about-dialog confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+        {closeButton && <button className="about-dialog-close" onClick={onCancel} aria-label="Close" data-tip="Close `Esc`"><X size={18} /></button>}
         <div className="confirm-dialog-content">
           <h2 id="confirm-title">{title}</h2>
           <p id="confirm-message">{message}</p>
           {details}
         </div>
         <div className="about-dialog-actions confirm-dialog-actions">
-          <button className="button secondary" onClick={onCancel}>Cancel</button>
+          {!closeButton && <button className="button secondary" onClick={onCancel}>Cancel</button>}
           {otherLabel && onOther && <button className="button secondary" onClick={onOther}>{otherLabel}</button>}
           <button ref={confirmRef} className="button primary" onClick={onConfirm}>{confirmLabel}</button>
         </div>

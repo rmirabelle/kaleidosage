@@ -41,7 +41,7 @@ export function DocumentTabs({ tabs, activeId, onSelect, onClose }: Props) {
               className="document-tab-close"
               onPointerDown={(event) => event.stopPropagation()}
               onClick={() => onClose(tab.id)}
-              data-tip={active ? "Close the scene (Ctrl+W)" : "Close the scene"}
+              data-tip={active ? "Close the scene `Ctrl+w`" : "Close the scene"}
               aria-label={`Close ${tab.fileName}`}
             >
               <X size={13} weight="bold" />

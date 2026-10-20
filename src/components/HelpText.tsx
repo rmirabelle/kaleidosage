@@ -36,7 +36,23 @@ const ICONS: Record<HelpIcon, ReactNode> = {
 };
 
 /**
- * A help text with its icons: each {name} in the text (see HELP_ICONS)
+ * A text with its keys: each key or key combination in backticks
+ * (`Esc`, `Ctrl+w`, `x`) shows as a key cap. A letter key is written in
+ * lower case, as it is pressed.
+ */
+export function KeyText({ text }: { text: string }) {
+  const parts = text.split(/`([^`]+)`/);
+  return (
+    <>
+      {parts.map((part, index) => index % 2 === 0
+        ? <Fragment key={index}>{part}</Fragment>
+        : <kbd key={index} className="key">{part}</kbd>)}
+    </>
+  );
+}
+
+/**
+ * A help text with its icons and keys (see KeyText): each {name} in the text (see HELP_ICONS)
  * shows as that button's icon, in a small box like a button, so the user
  * can find the button by its look.
  */
@@ -45,7 +61,7 @@ export function HelpText({ text }: { text: string }) {
   return (
     <>
       {parts.map((part, index) => index % 2 === 0
-        ? <Fragment key={index}>{part}</Fragment>
+        ? <KeyText key={index} text={part} />
         : <span key={index} className={`help-icon ${part}`} aria-hidden="true">{ICONS[part as HelpIcon]}</span>)}
     </>
   );

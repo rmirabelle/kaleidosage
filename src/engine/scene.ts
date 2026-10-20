@@ -1,11 +1,11 @@
-import { CONTOUR_TONES, EASES, MAX_CUSTOM_SECONDS, PARAM_KEYS, REFERENCE_CYCLE, defaultFxOrder, defaultPictureOrder, defaultShapeOrder, effectShows, type ContourTone, type Ease, type GroupKey, type Param, type Params, type PlayState } from "./params";
+import { CONTOUR_TONES, EASES, MAX_CUSTOM_SECONDS, MAX_GRADIENT_STOPS, PARAM_KEYS, REFERENCE_CYCLE, defaultFxOrder, defaultGradientStops, defaultPictureOrder, defaultShapeOrder, effectShows, type ContourTone, type Ease, type GradientStop, type GroupKey, type Param, type Params, type PlayState } from "./params";
 import { isShapeStep, type FxStep } from "./renderer";
 import { AUDIO_RELEASE, audioLinkList, readAudioLinks } from "./audio";
 
 export const SCENE_EXTENSION = "ksage";
 /** 3: reads as 2 (it changed only an effect that was later removed). 2: ranges share one cycle, and a custom range keeps its own seconds. 1: each range had its own rate, and a speed. */
 const SCENE_VERSION = 3;
-const GROUP_KEYS: GroupKey[] = ["warp", "map", "kaleidoscope", "blur", "trails", "smear", "contours", "relief", "driver", "camera", "sort", "particles", "rays", "bloom", "finish"];
+const GROUP_KEYS: GroupKey[] = ["warp", "map", "kaleidoscope", "blur", "trails", "smear", "contours", "relief", "driver", "camera", "sort", "particles", "rays", "bloom", "sharpen", "color", "levels"];
 
 /** Still images and legacy videos use base64. New videos refer to an embedded archive entry. */
 export type SceneImage = { type: string; data: string; video?: never }
@@ -42,7 +42,7 @@ export function serializeScene(params: Params, state: PlayState, { image, image2
     const { value, low, high, on, ease, custom, seconds, startTime } = params[key];
     savedParams[key] = { value, low, high, on, ease, custom, seconds, startTime };
   }
-  const { groups, blendMode, tiling, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, particleBlend, driverSource, driverMode, videoCrossfade, time, clock, warpTime, driverTime, mapTravel, cameraX, cameraY, fxOrder, layerBlend } = state;
+  const { groups, blendMode, tiling, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, particleBlend, particleStops, driverSource, driverMode, videoCrossfade, time, clock, warpTime, driverTime, mapTravel, cameraX, cameraY, fxOrder, layerBlend } = state;
   /**
    * "effects" is the effect list. Earlier versions of the app read two full
    * orders of their own, so they get the list's order inside each kind,
@@ -55,7 +55,7 @@ export function serializeScene(params: Params, state: PlayState, { image, image2
     app: "KaleidoSage",
     version: SCENE_VERSION,
     params: savedParams,
-    state: { groups: { ...groups }, blendMode, tiling, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, particleBlend, driverSource, driverMode, videoCrossfade, time, clock, warpTime, driverTime, mapTravel, cameraX, cameraY, effects: [...fxOrder], shapeStack, pictureOrder, layerBlend: { ...layerBlend }, audioLinks: audioLinkList(state.audioLinks), audioRelease: state.audioRelease },
+    state: { groups: { ...groups }, blendMode, tiling, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, particleBlend, particleStops: particleStops.map((stop) => ({ ...stop })), driverSource, driverMode, videoCrossfade, time, clock, warpTime, driverTime, mapTravel, cameraX, cameraY, effects: [...fxOrder], shapeStack, pictureOrder, layerBlend: { ...layerBlend }, audioLinks: audioLinkList(state.audioLinks), audioRelease: state.audioRelease },
     image,
     ...(image2 ? { image2 } : {})
   };
@@ -65,6 +65,20 @@ export function serializeScene(params: Params, state: PlayState, { image, image2
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const isNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+
+/** The effects that older scenes had as one, Final effects ("finish"), in their order. */
+const FINISH_PARTS: FxStep[] = ["sharpen", "color", "levels"];
+
+/** A saved gradient's stops, kept inside 0 to 1 and in order, or undefined when fewer than 2 read well. */
+function readGradientStops(saved: unknown): GradientStop[] | undefined {
+  if (!Array.isArray(saved)) return undefined;
+  const stops = saved
+    .filter((stop): stop is { at: number; color: string } => isRecord(stop) && isNumber(stop.at) && typeof stop.color === "string" && /^#[0-9a-f]{6}$/i.test(stop.color))
+    .map((stop) => ({ at: clamp(stop.at, 0, 1), color: stop.color.toLowerCase() }))
+    .sort((a, b) => a.at - b.at)
+    .slice(0, MAX_GRADIENT_STOPS);
+  return stops.length >= 2 ? stops : undefined;
+}
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 /**
@@ -179,6 +193,8 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
 
   if (isRecord(saved.groups)) {
     for (const key of GROUP_KEYS) if (typeof saved.groups[key] === "boolean") state.groups[key] = saved.groups[key] as boolean;
+    /* Scenes from before Sharpen, Color and Levels had them as one effect, Final effects ("finish"). */
+    if (typeof saved.groups.finish === "boolean") for (const part of FINISH_PARTS) state.groups[part] = saved.groups.finish;
   }
   state.blendMode = mode(saved.blendMode, [0, 1] as const) ?? state.blendMode;
   /* Scenes from before tiling have none; auto works as they did, except for repeating test patterns. */
@@ -203,13 +219,17 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
     ?? (earlier && [...earlier].reverse())
     ?? (saved.warpMode === 2 ? ["warp", "kaleidoscope", "map"] : defaultShapeOrder());
   /* A step the app no longer has (such as the old branches effect) is dropped from the list. */
-  const effects = Array.isArray(saved.effects) ? saved.effects.filter((step) => defaultFxOrder().includes(step)) : undefined;
+  /* Final effects in an older list becomes the parts of it that change the picture, in its place. */
+  const splitFinish = (value: unknown, keep: (part: FxStep) => boolean = () => true) =>
+    Array.isArray(value) ? value.flatMap((step) => step === "finish" ? FINISH_PARTS.filter(keep) : [step]) : value;
+  const savedEffects = splitFinish(saved.effects, (part) => effectShows(part, params, state));
+  const effects = Array.isArray(savedEffects) ? savedEffects.filter((step) => defaultFxOrder().includes(step)) : undefined;
   if (Array.isArray(effects) && effects.every((step) => defaultFxOrder().includes(step)) && new Set(effects).size === effects.length) {
     state.fxOrder = [...effects] as FxStep[];
   } else {
     /* Those scenes listed every effect; the list keeps the ones that are on and change the picture. */
-    const fullOrder = orderWithNewSteps(saved.fxOrder, defaultFxOrder())
-      ?? [...shapeOrder, ...(orderWithNewSteps(saved.pictureOrder, defaultPictureOrder()) ?? defaultPictureOrder())];
+    const fullOrder = orderWithNewSteps(splitFinish(saved.fxOrder), defaultFxOrder())
+      ?? [...shapeOrder, ...(orderWithNewSteps(splitFinish(saved.pictureOrder), defaultPictureOrder()) ?? defaultPictureOrder())];
     state.fxOrder = fullOrder.filter((step) => effectShows(step, params, state));
   }
   /* An effect that is not in the list is off. */
@@ -233,8 +253,12 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   if (isNumber(saved.cameraX)) state.cameraX = saved.cameraX;
   if (isNumber(saved.cameraY)) state.cameraY = saved.cameraY;
   if (typeof saved.overlayColor === "string" && /^#[0-9a-f]{6}$/i.test(saved.overlayColor)) state.overlayColor = saved.overlayColor;
+  /* Scenes from before the color blend covered the picture with the color (Normal). */
+  state.colorBlend = mode(saved.colorBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? 0;
   if (typeof saved.trailColor === "string" && /^#[0-9a-f]{6}$/i.test(saved.trailColor)) state.trailColor = saved.trailColor;
   if (typeof saved.skyColor === "string" && /^#[0-9a-f]{6}$/i.test(saved.skyColor)) state.skyColor = saved.skyColor;
+  /* Scenes from before the life gradient have none, and get the default; stops that do not read well are dropped. */
+  state.particleStops = readGradientStops(saved.particleStops) ?? defaultGradientStops();
   if (typeof saved.videoCrossfade === "boolean") state.videoCrossfade = saved.videoCrossfade;
   state.smearShape = mode(saved.smearShape, [0, 1, 2, 3, 4] as const) ?? state.smearShape;
   if (CONTOUR_TONES.includes(saved.contourTone as ContourTone)) state.contourTone = saved.contourTone as ContourTone;
@@ -263,8 +287,8 @@ export function sceneFingerprint(params: Params, state: PlayState, imageIds: rea
     const { value, low, high, on, ease, custom, seconds } = params[key];
     return [value, low, high, on, ease ?? null, custom ?? false, custom ? seconds : null];
   });
-  const { groups, blendMode, tiling, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, particleBlend, driverSource, driverMode, videoCrossfade, fxOrder, layerBlend } = state;
-  return JSON.stringify([settings, groups, blendMode, tiling, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, particleBlend, driverSource, driverMode, videoCrossfade, fxOrder, layerBlend, audioLinkList(state.audioLinks), state.audioRelease, imageIds]);
+  const { groups, blendMode, tiling, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, particleBlend, particleStops, driverSource, driverMode, videoCrossfade, fxOrder, layerBlend } = state;
+  return JSON.stringify([settings, groups, blendMode, tiling, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, particleBlend, particleStops, driverSource, driverMode, videoCrossfade, fxOrder, layerBlend, audioLinkList(state.audioLinks), state.audioRelease, imageIds]);
 }
 
 /** Uint8Array.fromBase64 and toBase64, in newer browsers; much faster for a large video. */

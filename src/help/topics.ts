@@ -65,8 +65,8 @@ export const HELP_TOPICS = {
     tips: [
       "New {new} adds an effect.",
       "Drag an effect's grip {grip} to change the order.",
-      "Random all {random} (X) gives new settings to every unlocked effect.",
-      "Nudge all {nudge} (N) moves each value a little.",
+      "Random all {random} `x` gives new settings to every unlocked effect.",
+      "Nudge all {nudge} `n` moves each value a little.",
       "Clear all {trash} removes every effect; locked effects stay."
     ],
     keywords: ["effect", "effects", "add effect", "order", "random", "nudge", "clear"]
@@ -76,7 +76,7 @@ export const HELP_TOPICS = {
     text: "Each effect has its own settings. Click its name to open or close it.",
     tips: [
       "The dice {dice} gives the effect new random settings.",
-      "Ctrl + hold the header: the effect has no effect while you hold.",
+      "`Ctrl` + hold the header: the effect has no effect while you hold.",
       "Ctrl + Shift + hold the header: only this effect shows while you hold.",
       "Right-click the header to turn the effect on or off.",
       "Right-click the header to lock the effect against Random.",
@@ -89,7 +89,7 @@ export const HELP_TOPICS = {
     text: "A setting is one value of an effect. Turn on its range {range}, and the value moves between two handles over the scene length.",
     tips: [
       "Double-click the name to set the value, or the whole range, back to its default.",
-      "Ctrl + hold the name: the setting has no effect while you hold.",
+      "`Ctrl` + hold the name: the setting has no effect while you hold.",
       "Reverse {reverse} makes the range move the other way.",
       "Easing {easing} changes how the value moves between the handles.",
       "Own time {own-time} gives the range a length of its own."
@@ -98,12 +98,12 @@ export const HELP_TOPICS = {
   },
   "audio.input": {
     title: "Audio input",
-    text: "The Input is the sound that moves the settings: the sound your PC plays, a microphone or line input, or audio files that the app plays. Global Gain and Global Threshold apply to every scene.",
+    text: "The Input is the sound that moves the settings: the sound your PC plays, a microphone or line input, or audio files that the app plays. Master Gain and Master Threshold apply to every scene.",
     tips: [
       "PC (loopback) hears any app on the PC.",
       "Windows cannot capture the sound of one app only.",
-      "Global Gain makes the input louder or quieter.",
-      "Sound under the Global Threshold moves nothing.",
+      "Master Gain makes the input louder or quieter.",
+      "Sound under the Master Threshold moves nothing.",
       "Nothing stops listening.",
       "A microphone shows the Windows microphone icon while the app listens."
     ],
@@ -111,7 +111,7 @@ export const HELP_TOPICS = {
   },
   "audio.levels": {
     title: "Levels",
-    text: "The meters show the peak of each band of the input, in dBFS, with an orange mark at the Global Threshold. The light flashes on each beat.",
+    text: "The meters show the peak of each band of the input, in dBFS, with an orange mark at the Master Threshold. The light flashes on each beat.",
     tips: [
       "Level is the whole sound; Bass, Mids and Highs are parts of it.",
       "A bar is gray under the threshold: that sound moves nothing.",
@@ -183,7 +183,7 @@ export const HELP_TOPICS = {
   },
   export: {
     title: "Pictures and videos",
-    text: "Save PNG (S) saves the picture as it is now. Export Video makes an MP4 of the scene, which can repeat with no jump.",
+    text: "Save PNG `s` saves the picture as it is now. Export Video makes an MP4 of the scene, which can repeat with no jump.",
     tips: [
       "A video plays the ranges; audio sensors do not move in it.",
       "The video is made in the background; the app stays usable.",

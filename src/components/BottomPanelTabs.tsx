@@ -6,8 +6,8 @@ import { MidiIcon } from "./MidiIcon";
 export type BottomTab = "midi" | "audio";
 
 const TABS: readonly (readonly [BottomTab, string, string, ReactNode])[] = [
-  ["audio", "Audio", "Sound that the settings react to (A)", <SpeakerSimpleHigh size={16} />],
-  ["midi", "MIDI", "MIDI controllers and mappings (M)", <MidiIcon size={14} />]
+  ["audio", "Audio", "Sound that the settings react to `a`", <SpeakerSimpleHigh size={16} />],
+  ["midi", "MIDI", "MIDI controllers and mappings `m`", <MidiIcon size={14} />]
 ];
 
 /**

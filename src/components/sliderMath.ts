@@ -25,6 +25,23 @@ export function snapToDetent(value: number, detent: number | undefined, min: num
 }
 
 /**
+ * Like snapToDetent, for several points (the detent, and other places to
+ * snap to, such as whole numbers): a value near one of them becomes the
+ * nearest one.
+ */
+export function snapToPoints(value: number, points: readonly number[], min: number, max: number): number {
+  let best = value;
+  let distance = (max - min) * DETENT_SNAP;
+  for (const point of points) {
+    if (Math.abs(value - point) <= distance) {
+      best = point;
+      distance = Math.abs(value - point);
+    }
+  }
+  return best;
+}
+
+/**
  * A range kept around a center: the moved handle's distance from the center
  * is copied to the other side. Returns the moved handle's value first. The
  * distance stops where the other handle would leave the slider.

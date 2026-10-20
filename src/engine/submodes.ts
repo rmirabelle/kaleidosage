@@ -4,7 +4,7 @@ import type { BlurMask, FoldMode, FxStep, MapMode, SmearShape, WarpType } from "
 /** The effects in the Add effect menu, in menu order, with the names their groups show. */
 export const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
   ["kaleidoscope", "Kaleidoscope"], ["map", "Algorithm"], ["warp", "Warp"], ["blur", "Blur"], ["trails", "Trails"],
-  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["driver", "Driver"], ["camera", "Camera"], ["sort", "Pixel sort"], ["particles", "Particles"], ["rays", "Light rays"], ["bloom", "Bloom"], ["finish", "Final effects"]
+  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["driver", "Driver"], ["camera", "Camera"], ["sort", "Pixel sort"], ["particles", "Particles"], ["rays", "Light rays"], ["bloom", "Bloom"], ["sharpen", "Sharpen"], ["color", "Color"], ["levels", "Levels"]
 ];
 
 /**
@@ -57,7 +57,7 @@ export const MAP_KEYS: Record<MapMode, ParamKey[]> = {
   5: ["mapAngle", "mapRoll", "mapCurl", "mapScale", "mapPanX", "mapPanY", "mapMix"],
   6: ["mapSpeed", "tunnelTwist", "mapAngle", "mapFog", "mapFogSoftness", "mapScale", "mapPanX", "mapPanY", "mapMix"],
   7: ["mapSpeed", "mapArms", "mapAngle", "mapFog", "mapFogSoftness", "mapScale", "mapPanX", "mapPanY", "mapMix"],
-  8: ["mapSpeed", "drosteSize", "drosteSpirals", "mapFog", "mapFogSoftness", "mapScale", "mapPanX", "mapPanY", "mapMix"]
+  8: ["mapSpeed", "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drostePictureTurn", "drosteRotation", "mapPanX", "mapPanY", "mapMix"]
 };
 export const MAP_MODES = [[8, "Droste spiral"], [2, "Möbius"], [3, "Julia"], [4, "Log spiral"], [5, "Sine"], [6, "Tunnel"], [7, "Seamless spiral"], [1, "Power (z^n)"]] as const;
 

@@ -1,4 +1,5 @@
 import { GpuTimer } from "./gpuTimer";
+import { trackTextureMemory, type TextureMemory } from "./textureMemory";
 import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 
 /** The blur mask: circle with a sharp or a blurred center, gradient, bright areas, dark areas, noise. */
@@ -17,7 +18,7 @@ export type ShapeStep = "warp" | "map" | "kaleidoscope";
 /** The kind of warp: noise, ripple, waves, swirl, bulge and pinch, cells. */
 export type WarpType = 0 | 1 | 2 | 3 | 4 | 5;
 /** The steps that change the drawn picture. The user sets their order. */
-export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "sort" | "particles" | "rays" | "bloom" | "finish";
+export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "sort" | "particles" | "rays" | "bloom" | "sharpen" | "color" | "levels";
 /**
  * Any effect step. The user sets one order for all of them. Shape steps
  * that are next to each other run in one pass; a shape step after a
@@ -25,7 +26,12 @@ export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | 
  */
 export type FxStep = ShapeStep | PictureStep;
 export const SHAPE_STEPS: readonly ShapeStep[] = ["warp", "map", "kaleidoscope"];
-export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "camera", "sort", "particles", "rays", "bloom", "finish"];
+export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "camera", "sort", "particles", "rays", "bloom", "sharpen", "color", "levels"];
+
+/** Sharpen, Color and Levels, in the order FINISH_SHADER applies them (see drawFinish). */
+type FinishPart = "sharpen" | "color" | "levels";
+const FINISH_PARTS: readonly FinishPart[] = ["sharpen", "color", "levels"];
+const isFinishPart = (step: FxStep): step is FinishPart => (FINISH_PARTS as readonly string[]).includes(step);
 export const isShapeStep = (step: FxStep): step is ShapeStep => (SHAPE_STEPS as readonly FxStep[]).includes(step);
 /** The time smear's pattern: 0 linear, 1 rings, 2 sweep, 3 brightness, 4 noise (see SMEAR_SHADER). */
 export type SmearShape = 0 | 1 | 2 | 3 | 4;
@@ -97,6 +103,10 @@ export interface FrameValues {
   /** Droste spiral: the size of the copy inside the picture (0 to 1), and the whole number of spiral arms. */
   drosteSize: number;
   drosteSpirals: number;
+  drosteSoftness: number;
+  drosteRound: number;
+  drosteRotation: number;
+  drostePictureTurn: number;
   mapTwist: number;
   /** The angle (radians) of the axis that power, log spiral and tunnel fold over. */
   mapAngle: number;
@@ -160,6 +170,7 @@ export interface FrameValues {
   /** The color overlay color (red, green, blue from 0 to 1) and its opacity (0 = off). */
   overlayColor: [number, number, number];
   overlayOpacity: number;
+  colorBlend: LayerBlend;
   /** Time smear: strength (0 = off), the longest delay in seconds, the pattern, its angle (radians) and how many bands it repeats. */
   smear: number;
   smearDelay: number;
@@ -263,6 +274,13 @@ export interface FrameValues {
   particleAngle: number;
   particleTurbulence: number;
   particleDrag: number;
+  particleFollow: number;
+  particleCling: number;
+  particleGradient: number;
+  particleBoost: number;
+  /** The life gradient's stops, in order: their places, and their colors as red, green, blue (three numbers each). */
+  particleStopAt: Float32Array;
+  particleStopColor: Float32Array;
   /** Animation seconds since the last frame (0 while paused, so the particles stand still), and the animation time. */
   particleSeconds: number;
   particleTime: number;
@@ -369,7 +387,7 @@ interface Program {
 }
 
 /** The particles: one texel of the state textures per particle, so at most PARTICLE_SIDE² of them. */
-const PARTICLE_SIDE = 512;
+const PARTICLE_SIDE = 1024;
 
 /** One copy of the particle state: place and speed, age and life span, color (see PARTICLE_STEP_SHADER). */
 interface ParticleState {
@@ -392,11 +410,16 @@ const MAX_IMAGE_SIDE = 4096;
  */
 export class KaleidoRenderer {
   private readonly gl: WebGL2RenderingContext;
+  /** An estimate of the GPU memory the textures use (see trackTextureMemory). */
+  readonly memory: TextureMemory;
   private readonly kaleido: Program;
   private readonly blur: Program;
   /** The first and the second image. */
   private readonly imageTextures: [WebGLTexture, WebGLTexture];
   private readonly frameTexture: WebGLTexture;
+  /** GPU limits, read once: a read of a GPU setting waits for the GPU, so it is not done in each frame. */
+  private readonly maxTextureSize: number;
+  private readonly maxPointSize: number;
   private readonly framebuffer: WebGLFramebuffer;
   private readonly trails: Program;
   private readonly copy: Program;
@@ -460,7 +483,6 @@ export class KaleidoRenderer {
   private readonly bloomUp: Program;
   private readonly bloomMix: Program;
   /** The bright parts of the picture, for the bloom. */
-  private readonly bloomTarget: Target;
   /**
    * The bloom levels: the bright parts at half size, quarter size, and so
    * on (see drawBloom). Only the first "bloomLevels" fit this canvas; the
@@ -509,6 +531,7 @@ export class KaleidoRenderer {
     const gl = canvas.getContext("webgl2", { antialias: false, alpha: false });
     if (!gl) throw new Error("WebGL 2 is not available on this computer.");
     this.gl = gl;
+    this.memory = trackTextureMemory(gl);
     /**
      * A lost context (the graphics driver gave up, often on a frame that took
      * too long) leaves the picture blank; say so in the console. A renderer
@@ -561,6 +584,8 @@ export class KaleidoRenderer {
     /* The second image starts as one black pixel, so its sampler is always complete. */
     gl.bindTexture(gl.TEXTURE_2D, this.imageTextures[1]);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+    this.maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
+    this.maxPointSize = (gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE) as Float32Array)[1];
     this.frameTexture = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D, this.frameTexture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -578,7 +603,6 @@ export class KaleidoRenderer {
     this.trailTargets = [this.createTarget(), this.createTarget()];
     this.fieldTargets = [this.createTarget(), this.createTarget()];
     this.heightTarget = this.createTarget();
-    this.bloomTarget = this.createTarget();
     this.raysTargets = [this.createTarget(), this.createTarget()];
     this.maxFramebuffer = gl.createFramebuffer()!;
     this.maxFormat = this.trailFormat.internal === gl.RGBA16F ? gl.R16F : gl.R8;
@@ -633,9 +657,14 @@ export class KaleidoRenderer {
     entry.mix = entry.partner ? mix : 0;
   }
 
-  /** Uploads the newest frame of each video. Called once per frame, before drawing. "force" uploads the current frame even when no new frame was reported (after a seek). */
+  /**
+   * Uploads the newest frame of each video. Called once per frame, before
+   * drawing. "force" uploads the current frame even when no new frame was
+   * reported (after a seek). Returns true when it uploaded a frame.
+   */
   updateVideos(force = false) {
     const now = performance.now();
+    let uploaded = false;
     for (const slot of [0, 1] as const) {
       const entry = this.videos[slot];
       if (!entry) continue;
@@ -650,6 +679,7 @@ export class KaleidoRenderer {
       entry.fresh = false;
       entry.uploadedTime = main.currentTime;
       entry.uploadedFrom = main;
+      uploaded = true;
       if (fading && other) {
         const [width, height] = this.imageSizes[slot];
         if (!entry.mixed) {
@@ -669,6 +699,7 @@ export class KaleidoRenderer {
         this.uploadTexture(slot, scaled ?? main);
       }
     }
+    return uploaded;
   }
 
   private watchVideo(slot: 0 | 1, video: HTMLVideoElement, scaled: HTMLCanvasElement | null) {
@@ -741,13 +772,16 @@ export class KaleidoRenderer {
     const [width, height] = this.frameSize;
     if (width === 0 || height === 0) return;
 
-    /* The blur reads up to about its radius past each pixel, so the kaleidoscope picture gets a border that wide. */
-    this.ensurePad(v.blur * height);
-    const [textureWidth, textureHeight] = this.textureSize;
-
-    /** The picture steps that do something. A shape step that is off does nothing either. */
+    const opacity = (step: ShapeStep) => Math.min(1, Math.max(0, v.shapeOpacity[step]));
+    /**
+     * The picture steps that do something. A shape step that is off does
+     * nothing either, and neither does one at opacity 0: the shader would
+     * mix all of it away.
+     */
     const active: Record<FxStep, boolean> = {
-      ...v.shapeActive,
+      warp: v.shapeActive.warp && opacity("warp") > 0,
+      map: v.shapeActive.map && opacity("map") > 0,
+      kaleidoscope: v.shapeActive.kaleidoscope && opacity("kaleidoscope") > 0,
       blur: v.blur > 0,
       trails: v.trailMode !== 0,
       smear: v.smear > 0,
@@ -761,7 +795,9 @@ export class KaleidoRenderer {
       sort: v.sort > 0 && this.floatTargets,
       rays: v.rays > 0,
       bloom: v.bloom > 0,
-      finish: v.sharpen > 0 || v.exposure !== 0 || v.blackLevel > 0 || v.overlayOpacity > 0
+      sharpen: v.sharpen > 0,
+      color: v.overlayOpacity > 0,
+      levels: v.exposure !== 0 || v.blackLevel > 0
     };
     /**
      * The steps in the user's order, with shape steps that are next to each
@@ -769,53 +805,77 @@ export class KaleidoRenderer {
      * pass. The shape steps before the first picture step read the source
      * images; a later group of shape steps reads the picture made so far.
      */
-    const passes: (PictureStep | ShapeStep[])[] = [];
+    /**
+     * Sharpen, Color and Levels next to each other, in that order, join into
+     * one pass of FINISH_SHADER, which applies them in that order.
+     */
+    const passes: (PictureStep | ShapeStep[] | { finish: FinishPart[] })[] = [];
     for (const step of v.fxOrder.filter((candidate) => active[candidate])) {
       const previous = passes[passes.length - 1];
-      if (!isShapeStep(step)) passes.push(step);
+      if (isFinishPart(step)) {
+        const group = typeof previous === "object" && !Array.isArray(previous) ? previous.finish : null;
+        if (group && FINISH_PARTS.indexOf(step) > FINISH_PARTS.indexOf(group[group.length - 1])) group.push(step);
+        else passes.push({ finish: [step] });
+      } else if (!isShapeStep(step)) passes.push(step);
       else if (Array.isArray(previous)) previous.push(step);
       else passes.push([step]);
     }
     const first = Array.isArray(passes[0]) ? passes.shift() as ShapeStep[] : [];
 
-    const opacity = (step: ShapeStep) => Math.min(1, Math.max(0, v.shapeOpacity[step]));
     const shapeSteps = v.fxOrder.filter((step): step is ShapeStep => isShapeStep(step) && active[step]);
     this.info.shapeVersions = 1 + shapeSteps.filter((step) => opacity(step) < 1 || v.layerBlend[step] !== 0).length;
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
-    gl.viewport(0, 0, textureWidth, textureHeight);
-    this.timer.begin("fold");
-    this.drawShapes(v, first, null, width, height);
-    this.timer.end();
-
-    Object.assign(this.info, { width, height, textureWidth, textureHeight, blurSamples: v.blur > 0 ? BLUR_TAPS : 0 });
-
     if (passes.length > 0) this.ensureTrailTargets(width, height);
     for (const step of PICTURE_STEPS) if (!active[step]) delete this.timer.times[step];
+    /* A joined Sharpen, Color and Levels pass is timed under its first part. */
+    for (const pass of passes) if (typeof pass === "object" && !Array.isArray(pass)) for (const part of pass.finish.slice(1)) delete this.timer.times[part];
     if (!passes.some(Array.isArray)) delete this.timer.times.refold;
     /** A scratch picture that is not the one being read. */
     const scratchFor = (input: WebGLTexture) => (input === this.current.texture ? this.scratch : this.current);
 
     /**
-     * The picture so far. It starts in the bordered kaleidoscope texture.
-     * Blur reads the border, so it can be first; any other first step gets a
-     * plain copy without the border (the blur shader with no blur). With no
-     * steps, that copy goes straight to the screen.
+     * The kaleidoscope picture. Only a Blur that comes first reads past the
+     * screen's edge (up to about its radius), so then the picture is drawn
+     * into a texture with a border that wide. Otherwise it is drawn at the
+     * screen's size straight into the picture for the next step, or onto
+     * the screen when no step follows.
      */
-    let source: WebGLTexture = this.frameTexture;
-    let padded = true;
-    if (passes[0] !== "blur") {
-      const target = passes.length > 0 ? scratchFor(source) : null;
-      this.timer.begin("blur");
-      this.drawBlur(v, source, true, target, false);
+    let source: WebGLTexture;
+    let padded = false;
+    const blurFirst = passes[0] === "blur";
+    if (blurFirst) {
+      this.ensurePad(v.blur * height);
+      const [textureWidth, textureHeight] = this.textureSize;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
+      gl.viewport(0, 0, textureWidth, textureHeight);
+      this.timer.begin("fold");
+      this.drawShapes(v, first, null, width, height, this.pad);
       this.timer.end();
-      if (target) {
-        source = target.texture;
-        padded = false;
-      }
+      source = this.frameTexture;
+      padded = true;
+    } else {
+      const target = passes.length > 0 ? this.current : null;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+      gl.viewport(0, 0, width, height);
+      this.timer.begin("fold");
+      this.drawShapes(v, first, null, width, height, 0);
+      this.timer.end();
+      source = target ? target.texture : this.current.texture;
     }
+    const [textureWidth, textureHeight] = blurFirst ? this.textureSize : [width, height];
+    Object.assign(this.info, { width, height, textureWidth, textureHeight, blurSamples: v.blur > 0 ? BLUR_TAPS : 0 });
+
     passes.forEach((step, index) => {
       const last = index === passes.length - 1;
+      if (typeof step === "object" && !Array.isArray(step)) {
+        const target = last ? null : scratchFor(source);
+        this.timer.begin(step.finish[0]);
+        this.drawFinish(v, step.finish, source, target, width, height);
+        this.timer.end();
+        if (target) source = target.texture;
+        padded = false;
+        return;
+      }
       if (Array.isArray(step)) {
         /* Shape steps after a picture step move the picture made so far. */
         const target = last ? null : scratchFor(source);
@@ -844,7 +904,6 @@ export class KaleidoRenderer {
         else if (step === "rays") this.drawRays(v, source, target, width, height);
         else if (step === "sort") this.drawSort(v, source, target, width, height);
         else if (step === "bloom") this.drawBloom(v, source, target, width, height);
-        else this.drawFinish(v, source, target, width, height);
         if (target) source = target.texture;
         padded = false;
       }
@@ -862,7 +921,7 @@ export class KaleidoRenderer {
    * kaleidoscope texture. With a picture (the result of the steps before,
    * the size of the screen), it moves that picture, with no border.
    */
-  private drawShapes(v: FrameValues, steps: ShapeStep[], picture: WebGLTexture | null, width: number, height: number) {
+  private drawShapes(v: FrameValues, steps: ShapeStep[], picture: WebGLTexture | null, width: number, height: number, pad = 0) {
     const gl = this.gl;
     const k = this.kaleido;
     gl.useProgram(k.program);
@@ -884,7 +943,7 @@ export class KaleidoRenderer {
     gl.uniform1i(k.uniforms.u_img, 0);
     gl.uniform1i(k.uniforms.u_picture, picture ? 1 : 0);
     gl.uniform2f(k.uniforms.u_res, width, height);
-    gl.uniform1f(k.uniforms.u_pad, picture ? 0 : this.pad);
+    gl.uniform1f(k.uniforms.u_pad, picture ? 0 : pad);
     gl.uniform2f(k.uniforms.u_center, v.centerX, v.centerY);
     gl.uniform1i(k.uniforms.u_warpMode, v.warpMode);
     gl.uniform1f(k.uniforms.u_warpAmount, v.warpAmount);
@@ -910,6 +969,10 @@ export class KaleidoRenderer {
     gl.uniform1f(k.uniforms.u_spiralCopies, v.spiralCopies);
     gl.uniform1f(k.uniforms.u_drosteSize, v.drosteSize);
     gl.uniform1f(k.uniforms.u_drosteSpirals, v.drosteSpirals);
+    gl.uniform1f(k.uniforms.u_drosteSoftness, v.drosteSoftness);
+    gl.uniform1f(k.uniforms.u_drosteRound, v.drosteRound);
+    gl.uniform1f(k.uniforms.u_drosteRotation, v.drosteRotation);
+    gl.uniform1f(k.uniforms.u_drostePictureTurn, v.drostePictureTurn);
     gl.uniform1f(k.uniforms.u_mapTwist, v.mapTwist);
     gl.uniform2f(k.uniforms.u_mapAxis, Math.cos(v.mapAngle), Math.sin(v.mapAngle));
     gl.uniform1f(k.uniforms.u_mapTravel, v.mapTravel);
@@ -1326,6 +1389,13 @@ export class KaleidoRenderer {
       const s = this.particleStep;
       gl.bindFramebuffer(gl.FRAMEBUFFER, next.framebuffer);
       gl.viewport(0, 0, PARTICLE_SIDE, PARTICLE_SIDE);
+      /**
+       * Only the rows that hold the particles in use move; the rows past
+       * them keep their last state until the count grows into them again.
+       */
+      const rows = Math.min(PARTICLE_SIDE, Math.max(1, Math.ceil(v.particleCount / PARTICLE_SIDE)));
+      gl.enable(gl.SCISSOR_TEST);
+      gl.scissor(0, 0, PARTICLE_SIDE, rows);
       gl.useProgram(s.program);
       this.bindParticleState(s, previous);
       gl.activeTexture(gl.TEXTURE3);
@@ -1344,7 +1414,10 @@ export class KaleidoRenderer {
       gl.uniform2f(s.uniforms.u_gravity, Math.cos(v.particleAngle) * v.particleGravity, Math.sin(v.particleAngle) * v.particleGravity);
       gl.uniform1f(s.uniforms.u_turbulence, v.particleTurbulence);
       gl.uniform1f(s.uniforms.u_drag, Math.max(0, v.particleDrag));
+      gl.uniform1f(s.uniforms.u_follow, Math.min(1, Math.max(0, v.particleFollow)));
+      gl.uniform1f(s.uniforms.u_cling, Math.min(1, Math.max(0, v.particleCling)));
       gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.disable(gl.SCISSOR_TEST);
       this.particleIndex = 1 - this.particleIndex;
     }
 
@@ -1367,8 +1440,13 @@ export class KaleidoRenderer {
     this.bindParticleState(d, states[this.particleIndex]);
     gl.uniform1i(d.uniforms.u_side, PARTICLE_SIDE);
     gl.uniform1f(d.uniforms.u_size, v.particleSize * height / 1080);
-    gl.uniform1f(d.uniforms.u_maxSize, (gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE) as Float32Array)[1]);
+    gl.uniform1f(d.uniforms.u_maxSize, this.maxPointSize);
     gl.uniform1f(d.uniforms.u_opacity, Math.min(1, Math.max(0, v.particles)));
+    gl.uniform1f(d.uniforms.u_gradient, Math.min(1, Math.max(0, v.particleGradient)));
+    gl.uniform1f(d.uniforms.u_boost, Math.max(1, v.particleBoost));
+    gl.uniform1i(d.uniforms.u_stopCount, v.particleStopAt.length);
+    gl.uniform1fv(d.uniforms["u_stopAt[0]"], v.particleStopAt);
+    gl.uniform3fv(d.uniforms["u_stopColor[0]"], v.particleStopColor);
     gl.bindVertexArray(this.particleVertices);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, v.particleBlend === 0 ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA);
@@ -1538,24 +1616,16 @@ export class KaleidoRenderer {
    */
   private drawBloom(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
     const gl = this.gl;
-    const b = this.bloomBright;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.bloomTarget.framebuffer);
-    gl.viewport(0, 0, width, height);
-    gl.useProgram(b.program);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, source);
-    gl.uniform1i(b.uniforms.u_tex, 0);
-    gl.uniform1f(b.uniforms.u_threshold, v.bloomThreshold);
-    gl.uniform1f(b.uniforms.u_softness, v.bloomSoftness);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-
     const size = Math.max(1, v.bloomSize + 2 + Math.log2(height / 1080));
     const count = Math.min(this.bloomLevels, Math.ceil(size));
     const lastWeight = count < Math.ceil(size) ? 1 : size - (count - 1);
+    /* The first, half-size level reads the picture and keeps only its bright parts (see BLOOM_DOWN_SHADER). */
     const d = this.bloomDown;
     gl.useProgram(d.program);
+    gl.activeTexture(gl.TEXTURE0);
     gl.uniform1i(d.uniforms.u_tex, 0);
-    let input = this.bloomTarget.texture;
+    gl.uniform1f(d.uniforms.u_softness, v.bloomSoftness);
+    let input = source;
     let inputSize: [number, number] = [width, height];
     for (let index = 0; index < count; index++) {
       const levelSize = this.bloomSize(index, width, height);
@@ -1563,6 +1633,7 @@ export class KaleidoRenderer {
       gl.viewport(0, 0, ...levelSize);
       gl.bindTexture(gl.TEXTURE_2D, input);
       gl.uniform2f(d.uniforms.u_texel, 1 / inputSize[0], 1 / inputSize[1]);
+      gl.uniform1f(d.uniforms.u_threshold, index === 0 ? v.bloomThreshold : -1);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       input = this.bloomChain[index].texture;
       inputSize = levelSize;
@@ -1815,8 +1886,13 @@ export class KaleidoRenderer {
   /** True after dispose: the context is lost on purpose. */
   private disposed = false;
 
-  /** Applies the final effects to the picture and draws it on the screen. */
-  private drawFinish(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+  /**
+   * Sharpen, Color and Levels: one pass of FINISH_SHADER with the settings
+   * of the parts in "parts" (one, or several that are next to each other in
+   * the list, see render). With its settings at 0, a part of the shader
+   * leaves the picture as it is.
+   */
+  private drawFinish(v: FrameValues, parts: readonly FinishPart[], source: WebGLTexture, target: Target | null, width: number, height: number) {
     const gl = this.gl;
     const f = this.finish;
     gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
@@ -1826,12 +1902,13 @@ export class KaleidoRenderer {
     gl.bindTexture(gl.TEXTURE_2D, source);
     gl.uniform1i(f.uniforms.u_tex, 0);
     gl.uniform2f(f.uniforms.u_texel, this.texelScale / width, this.texelScale / height);
-    gl.uniform1f(f.uniforms.u_sharpen, v.sharpen);
+    gl.uniform1f(f.uniforms.u_sharpen, parts.includes("sharpen") ? v.sharpen : 0);
     gl.uniform1f(f.uniforms.u_radius, v.sharpenRadius);
-    gl.uniform1f(f.uniforms.u_exposure, v.exposure);
-    gl.uniform1f(f.uniforms.u_black, v.blackLevel);
+    gl.uniform1f(f.uniforms.u_exposure, parts.includes("levels") ? v.exposure : 0);
+    gl.uniform1f(f.uniforms.u_black, parts.includes("levels") ? v.blackLevel : 0);
     gl.uniform3f(f.uniforms.u_overlay, ...v.overlayColor);
-    gl.uniform1f(f.uniforms.u_overlayOpacity, v.overlayOpacity);
+    gl.uniform1f(f.uniforms.u_overlayOpacity, parts.includes("color") ? v.overlayOpacity : 0);
+    gl.uniform1i(f.uniforms.u_overlayBlend, v.colorBlend);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
@@ -1902,7 +1979,7 @@ export class KaleidoRenderer {
   private ensureTrailTargets(width: number, height: number) {
     if (width === this.trailSize[0] && height === this.trailSize[1]) return;
     this.trailSize = [width, height];
-    for (const target of [this.current, this.scratch, ...this.trailTargets, ...this.fieldTargets, this.heightTarget, this.bloomTarget]) this.allocate(target, width, height);
+    for (const target of [this.current, this.scratch, ...this.trailTargets, ...this.fieldTargets, this.heightTarget]) this.allocate(target, width, height);
     for (const target of this.raysTargets) this.allocate(target, Math.max(1, width >> 1), Math.max(1, height >> 1));
     this.bloomLevels = Math.max(1, Math.floor(Math.log2(Math.min(width, height))) - 3);
     while (this.bloomChain.length < this.bloomLevels) this.bloomChain.push(this.createTarget());
@@ -1951,8 +2028,7 @@ export class KaleidoRenderer {
   private ensurePad(reach: number) {
     const gl = this.gl;
     const [width, height] = this.frameSize;
-    const maxSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
-    const maxPad = Math.max(0, Math.floor((maxSize - Math.max(width, height)) / 2));
+    const maxPad = Math.max(0, Math.floor((this.maxTextureSize - Math.max(width, height)) / 2));
     const needed = Math.min(maxPad, Math.ceil((reach + 2) / 64) * 64);
     if (needed <= this.pad) return;
     this.pad = needed;
