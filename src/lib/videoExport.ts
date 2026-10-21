@@ -1,4 +1,5 @@
-import { ArrayBufferTarget, Muxer } from "mp4-muxer";
+import { ArrayBufferTarget, Muxer, StreamTarget } from "mp4-muxer";
+import type { ExportFile } from "./exports";
 import type { Engine } from "../engine/engine";
 import { baseLoopSeconds, fittedCustomSeconds, needsSeamFade, trailSettleTime, warpFlowCorrection } from "../engine/loop";
 import { PARAM_KEYS, startRangeAt, type ParamKey } from "../engine/params";
@@ -141,7 +142,7 @@ const loadIcon = () => new Promise<HTMLCanvasElement | null>((resolve) => {
     resolve(cut);
   };
   image.onerror = () => resolve(null);
-  image.src = "/app-icon.png";
+  image.src = "/kaleido-sage-logo.png";
 });
 
 /** Splits "text" into lines no wider than "maxWidth" in the context's current font, breaking between words. */
@@ -315,14 +316,20 @@ const MAX_SUBSTEPS = 4;
 /** Frames being read back from the GPU at once; the oldest is usually done by the time it is needed. */
 const READS_AHEAD = 3;
 
-/** Renders and encodes the video. "onProgress" gets 0 to 1; an aborted "signal" stops it with an AbortError. */
+/**
+ * Renders and encodes the video. "onProgress" gets 0 to 1; an aborted
+ * "signal" stops it with an AbortError. With "file" (in the app) the video
+ * goes to it as it is made, and the result is null; with none (the
+ * browser) the result is the video.
+ */
 export async function encodeVideo(
   source: Engine,
   size: { width: number; height: number },
   options: VideoOptions,
   onProgress: (fraction: number) => void,
-  signal: AbortSignal
-): Promise<Blob> {
+  signal: AbortSignal,
+  file: ExportFile | null = null
+): Promise<Blob | null> {
   const { width, height } = size;
   const fps = options.fps;
   const engine = await source.forExport(width, height);
@@ -383,11 +390,15 @@ export async function encodeVideo(
 
     const overlay = options.style === "title" ? await titleOverlay(width, height, options.title) : null;
     const { config, quantizer } = await pickEncoder(width, height, fps, options.quality);
-    const muxer = new Muxer({
-      target: new ArrayBufferTarget(),
-      video: { codec: "avc", width, height, frameRate: fps },
-      fastStart: "in-memory"
-    });
+    /**
+     * With a file, the MP4 goes to it in parts as it is made (see
+     * openExportFile), and its index at the end; so a long or large video
+     * never has to fit in memory. With no file (the browser), it is made in
+     * memory, its index first.
+     */
+    const muxer = file
+      ? new Muxer({ target: new StreamTarget({ onData: (data, position) => file.write(data, position), chunked: true }), video: { codec: "avc", width, height, frameRate: fps }, fastStart: false })
+      : new Muxer({ target: new ArrayBufferTarget(), video: { codec: "avc", width, height, frameRate: fps }, fastStart: "in-memory" });
     let failure: Error | null = null;
     const encoder = new VideoEncoder({
       output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
@@ -404,6 +415,8 @@ export async function encodeVideo(
     /** Ends the slice when its time is up: reports the progress and lets the window draw. */
     const pause = async (index: number) => {
       if (performance.now() - sliceStart < SLICE_MS) return;
+      /* The parts sent to the file are written before more are made, so they never pile up in memory. */
+      await file?.flush();
       onProgress(index / total);
       await afterNextFrame();
       sliceStart = performance.now();
@@ -468,7 +481,11 @@ export async function encodeVideo(
     if (failure) throw failure;
     muxer.finalize();
     onProgress(1);
-    return new Blob([muxer.target.buffer], { type: "video/mp4" });
+    if (file) {
+      await file.flush();
+      return null;
+    }
+    return new Blob([(muxer.target as ArrayBufferTarget).buffer], { type: "video/mp4" });
   } finally {
     for (const texture of tail) engine.releaseFrame(texture);
     engine.dispose();

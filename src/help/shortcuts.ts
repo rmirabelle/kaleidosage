@@ -36,8 +36,8 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
   {
     title: "Play",
     shortcuts: [
-      { keys: ["Space"], does: "Play or pause (with Files: the music too)" },
-      { keys: ["Shift+Space"], does: "Stop: pause and go back to the start" },
+      { keys: ["Space"], does: "Play or pause the scene (the music has its own controls)" },
+      { keys: ["Shift+Space"], does: "Stop the scene: pause and go back to its start" },
       { keys: ["F", "F11", "Double-click the picture"], does: "Full screen" },
       { keys: ["Esc"], does: "Leave full screen, or play the ranges that MIDI stopped" }
     ]
@@ -56,7 +56,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
   {
     title: "View",
     shortcuts: [
-      { keys: ["H"], does: "Hide or show the settings" },
+      { keys: ["H"], does: "Hide or show the panels" },
       { keys: ["A"], does: "Audio panel" },
       { keys: ["M"], does: "MIDI panel" },
       { keys: ["P"], does: "Performance" },

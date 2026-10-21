@@ -5,6 +5,7 @@ import { MAX_CUSTOM_SECONDS, NO_EFFECT, SLIDER_STEPS, defaultValue, formatValue,
 import { ColorPicker } from "./ColorPicker";
 import { EaseMenu } from "./EaseMenu";
 import { RangeSlider, Slider, rangePosition, trackPosition } from "./Slider";
+import { scenePosition } from "../engine/loop";
 import { createPortal } from "react-dom";
 import { NOT_MAPPABLE, midi } from "../lib/midi";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
@@ -13,6 +14,7 @@ import { useMidi } from "./useMidi";
 import { AudioLinkButton } from "./AudioLinkButton";
 import { audioLinkable } from "../engine/audio";
 import { help } from "../help/topics";
+import { commonKeys, commonName } from "../engine/common";
 
 /**
  * This file holds the hook and its row component, apart from the panels, so
@@ -30,6 +32,8 @@ export function useParamRows(engine: Engine) {
   const singleMarkers = useRef(new Map<ParamKey, HTMLDivElement>());
   /** The value of a drift handle that is being dragged. Its readout shows it instead of the live value. */
   const held = useRef(new Map<ParamKey, number>());
+  /** The playhead line in the Length slider: the place in the scene's Length. */
+  const progress = useRef<HTMLDivElement | null>(null);
 
   /** The readouts and drift lines show the live value each frame, so drifting values can be seen moving. */
   useEffect(() => engine.onFrame(() => {
@@ -53,6 +57,11 @@ export function useParamRows(engine: Engine) {
       element.classList.toggle("idle", !moving);
       if (moving) element.style.left = trackPosition(toSlider(param, engine.live(key)), min, max);
     }
+    /* From the slider's left edge (0 s) to the Length handle's center, once per Length. */
+    if (progress.current) {
+      const { min, max, value } = engine.params.cycle;
+      progress.current.style.left = `calc(${scenePosition(engine.state)} * ${trackPosition(value, min, max)})`;
+    }
   }), [engine]);
 
   const register = (key: ParamKey) => (element: HTMLSpanElement | null) => {
@@ -68,7 +77,7 @@ export function useParamRows(engine: Engine) {
     else singleMarkers.current.delete(key);
   };
 
-  const rowWith = (key: ParamKey, { after, menu }: { after?: ReactNode; menu?: MenuItem[] } = {}) => (
+  const rowWith = (key: ParamKey, { after, badge, menu }: { after?: ReactNode; badge?: ReactNode; menu?: MenuItem[] } = {}) => (
     <ParamRow
       key={key}
       engine={engine}
@@ -76,15 +85,18 @@ export function useParamRows(engine: Engine) {
       readout={register(key)}
       marker={registerMarker(key)}
       singleMarker={registerSingleMarker(key)}
+      progress={key === "cycle" ? (element) => { progress.current = element; } : undefined}
       after={after}
+      badge={badge}
       menu={menu}
       onHold={(value) => { if (value === null) held.current.delete(key); else held.current.set(key, value); }}
     />
   );
   /**
    * The row for one parameter. "with" can also put a control after its
-   * slider, in the same row (the video crossfade after Scene length), and
-   * give the row a right-click menu (the Crossfade blend type).
+   * slider, in the same row (the video crossfade after Scene length), a
+   * badge after its value (HOLD after the Length), and give the row a
+   * right-click menu (the Crossfade blend type).
    */
   return Object.assign((key: ParamKey) => rowWith(key), { with: rowWith });
 }
@@ -118,17 +130,21 @@ const HUE_KEYS: ParamKey[] = ["contourHue"];
  * live value. The readout and the line are written by the frame loop, not by
  * React, because drifting values change every frame.
  */
-function ParamRow({ engine, paramKey, readout, marker, singleMarker, after, menu, onHold }: {
+function ParamRow({ engine, paramKey, readout, marker, singleMarker, progress, after, badge, menu, onHold }: {
   engine: Engine;
   paramKey: ParamKey;
   /** A control after the slider, in the slider's row. */
   after?: ReactNode;
+  /** A small button after the value. */
+  badge?: ReactNode;
   /** The row's right-click menu, when it has one. */
   menu?: MenuItem[];
   readout: (element: HTMLSpanElement | null) => void;
   marker: (element: HTMLDivElement | null) => void;
   /** The single-value slider's live line, for a setting with an audio link. */
   singleMarker: (element: HTMLDivElement | null) => void;
+  /** The Length slider's playhead line, for the scene's Length only. */
+  progress?: (element: HTMLDivElement | null) => void;
   onHold: (value: number | null) => void;
 }) {
   const param = engine.params[paramKey];
@@ -301,6 +317,7 @@ function ParamRow({ engine, paramKey, readout, marker, singleMarker, after, menu
         </span>
         <span className="panel-row-end">
           <span className="panel-row-value" ref={readout} />
+          {badge}
         </span>
       </div>
       <div className="panel-row-control">
@@ -339,6 +356,7 @@ function ParamRow({ engine, paramKey, readout, marker, singleMarker, after, menu
             snapToDetent={!NO_DETENT_SNAP_KEYS.includes(paramKey)}
             snaps={snaps}
             markerRef={param.drift ? singleMarker : undefined}
+            progressRef={progress}
             onChange={(position) => {
               const next = fromSlider(param, position);
               param.value = next;
@@ -421,7 +439,7 @@ function MidiRemove({ paramKey, label }: { paramKey: ParamKey; label: string }) 
   const { armed, mapped } = useMidi();
   if (!armed.includes(paramKey) || !mapped.has(paramKey)) return null;
   return (
-    <button className="midi-remove" data-tip="Remove the MIDI control" aria-label={`Remove the MIDI control from ${label}`} onClick={() => midi.clear(paramKey)}>
+    <button className="midi-remove" data-tip="Remove the MIDI control" aria-label={`Remove the MIDI control from ${label}`} onClick={() => midi.clearAll(commonKeys(paramKey))}>
       <Trash size={12} weight="bold" />
     </button>
   );
@@ -436,12 +454,17 @@ function MidiRemove({ paramKey, label }: { paramKey: ParamKey; label: string }) 
  * tooltip names the slider's controls and the other sliders they move. It is lit while a control is
  * assigned. While it waits, an assigned slider also shows a remove button (see MidiRemove);
  * a right-click on the lit icon removes the control too. It shows only
- * while a MIDI controller is connected, or when a control is assigned.
+ * while a MIDI controller is connected, or when a control is assigned. On a
+ * common setting (see engine/common.ts) it works on that setting in every
+ * effect: one control moves every Pan X, for example.
  */
 function MidiAssign({ engine, paramKey, label }: { engine: Engine; paramKey: ParamKey; label: string }) {
   const { available, devices, armed, mapped } = useMidi();
   const waiting = armed.includes(paramKey);
   const assigned = mapped.has(paramKey);
+  const keys = commonKeys(paramKey);
+  /** The common setting's shared name, for the tooltips, or null for a setting of the effect's own. */
+  const shared = keys.length > 1 ? commonName(paramKey) ?? null : null;
 
   /* Capture, so Esc stops waiting and does not also leave full screen. */
   useEffect(() => {
@@ -459,14 +482,15 @@ function MidiAssign({ engine, paramKey, label }: { engine: Engine; paramKey: Par
   /** Where this slider's control is, and the other sliders that the same control moves. */
   const where = assigned ? midi.mappings([paramKey]).map(({ device, control }) => {
     const [channel, number] = control.split(":");
-    const others = midi.sliders(device, control).filter((key) => key !== paramKey).map((key) => engine.params[key].label);
+    const others = midi.sliders(device, control).filter((key) => !keys.includes(key)).map((key) => engine.params[key].label);
     return `Control ${number}, channel ${channel} (${device})${others.length ? `. It also moves ${others.join(", ")}` : ""}.`;
   }).join(" ") : "";
+  const target = shared ? `${shared} in every effect` : "this slider";
   const title = waiting
-    ? "Move a knob or fader to assign it to this slider. Click or `Esc` to stop."
+    ? `Move a knob or fader to assign it to ${target}. Click or \`Esc\` to stop.`
     : assigned
-      ? `${where} Click to add another control; right-click to remove every control from this slider.`
-      : "Assign a MIDI knob or fader to this slider";
+      ? `${where} Click to add another control; right-click to remove every control from ${target}.`
+      : `Assign a MIDI knob or fader to ${target}`;
   return (
     <>
       <button
@@ -474,10 +498,10 @@ function MidiAssign({ engine, paramKey, label }: { engine: Engine; paramKey: Par
         data-tip={title}
         aria-label={waiting ? `Stop waiting for a MIDI control for ${label}` : `Assign a MIDI control to ${label}`}
         aria-pressed={waiting}
-        onClick={() => waiting ? midi.setLearning(false) : midi.assign(paramKey)}
+        onClick={() => waiting ? midi.setLearning(false) : midi.assign(keys)}
         onContextMenu={(event) => {
           event.preventDefault();
-          if (assigned) midi.clear(paramKey);
+          if (assigned) midi.clearAll(keys);
         }}
       >
         <MidiIcon size={13} />

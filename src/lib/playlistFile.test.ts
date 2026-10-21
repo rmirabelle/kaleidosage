@@ -15,11 +15,22 @@ describe("playlist files", () => {
     expect(() => readManifest("not json")).toThrow("not a Kaleido Sage playlist");
   });
 
+  it("read back the Files column width, and leave it out of older playlists", () => {
+    expect(readManifest(writeManifest({ audio: AUDIO, activeScene: 0, filesWidth: 420 })).filesWidth).toBe(420);
+    expect(readManifest(writeManifest({ audio: AUDIO, activeScene: 0 })).filesWidth).toBeUndefined();
+  });
+
+  it("read back the track lengths, with null for a length that is not known", () => {
+    expect(readManifest(writeManifest({ audio: AUDIO, activeScene: 0, trackSeconds: [183.5, null] })).trackSeconds).toEqual([183.5, null]);
+    expect(readManifest(writeManifest({ audio: AUDIO, activeScene: 0 })).trackSeconds).toBeUndefined();
+  });
+
   it("count a new scene order, track or audio setting as a change", () => {
     const base = playlistFingerprint(["a.ksage", "b.ksage"], ["song.mp3"], AUDIO);
     expect(playlistFingerprint(["b.ksage", "a.ksage"], ["song.mp3"], AUDIO)).not.toBe(base);
     expect(playlistFingerprint(["a.ksage", "b.ksage"], [], AUDIO)).not.toBe(base);
     expect(playlistFingerprint(["a.ksage", "b.ksage"], ["song.mp3"], { ...AUDIO, gainDb: 4 })).not.toBe(base);
     expect(playlistFingerprint(["a.ksage", "b.ksage"], ["song.mp3"], { ...AUDIO })).toBe(base);
+    expect(playlistFingerprint(["a.ksage", "b.ksage"], ["song.mp3"], AUDIO, 420)).not.toBe(base);
   });
 });

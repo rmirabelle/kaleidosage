@@ -1,10 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ImageSquare, Plus } from "@phosphor-icons/react";
+import { Plus } from "@phosphor-icons/react";
 import type { FxStep } from "../engine/renderer";
 import { EFFECT_NAMES } from "../engine/submodes";
 
-/** One short line on what each effect does, under its name on its card. */
+/** One short line on what each effect does, in its preview. */
 const EFFECT_NOTES: Record<FxStep, string> = {
   kaleidoscope: "Mirrors the picture into wedges or tiles.",
   map: "Bends space with a math map: spirals, tunnels, Möbius.",
@@ -26,10 +26,10 @@ const EFFECT_NOTES: Record<FxStep, string> = {
 };
 
 /**
- * The card thumbnails, 16:9 (320 x 180), in src/assets/fx: <effect>.jpg for
- * an effect with one look, or <effect>-<n>-<type>.jpg for each type of an
- * effect with types, numbered in the order of its Type menu. A card with no
- * file shows a placeholder.
+ * The preview thumbnails, 16:9 (320 x 180), in src/assets/fx: <effect>.jpg
+ * for an effect with one look, or <effect>-<n>-<type>.jpg for each type of
+ * an effect with types, numbered in the order of its Type menu. A preview
+ * with no file shows only the name and the note.
  */
 const THUMBNAILS: Partial<Record<string, string[]>> = {};
 for (const [path, url] of Object.entries(import.meta.glob<string>("../assets/fx/*.{jpg,webp,png}", { eager: true, query: "?url", import: "default" })).sort(([a], [b]) => a.localeCompare(b))) {
@@ -37,19 +37,17 @@ for (const [path, url] of Object.entries(import.meta.glob<string>("../assets/fx/
   (THUMBNAILS[step] ??= []).push(url);
 }
 
-/** The cards in each row of the grid, for Up and Down. The CSS grid has the same count. */
-const COLUMNS = 5;
-
 /** An effect with types shows the next type's thumbnail after this time. */
 const TYPE_MS = 1000;
 
 /**
  * The + New button at the end of the FX title bar. It opens the Add effect
- * menu at the right of the button: a card for each effect, with a
- * thumbnail, its name and a short note. Effects that are in the list
- * already show dimmed and cannot be picked. A pick adds that effect and
- * closes the menu. Keys: the arrow keys move, Enter or Space picks, Esc
- * closes. A click outside closes it.
+ * menu at the right of the button: a list of effect names. The highlighted
+ * name shows a preview frame beside the list, with its thumbnails (one per
+ * type, in turn) and a short note. Effects that are in the list already
+ * show dimmed and cannot be picked. A pick adds that effect and closes the
+ * menu. Keys: Up and Down move, Enter or Space picks, Esc closes. A click
+ * outside closes it.
  */
 export function AddEffectMenu({ taken, onAdd }: {
   /** The effects that are in the list already. */
@@ -75,7 +73,7 @@ export function AddEffectMenu({ taken, onAdd }: {
         </button>
       </div>
       {open && createPortal(
-        <AddEffectCards
+        <AddEffectList
           button={buttonRef.current!}
           taken={taken}
           onPick={(step) => {
@@ -90,7 +88,7 @@ export function AddEffectMenu({ taken, onAdd }: {
   );
 }
 
-function AddEffectCards({ button, taken, onPick, onClose }: {
+function AddEffectList({ button, taken, onPick, onClose }: {
   /** The New button that opened the menu: the menu opens at its right. */
   button: HTMLButtonElement;
   taken: readonly FxStep[];
@@ -98,12 +96,17 @@ function AddEffectCards({ button, taken, onPick, onClose }: {
   onClose: () => void;
 }) {
   const canPick = (index: number) => !taken.includes(EFFECT_NAMES[index][0]);
+  /** The highlighted name. The pointer can highlight an effect in the list already, to show its preview; the keys skip it. */
   const [active, setActive] = useState(() => Math.max(0, EFFECT_NAMES.findIndex((_, index) => canPick(index))));
   const activeRef = useRef(active);
   activeRef.current = active;
   const menuRef = useRef<HTMLDivElement>(null);
-  const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
+  const [previewPosition, setPreviewPosition] = useState<{ left: number; top: number } | null>(null);
+  /** Changes when the list scrolls, so the preview follows its name. */
+  const [scroll, setScroll] = useState(0);
   const [tick, setTick] = useState(0);
 
   /**
@@ -118,22 +121,39 @@ function AddEffectCards({ button, taken, onPick, onClose }: {
     setPosition({ left, top });
   }, [button]);
 
+  /**
+   * At the right of the list, top edge in line with the highlighted name,
+   * and inside the window. When there is no room at the right, at the left.
+   */
+  useLayoutEffect(() => {
+    if (!position) return;
+    const menu = menuRef.current!.getBoundingClientRect();
+    const item = itemRefs.current[active]!.getBoundingClientRect();
+    const preview = previewRef.current!.getBoundingClientRect();
+    const left = menu.right + 6 + preview.width <= window.innerWidth - 8 ? menu.right + 6 : Math.max(8, menu.left - 6 - preview.width);
+    const top = Math.max(8, Math.min(item.top - 5, window.innerHeight - 8 - preview.height));
+    setPreviewPosition({ left, top });
+  }, [active, position, scroll]);
+
+  /* Each new name starts its thumbnails at the first type. */
   useEffect(() => {
+    setTick(0);
     const timer = window.setInterval(() => setTick((value) => value + 1), TYPE_MS);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [active]);
 
   useEffect(() => {
-    if (position) cardRefs.current[active]?.focus();
+    if (position) itemRefs.current[active]?.focus();
   }, [active, position]);
 
   useEffect(() => {
-    /** The next card that can be picked, in steps of `by`, or the same card when there is none. */
-    const move = (by: number) => {
-      for (let index = activeRef.current + by; index >= 0 && index < EFFECT_NAMES.length; index += by) {
+    /** The next name that can be picked, in steps of `by`, or the same name when there is none. */
+    const move = (from: number, by: number) => {
+      for (let index = from + by; index >= 0 && index < EFFECT_NAMES.length; index += by) {
         if (canPick(index)) return setActive(index);
       }
     };
+    const pickActive = () => canPick(activeRef.current) && onPick(EFFECT_NAMES[activeRef.current][0]);
     /* The button toggles the menu itself, so a press on it does not count as outside. */
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
@@ -143,12 +163,12 @@ function AddEffectCards({ button, taken, onPick, onClose }: {
     const onKeyDown = (event: KeyboardEvent) => {
       const keys: Record<string, () => void> = {
         Escape: onClose,
-        ArrowRight: () => move(1),
-        ArrowLeft: () => move(-1),
-        ArrowDown: () => move(COLUMNS),
-        ArrowUp: () => move(-COLUMNS),
-        Enter: () => canPick(activeRef.current) && onPick(EFFECT_NAMES[activeRef.current][0]),
-        " ": () => canPick(activeRef.current) && onPick(EFFECT_NAMES[activeRef.current][0])
+        ArrowDown: () => move(activeRef.current, 1),
+        ArrowUp: () => move(activeRef.current, -1),
+        Home: () => move(-1, 1),
+        End: () => move(EFFECT_NAMES.length, -1),
+        Enter: pickActive,
+        " ": pickActive
       };
       const action = keys[event.key];
       if (!action) return;
@@ -168,45 +188,59 @@ function AddEffectCards({ button, taken, onPick, onClose }: {
     };
   }, [button, taken, onPick, onClose]);
 
+  const [activeStep, activeName] = EFFECT_NAMES[active];
+  const activeInList = !canPick(active);
+  const thumbnails = THUMBNAILS[activeStep] ?? [];
   return (
-    <div
-      ref={menuRef}
-      className="add-effect-menu"
-      role="menu"
-      aria-labelledby="add-effect-title"
-      style={position ?? { visibility: "hidden" }}
-    >
-      <h2 id="add-effect-title" className="add-effect-title">Add an effect</h2>
-      <div className="add-effect-grid">
+    <>
+      <div
+        ref={menuRef}
+        className="toolbar-dropdown add-effect-menu"
+        role="menu"
+        aria-labelledby="add-effect-title"
+        style={position ?? { visibility: "hidden" }}
+        onScroll={() => setScroll((value) => value + 1)}
+      >
+        <div id="add-effect-title" className="toolbar-dropdown-heading">Add an effect</div>
         {EFFECT_NAMES.map(([step, name], index) => {
           const inList = !canPick(index);
-          const thumbnails = THUMBNAILS[step] ?? [];
-          /** An effect in the list already stays on its first type. */
-          const shownType = inList ? 0 : tick % thumbnails.length;
           return (
             <button
               key={step}
-              ref={(element) => { cardRefs.current[index] = element; }}
+              ref={(element) => { itemRefs.current[index] = element; }}
               role="menuitem"
-              className={`add-effect-card ${index === active ? "active" : ""}`}
-              disabled={inList}
+              aria-disabled={inList}
+              className={`toolbar-dropdown-item ${index === active ? "active" : ""} ${inList ? "in-list" : ""}`}
               tabIndex={index === active ? 0 : -1}
-              onPointerEnter={() => !inList && setActive(index)}
-              onClick={() => onPick(step)}
+              onPointerEnter={() => setActive(index)}
+              onClick={() => !inList && onPick(step)}
             >
-              <span className="add-effect-thumb">
-                {thumbnails.length ? thumbnails.map((url, shown) => (
-                  <img key={url} src={url} alt="" draggable={false} className={shown === shownType ? "shown" : ""} />
-                )) : <ImageSquare size={24} />}
-                {thumbnails.length > 1 && <span className="add-effect-badge types">{thumbnails.length} Types</span>}
-                {inList && <span className="add-effect-badge in-list">Already added</span>}
-              </span>
-              <span className="add-effect-name">{name}</span>
-              <span className="add-effect-note">{EFFECT_NOTES[step]}</span>
+              {name}
+              {inList && <span className="add-effect-added">Added</span>}
             </button>
           );
         })}
       </div>
-    </div>
+      {position && (
+        <div
+          ref={previewRef}
+          className="add-effect-preview"
+          aria-hidden
+          style={previewPosition ?? { visibility: "hidden" }}
+        >
+          {thumbnails.length > 0 && (
+            <span className="add-effect-thumb">
+              {thumbnails.map((url, shown) => (
+                <img key={url} src={url} alt="" draggable={false} className={shown === tick % thumbnails.length ? "shown" : ""} />
+              ))}
+              {thumbnails.length > 1 && <span className="add-effect-badge types">{thumbnails.length} Types</span>}
+            </span>
+          )}
+          <span className="add-effect-name">{activeName}</span>
+          <span className="add-effect-note">{EFFECT_NOTES[activeStep]}</span>
+          {activeInList && <span className="add-effect-note in-list">This effect is in the list already.</span>}
+        </div>
+      )}
+    </>
   );
 }

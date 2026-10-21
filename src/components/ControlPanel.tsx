@@ -8,6 +8,7 @@ import { audioInput } from "../lib/audioInput";
 import { settingButtons } from "../lib/settingButtons";
 import { GradientEditor } from "./GradientEditor";
 import { EmptyState } from "./EmptyState";
+import { commonRole, splitCommon } from "../engine/common";
 import { BLUR_KEYS, BLUR_MASKS, FOLD_MODES, KALEIDOSCOPE_KEYS, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
 import type { BlurMask, FoldMode, FxStep, MapMode, ShapeStep, SmearShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
@@ -32,8 +33,6 @@ interface Props {
   onReset: () => void;
   /** New random settings for one group only (its dice button). */
   onRandomizeGroup: (group: GroupKey) => void;
-  /** True when a source is a video; only then does the video crossfade choice show. */
-  hasVideo: boolean;
   /** The Source section (see SourcePanel), at the top of the panel, above the Designer. */
   source: ReactNode;
   /** The file name of the Driver effect's own video, or null, and the button that picks one. */
@@ -41,6 +40,9 @@ interface Props {
   onPickDriverVideo: () => void;
   /** The FX audio button was turned on while the app listens to nothing: the app opens the Audio panel at its Input. */
   onNeedAudioInput: () => void;
+  /** True while Hold keeps the shown scene (Files only, see holdScene in App): HOLD then shows after the Length; a click on it turns Hold off. */
+  held: boolean;
+  onReleaseHold: () => void;
 }
 
 const TRAIL_KEYS: ParamKey[] = ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"];
@@ -49,7 +51,7 @@ const RELIEF_KEYS: ParamKey[] = ["reliefAmount", "reliefDepth", "reliefSize", "l
 const DRIVER_KEYS: ParamKey[] = ["driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast"];
 const CAMERA_KEYS: ParamKey[] = ["cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth"];
 const SORT_KEYS: ParamKey[] = ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"];
-/* The Blend menu and the Opacity slider (particleAmount) come after these, at the bottom of the group. */
+/* The Blend menu and the Opacity slider (particleAmount) come after these, in the Common part at the bottom of the group. */
 const PARTICLE_KEYS: ParamKey[] = ["particleLevel", "particleBackground", "particleCount", "particleSize", "particleLife", "particleSpeed", "particleFollow", "particleCling", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleGradient", "particleBoost"];
 const RAYS_KEYS: ParamKey[] = ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"];
 const BLOOM_KEYS: ParamKey[] = ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"];
@@ -70,12 +72,11 @@ const CAMERA_REPEATS = [[0, "Mirror"], [1, "Tile"], [2, "None"]] as const;
 
 /** The left panel: the Source section, then the Designer: its toolbar, the scene length, and the effect groups. */
 
-export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, hasVideo, source, driverVideoName, onPickDriverVideo, onNeedAudioInput }: Props) {
+export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, driverVideoName, onPickDriverVideo, onNeedAudioInput, held, onReleaseHold }: Props) {
   const row = useParamRows(engine);
   /** True while MIDI holds any range: the Effects header then shows a play button that plays them all again. */
   const [anyHeld, setAnyHeld] = useState(engine.anyHeld);
   useEffect(() => engine.onParamChange(() => setAnyHeld(engine.anyHeld)), [engine]);
-  const [videoCrossfade, setVideoCrossfade] = useState(engine.state.videoCrossfade);
   /**
    * The MIDI button before the FX title shows the settings' MIDI buttons; they
    * are hidden until then. It shows when a MIDI device is there or a setting
@@ -263,9 +264,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     contours: (grip) => (
       <Group engine={engine} group="contours" title="Contours" grip={grip} onEnable={enableContours} {...accordion("contours")}>
         <Fragment key={contourRevision}>
-          {row("contourHue")}
-          <ContourBlend engine={engine} />
-          {CONTOUR_KEYS.map(row)}
+          <SplitRows keys={["contourHue", ...CONTOUR_KEYS]} row={row} blend={<ContourBlend engine={engine} />} />
         </Fragment>
       </Group>
     ),
@@ -283,21 +282,23 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       <Group engine={engine} group="camera" title="Camera" grip={grip} {...accordion("camera")}>
         <CameraBlend engine={engine} />
         <CameraRepeatRow engine={engine} />
-        {CAMERA_KEYS.map(row)}
+        <SplitRows keys={CAMERA_KEYS} row={row} />
       </Group>
     ),
     sort: (grip) => (
       <Group engine={engine} group="sort" title="Pixel sort" grip={grip} {...accordion("sort")}>
         <ModeSelect engine={engine} stateKey="sortOrder" options={SORT_ORDERS} name="Order" />
-        {SORT_KEYS.map(row)}
+        <SplitRows keys={SORT_KEYS} row={row} />
       </Group>
     ),
     particles: (grip) => (
       <Group engine={engine} group="particles" title="Particles" grip={grip} {...accordion("particles")}>
         {/* The life gradient's colors, under its Gradient slider, in the same row block (no line between them). */}
-        {PARTICLE_KEYS.map((key) => key === "particleGradient" ? <Fragment key={key}>{row(key)}<GradientEditor engine={engine} /></Fragment> : row(key))}
-        <ModeSelect engine={engine} stateKey="particleBlend" options={PARTICLE_BLENDS} name="Blend" />
-        {row("particleAmount")}
+        <SplitRows
+          keys={[...PARTICLE_KEYS, "particleAmount"]}
+          row={(key) => key === "particleGradient" ? <Fragment key={key}>{row(key)}<GradientEditor engine={engine} /></Fragment> : row(key)}
+          blend={<ModeSelect engine={engine} stateKey="particleBlend" options={PARTICLE_BLENDS} name="Blend" />}
+        />
       </Group>
     ),
     rays: (grip) => (
@@ -317,8 +318,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     ),
     color: (grip) => (
       <Group engine={engine} group="color" title="Color" grip={grip} {...accordion("color")}>
-        {COLOR_KEYS.map(row)}
-        <ColorBlend engine={engine} />
+        <SplitRows keys={COLOR_KEYS} row={row} blend={<ColorBlend engine={engine} />} />
       </Group>
     ),
     levels: (grip) => (
@@ -330,20 +330,16 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
 
   return (
     <aside className={`side-panel control-panel ${midiButtons || audioButtons ? "" : "midi-hidden"} ${midiButtons ? "" : "no-midi-buttons"} ${audioButtons ? "" : "no-audio-buttons"}`}>
-      {/* The scene length (the cycle): at the very top and always in view, because its timing affects the sources and every effect below. A video source adds its crossfade after the slider. */}
+      {/* The scene length (the cycle): at the very top and always in view, because its timing affects the sources and every effect below. HOLD shows after the value while Hold is on. */}
       <div className="panel-root-row">
-        {row.with("cycle", { after: hasVideo && (
-          <label className="panel-check-inline" data-tip="A source video fades its end into its start, so it never jumps. Off, the video starts again at the start of each loop. A seamless video export always crossfades.">
-            <input
-              type="checkbox"
-              checked={videoCrossfade}
-              onChange={(event) => {
-                engine.state.videoCrossfade = event.target.checked;
-                setVideoCrossfade(event.target.checked);
-              }}
-            />
-            Crossfade
-          </label>
+        {row.with("cycle", { badge: held && (
+          <button
+            className="hold-badge"
+            onClick={onReleaseHold}
+            data-tip="Hold is on: this scene stays while you edit it, and the music plays on. Click, save, or pick a tab to go on to the next scenes."
+          >
+            <span className="hold-badge-label">Hold</span>
+          </button>
         ) })}
       </div>
       {source}
@@ -781,8 +777,7 @@ function WarpSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => 
   return (
     <>
       <ModeSelect engine={engine} stateKey="warpType" options={WARP_TYPES} name="Type" onChange={setType} />
-      {WARP_KEYS[type].map(row)}
-      <LayerRows engine={engine} step="warp" row={row} />
+      <SplitRows keys={[...WARP_KEYS[type], OPACITY_KEY.warp]} row={row} blend={<LayerBlend engine={engine} step="warp" />} />
     </>
   );
 }
@@ -792,8 +787,7 @@ function MapSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => R
   return (
     <>
       <ModeSelect engine={engine} stateKey="mapMode" options={MAP_MODES} name="Type" onChange={setMode} />
-      {MAP_KEYS[mode].map(row)}
-      <LayerRows engine={engine} step="map" row={row} />
+      <SplitRows keys={[...MAP_KEYS[mode], OPACITY_KEY.map]} row={row} blend={<LayerBlend engine={engine} step="map" />} />
     </>
   );
 }
@@ -811,7 +805,7 @@ function SmearSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =>
   return (
     <>
       <ModeSelect engine={engine} stateKey="smearShape" options={SMEAR_SHAPES} onChange={setShape} />
-      {SMEAR_KEYS[shape].map(row)}
+      <SplitRows keys={SMEAR_KEYS[shape]} row={row} />
     </>
   );
 }
@@ -900,7 +894,7 @@ function DriverSection({ engine, row, videoName, onPickVideo }: { engine: Engine
         </div>
       )}
       <ModeSelect engine={engine} stateKey="driverMode" options={DRIVER_MODES} name="Mode" />
-      {DRIVER_KEYS.map(row)}
+      <SplitRows keys={DRIVER_KEYS} row={row} />
     </>
   );
 }
@@ -924,23 +918,44 @@ function CameraRepeatRow({ engine }: { engine: Engine }) {
   );
 }
 
-function LayerRows({ engine, step, row }: { engine: Engine; step: ShapeStep; row: (key: ParamKey) => ReactNode }) {
+function LayerBlend({ engine, step }: { engine: Engine; step: ShapeStep }) {
   const [blend, setBlend] = useState(engine.state.layerBlend[step]);
   return (
+    <div className="panel-select-row panel-layer-blend">
+      <span className="panel-row-name">Blend</span>
+      <Dropdown
+        value={blend}
+        options={LAYER_BLENDS}
+        label="Layer blend mode"
+        onChange={(next) => {
+          engine.state.layerBlend[step] = next;
+          setBlend(next);
+        }}
+      />
+    </div>
+  );
+}
+
+/**
+ * An effect's settings: its own settings first, then its common settings
+ * (see engine/common.ts) under a Common heading. "blend" is the effect's
+ * Blend menu, which is common too: it shows right before Opacity.
+ */
+function SplitRows({ keys, row, blend }: { keys: readonly ParamKey[]; row: (key: ParamKey) => ReactNode; blend?: ReactNode }) {
+  const { own, common } = splitCommon(keys);
+  const moves = common.filter((key) => commonRole(key) !== "opacity");
+  const opacity = common.filter((key) => commonRole(key) === "opacity");
+  return (
     <>
-      <div className="panel-select-row panel-layer-blend">
-        <span className="panel-row-name">Blend</span>
-        <Dropdown
-          value={blend}
-          options={LAYER_BLENDS}
-          label="Layer blend mode"
-          onChange={(next) => {
-            engine.state.layerBlend[step] = next;
-            setBlend(next);
-          }}
-        />
-      </div>
-      {row(OPACITY_KEY[step])}
+      {own.map(row)}
+      {(common.length > 0 || blend) && (
+        <>
+          <div className="panel-common-head" data-tip="Settings that many effects share. A MIDI control on one of them moves it in every effect.">Common</div>
+          {moves.map(row)}
+          {blend}
+          {opacity.map(row)}
+        </>
+      )}
     </>
   );
 }
@@ -960,8 +975,9 @@ function KaleidoscopeSection({ engine, row }: { engine: Engine; row: (key: Param
   return (
     <>
       <ModeSelect engine={engine} stateKey="foldMode" options={FOLD_MODES} name="Type" onChange={pick} />
-      <Fragment key={revision}>{KALEIDOSCOPE_KEYS[mode].map(row)}</Fragment>
-      <LayerRows engine={engine} step="kaleidoscope" row={row} />
+      <Fragment key={revision}>
+        <SplitRows keys={[...KALEIDOSCOPE_KEYS[mode], OPACITY_KEY.kaleidoscope]} row={row} blend={<LayerBlend engine={engine} step="kaleidoscope" />} />
+      </Fragment>
     </>
   );
 }

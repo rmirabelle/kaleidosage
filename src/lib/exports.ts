@@ -48,5 +48,42 @@ export async function writeExport(path: string, blob: Blob) {
   await invoke("save_export", bytes, { headers: { path: encodeURIComponent(path) } });
 }
 
+/**
+ * A video export written to disk while it is made (Rust: export_stream.rs),
+ * so a long or large video never has to fit in memory. "write" sends a part
+ * to its place in the file; the parts go one after the other. "flush"
+ * waits for the parts sent so far and throws the first failure. "finish"
+ * keeps the file; "discard" removes it (a stopped or failed export).
+ */
+export async function openExportFile(path: string) {
+  const id = await invoke<number>("begin_export", { path });
+  let queue: Promise<void> = Promise.resolve();
+  let failure: unknown = null;
+  const flush = async () => {
+    await queue;
+    if (failure) throw failure;
+  };
+  return {
+    write(data: Uint8Array, position: number) {
+      /* A copy: the muxer may use its buffer again after this call. */
+      const bytes = data.slice();
+      queue = queue
+        .then(() => invoke<void>("write_export", bytes, { headers: { "export-id": String(id), offset: String(position) } }))
+        .catch((error: unknown) => { failure ??= error; });
+    },
+    flush,
+    async finish() {
+      await flush();
+      await invoke("finish_export", { id, discard: false });
+    },
+    async discard() {
+      await queue;
+      await invoke("finish_export", { id, discard: true }).catch(() => {});
+    }
+  };
+}
+
+export type ExportFile = Awaited<ReturnType<typeof openExportFile>>;
+
 /** The file name at the end of a path. */
 export const fileNameOf = (path: string) => path.split(/[\\/]/).pop() ?? path;

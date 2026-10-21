@@ -1,4 +1,5 @@
 mod browse;
+mod export_stream;
 mod files;
 mod playlist_archive;
 mod sound_capture;
@@ -52,6 +53,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(video_stream::Videos::default())
         .manage(video_stream::Uploads::default())
+        .manage(export_stream::Exports::default())
         .manage(sound_capture::SoundCapture::default())
         .on_page_load(|webview, payload| sound_capture::stop_on_page_load(webview, payload))
         .register_asynchronous_uri_scheme_protocol("video", |ctx, request, responder| {
@@ -88,11 +90,15 @@ pub fn run() {
             video_stream::finish_video_upload,
             video_import::compatible_video,
             files::save_export,
+            export_stream::begin_export,
+            export_stream::write_export,
+            export_stream::finish_export,
             files::default_export_folder,
             scene_archive::save_scene,
             scene_archive::read_scene,
             playlist_archive::save_playlist,
             playlist_archive::open_playlist,
+            playlist_archive::read_playlist_summary,
             playlist_archive::playlist_scene_path,
             files::reveal_file,
             files::cursor_position,

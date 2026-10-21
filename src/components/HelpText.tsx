@@ -1,5 +1,5 @@
 import { Fragment, type ReactNode } from "react";
-import { ArrowsLeftRight, ArrowsOut, BracketsSquare, DiceFive, DotsSixVertical, MagnifyingGlass, Play, Plus, SkipBack, SkipForward, SpeakerSimpleHigh, Timer, Trash, Wind, X } from "@phosphor-icons/react";
+import { ArrowsLeftRight, ArrowsOut, BracketsSquare, DiceFive, DotsSixVertical, MagnifyingGlass, Play, Plus, SpeakerSimpleHigh, Timer, Trash, Wind, X } from "@phosphor-icons/react";
 import { HELP_ICON_PATTERN, type HelpIcon } from "../help/topics";
 import { ColorFolder } from "./ColorFolder";
 import { ColorPattern } from "./ColorPattern";
@@ -30,8 +30,6 @@ const ICONS: Record<HelpIcon, ReactNode> = {
   play: <MediaIcon kind="play" size={13} />,
   pause: <MediaIcon kind="pause" size={13} />,
   stop: <MediaIcon kind="stop" size={13} />,
-  previous: <SkipBack size={12} weight="fill" />,
-  next: <SkipForward size={12} weight="fill" />,
   fullscreen: <ArrowsOut size={12} weight="bold" />
 };
 

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowClockwise, ArrowUp, CaretDown, CaretRight, CaretUp, CheckCircle, Copy, Desktop, DownloadSimple, FileImage, FilmSlate, Folder, FolderOpen, HardDrive, House, Images, MagnifyingGlass, MusicNote, MusicNotes, PencilSimple, SpinnerGap, Trash, WarningCircle, X } from "@phosphor-icons/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Engine } from "../engine/engine";
 import { createParams, createPlayState, type GroupKey, type Params, type PlayState } from "../engine/params";
 import { sourceSize, type ImageSource } from "../engine/renderer";
@@ -8,6 +8,8 @@ import { applyScene } from "../engine/scene";
 import { loadImageFile } from "../lib/images";
 import { isVideoPath, loadVideoFile } from "../lib/videos";
 import { loadSceneMedia, readScene } from "../lib/scenes";
+import { readPlaylistSummary, type PlaylistSummary } from "../lib/playlistFile";
+import { formatPlayTime } from "../lib/tracks";
 import { ColorFolder } from "./ColorFolder";
 
 /** The kind of file the dialog opens: an image (or a video), a scene (.ksage), or an audio file for the tracks. */
@@ -98,7 +100,13 @@ interface VideoPreviewData {
   height: number;
 }
 
-type PreviewData = ImagePreviewData | ScenePreviewData | VideoPreviewData;
+/** A playlist's summary, for the dashboard in the preview column (see PlaylistDashboard). */
+interface PlaylistPreviewData {
+  kind: "playlist";
+  summary: PlaylistSummary;
+}
+
+type PreviewData = ImagePreviewData | ScenePreviewData | VideoPreviewData | PlaylistPreviewData;
 
 type PreviewState =
   | { status: "idle" }
@@ -347,8 +355,69 @@ async function buildScenePreview(path: string): Promise<ScenePreviewData> {
   };
 }
 
-const buildPreview = (entry: BrowseEntry): Promise<PreviewData> =>
-  entry.kind === "scene" ? buildScenePreview(entry.path) : buildImagePreview(entry.path);
+const buildPreview = async (entry: BrowseEntry): Promise<PreviewData> =>
+  entry.kind === "scene" ? buildScenePreview(entry.path)
+    : entry.kind === "playlist" ? { kind: "playlist", summary: await readPlaylistSummary(entry.path) }
+    : buildImagePreview(entry.path);
+
+const INPUT_NAMES: Record<string, string> = { tracks: "Files", output: "PC sound", input: "Microphone", none: "None" };
+
+/** One card of the playlist dashboard: a heading with an icon and a blue count badge, then the files, numbered, in a list that scrolls by itself. */
+function PlaylistCard({ title, icon, files, empty, strip, times }: {
+  title: string;
+  icon: ReactNode;
+  files: PlaylistSummary["scenes"];
+  empty: string;
+  strip?: RegExp;
+  /** Show each file's length instead of its size, with the total in a footer (the tracks, when the playlist kept their lengths). */
+  times?: boolean;
+}) {
+  const known = files.filter((file) => file.seconds !== null);
+  const total = known.reduce((sum, file) => sum + (file.seconds ?? 0), 0);
+  return (
+    <section className="playlist-card">
+      <header className="playlist-card-head">{icon}<span className="playlist-card-title">{title}</span><span className="playlist-card-count">{files.length}</span></header>
+      {files.length ? (
+        <ol className="playlist-list">
+          {files.map((file, index) => (
+            <li key={`${index}:${file.name}`} className="playlist-item">
+              <span className="playlist-item-number">{index + 1}</span>
+              <span className="playlist-item-name" data-tip={file.name}>{strip ? file.name.replace(strip, "") : file.name}</span>
+              <span className="playlist-item-size">{times ? (file.seconds !== null ? formatPlayTime(file.seconds) : "–") : formatSize(file.bytes)}</span>
+            </li>
+          ))}
+        </ol>
+      ) : <p className="playlist-empty">{empty}</p>}
+      {times && files.length > 0 && (
+        <footer className="playlist-card-foot">
+          <span>{files.length === 1 ? "1 file" : `${files.length} files`}</span>
+          <span>{formatPlayTime(total)}{known.length < files.length ? "+" : ""}</span>
+        </footer>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The Open Playlist dialog's preview: a dashboard of the selected playlist.
+ * The audio settings, then two cards of the same height, the tracks and
+ * the scenes, each of which scrolls by itself. The file's size and date
+ * are in the details under the preview.
+ */
+function PlaylistDashboard({ summary }: { summary: PlaylistSummary }) {
+  const audio = summary.audio ?? {};
+  return (
+    <div className="playlist-dashboard">
+      <div className="playlist-audio">
+        <span>Input <b>{INPUT_NAMES[audio.kind ?? "none"] ?? "None"}</b></span>
+        {audio.gainDb !== undefined && <span>Gain <b>{audio.gainDb} dB</b></span>}
+        {audio.thresholdDb !== undefined && <span>Threshold <b>{audio.thresholdDb} dB</b></span>}
+      </div>
+      <PlaylistCard title="Tracks" icon={<MusicNotes size={15} weight="fill" />} files={summary.tracks} empty="No tracks" times={summary.tracks.some((track) => track.seconds !== null)} />
+      <PlaylistCard title="Scenes" icon={<FilmSlate size={15} weight="fill" />} files={summary.scenes} empty="No scenes" strip={/\.ksage$/i} />
+    </div>
+  );
+}
 
 /** Native controls provide play/pause, seeking, and time for the selected video. */
 function VideoPreview({ video }: { video: VideoPreviewData }) {
@@ -850,8 +919,8 @@ export function OpenDialog({ kind, title, onCancel, onOpen, onOpenMany }: Props)
   const pickedPaths = visibleEntries.filter((entry) => picked.has(entry.path)).map((entry) => entry.path);
 
   useEffect(() => {
-    /* Audio files have no preview. */
-    if (!selected || selected.kind === "folder" || selected.kind === "audio" || selected.kind === "playlist") {
+    /* Audio files have no preview; a playlist's is its dashboard (see PlaylistDashboard). */
+    if (!selected || selected.kind === "folder" || selected.kind === "audio") {
       previewRequest.current++;
       setPreview({ status: "idle" });
       return;
@@ -1226,7 +1295,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen, onOpenMany }: Props)
           />
 
           <aside className="open-preview" aria-label="Preview">
-            <div className="open-preview-frame">
+            <div className={`open-preview-frame ${ready?.kind === "playlist" ? "playlist" : ""}`}>
               {preview.status === "idle" && (
                 <div className="open-preview-placeholder">
                   {kind === "scene" ? <FilmSlate size={34} weight="duotone" /> : kind === "audio" ? <MusicNotes size={34} weight="duotone" /> : <FileImage size={34} weight="duotone" />}
@@ -1243,6 +1312,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen, onOpenMany }: Props)
                 <img src={ready.imageUrl} alt={selected ? `Preview of ${selected.name}` : "Preview"} />
               )}
               {ready?.kind === "video" && <VideoPreview video={ready} />}
+              {ready?.kind === "playlist" && selected && <PlaylistDashboard summary={ready.summary} />}
               <ScenePreview scene={playingScene} />
             </div>
             {selected && (
@@ -1251,7 +1321,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen, onOpenMany }: Props)
                 <dd className="open-preview-name" data-tip={selected.name}>{selected.name}</dd>
                 <dt>Type</dt>
                 <dd>{typeLabel(selected)}</dd>
-                {ready && (
+                {ready && ready.kind !== "playlist" && (
                   <>
                     <dt>{ready.kind === "scene" ? "Image size" : "Dimensions"}</dt>
                     <dd>{ready.width} × {ready.height} px</dd>

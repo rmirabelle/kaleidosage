@@ -169,16 +169,16 @@ button { border: 0; }
 }
 .stage-controls.play { left: 50%; bottom: 14px; transform: translateX(-50%); }
 .stage-controls.view { top: 14px; right: 14px; }
-/* While the tracks run the show: the track's name, time and seek bar after the buttons. */
-.stage-controls.with-track { gap: 10px; padding-right: 12px; }
-.stage-track { display: flex; flex-direction: column; gap: 2px; width: 260px; }
-.stage-track-text { display: flex; justify-content: space-between; gap: 10px; color: #e4e6ec; font-size: 11px; }
-.stage-track-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.stage-track-time { flex: 0 0 auto; color: var(--muted); font-variant-numeric: tabular-nums; }
-.stage-track-bar { width: 100%; height: 14px; margin: 0; accent-color: var(--accent); cursor: pointer; }
 /* Each bar's button group has round outer corners. */
 .stage-controls .panel-buttons { border-radius: 5px; }
 .stage:hover .stage-controls, .stage-controls:has(:focus-visible) { opacity: 1; pointer-events: auto; }
+/* HOLD (Files only, see holdScene in App): a small red button after the Length value, only while Hold is on. */
+.hold-badge { height: 20px; margin-left: 4px; padding: 0 8px; border: 0; border-radius: 4px; color: #fff; background: #e53935; font: inherit; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
+.hold-badge:hover { background: #f05350; }
+/* Its label blinks while Hold is on (not with reduced motion). */
+.hold-badge-label { animation: hold-blink 1s steps(1, end) infinite; }
+@keyframes hold-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .hold-badge-label { animation: none; } }
 
 /* The Patterns drop-down list. */
 .toolbar-menu { position: relative; }
@@ -231,15 +231,90 @@ button { border: 0; }
 /* Under the toolbar: the picture, with the settings panel docked at the right. */
 .workspace { position: relative; display: flex; flex: 1; min-height: 0; }
 .document { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-/* With a scene open (not full screen), the settings panel and the picture with its tab are two separate cards. */
-.workspace:has(.document-tabs) { gap: 6px; padding: 6px; background: #272b36; }
-.workspace:has(.document-tabs) > .control-panel, .workspace:has(.document-tabs) > .document { overflow: hidden; border: 1px solid var(--border); border-radius: 8px; }
+/* With a scene open (not full screen), the left side and the picture with its tab are separate cards. */
+.workspace:has(.document-tabs), .workspace:has(.scene-list) { gap: 6px; padding: 6px; background: #272b36; }
+.workspace:has(.document-tabs) .control-panel, .workspace:has(.document-tabs) > .document, .workspace:has(.scene-list) > .document { overflow: hidden; border: 1px solid var(--border); border-radius: 8px; }
+/**
+ * The left side (see App). Alone, the left panel needs no wrapper, so the
+ * wrapper has no box of its own. In Files mode it is one panel two columns
+ * wide, the scenes and the left panel, with the left panel's look: dark,
+ * with a soft glow inside its edge; the columns inside it have no look of
+ * their own.
+ */
+.sidebar { display: contents; }
+.sidebar.with-scenes { position: relative; display: flex; flex: 0 0 auto; min-height: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: #14161c; }
+.sidebar.with-scenes::after { content: ""; position: absolute; z-index: 60; inset: 0; border-radius: inherit; box-shadow: inset 0 0 5px 1px rgba(0,0,0,.8); pointer-events: none; }
+.sidebar.with-scenes > .control-panel { border: 0; background: transparent; }
+.sidebar.with-scenes > .control-panel::after { display: none; }
+/* The scene list (see SceneList): the first column of the left side, a card like the Source card; the selected scene bright blue, as a tab. */
+.side-panel.scene-list { flex: 0 0 230px; display: flex; flex-direction: column; min-height: 0; padding: 8px 0 8px 8px; overflow: hidden; background: transparent; }
+.scene-card { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+/* The audio files (see FilesCard): the first column of the left side in Files mode, a card like the scenes'; its width is the user's (panelLayout). */
+.side-panel.files-column { flex: 0 0 auto; display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 8px 0 8px 8px; overflow: hidden; background: transparent; }
+.files-card { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.files-card > .panel-header-bar { justify-content: flex-start; gap: 8px; padding-left: 6px; }
+/* The collapse button at the left of the Playlist title, and the narrow strip it leaves: a click on the strip opens the column again. */
+/* The Playlist card's play toolbar (see PlaylistTransport): the buttons, the bar to seek (an effects' slider) and the time, on one line, on the title bar's color. */
+.playlist-transport { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; padding: 8px 10px; border-top: 1px solid #3a3e4d; background: #252832; }
+/* The music's level meter over the buttons: the Audio panel's meter well, taller. */
+.audio-meter-well.playlist-level { display: block; height: 16px; cursor: ew-resize; outline: none; }
+/* While the mouse is over the meter (or it has the keys), the Threshold line grows into a handle, and its value shows at the right. */
+.playlist-level .audio-meter-threshold { transition: width .12s ease, margin-left .12s ease; }
+.playlist-level:hover .audio-meter-threshold, .playlist-level:focus-visible .audio-meter-threshold { width: 4px; margin-left: -2px; box-shadow: 0 0 4px rgba(255,255,255,.5); }
+.playlist-threshold-value { position: absolute; top: 0; right: 5px; bottom: 0; display: flex; align-items: center; color: #fff; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; text-shadow: 0 0 3px #000; opacity: 0; pointer-events: none; transition: opacity .12s ease; }
+.playlist-level:hover .playlist-threshold-value, .playlist-level:focus-visible .playlist-threshold-value { opacity: 1; }
+.playlist-transport-row { display: flex; align-items: center; gap: 10px; }
+.slider.playlist-seek { flex: 1; min-width: 40px; margin-top: 0; }
+.slider.playlist-seek input:disabled { cursor: default; }
+.playlist-transport .panel-buttons { border-radius: 5px; }
+.playlist-transport-time { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.files-collapse { display: grid; place-items: center; width: 24px; height: 26px; padding: 0; border-radius: 4px; color: #8a8fa0; background: transparent; cursor: pointer; }
+.files-collapse:hover { color: #fff; background: rgba(255,255,255,.08); }
+.side-panel.files-column.collapsed { flex: 0 0 auto; }
+.files-collapsed { flex: 1; width: 36px; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 12px 0; border: 1px solid var(--border); border-radius: 6px; color: #8a8fa0; background: #252832; cursor: pointer; }
+.files-collapsed:hover { color: #fff; background: #2c303c; }
+/* The number of files, small and gray, at the bottom of the strip. */
+.files-collapsed-count { margin-top: auto; color: #6f7686; font-size: 11px; font-variant-numeric: tabular-nums; }
+.files-collapsed-title { color: #c3c7d0; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; writing-mode: vertical-rl; transform: rotate(180deg); }
+.files-card-buttons { display: flex; gap: 4px; margin-left: auto; }
+.files-card-buttons .button.small { min-height: 24px; }
+.files-card > .panel-header-bar .help-badge { margin-left: 0; }
+.files-card-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+/* A file row is clickable even while it plays (a scene row that shows is not). */
+.scene-list-item.file-item.active { cursor: pointer; }
+.scene-list-item.file-item .scene-list-number { display: grid; place-items: center end; }
+.files-card-body .audio-error { margin: 4px 6px 8px; }
+.files-card-body .empty-state { margin: 8px 6px; }
+/* The footer of the Playlist and Scenes cards: a count at the left, more at the right (the play time, the unsaved scenes). */
+.files-card-foot { flex: 0 0 auto; display: flex; justify-content: space-between; gap: 10px; padding: 7px 12px; border-top: 1px solid #3a3e4d; color: var(--muted); background: #1b1e25; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+/* The line at the Files column's right edge (see FilesSplitter): unseen until the mouse is over it. */
+.files-splitter { flex: 0 0 auto; width: 7px; margin: 0 -7px 0 0; position: relative; z-index: 2; cursor: col-resize; background: transparent; background-clip: content-box; padding: 0 3px; transition: background-color .12s ease; }
+.files-splitter:hover { background-color: var(--accent); }
+.scene-card > .panel-header-bar { justify-content: flex-start; gap: 8px; }
+.scene-list-count { padding: 1px 7px; border-radius: 9px; color: #fff; background: var(--accent); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.scene-card > .panel-header-bar .help-badge { margin-left: auto; }
+.scene-list-items { flex: 1; min-height: 0; margin: 0; padding: 6px; overflow-y: auto; list-style: none; scrollbar-width: thin; scrollbar-color: #474c5e transparent; }
+.scene-list-item { display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 4px 0 8px; border-radius: 5px; color: #c3c7d4; font-size: 13px; cursor: pointer; }
+.scene-list-item + .scene-list-item { margin-top: 2px; }
+.scene-list-item:hover { color: #fff; background: #343947; }
+.scene-list-item.active { color: #fff; background: #3b63dc; cursor: default; }
+.scene-list-item.active .titlebar-dirty { color: #fff; }
+.scene-list-item.dragging { opacity: .55; }
+.scene-list-number { flex: 0 0 18px; color: #6f7686; font-size: 11px; font-variant-numeric: tabular-nums; text-align: right; }
+.scene-list-item.active .scene-list-number { color: #c9d4ff; }
+.scene-list-name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* The text box that takes a scene's place while it is renamed. */
+.scene-list-rename { flex: 1; min-width: 0; height: 22px; padding: 0 6px; border: 1px solid var(--accent); border-radius: 4px; color: #fff; background: #14161c; font: inherit; font-size: 13px; outline: none; }
+.scene-list-close { flex: 0 0 auto; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 4px; color: inherit; background: transparent; opacity: 0; cursor: pointer; }
+.scene-list-item:hover .scene-list-close, .scene-list-item.active .scene-list-close, .scene-list-close:focus-visible { opacity: .6; }
+.scene-list-close:hover { background: rgba(255,255,255,.2); opacity: 1 !important; }
 .stage { position: relative; flex: 1; min-width: 0; min-height: 0; background: #000; }
 
 /* The open scenes as tab buttons above the picture: the selected one bright blue with white text. */
-.document-tabs { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; padding: 7px 6px; overflow: hidden; border-bottom: 1px solid var(--border); background: #1b1e25; }
+.document-tabs { flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 7px 6px; overflow: hidden; border-bottom: 1px solid var(--border); background: #1b1e25; }
+/* A tab keeps its width; more tabs than one row holds go on to the next row. */
 .document-tab {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-width: 90px;
   height: 27px;
   max-width: 350px;
@@ -257,6 +332,8 @@ button { border: 0; }
 .document-tab:hover { color: #fff; background: #343947; }
 .document-tab.active { color: #fff; background: #3b63dc; cursor: default; }
 .document-tab-name { overflow: hidden; text-overflow: ellipsis; }
+/* The tab or track that is being dragged (see useDragReorder). */
+.document-tab.dragging { opacity: .55; }
 .document-tab.active .titlebar-dirty { color: #fff; }
 /* The close button is half transparent until the pointer is on it. */
 .document-tab-close { flex: 0 0 auto; display: grid; place-items: center; width: 22px; height: 22px; margin-left: 7px; border-radius: 4px; color: inherit; background: transparent; opacity: .5; cursor: pointer; }
@@ -310,7 +387,7 @@ button { border: 0; }
 .midi-remove:hover { color: #fff; background: #c83232; }
 /* The Effects panel does not scroll as a whole: its top stays, and only .panel-scroll under it scrolls. */
 /* The left panel, darker than the cards on it. */
-.control-panel { flex: 0 0 400px; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; border-right: 1px solid var(--border); background: #14161c; }
+.control-panel { flex: 0 0 400px; display: flex; flex-direction: column; overflow: hidden; padding: 0 8px; border-right: 1px solid var(--border); background: #14161c; }
 /* The FX card is left out: it fills the rest of the panel, so its list scrolls inside it. */
 .control-panel > :not(.panel-scroll):not(.fx-card) { flex: 0 0 auto; }
 /* A soft black glow inside the panel's edge, drawn above the panel's content so the cards in it do not cover it. */
@@ -346,8 +423,8 @@ button { border: 0; }
 /* The Source and FX cards in the left panel: each a box with mildly rounded corners, its title bar across the top, and 10px around its content. */
 .panel-card { overflow: hidden; border: 1px solid var(--border); border-radius: 6px; background: #1b1e25; }
 .panel-card > .panel-header-bar { margin: 0; }
-.source-section { flex: 0 0 auto; margin-bottom: 18px; }
-.fx-card { display: flex; flex: 1; flex-direction: column; min-height: 0; margin-bottom: 10px; }
+.source-section { flex: 0 0 auto; margin-bottom: 8px; }
+.fx-card { display: flex; flex: 1; flex-direction: column; min-height: 0; margin-bottom: 8px; }
 /* 10px around the groups: each group already has 6px above it, so the list adds 4px at the top. */
 .fx-card > .panel-scroll { margin: 0; padding: 4px 6px 10px 10px; }
 .source-well .panel-row { padding: 10px; }
@@ -411,7 +488,6 @@ button { border: 0; }
 .empty-state { margin: 14px 16px; color: #a2a7b5; font-size: 12px; line-height: 1.45; }
 .empty-state p { max-width: 460px; margin: 0; }
 .empty-state-action { display: flex; gap: 6px; margin-top: 8px; }
-.audio-files-body .empty-state { margin: 8px 6px; }
 .fx-card .empty-state { margin: 12px 4px; }
 /* One row per mapping, under its controller's name: activity icon, control, arrow, setting menu, remove button. */
 .midi-map-list { flex: 1; min-height: 0; margin: 0; padding: 0 10px 10px; overflow-y: auto; list-style: none; scrollbar-width: thin; scrollbar-color: #474c5e transparent; }
@@ -485,17 +561,6 @@ button { border: 0; }
 .audio-levels-label + .midi-panel-empty { margin-top: 6px; }
 /* The links heading, under the meters, has a line above it too. */
 .stage-label.audio-levels-label:not(:first-child) { border-top: 1px solid #3a3e4d; }
-/* The track list under the Input menu: its buttons, then the tracks, which scroll. The track that plays is blue. */
-.tracks-buttons { display: flex; gap: 6px; }
-.tracks-empty { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
-.tracks-tracks { max-height: 180px; margin: 2px 0 0; padding: 0; overflow-y: auto; list-style: none; scrollbar-width: thin; scrollbar-color: #474c5e transparent; }
-.tracks-track { display: flex; align-items: center; gap: 4px; border-radius: 5px; }
-.tracks-track:hover { background: rgba(255,255,255,.04); }
-.tracks-track.current { background: rgba(75,118,247,.22); }
-.tracks-track-name { display: flex; flex: 1; align-items: center; gap: 7px; min-width: 0; padding: 4px 6px; border: 0; color: #c3c7d0; background: transparent; font-size: 12px; text-align: left; cursor: pointer; }
-.tracks-track-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tracks-track.current .tracks-track-name { color: #fff; }
-.tracks-track .midi-map-clear { width: 20px; height: 20px; }
 .audio-link-menu-note { margin: 6px 9px 4px; color: var(--muted); font-size: 11px; }
 .audio-error { margin: 0; color: #ff7a7a; }
 /* The Source column's settings are rows like the FX panel's: the same padding, and a thin line between two rows. */
@@ -516,7 +581,7 @@ button { border: 0; }
 /* Levels sits at the bottom of the Source column: the free space goes above its heading. */
 .audio-source > .audio-source-levels { margin: auto 0 0; border-top: 1px solid #3a3e4d; }
 /* The Audio panel's headings have an icon before the name, in the heading's own color. */
-.audio-source > .stage-label, .audio-tracks-column > .stage-label, .audio-sensors-label { gap: 6px; }
+.audio-source > .stage-label, .audio-sensors-label { gap: 6px; }
 /* The Source column (with its Levels) is a little brighter than the panel, so its settings and meters stand out. */
 .midi-panel-devices.audio-source { background: #262a35; }
 /* The Audio sensors heading and its column: the same top border and brighter body as Source and Levels. */
@@ -525,17 +590,10 @@ button { border: 0; }
 /* The scene's file name as the tabs and the title bar show it: plain, not in capitals. */
 .audio-sensors-scene { margin-left: 5px; overflow: hidden; color: #e4e6ec; font-size: 12px; font-weight: 400; letter-spacing: 0; text-overflow: ellipsis; text-transform: none; }
 .audio-source .audio-meters { padding-top: 10px; }
-/* The Files column: its heading, a toolbar (Add files, Clear), then a body on the FX panel's dark blue, which fills the rest and scrolls. */
-.audio-tracks-column { gap: 0; padding-bottom: 0; overflow: hidden; }
-.audio-tracks-column > .stage-label { margin-bottom: 0; }
-/* The Files heading holds its buttons at the right, in normal type (the heading itself is in small capitals). */
-.stage-label.audio-files-head { padding-right: 6px; }
-.audio-files-head-buttons { display: flex; gap: 4px; margin-left: auto; letter-spacing: 0; text-transform: none; }
-.audio-files-head-buttons .button.small { min-height: 24px; font-weight: 400; }
+/* While a column's edge is dragged (see FilesSplitter), the resize cursor shows everywhere and no text is selected. */
+body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-select: none; }
+/* A small button with only an icon (the Files card's trash can). */
 .button.small.icon-only { width: 28px; padding: 0; }
-.audio-files-body { flex: 1; min-height: 0; padding: 6px 8px; overflow-y: auto; background: #253049; }
-.audio-files-body .tracks-tracks { max-height: none; margin: 0; }
-.audio-files-body .tracks-empty, .audio-files-body .audio-error { margin: 4px 6px 8px; }
 .audio-source > .stage-label { margin-bottom: 0; }
 .audio-setting { display: flex; flex-direction: column; gap: 5px; padding: 0 16px; color: #c3c7d0; font-size: 12px; }
 .audio-setting output { margin-left: 6px; color: var(--muted); }
@@ -642,7 +700,7 @@ button { border: 0; }
   padding: 8px 0 8px 5px;
   color: #c3c7d0;
   background: transparent;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: .1em;
   text-align: left;
@@ -733,12 +791,12 @@ button { border: 0; }
 .panel-group.disabled .panel-group-inner { opacity: .45; }
 .panel-row { padding: 11px 14px 10px; }
 /* A control outside any group (the cycle): it lines up with the buttons above it. */
-.panel-root-row > .panel-row { padding: 12px 2px 12px; }
-/* After the Scene length slider: the source video's crossfade, shown only with a video source. */
+.panel-root-row > .panel-row { padding: 8px 2px; }
+/* A check box with its name on one line (a video slot's Loop). */
 .panel-check-inline { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; color: #a2a7b5; font-size: 12px; white-space: nowrap; cursor: pointer; }
 .panel-check-inline input { margin: 0; accent-color: var(--accent); cursor: pointer; }
 .panel-root-row .panel-row-name { color: #a2a7b5; }
-/* Length on one line: the name, then the slider (and the video's Crossfade), then the value. The top row's box steps aside so its parts line up with the slider. Length has no range, so it needs no space for the range buttons. */
+/* Length on one line: the name, then the slider, then the value. The top row's box steps aside so its parts line up with the slider. Length has no range, so it needs no space for the range buttons. */
 .panel-root-row > .panel-row { display: flex; align-items: center; gap: 10px; }
 .panel-root-row .panel-row-top { display: contents; }
 .panel-root-row .panel-row-label { order: 1; }
@@ -754,6 +812,9 @@ button { border: 0; }
 /* The particles' life gradient (see GradientEditor): the bar, with a handle under it for each color stop. */
 /* It sits right under the Gradient slider, as part of its row: no line above it, and the row's side padding. */
 .panel-group-inner > .gradient-row { padding: 0 14px 8px; border-top: 0; }
+/* The Common part at the bottom of an effect (see SplitRows): a dark band with its name, and the names of the common settings in lavender. */
+.panel-common-head { padding: 6px 14px 5px; color: #c3b5ff; background: #1b1e25; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; cursor: default; }
+.panel-common-head ~ * .panel-row-name:not(.midi-touched):not(.bypassed) { color: #c3b5ff; }
 .gradient-editor { position: relative; flex: 1; min-width: 0; height: 30px; margin: 0 6px; }
 .gradient-bar { position: absolute; top: 2px; right: 0; left: 0; height: 14px; border: 1px solid #474c5e; border-radius: 4px; cursor: copy; }
 .gradient-bar.full { cursor: default; }
@@ -1240,7 +1301,7 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
   overflow: hidden;
   text-align: center;
   background-color: #22252f;
-  background-image: radial-gradient(rgba(75,118,247,.07) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(75,118,247,.18) 1px, transparent 1px);
   background-size: 22px 22px;
 }
 .start-glow { position: absolute; z-index: -1; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 520px; height: 420px; background: radial-gradient(closest-side, rgba(75,118,247,.16), rgba(75,118,247,.10) 30%, rgba(75,118,247,.04) 60%, rgba(75,118,247,0)); }
@@ -1250,10 +1311,25 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .start-above { z-index: 1; display: flex; flex-direction: column; align-items: center; align-self: end; padding-bottom: 14px; }
 .start-below { z-index: 1; align-self: start; display: flex; flex-direction: column; align-items: center; padding-top: 8px; }
 /* The app name: hero size, in a quiet gray, so the title under it still leads. */
-.start-name { position: relative; z-index: 1; margin-top: 18px; color: #4a4f5e; font-size: 56px; font-weight: 700; line-height: 1; letter-spacing: -.035em; }
-.start-screen h1 { z-index: 1; margin: 0; color: #fafafa; font-size: 28px; line-height: 1.2; letter-spacing: -.025em; }
-.start-copy { z-index: 1; max-width: 460px; margin: 8px 0 22px; color: #9ca1af; font-size: 13px; line-height: 1.55; }
-.start-actions { z-index: 1; display: flex; gap: 10px; }
+.start-name { position: relative; z-index: 1; margin-top: 18px; color: var(--secondary); font-size: 56px; font-weight: 700; line-height: 1; letter-spacing: -.035em; }
+.start-screen h1 { z-index: 1; margin: 0; color: #4a4f5e; font-size: 28px; line-height: 1.2; letter-spacing: -.025em; }
+/* The overlay while a playlist or several scenes open (see LoadingOverlay): over the start screen and the panels, also over the panels' inner glow (z-index 60), on the start screen's background. */
+.loading-overlay { position: absolute; z-index: 90; inset: 0; display: grid; place-items: center; background-color: #22252f; background-image: radial-gradient(rgba(75,118,247,.18) 1px, transparent 1px); background-size: 22px 22px; }
+.loading-card { width: min(360px, calc(100% - 40px)); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 24px 26px 22px; border: 1px solid #3a3f4d; border-radius: 10px; background: #242832; box-shadow: 0 18px 50px rgba(0,0,0,.5); text-align: center; }
+.loading-spinner { width: 26px; height: 26px; margin-bottom: 6px; border: 3px solid rgba(255,255,255,.1); border-top-color: var(--accent); border-radius: 50%; animation: loading-spin .7s linear infinite; }
+@keyframes loading-spin { to { transform: rotate(360deg); } }
+.loading-title { max-width: 100%; overflow: hidden; color: #fff; font-size: 14px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+.loading-detail { max-width: 100%; overflow: hidden; color: var(--muted); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
+.loading-bar { position: relative; width: 100%; height: 4px; margin-top: 8px; overflow: hidden; border-radius: 2px; background: #1b1e25; }
+.loading-bar > div { height: 100%; border-radius: 2px; background: var(--accent); transition: width .2s ease; }
+/* While the length of the work is not known (unpacking), a short bar moves back and forth. */
+.loading-bar.unknown > div { position: absolute; width: 30%; animation: loading-sweep 1.1s ease-in-out infinite alternate; }
+@keyframes loading-sweep { from { left: 0; } to { left: 70%; } }
+@media (prefers-reduced-motion: reduce) { .loading-spinner, .loading-bar.unknown > div { animation: none; } }
+.start-actions { z-index: 1; display: flex; gap: 10px; margin-top: 20px; }
+/* The author and the version under the tagline, small and quiet, with a dot between them. */
+.start-credits { z-index: 1; display: flex; gap: 8px; margin-top: 6px; color: #5d6272; font-size: 11px; }
+.start-credits > span + span::before { content: "·"; margin-right: 8px; }
 
 /* About dialog, the same as the other Sage apps. */
 .about-dialog-overlay {
@@ -1314,24 +1390,29 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .shortcuts-row kbd { padding: 1px 6px; border: 1px solid #474c5e; border-bottom-width: 2px; border-radius: 4px; color: #e4e6ec; background: #30343f; font-family: inherit; font-size: 11px; white-space: nowrap; }
 .shortcuts-gesture { color: #e4e6ec; font-style: italic; }
 .shortcuts-or { margin: 0 4px 0 0; color: var(--muted); font-size: 11px; }
-/* The Add effect menu, at the right of the New button: a card for each effect in a grid of 5 columns (COLUMNS in AddEffectMenu) that scrolls. Above the panels and help badges, like the dialogs. */
-.add-effect-menu { position: fixed; z-index: 160; width: min(820px, calc(100vw - 16px)); max-height: calc(100vh - 16px); display: flex; flex-direction: column; box-sizing: border-box; border: 1px solid rgba(75,118,247,.3); border-radius: 10px; color: #d9dce3; background: #242832; box-shadow: 0 18px 60px rgba(0,0,0,.65); }
-.add-effect-title { margin: 0; padding: 14px 16px 10px; color: #fff; font-size: 15px; }
-.add-effect-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; padding: 2px 16px 16px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #474c5e transparent; }
-.add-effect-card { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 0 0 8px; overflow: hidden; border: 1px solid #393d4d; border-radius: 8px; color: inherit; background: #2b2f3a; font: inherit; text-align: left; cursor: pointer; outline: none; transition: border-color .12s ease, background .12s ease; }
-.add-effect-card.active:not(:disabled) { border-color: var(--accent); background: #2f3546; box-shadow: 0 0 0 1px var(--accent); }
-/* A card in the list already: everything dims but its Already added badge (an opacity on the card would dim the badge too). */
-.add-effect-card:disabled { cursor: default; }
-.add-effect-card:disabled > :not(.add-effect-thumb), .add-effect-card:disabled .add-effect-thumb > :not(img, .in-list), .add-effect-card:disabled .add-effect-thumb img.shown { opacity: .3; }
-.add-effect-thumb { position: relative; display: grid; place-items: center; aspect-ratio: 16 / 9; margin-bottom: 5px; color: #5d6378; background: repeating-linear-gradient(135deg, #252934 0 10px, #222631 10px 20px); }
+/**
+ * The Add effect menu, at the right of the New button: a list of effect
+ * names, and a preview frame beside the highlighted name. Above the panels
+ * and help badges, like the dialogs.
+ */
+.toolbar-dropdown.add-effect-menu { position: fixed; z-index: 160; min-width: 180px; max-height: calc(100vh - 16px); box-sizing: border-box; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #474c5e transparent; }
+.add-effect-menu .toolbar-dropdown-item { display: flex; align-items: center; justify-content: space-between; gap: 14px; outline: none; white-space: nowrap; }
+.add-effect-menu .toolbar-dropdown-item.active { color: #fff; background: rgba(75,118,247,.3); }
+/* An effect in the list already: dimmed, and its highlight is gray, since a click does nothing. */
+.add-effect-menu .toolbar-dropdown-item.in-list { color: #6c7284; cursor: default; }
+.add-effect-menu .toolbar-dropdown-item.in-list:hover, .add-effect-menu .toolbar-dropdown-item.in-list.active { color: #9095a3; background: rgba(255,255,255,.05); }
+.add-effect-added { color: #6c7284; font-size: 10px; }
+/* The pointer passes through the preview, so it never takes the hover from the list. */
+.add-effect-preview { position: fixed; z-index: 161; width: 260px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(75,118,247,.3); border-radius: 8px; color: #d9dce3; background: #242832; box-shadow: 0 14px 40px rgba(0,0,0,.55); pointer-events: none; }
+.add-effect-thumb { position: relative; display: block; aspect-ratio: 16 / 9; background: #1b1e25; }
 /* An effect with types stacks one image per type; the shown one fades in over the one before. */
 .add-effect-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .35s ease; }
 .add-effect-thumb img.shown { opacity: 1; }
-.add-effect-badge { position: absolute; top: 5px; right: 5px; padding: 2px 6px; border-radius: 10px; color: #fff; background: rgba(12,14,19,.8); font-size: 10px; font-weight: 600; }
-.add-effect-badge.types { right: auto; left: 5px; background: rgba(59,99,220,.9); }
-.add-effect-badge.in-list { top: 50%; right: auto; left: 50%; transform: translate(-50%, -50%); white-space: nowrap; }
-.add-effect-name { padding: 0 9px; color: #fff; font-size: 13.5px; font-weight: 600; }
-.add-effect-note { padding: 0 9px; color: #a3a8b6; font-size: 10.5px; line-height: 1.3; }
+.add-effect-badge { position: absolute; top: 6px; left: 6px; padding: 2px 6px; border-radius: 10px; color: #fff; background: rgba(59,99,220,.9); font-size: 10px; font-weight: 600; }
+.add-effect-name { padding: 9px 11px 0; color: #fff; font-size: 13.5px; font-weight: 600; }
+.add-effect-note { padding: 3px 11px 0; color: #a3a8b6; font-size: 11.5px; line-height: 1.35; }
+.add-effect-note:last-child { padding-bottom: 10px; }
+.add-effect-note.in-list { color: #d8a657; }
 .about-dialog {
   width: min(460px, 100%);
   position: relative;
@@ -1468,6 +1549,8 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 /* Images A and B side by side, with the swap button between them. */
 .source-images { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; padding: 10px; }
 .source-card { min-width: 0; }
+/* A video slot's Loop check box, centered under its card in a row of its own. */
+.source-loop { justify-self: center; margin-top: -2px; }
 .source-thumb { position: relative; aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid #3a3f4d; border-radius: 5px; background: #111318; }
 .source-thumb.empty { border-style: dashed; border-color: #535a6c; background: transparent; }
 .source-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
@@ -1923,6 +2006,25 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
   line-height: 1.5;
 }
 .open-preview-placeholder.error { color: #fecaca; }
+/* A playlist's preview (see PlaylistDashboard): a dashboard that fills the frame, on a plain background. */
+.open-preview-frame.playlist { display: flex; align-items: stretch; padding: 12px; background: #1a1d25; }
+.playlist-dashboard { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; color: #d9dce3; font-size: 11.5px; }
+.playlist-audio { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); }
+.playlist-audio b { color: #e6e8ee; font-weight: 600; }
+/* The scenes and the tracks: two cards that share the rest of the height equally, each list scrolling by itself. */
+.playlist-card { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #343843; border-radius: 6px; background: #232731; }
+.playlist-card-head { flex: 0 0 auto; display: flex; align-items: center; gap: 7px; padding: 8px 10px 7px; border-bottom: 1px solid #343843; color: var(--secondary); font-size: 12.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.playlist-card-title { flex: 1; }
+/* The count: a blue badge at the right of the heading. */
+.playlist-card-count { min-width: 20px; padding: 1px 7px; border-radius: 9px; color: #fff; background: var(--accent); font-size: 11px; letter-spacing: 0; text-align: center; font-variant-numeric: tabular-nums; }
+.playlist-list { flex: 1; min-height: 0; margin: 0; padding: 4px 6px; overflow-y: auto; list-style: none; scrollbar-width: thin; scrollbar-color: #474c5e transparent; }
+.playlist-item { display: flex; align-items: baseline; gap: 8px; padding: 4px 2px; }
+.playlist-item-number { flex: 0 0 20px; color: #6f7686; font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; }
+.playlist-item-name { flex: 1; min-width: 0; overflow: hidden; color: #8eaaff; font-size: 13px; white-space: nowrap; text-overflow: ellipsis; }
+.playlist-item-size { flex: 0 0 auto; color: #858b9b; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.playlist-empty { margin: 0; padding: 8px 10px; color: #6f7686; }
+/* The Tracks card's footer: the number of files and their play time, as in the Audio panel's Files column. */
+.playlist-card-foot { flex: 0 0 auto; display: flex; justify-content: space-between; gap: 10px; padding: 6px 10px; border-top: 1px solid #343843; color: var(--muted); background: #1b1e25; font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .open-preview-placeholder.error svg { color: #f87171; }
 .open-preview-details {
   flex: 0 0 auto;

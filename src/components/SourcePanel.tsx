@@ -28,13 +28,15 @@ const TILINGS: readonly (readonly [Tiling, string, ReactNode])[] = [
  * side, and, once B is loaded, the Crossfade slider between them. The
  * blend only has an effect with a second image, so it shows only then. How
  * it fades (evenly, or by brightness) is in the slider's right-click menu,
- * to save the room a menu row took. The tile button in the title bar sets
- * how the images go on past their edges. It is always open.
+ * to save the room a menu row took. A video slot has a Loop check box
+ * under it. The tile button in the title bar sets how the images go on
+ * past their edges. It is always open.
  */
-export function SourcePanel({ engine, ...sources }: SourceImagesProps & { engine: Engine }) {
+export function SourcePanel({ engine, ...sources }: Omit<SourceImagesProps, "videoLoop" | "onVideoLoop"> & { engine: Engine }) {
   const row = useParamRows(engine);
   const [blendMode, setBlendMode] = useState<BlendMode>(engine.state.blendMode);
   const [tiling, setTiling] = useState<Tiling>(engine.state.tiling);
+  const [videoLoop, setVideoLoop] = useState(engine.state.videoCrossfade);
   const [tilingMenu, setTilingMenu] = useState<{ left: number; top: number } | null>(null);
   const tilingName = TILINGS.find(([mode]) => mode === tiling)?.[1] ?? "Auto";
   return (
@@ -72,7 +74,14 @@ export function SourcePanel({ engine, ...sources }: SourceImagesProps & { engine
         )}
       </div>
       <div className="source-well">
-        <SourceImages {...sources} />
+        <SourceImages
+          {...sources}
+          videoLoop={videoLoop}
+          onVideoLoop={(on) => {
+            engine.state.videoCrossfade = on;
+            setVideoLoop(on);
+          }}
+        />
         {sources.images[1] && row.with("imageBlend", {
           menu: BLEND_MODES.map(([mode, label, icon]) => ({
             label,

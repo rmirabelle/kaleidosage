@@ -17,3 +17,6 @@ Thumbs.db
 
 # Test images made by tools/make-test-images.py
 /test-images/
+
+# The icon pack the app icons came from; a source file kept outside the repository
+/icon-pack.zip

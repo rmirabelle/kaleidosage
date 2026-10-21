@@ -1,4 +1,4 @@
-import { GROUP_PARAMS, PARAM_KEYS, WANDER, easeOf, isCustom, liveValue, type Param, type ParamKey, type Params, type PlayState } from "./params";
+import { GROUP_PARAMS, PARAM_KEYS, REFERENCE_CYCLE, WANDER, easeOf, isCustom, liveValue, type Param, type ParamKey, type Params, type PlayState } from "./params";
 import type { WarpType } from "./renderer";
 
 /**
@@ -60,6 +60,16 @@ export function baseLoopSeconds(params: Params, state: PlayState) {
     return inUse(key, state) && moving(param) && !isCustom(param) && !fullTurn(param);
   });
   return there ? cycle * 2 : cycle;
+}
+
+/**
+ * How far the play is into the scene's Length (one cycle), from 0 to 1. It
+ * is the Length only: a range that needs two cycles to come back, or one
+ * with its own time, does not make it longer. On animation time each cycle
+ * is REFERENCE_CYCLE seconds long, so a change to the Length keeps the place.
+ */
+export function scenePosition(state: PlayState) {
+  return (((state.time % REFERENCE_CYCLE) + REFERENCE_CYCLE) % REFERENCE_CYCLE) / REFERENCE_CYCLE;
 }
 
 /**

@@ -1,6 +1,7 @@
 import { X } from "@phosphor-icons/react";
 import { help } from "../help/topics";
 import { HelpButton } from "./HelpButton";
+import { useDragReorder } from "./useDragReorder";
 
 export interface DocumentTabInfo {
   id: number;
@@ -17,22 +18,35 @@ interface Props {
   activeId: number | null;
   onSelect: (id: number) => void;
   onClose: (id: number) => void;
+  /** The tabs' ids in a new order, after a drag. */
+  onReorder: (ids: number[]) => void;
 }
 
-/** The open scenes as document tabs above the picture, each labeled with its scene file name. A middle click closes a tab. */
-export function DocumentTabs({ tabs, activeId, onSelect, onClose }: Props) {
+/**
+ * The open scenes as document tabs above the picture, each labeled with its
+ * scene file name. More tabs than one row holds go on to more rows. A press
+ * selects a tab; a drag moves it to another place (see useDragReorder). A
+ * middle click closes a tab.
+ */
+export function DocumentTabs({ tabs, activeId, onSelect, onClose, onReorder }: Props) {
+  const drag = useDragReorder(tabs.map((tab) => tab.id), onReorder, true);
   return (
-    <div className="document-tabs" role="tablist" {...help("scene.tabs")}>
+    <div ref={drag.listRef} className="document-tabs" role="tablist" {...help("scene.tabs")}>
       {tabs.map((tab) => {
         const active = tab.id === activeId;
         return (
           <div
             key={tab.id}
-            className={`document-tab ${active ? "active" : ""}`}
+            data-key={tab.id}
+            className={`document-tab ${active ? "active" : ""} ${drag.dragging === tab.id ? "dragging" : ""}`}
             role="tab"
             aria-selected={active}
             data-tip={tab.path ?? undefined}
-            onPointerDown={(event) => { if (event.button === 0) onSelect(tab.id); }}
+            onPointerDown={(event) => {
+              if (event.button !== 0) return;
+              onSelect(tab.id);
+              drag.start(tab.id)(event);
+            }}
             onAuxClick={(event) => { if (event.button === 1) onClose(tab.id); }}
           >
             <span className="document-tab-name">{tab.fileName}</span>

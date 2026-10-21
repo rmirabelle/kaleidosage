@@ -98,7 +98,7 @@ export function AboutDialog({ version, initialUpdateInfo, onClose, beforeInstall
           </button>
         )}
         <div className="about-dialog-content">
-          <div className="about-app-icon"><img src="/app-icon.png" alt="" /></div>
+          <div className="about-app-icon"><img src="/kaleido-sage-logo.png" alt="" /></div>
           <div className="about-dialog-copy">
             <h2 id="about-title">Kaleido Sage</h2>
             <div className="about-version">Version {version || "—"}</div>

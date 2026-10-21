@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { ArrowClockwise, ArrowCounterClockwise, ArrowsIn, ArrowsOut, Camera, FilmSlate, FilmStrip, FloppyDisk, Gauge, Info, Keyboard, MusicNotes, Plus, Question, SignOut, SlidersHorizontal, SpeakerSimpleHigh, X } from "@phosphor-icons/react";
+import { open as openFileDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { ArrowClockwise, ArrowCounterClockwise, ArrowsIn, ArrowsOut, Camera, FilmStrip, FloppyDisk, FolderOpen, Gauge, Info, Playlist, Keyboard, Plus, Question, SignOut, SlidersHorizontal, SpeakerSimpleHigh, X } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { AboutDialog } from "./components/AboutDialog";
 import { ShortcutsDialog } from "./components/ShortcutsDialog";
@@ -17,6 +17,9 @@ import { AudioPanel } from "./components/AudioPanel";
 import { BottomPanelTabs, type BottomTab } from "./components/BottomPanelTabs";
 import { SourcePanel } from "./components/SourcePanel";
 import { StartScreen } from "./components/StartScreen";
+import { LoadingOverlay, type Loading } from "./components/LoadingOverlay";
+import { SceneList } from "./components/SceneList";
+import { FilesCard } from "./components/FilesCard";
 import { MenuBar, type Menu } from "./components/MenuBar";
 import { OpenDialog, type OpenKind } from "./components/OpenDialog";
 import { StatsOverlay } from "./components/StatsOverlay";
@@ -26,6 +29,7 @@ import { StageControls } from "./components/StageControls";
 import { Engine } from "./engine/engine";
 import { createParams, createPlayState, nudgeParams, randomizeGroup, randomizeParams, resetEffects, type GroupKey, type Params, type PlayState } from "./engine/params";
 import { SettingsHistory } from "./engine/history";
+import { scenePosition } from "./engine/loop";
 import { SCENE_EXTENSION, applyScene, blobToSceneImage, sceneFingerprint, serializeScene, type SceneImage } from "./engine/scene";
 import { loadSceneMedia, readScene, writeScene } from "./lib/scenes";
 import type { ImageSource } from "./engine/renderer";
@@ -37,10 +41,12 @@ import {
   loadRandomImage,
   type CommonsPhoto
 } from "./lib/images";
-import { chooseExportPath, fileNameOf, writeExport } from "./lib/exports";
+import { chooseExportPath, fileNameOf, openExportFile, writeExport } from "./lib/exports";
 import { PATTERNS, drawPattern, type Pattern } from "./lib/patterns";
 import { midi } from "./lib/midi";
 import { audioInput } from "./lib/audioInput";
+import { panelLayout } from "./lib/panelLayout";
+import { isPlaylistCopy } from "./lib/playlistFile";
 import { tracks } from "./lib/tracks";
 import { helpSettings } from "./lib/helpSettings";
 import { PLAYLIST_EXTENSION, openPlaylistFile, playlistFingerprint, readManifest, savePlaylistFile, type PlaylistAudio } from "./lib/playlistFile";
@@ -125,13 +131,6 @@ let nextDocId = 1;
 /** Windows file names do not care about case. */
 const samePath = (a: string | null, b: string | null) => a !== null && b !== null && a.toLowerCase() === b.toLowerCase();
 
-/**
- * True for a scene file that is the open playlist's own copy: in a folder
- * that the app made in the temp folder (see playlist_archive.rs). Save
- * Playlist writes such a copy in place; any other scene gets a new copy
- * first, so its own file on disk never changes.
- */
-const isPlaylistCopy = (path: string | null) => path !== null && /[\\/]kaleidosage-playlist-[^\\/]+[\\/]/i.test(path);
 
 /** One image slot as a scene file keeps it: a video by its stream (embedded when the file is written), anything else as image bytes. */
 async function sceneMedia(image: SlotImage): Promise<SceneImage> {
@@ -156,8 +155,14 @@ async function writeSceneFile(path: string, params: Params, state: PlayState, [f
   const scene = JSON.parse(serializeScene(params, state, { image: { type: "image/png", data: "pending" } }));
   scene.image = await sceneMedia(first);
   if (second) scene.image2 = await sceneMedia(second);
-  /* The driver video is embedded like a source video (see scene_archive.rs). */
-  if (driver) scene.driverVideo = { type: driver.videoFile.mime, video: driver.videoFile.id, name: driver.name };
+  /**
+   * The driver video is embedded like a source video (see scene_archive.rs),
+   * but only while the scene uses it: the Driver effect is in the list,
+   * with Video as its driver. A video the scene no longer uses would only
+   * make the file large (an unused 1.2 GB video once made a 1.2 GB scene).
+   */
+  const usesDriverVideo = state.fxOrder.includes("driver") && state.driverSource === 5;
+  if (driver && usesDriverVideo) scene.driverVideo = { type: driver.videoFile.mime, video: driver.videoFile.id, name: driver.name };
   await writeScene(path, JSON.stringify(scene));
 }
 
@@ -200,6 +205,8 @@ export default function App() {
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
+  /* The Playlist column can be collapsed on its own (see FilesCard); View > Hide Playlist does it too. */
+  const filesCollapsed = useSyncExternalStore(panelLayout.subscribe, () => panelLayout.filesCollapsed);
   /**
    * The MIDI panel at the bottom of the window. It starts closed; it opens
    * at the height it last had, which the user sets by dragging its top
@@ -259,6 +266,8 @@ export default function App() {
     window.addEventListener("pointercancel", end);
   }, [midiPanelHeight]);
   const [statsOpen, setStatsOpen] = useState(false);
+  /** A long open (a playlist, several scenes) in progress: the overlay over the work area (see LoadingOverlay). */
+  const [loading, setLoading] = useState<Loading | null>(null);
   /** The slot that a random photo is downloading for; the dice on its button spin. */
   const [randomLoading, setRandomLoading] = useState<ImageSlot | null>(null);
   const [paused, setPaused] = useState(false);
@@ -323,7 +332,7 @@ export default function App() {
     const { kind, device, gainDb, thresholdDb } = audioInput.settings;
     return { kind, device, gainDb, thresholdDb };
   }, []);
-  const playlistNow = useCallback(() => playlistFingerprint(playlistScenes(), tracks.list.map((track) => track.path), playlistAudio()), [playlistAudio, playlistScenes]);
+  const playlistNow = useCallback(() => playlistFingerprint(playlistScenes(), tracks.list.map((track) => track.path), playlistAudio(), panelLayout.filesWidth), [playlistAudio, playlistScenes]);
   const playlistChanged = useCallback(() => playlistPathRef.current !== null && playlistNow() !== playlistSavedRef.current, [playlistNow]);
   /** The playlist as it is now counts as saved. */
   const markPlaylistClean = useCallback((path: string | null) => {
@@ -406,7 +415,9 @@ export default function App() {
     const used = new Set(docsRef.current.filter((doc) => doc.path === null).map((doc) => doc.untitled));
     let untitled = 1;
     while (used.has(untitled)) untitled++;
-    const id = nextDocId++;
+    /* Above every open tab's id: a dev hot update of this file starts nextDocId at 1 again while the tabs stay, and two tabs with one id break the tab bar. */
+    const id = Math.max(nextDocId, ...docsRef.current.map((doc) => doc.id + 1));
+    nextDocId = id + 1;
     writeDocs([...docsRef.current, { id, path: null, untitled, dirty: false }]);
     selectDocId(id);
     historyRef.current = new SettingsHistory(engine.params, engine.state);
@@ -612,18 +623,28 @@ export default function App() {
       shown = percent;
       setVideoJob((current) => current?.controller === controller ? { ...current, progress: fraction } : current);
     };
+    /* In the app the video goes to its file while it is made (see openExportFile); a stopped or failed export removes the file. */
+    const file = isTauri() ? await openExportFile(path).catch((error: unknown) => {
+      showError(`Could not make the video. ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }) : null;
+    if (isTauri() && !file) {
+      setVideoJob((current) => current?.controller === controller ? null : current);
+      return;
+    }
     try {
-      const blob = await encodeVideo(engine, size, options, progress, controller.signal);
-      if (isTauri()) {
-        await writeExport(path, blob);
+      const blob = await encodeVideo(engine, size, options, progress, controller.signal, file);
+      if (file) {
+        await file.finish();
         showSaved(path, 8000);
-      } else {
+      } else if (blob) {
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob);
         link.download = path;
         link.click();
       }
     } catch (error) {
+      await file?.discard();
       if (controller.signal.aborted) showStatus("Video export stopped");
       else showError(`Could not make the video. ${error instanceof Error ? error.message : String(error)}`);
     } finally {
@@ -637,6 +658,19 @@ export default function App() {
     const [first, second] = imagesRef.current;
     return sceneFingerprint(engine.params, engine.state, [first?.id ?? null, second?.id ?? null, driverRef.current?.id ?? null]);
   }, [engine]);
+
+  /**
+   * Hold (Files only, see the watch of the user's changes below): while it
+   * is on, a Length end or a new track does not take the shown scene away.
+   * A click on Hold, a save, or a tab click turns it off; the scene
+   * then plays to the end of its Length.
+   */
+  const [sceneHeld, setSceneHeld] = useState(false);
+  const sceneHeldRef = useRef(false);
+  const holdScene = useCallback((held: boolean) => {
+    sceneHeldRef.current = held;
+    setSceneHeld(held);
+  }, []);
 
   /**
    * The open playlist's unsaved changes: its own (a tab, a track, an audio
@@ -657,7 +691,8 @@ export default function App() {
     savedFingerprintRef.current = fingerprint();
     dirtyRef.current = false;
     setDirty(false);
-  }, [fingerprint]);
+    holdScene(false);
+  }, [fingerprint, holdScene]);
 
   /** About twice a second, compare the scene with its saved state. */
   useEffect(() => {
@@ -743,13 +778,32 @@ export default function App() {
    * Selects another tab with a crossfade: the old scene's last frame fades
    * out over the new scene, which plays under it. For the switches the user
    * makes (a tab, Ctrl+Tab, the number keys); a switch to ask "Save
-   * changes?" cuts at once.
+   * changes?", or any switch while paused, cuts at once. Only the latest request switches: a tab click
+   * during an automatic switch (a loop end or a new track, see below) wins.
+   * "auto" is true for those automatic switches. The new scene always
+   * starts from 0, so it plays its whole Length.
    */
-  const crossfadeToDoc = useCallback(async (id: number) => {
-    if (!engine || id === activeIdRef.current || !storedRef.current.has(id)) return;
-    await engine.fadeOut(CROSSFADE_SECONDS);
-    switchToDoc(id);
-  }, [engine, switchToDoc]);
+  const switchRequestRef = useRef(0);
+  /** How a scene last came into view through a tab switch: picked by the user or not, and the scene's play clock then. */
+  const sceneShownRef = useRef<{ id: number | null; byUser: boolean; clock: number }>({ id: null, byUser: false, clock: 0 });
+  const crossfadeToDoc = useCallback(async (id: number, auto = false) => {
+    const request = ++switchRequestRef.current;
+    if (!engine || (id !== activeIdRef.current && !storedRef.current.has(id))) return;
+    if (!auto) holdScene(false);
+    /* A click on the shown scene's own tab keeps it, as a pick of the user. */
+    if (id !== activeIdRef.current) {
+      /* While paused (stopped) the new scene shows at once, with no fade. */
+      if (!engine.state.paused) await engine.fadeOut(CROSSFADE_SECONDS);
+      if (request !== switchRequestRef.current) return;
+      /* The new scene starts from 0, as Stop puts it (see Engine.rewind), and plays or stays paused as the scene before it did. */
+      const paused = engine.state.paused;
+      switchToDoc(id);
+      engine.rewind();
+      engine.state.paused = paused;
+      setPaused(paused);
+    }
+    sceneShownRef.current = { id, byUser: !auto, clock: engine.state.clock };
+  }, [engine, holdScene, switchToDoc]);
 
   /** Adds audio files to the tracks. The first files of an empty track list start to play at once. */
   const addTracks = useCallback((paths: string[]) => {
@@ -758,12 +812,27 @@ export default function App() {
     if (wasEmpty && tracks.list.length > 0) tracks.playTrack(0);
   }, []);
 
+  /**
+   * Add File(s) in the Audio panel: the Windows file dialog, a window of its
+   * own that can move off the app, so the track list stays in view. The
+   * same file types as AUDIO_EXTENSIONS in files.rs.
+   */
+  const pickTracks = useCallback(async () => {
+    if (!isTauri()) return;
+    const picked = await openFileDialog({
+      title: "Add Audio Files",
+      multiple: true,
+      filters: [{ name: "Audio files", extensions: ["mp3", "wav", "flac", "ogg", "opus", "m4a", "aac"] }]
+    });
+    if (picked) addTracks(Array.isArray(picked) ? picked : [picked]);
+  }, [addTracks]);
+
   /** Selects the next tab (step 1) or the one before it (step -1); the last tab goes round to the first. */
-  const switchByStep = useCallback((step: 1 | -1) => {
+  const switchByStep = useCallback((step: 1 | -1, auto = false) => {
     const list = docsRef.current;
     const index = list.findIndex((doc) => doc.id === activeIdRef.current);
     if (index < 0 || list.length < 2) return;
-    void crossfadeToDoc(list[(index + step + list.length) % list.length].id);
+    void crossfadeToDoc(list[(index + step + list.length) % list.length].id, auto);
   }, [crossfadeToDoc]);
 
   /** True when any open scene, or the open playlist, has changes that are not saved. */
@@ -819,6 +888,7 @@ export default function App() {
         savedFingerprintRef.current = saved;
         setDirty(fingerprint() !== saved);
         setActivePath(path);
+        holdScene(false);
       }
       showStatus(`Saved ${fileNameOf(path)}`);
       return true;
@@ -826,7 +896,7 @@ export default function App() {
       showError(`Could not save the scene. ${String(error)}`);
       return false;
     }
-  }, [engine, fingerprint, setActivePath, showError, showStatus]);
+  }, [engine, fingerprint, holdScene, setActivePath, showError, showStatus]);
 
   /* A scene opens in a new tab, so the scenes that are open stay as they are. */
   const openScene = useCallback(() => {
@@ -984,44 +1054,110 @@ export default function App() {
   }, [showStatus]);
 
   /**
-   * While the tracks are the input, they run the show (see docs/AUDIO.md,
-   * part 7): Play and Pause start and stop the music and the animation
-   * together, Stop also goes back to the start of the track, and each new
-   * track crossfades to the next scene tab.
+   * While the tracks are the input, each scene plays its Length and then
+   * crossfades to the next scene (see docs/AUDIO.md, part 7). The music and
+   * the scene have play controls of their own: the Playlist card's toolbar
+   * runs the music, and the controls on the picture run the scene.
    */
   const tracksActive = useSyncExternalStore((listener) => audioInput.subscribe(listener), () => audioInput.settings.kind === "tracks");
-  const tracksPlaying = useSyncExternalStore((listener) => tracks.subscribe(listener), () => tracks.playing);
-  /* The animation follows the music, also after a scene tab change (which brings that scene's own pause back). */
+  const switchByStepRef = useRef(switchByStep);
+  switchByStepRef.current = switchByStep;
+  /**
+   * At the end of the scene's Length (see scenePosition, which the Length
+   * slider shows), the next tab crossfades in; the last tab goes round to
+   * the first. Ranges with their own times, or that need two Lengths to
+   * come back, do not make the scene longer. Each scene starts from 0 when
+   * it shows (see crossfadeToDoc), so it plays its whole Length. A pause
+   * holds it. A tab click starts the order again from the clicked tab. The
+   * track end takes precedence: a Length that ends in the last half Length
+   * of the track does not switch, and the new track switches instead.
+   */
   useEffect(() => {
     if (!engine || !tracksActive) return;
-    engine.state.paused = !tracksPlaying;
-    setPaused(!tracksPlaying);
-  }, [activeId, engine, tracksActive, tracksPlaying]);
-  const crossfadeRef = useRef(crossfadeToDoc);
-  crossfadeRef.current = crossfadeToDoc;
-  useEffect(() => tracks.onTrackChange((index) => {
-    if (audioInput.settings.kind !== "tracks") return;
-    const list = docsRef.current;
-    if (list.length > 1) void crossfadeRef.current(list[index % list.length].id);
-  }), []);
+    /* After a switch, this watch sees the new scene's clock until the effect runs again: it stops at once, so it cannot read that as a loop end. */
+    const shown = activeIdRef.current;
+    let lastClock = engine.state.clock;
+    let lastPosition = scenePosition(engine.state);
+    /** The switch request this watch made (see crossfadeToDoc), or 0. */
+    let pending = 0;
+    return engine.onFrame(() => {
+      if (activeIdRef.current !== shown) return;
+      const clock = engine.state.clock;
+      const position = scenePosition(engine.state);
+      /* A click on this scene's own tab cancelled the switch: the scene stays. */
+      if (pending && switchRequestRef.current !== pending) pending = 0;
+      /* Stop sets the clock back to 0, so its jump to the start is not an end. */
+      const ended = clock > lastClock && position < lastPosition;
+      lastClock = clock;
+      lastPosition = position;
+      if (pending || !ended || docsRef.current.length < 2 || sceneHeldRef.current) return;
+      if (tracks.playing && tracks.duration > 0 && tracks.duration - tracks.position < engine.params.cycle.value / 2) return;
+      switchByStepRef.current(1, true);
+      pending = switchRequestRef.current;
+    });
+  }, [activeId, engine, tracksActive]);
 
+  /**
+   * Each new track (the end of a track, or a pick in the list) also
+   * crossfades to the next tab. A scene that the user picked
+   * stays for at least half its Length of play time: the user's pick takes
+   * precedence.
+   */
+  useEffect(() => tracks.onTrackChange(() => {
+    if (!engine || audioInput.settings.kind !== "tracks" || docsRef.current.length < 2 || sceneHeldRef.current) return;
+    const shown = sceneShownRef.current;
+    if (shown.id === activeIdRef.current && shown.byUser && engine.state.clock - shown.clock < engine.params.cycle.value / 2) return;
+    switchByStepRef.current(1, true);
+  }), [engine]);
+
+  /**
+   * A change that the user makes to the shown scene with the mouse or the
+   * keys (a slider, a menu, Random, Undo) turns Hold on, so the scene stays
+   * while the user edits it. A change counts when the scene's settings
+   * change within a second of a click, a drag, a key or the mouse wheel.
+   * MIDI knobs and audio links do not turn it on, so a live show with
+   * knobs goes on.
+   */
+  useEffect(() => {
+    if (!engine || !tracksActive) {
+      holdScene(false);
+      return;
+    }
+    let lastInput = -Infinity;
+    const input = (event: Event) => {
+      if (event.type !== "pointermove" || (event as PointerEvent).buttons) lastInput = performance.now();
+    };
+    const events = ["pointerdown", "pointermove", "keydown", "wheel"];
+    for (const name of events) window.addEventListener(name, input, true);
+    let last = { id: activeIdRef.current, print: fingerprint() };
+    const timer = window.setInterval(() => {
+      const now = { id: activeIdRef.current, print: fingerprint() };
+      /* A tab switch changes the settings too: only a change of the same scene counts. */
+      const edited = now.id === last.id && now.print !== last.print && performance.now() - lastInput < 1000 && !midi.turning;
+      last = now;
+      if (!edited || sceneHeldRef.current) return;
+      holdScene(true);
+      showStatus("Hold: this scene stays while you edit it. Click Hold, save, or pick a tab to go on.", 4000);
+    }, 250);
+    return () => {
+      window.clearInterval(timer);
+      for (const name of events) window.removeEventListener(name, input, true);
+    };
+  }, [engine, fingerprint, holdScene, showStatus, tracksActive]);
+
+  /* Stop and Play or Pause run the scene only; the music has its own controls (see FilesCard). */
   const stop = useCallback(() => {
     if (!engine) return;
-    if (tracksActive) tracks.stop();
     engine.rewind();
     setPaused(true);
-    showStatus(tracksActive ? "Stopped: the file and every range are at their start" : "Stopped: every range is at its start");
-  }, [engine, tracksActive, showStatus]);
+    showStatus("Stopped: every range is at its start");
+  }, [engine, showStatus]);
 
   const togglePause = useCallback(() => {
     if (!engine) return;
-    if (tracksActive) {
-      tracks.toggle();
-      return;
-    }
     engine.state.paused = !engine.state.paused;
     setPaused(engine.state.paused);
-  }, [engine, tracksActive]);
+  }, [engine]);
 
   const toggleFullscreen = useCallback(async () => {
     if (isTauri()) {
@@ -1067,9 +1203,19 @@ export default function App() {
     markClean();
   }, [engine, markClean, setDriver, setSlotImage]);
 
-  /** Starts a new, untitled scene in a new tab. The scene that was shown stays in its own tab. */
+  /**
+   * Outside a playlist, a new or opened scene starts quiet: the app stops
+   * listening (Input Nothing), so the Playlist and Scenes columns of Files
+   * mode go too. In a playlist the playlist's input stays.
+   */
+  const quietOutsidePlaylist = () => {
+    if (playlistPathRef.current === null && audioInput.settings.kind !== "none") audioInput.setSource("none", null);
+  };
+
+  /** Starts a new, untitled scene in a new tab. The scene that was shown stays in its own tab. The app stops listening outside a playlist (see quietOutsidePlaylist). */
   const newScene = useCallback(() => {
     if (!engine) return;
+    quietOutsidePlaylist();
     sceneGenerationRef.current++;
     setSceneGeneration(sceneGenerationRef.current);
     stashActive();
@@ -1170,15 +1316,22 @@ export default function App() {
         }
         scenes.push(target);
       }
-      await savePlaylistFile(path, { audio: playlistAudio(), activeScene }, scenes, tracks.list.map((track) => track.path));
+      await savePlaylistFile(path, {
+        audio: playlistAudio(),
+        activeScene,
+        filesWidth: panelLayout.filesWidth,
+        trackSeconds: tracks.list.map((track) => tracks.lengthOf(track.path))
+      }, scenes, tracks.list.map((track) => track.path));
     } catch (error) {
       showError(`Could not save the playlist. ${String(error)}`);
       return false;
     }
     markPlaylistClean(path);
+    /* A save of the playlist saves the shown scene too, so Hold goes off, as after a save of the scene. */
+    holdScene(false);
     showStatus(`Saved ${fileNameOf(path)}`);
     return true;
-  }, [engine, fingerprint, markPlaylistClean, playlistAudio, setActivePath, showError, showStatus, writeDocs]);
+  }, [engine, fingerprint, holdScene, markPlaylistClean, playlistAudio, setActivePath, showError, showStatus, writeDocs]);
 
   askToSavePlaylistRef.current = (title: string, reason: string) => new Promise<boolean>((resolve) => {
     const path = playlistPathRef.current;
@@ -1194,6 +1347,33 @@ export default function App() {
   }, [askToSaveAll, engine]);
 
   /**
+   * Close Playlist: asks "Save changes?" for the playlist when it has
+   * changes (its scenes are the playlist's, so they need no question of
+   * their own), then closes its scenes, and the Files list goes back to the
+   * user's own files. The start screen shows. The audio settings stay as
+   * they are.
+   */
+  const closePlaylist = useCallback(async () => {
+    const path = playlistPathRef.current;
+    if (!engine || !path) return;
+    if (!(await askToSavePlaylistRef.current("Save changes before closing the playlist?", "Closing the playlist closes its scenes and its files."))) return;
+    holdScene(false);
+    tracks.restoreOwn();
+    if (fullscreen) await exitFullscreen();
+    sceneGenerationRef.current++;
+    setSceneGeneration(sceneGenerationRef.current);
+    engine.stop();
+    blankScene();
+    writeDocs([]);
+    storedRef.current.clear();
+    selectDocId(null);
+    historyRef.current = null;
+    markPlaylistClean(null);
+    setStartScreen(true);
+    showStatus(`Closed ${fileNameOf(path)}`);
+  }, [blankScene, engine, exitFullscreen, fullscreen, holdScene, markPlaylistClean, selectDocId, showStatus, writeDocs]);
+
+  /**
    * Opens the playlist picked in the Open dialog: the open scenes close
    * (their changes were asked about), then the playlist's scenes open in
    * its tab order, its tracks come in stopped at the first one, and its
@@ -1202,8 +1382,9 @@ export default function App() {
   const openPlaylistPath = useCallback(async (path: string) => {
     if (!engine) return;
     const name = fileNameOf(path);
+    const title = `Opening ${name}`;
     try {
-      showStatus(`Opening ${name}…`, 0);
+      setLoading({ title, detail: "Unpacking the playlist…", progress: null });
       const opened = await openPlaylistFile(path);
       const manifest = readManifest(opened.manifest);
       tracks.pause();
@@ -1212,9 +1393,16 @@ export default function App() {
       selectDocId(null);
       historyRef.current = null;
       blankScene();
-      for (const scene of opened.scenes) await openScenePath(scene);
+      for (const [index, scene] of opened.scenes.entries()) {
+        setLoading({ title, detail: `Scene ${index + 1} of ${opened.scenes.length}: ${fileNameOf(scene)}`, progress: index / opened.scenes.length });
+        await openScenePath(scene);
+      }
+      setLoading({ title, detail: "Audio files and settings…", progress: 1 });
       tracks.replace(opened.tracks);
+      /* The lengths the playlist kept, so the Files footer has its play time at once. */
+      if (manifest.trackSeconds) tracks.setLengths(manifest.trackSeconds);
       await audioInput.applySettings(manifest.audio);
+      if (manifest.filesWidth) panelLayout.setFilesWidth(manifest.filesWidth);
       const target = docsRef.current[Math.min(manifest.activeScene, docsRef.current.length - 1)];
       if (target) switchToDoc(target.id);
       else setStartScreen(true);
@@ -1225,8 +1413,35 @@ export default function App() {
       showStatus(`Opened ${name}`);
     } catch (error) {
       showError(`Could not open the playlist. ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setLoading(null);
     }
   }, [blankScene, engine, markPlaylistClean, openScenePath, selectDocId, showError, showStatus, switchToDoc, writeDocs]);
+
+  /** Puts the tabs in a new order (a drag in the tab bar). The scenes play in tab order, and a playlist keeps it. */
+  const reorderDocs = useCallback((ids: number[]) => {
+    const byId = new Map(docsRef.current.map((doc) => [doc.id, doc]));
+    writeDocs(ids.flatMap((id) => byId.get(id) ?? []));
+  }, [writeDocs]);
+
+  /**
+   * Rename (the scene list's right-click menu): gives the scene's file a new
+   * name in its folder. In a playlist the file is the playlist's copy, so
+   * the playlist counts as changed, and its next save keeps the new name.
+   */
+  const renameDoc = useCallback(async (id: number, name: string) => {
+    const path = id === activeIdRef.current ? scenePathRef.current : docsRef.current.find((doc) => doc.id === id)?.path ?? null;
+    if (!path || !isTauri()) return;
+    const newName = name.toLowerCase().endsWith(`.${SCENE_EXTENSION}`) ? name : `${name}.${SCENE_EXTENSION}`;
+    try {
+      const newPath = await invoke<string>("rename_browse_entry", { path, newName });
+      if (id === activeIdRef.current) setActivePath(newPath);
+      else writeDocs(docsRef.current.map((doc) => doc.id === id ? { ...doc, path: newPath } : doc));
+      showStatus(`Renamed to ${fileNameOf(newPath)}`);
+    } catch (error) {
+      showError(`Could not rename the scene. ${String(error)}`);
+    }
+  }, [setActivePath, showError, showStatus, writeDocs]);
 
   /** Closes any tab. A tab with unsaved changes is selected first, so its "Save changes?" question shows over it. */
   const closeTab = useCallback((id: number) => {
@@ -1456,7 +1671,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [aboutOpen, shortcutsOpen, closeScene, crossfadeToDoc, engine, exitFullscreen, newScene, nudge, openImage, openRequest, videoDialogOpen, searchSlot, openScene, randomize, redo, savePng, saveScene, startScreen, stop, switchByStep, toggleAudioPanel, toggleFullscreen, toggleMidiPanel, togglePause, undo]);
+  }, [aboutOpen, shortcutsOpen, closeScene, crossfadeToDoc, engine, exitFullscreen, newScene, nudge, openImage, openRequest, videoDialogOpen, searchSlot, openScene, randomize, redo, savePlaylist, savePng, saveScene, startScreen, stop, switchByStep, toggleAudioPanel, toggleFullscreen, toggleMidiPanel, togglePause, undo]);
 
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
@@ -1486,12 +1701,32 @@ export default function App() {
     {
       id: "file",
       label: "File",
+      /* The picture's own commands (an image or video in, a PNG or video out); the scene and playlist commands have menus of their own. */
+      items: [
+        { label: "Open Image or Video…", icon: <ColorFolder size={18} />, shortcut: "O", run: () => void openImage() },
+        { label: "Save PNG", disabled: startScreen, icon: <Camera size={15} />, shortcut: "S", run: () => void savePng() },
+        { label: "Export Video…", icon: <FilmStrip size={15} />, run: openVideoDialog },
+        "separator",
+        { label: "Exit", icon: <SignOut size={15} />, shortcut: "Alt+F4", run: () => void (isTauri() ? getCurrentWindow().close() : window.close()) }
+      ]
+    },
+    {
+      id: "playlist",
+      label: "Playlist",
+      items: [
+        { label: "Open Playlist…", icon: <FolderOpen size={15} />, run: () => void openPlaylist() },
+        { label: "Save Playlist", icon: <FloppyDisk size={15} />, shortcut: playlistPath ? "Ctrl+S" : undefined, run: () => void savePlaylist() },
+        { label: "Save Playlist As…", icon: <FloppyDisk size={15} />, run: () => void savePlaylist(true) },
+        "separator",
+        { label: "Close Playlist", icon: <X size={15} />, disabled: !playlistPath, run: () => void closePlaylist() }
+      ]
+    },
+    {
+      id: "scene",
+      label: "Scene",
       items: [
         { label: "New Scene", icon: <Plus size={15} />, shortcut: "Ctrl+N", run: newScene },
-        { label: "Open Image or Video…", icon: <ColorFolder size={18} />, shortcut: "O", run: () => void openImage() },
-        { label: "Open Scene…", icon: <FilmSlate size={15} />, shortcut: "Ctrl+O", run: () => void openScene() },
-        { label: "Open Playlist…", icon: <MusicNotes size={15} />, run: () => void openPlaylist() },
-        "separator",
+        { label: "Open Scene…", icon: <FolderOpen size={15} />, shortcut: "Ctrl+O", run: () => void openScene() },
         /* In a playlist, a scene is the playlist's: Save Scene gives way to Export Scene As, which writes a copy. */
         ...(playlistPath
           ? [{ label: "Export Scene As…", disabled: startScreen, icon: <FloppyDisk size={15} />, shortcut: "Ctrl+Shift+S", run: () => void saveScene(false, { copy: true }) }]
@@ -1499,14 +1734,8 @@ export default function App() {
             { label: "Save Scene", disabled: startScreen, icon: <FloppyDisk size={15} />, shortcut: "Ctrl+S", run: () => void saveScene() },
             { label: "Save Scene As…", icon: <FloppyDisk size={15} />, shortcut: "Ctrl+Shift+S", run: () => void saveScene(true) }
           ]),
-        { label: "Save Playlist", icon: <MusicNotes size={15} />, shortcut: playlistPath ? "Ctrl+S" : undefined, run: () => void savePlaylist() },
-        { label: "Save Playlist As…", icon: <MusicNotes size={15} />, run: () => void savePlaylist(true) },
-        { label: "Save PNG", disabled: startScreen, icon: <Camera size={15} />, shortcut: "S", run: () => void savePng() },
-        { label: "Export Video…", icon: <FilmStrip size={15} />, run: openVideoDialog },
         "separator",
-        { label: "Close Scene", icon: <X size={15} />, shortcut: "Ctrl+W", disabled: startScreen, run: () => void closeScene() },
-        "separator",
-        { label: "Exit", icon: <SignOut size={15} />, shortcut: "Alt+F4", run: () => void (isTauri() ? getCurrentWindow().close() : window.close()) }
+        { label: "Close Scene", icon: <X size={15} />, shortcut: "Ctrl+W", disabled: startScreen, run: () => void closeScene() }
       ]
     },
     {
@@ -1521,7 +1750,8 @@ export default function App() {
       id: "view",
       label: "View",
       items: [
-        { label: panelOpen ? "Hide Settings" : "Show Settings", icon: <SlidersHorizontal size={15} />, shortcut: "H", run: () => setPanelOpen((open) => !open) },
+        { label: panelOpen ? "Hide Panels" : "Show Panels", icon: <SlidersHorizontal size={15} />, shortcut: "H", run: () => setPanelOpen((open) => !open) },
+        { label: filesCollapsed ? "Show Playlist" : "Hide Playlist", icon: <Playlist size={15} />, disabled: !tracksActive || !panelOpen, run: () => panelLayout.setFilesCollapsed(!panelLayout.filesCollapsed) },
         { label: statsOpen ? "Hide Performance" : "Show Performance", icon: <Gauge size={15} />, shortcut: "P", run: () => setStatsOpen((open) => !open) },
         { label: midiPanelOpen && bottomTab === "audio" ? "Hide Audio Panel" : "Show Audio Panel", icon: <SpeakerSimpleHigh size={16} />, shortcut: "A", disabled: startScreen, run: toggleAudioPanel },
         { label: midiPanelOpen && bottomTab === "midi" ? "Hide MIDI Panel" : "Show MIDI Panel", icon: <MidiIcon size={15} />, shortcut: "M", disabled: startScreen, run: toggleMidiPanel },
@@ -1544,6 +1774,9 @@ export default function App() {
   /** A tab's label: the scene file's name, or "Untitled Scene", with a number after the first. */
   const docFileName = (path: string | null, untitled: number) =>
     path?.split(/[\\/]/).pop() ?? (untitled > 1 ? `Untitled Scene ${untitled}` : "Untitled Scene");
+  /* The scenes are a list at the left, not tabs, in a playlist or with Files as the input: a show has many scenes. Hide Panels (H) hides the list with the rest of the left side. */
+  const sceneListMode = tracksActive || playlistPath !== null;
+  const sceneListShown = !fullscreen && !startScreen && sceneListMode && panelOpen;
   const tabs: DocumentTabInfo[] = docs.map((doc) => doc.id === activeId
     ? { id: doc.id, fileName: docFileName(scenePath, doc.untitled), path: scenePath, dirty }
     : { id: doc.id, fileName: docFileName(doc.path, doc.untitled), path: doc.path, dirty: doc.dirty });
@@ -1577,42 +1810,55 @@ export default function App() {
         </>
       )}
       <div className="workspace">
-        {startScreen && <StartScreen onNewScene={newScene} onOpenScene={openScene} onOpenPlaylist={() => void openPlaylist()} />}
-        {/* The left panel: the Source section, then the Designer (the effects). */}
-        {engine && !startScreen && panelOpen && (
-          <ControlPanel
-            /* A change outside the panel (Randomize, Undo, a new scene) makes a new panel, so all of its state reloads. */
-            key={`controls-${revision}`}
-            engine={engine}
-            openGroup={openGroup}
-            onOpenGroup={setOpenGroup}
-            onRandomize={randomize}
-            onNudge={nudge}
-            onReset={() => setResetAsked(true)}
-            onRandomizeGroup={randomizeOneGroup}
-            hasVideo={images.some((image) => image?.source instanceof HTMLVideoElement)}
-            driverVideoName={driverVideoName}
-            onPickDriverVideo={() => setOpenRequest({ kind: "image", slot: 0, target: "driver" })}
-            onNeedAudioInput={askForAudioInput}
-            source={(
-              <SourcePanel
-                engine={engine}
-                images={images}
-                randomLoading={randomLoading}
-                onOpenImage={(slot) => void openImage(slot)}
-                onRandomImage={(slot) => void randomImage(slot)}
-                onSearchImage={setSearchSlot}
-                onPatternImage={loadPattern}
-                onRemoveImage={removeImage}
-                onSwapImages={swapImages}
-                onRestoreImage={restoreUnderImage}
-              />
-            )}
-          />
-        )}
+        {loading && <LoadingOverlay loading={loading} />}
+        {startScreen && <StartScreen version={appVersion} onNewScene={newScene} onOpenScene={openScene} onOpenPlaylist={() => void openPlaylist()} />}
+        {/**
+          * The left side. With a playlist open, or Files as the input, it is
+          * one panel of columns: the audio files (Files only), the scenes (a
+          * list in place of the tabs), then the left panel. Else the wrapper
+          * has no box of its own (see .sidebar), and the left panel stands
+          * alone.
+          */}
+        <div className={`sidebar ${sceneListShown ? "with-scenes" : ""}`}>
+          {sceneListShown && tracksActive && <FilesCard onAddTracks={() => void pickTracks()} />}
+          {sceneListShown && <SceneList tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} inPlaylist={playlistPath !== null} />}
+          {/* The left panel: the Source section, then the Designer (the effects). */}
+          {engine && !startScreen && panelOpen && (
+            <ControlPanel
+              /* A change outside the panel (Randomize, Undo, a new scene) makes a new panel, so all of its state reloads. */
+              key={`controls-${revision}`}
+              engine={engine}
+              openGroup={openGroup}
+              onOpenGroup={setOpenGroup}
+              onRandomize={randomize}
+              onNudge={nudge}
+              onReset={() => setResetAsked(true)}
+              onRandomizeGroup={randomizeOneGroup}
+              driverVideoName={driverVideoName}
+              onPickDriverVideo={() => setOpenRequest({ kind: "image", slot: 0, target: "driver" })}
+              onNeedAudioInput={askForAudioInput}
+              held={tracksActive && sceneHeld}
+              onReleaseHold={() => holdScene(false)}
+              source={(
+                <SourcePanel
+                  engine={engine}
+                  images={images}
+                  randomLoading={randomLoading}
+                  onOpenImage={(slot) => void openImage(slot)}
+                  onRandomImage={(slot) => void randomImage(slot)}
+                  onSearchImage={setSearchSlot}
+                  onPatternImage={loadPattern}
+                  onRemoveImage={removeImage}
+                  onSwapImages={swapImages}
+                  onRestoreImage={restoreUnderImage}
+                />
+              )}
+            />
+          )}
+        </div>
         {/* The picture under its document tab; full screen hides the tab. */}
         <div className="document">
-          {!fullscreen && !startScreen && <DocumentTabs tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} />}
+          {!fullscreen && !startScreen && !sceneListMode && <DocumentTabs tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} />}
           <main className={`stage ${cursorIdle ? "cursor-idle" : ""}`}>
             <canvas ref={canvasRef} onDoubleClick={() => void toggleFullscreen()} />
             {engine && statsOpen && <StatsOverlay engine={engine} />}
@@ -1622,7 +1868,6 @@ export default function App() {
                 onTogglePause={togglePause}
                 onStop={stop}
                 onFullscreen={() => void toggleFullscreen()}
-                tracks={tracksActive}
               />
             )}
             {fullscreen && (
@@ -1675,7 +1920,7 @@ export default function App() {
           <div className="midi-panel-grip" onPointerDown={resizeMidiPanel} data-tip="Drag to make the MIDI panel taller or shorter" />
           <div className="midi-panel-body">
             <BottomPanelTabs tab={bottomTab} onTab={setBottomTab} onClose={closeBottomPanel} />
-            {bottomTab === "midi" ? <MidiPanel engine={engine} open={midiPanelOpen} /> : <AudioPanel engine={engine} sceneName={sceneFileName} onAddTracks={() => setOpenRequest({ kind: "audio", slot: 0 })} inputTip={inputTip && midiPanelOpen} onInputTipDone={() => setInputTip(false)} />}
+            {bottomTab === "midi" ? <MidiPanel engine={engine} open={midiPanelOpen} /> : <AudioPanel engine={engine} sceneName={sceneFileName} onAddTracks={() => void pickTracks()} inputTip={inputTip && midiPanelOpen} onInputTipDone={() => setInputTip(false)} />}
           </div>
         </div>
       )}
@@ -1701,7 +1946,18 @@ export default function App() {
           onOpen={(path) => {
             setOpenRequest(null);
             if (openRequest.target === "driver") void openDriverVideo(path);
-            else if (openRequest.kind === "scene") void openScenePath(path);
+            else if (openRequest.kind === "scene") {
+              quietOutsidePlaylist();
+              /* One scene opens behind the loader too: its media can take a moment. */
+              void (async () => {
+                setLoading({ title: `Opening ${fileNameOf(path)}`, detail: "Reading the scene and its images…", progress: null });
+                try {
+                  await openScenePath(path);
+                } finally {
+                  setLoading(null);
+                }
+              })();
+            }
             else if (openRequest.kind === "audio") addTracks([path]);
             else if (openRequest.kind === "playlist") void openPlaylistPath(path);
             else void openImagePath(path, openRequest.slot);
@@ -1709,7 +1965,19 @@ export default function App() {
           /* Several scenes open one after the other, each in its own tab; the last one shows. Several audio files go to the tracks. */
           onOpenMany={openRequest.kind === "scene" ? (paths) => {
             setOpenRequest(null);
-            void (async () => { for (const path of paths) await openScenePath(path); })();
+            quietOutsidePlaylist();
+            void (async () => {
+              /* Several scenes open behind the overlay, so they do not flash by one after the other. */
+              const title = `Opening ${paths.length} scenes`;
+              try {
+                for (const [index, path] of paths.entries()) {
+                  setLoading({ title, detail: `Scene ${index + 1} of ${paths.length}: ${fileNameOf(path)}`, progress: index / paths.length });
+                  await openScenePath(path);
+                }
+              } finally {
+                setLoading(null);
+              }
+            })();
           } : openRequest.kind === "audio" ? (paths) => {
             setOpenRequest(null);
             addTracks(paths);

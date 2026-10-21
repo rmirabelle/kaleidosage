@@ -10,6 +10,14 @@ import type { AudioSettings } from "./audioInput";
  */
 
 export const PLAYLIST_EXTENSION = "ksplaylist";
+
+/**
+ * True for a file that is the open playlist's own copy: in a folder that
+ * the app made in the temp folder (see playlist_archive.rs). Save Playlist
+ * writes such a scene copy in place; any other scene gets a new copy
+ * first, so its own file on disk never changes.
+ */
+export const isPlaylistCopy = (path: string | null) => path !== null && /[\\/]kaleidosage-playlist-[^\\/]+[\\/]/i.test(path);
 const PLAYLIST_VERSION = 1;
 
 /** The audio settings that a playlist keeps: what the app listens to and how. */
@@ -19,11 +27,15 @@ export interface PlaylistManifest {
   audio: PlaylistAudio;
   /** The tab that was selected when the playlist was saved (0 is the first). */
   activeScene: number;
+  /** The Audio panel's Files column width, in px (see panelLayout.ts); missing in older playlists. */
+  filesWidth?: number;
+  /** Each track's length in seconds, in track order (null when not known), for the Open Playlist dialog; missing in older playlists. */
+  trackSeconds?: (number | null)[];
 }
 
 /** playlist.json, without the scene and track entries, which the Rust side adds. */
-export function writeManifest({ audio, activeScene }: PlaylistManifest): string {
-  return JSON.stringify({ app: "KaleidoSage", kind: "playlist", version: PLAYLIST_VERSION, audio, activeScene });
+export function writeManifest({ audio, activeScene, filesWidth, trackSeconds }: PlaylistManifest): string {
+  return JSON.stringify({ app: "KaleidoSage", kind: "playlist", version: PLAYLIST_VERSION, audio, activeScene, ...(filesWidth ? { layout: { filesWidth } } : {}), ...(trackSeconds ? { trackSeconds } : {}) });
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -33,7 +45,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
  * out, so the app keeps its own; a playlist from a newer version still
  * opens.
  */
-export function readManifest(text: string): { audio: Partial<PlaylistAudio>; activeScene: number } {
+export function readManifest(text: string): { audio: Partial<PlaylistAudio>; activeScene: number; filesWidth?: number; trackSeconds?: (number | null)[] } {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -51,23 +63,38 @@ export function readManifest(text: string): { audio: Partial<PlaylistAudio>; act
     if (typeof value === "number" && Number.isFinite(value)) audio[key] = value;
   }
   const activeScene = typeof parsed.activeScene === "number" && Number.isInteger(parsed.activeScene) && parsed.activeScene >= 0 ? parsed.activeScene : 0;
-  return { audio, activeScene };
+  const filesWidth = isRecord(parsed.layout) ? parsed.layout.filesWidth : undefined;
+  const trackSeconds = Array.isArray(parsed.trackSeconds)
+    ? parsed.trackSeconds.map((seconds) => typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0 ? seconds : null)
+    : undefined;
+  return { audio, activeScene, ...(typeof filesWidth === "number" && filesWidth > 0 ? { filesWidth } : {}), ...(trackSeconds ? { trackSeconds } : {}) };
 }
 
 /**
  * A short text that changes when anything the playlist file keeps changes:
- * the scene files in tab order, the tracks, and the audio settings. The
- * scenes' own changes are not part of it: each scene has its own unsaved
- * mark.
+ * the scene files in tab order, the tracks, the audio settings and the
+ * Files column width. The scenes' own changes are not part of it: each
+ * scene has its own unsaved mark.
  */
-export function playlistFingerprint(scenes: readonly string[], tracks: readonly string[], audio: PlaylistAudio): string {
+export function playlistFingerprint(scenes: readonly string[], tracks: readonly string[], audio: PlaylistAudio, filesWidth?: number): string {
   const { kind, device, gainDb, thresholdDb } = audio;
-  return JSON.stringify([scenes, tracks, kind, device, gainDb, thresholdDb]);
+  return JSON.stringify([scenes, tracks, kind, device, gainDb, thresholdDb, filesWidth ?? null]);
 }
 
 /** Writes the playlist file: the manifest, then a copy of each scene and audio file. */
 export const savePlaylistFile = (path: string, manifest: PlaylistManifest, scenes: string[], tracks: string[]) =>
   invoke("save_playlist", { path, manifest: writeManifest(manifest), scenes, tracks });
+
+/** What the Open Playlist dialog shows of a playlist, read without unpacking it (Rust: read_playlist_summary). */
+export interface PlaylistSummary {
+  /** The audio settings, as playlist.json has them (see readManifest). */
+  audio: Partial<PlaylistAudio> | null;
+  /** Each scene's and track's file name and size, in order; a track also has its length in seconds, or null (older playlists). */
+  scenes: { name: string; bytes: number; seconds: number | null }[];
+  tracks: { name: string; bytes: number; seconds: number | null }[];
+}
+
+export const readPlaylistSummary = (path: string) => invoke<PlaylistSummary>("read_playlist_summary", { path });
 
 /** Unpacks a playlist file into a temp folder: its manifest, and the unpacked scene and audio files. */
 export const openPlaylistFile = (path: string) =>

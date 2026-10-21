@@ -20,7 +20,7 @@ const REQUIRED: readonly (readonly [string, string])[] = [
   ["../components/useParamRows.tsx", "row"],
   ["../components/AudioPanel.tsx", "audio.input"],
   ["../components/AudioPanel.tsx", "audio.levels"],
-  ["../components/AudioPanel.tsx", "audio.files"],
+  ["../components/FilesCard.tsx", "audio.files"],
   ["../components/AudioPanel.tsx", "audio.sensors"],
   ["../components/AudioLinkButton.tsx", "audio.sensors"],
   ["../components/MidiPanel.tsx", "midi"],

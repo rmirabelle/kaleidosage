@@ -16,7 +16,7 @@
 export const HELP_ICONS = [
   "random", "search", "pattern", "folder", "new", "grip", "nudge", "trash", "dice", "x",
   "range", "reverse", "easing", "own-time", "audio", "midi", "hold-play",
-  "play", "pause", "stop", "previous", "next", "fullscreen"
+  "play", "pause", "stop", "fullscreen"
 ] as const;
 export type HelpIcon = (typeof HELP_ICONS)[number];
 /** Splits a help text at its {name} marks: text, name, text, name, ... */
@@ -36,13 +36,15 @@ export interface HelpTopic {
 export const HELP_TOPICS = {
   "scene.tabs": {
     title: "Scenes and tabs",
-    text: "Each tab holds one scene: its picture, its effects and its audio sensors. Switch tabs to change the scene; the picture crossfades from the old scene to the new one.",
+    text: "Each tab holds one scene: its picture, its effects and its audio sensors. Switch tabs to change the scene; while it plays, the picture crossfades from the old scene to the new one, which starts from its beginning.",
     tips: [
       "Keys 1 to 9 select the tab with that number, also in full screen.",
       "Ctrl + Tab selects the next tab.",
       "Ctrl + Shift + Tab selects the tab before.",
       "The {x} on a tab closes it.",
-      "A middle click on a tab closes it."
+      "A middle click on a tab closes it.",
+      "Drag a tab to move it; the scenes play in tab order.",
+      "In a playlist or with Files as the input, the scenes are a list at the left, not tabs."
     ],
     keywords: ["scene", "tab", "crossfade", "switch", "document", "new scene", "open scene"]
   },
@@ -121,16 +123,16 @@ export const HELP_TOPICS = {
   },
   "audio.files": {
     title: "Files",
-    text: "Audio files that the app plays itself, one after the other, and round again. While Files is the input, the play controls run the music and the animation together, and each new file moves the show to the next scene tab.",
+    text: "Audio files that the app plays itself, one after the other, and round again. While Files is the input, the toolbar at the bottom of the Playlist card plays the music, and the show moves to the next scene tab at the end of each scene's loop and at each new file.",
     tips: [
-      "Click a file to play it.",
+      "Click a file to play it; drag it to move it in the list.",
+      "Drag the line at the list's right edge to make it wider; a playlist keeps the width.",
       "The {x} removes a file from the list.",
-      "Previous {previous} plays the file before.",
-      "Next {next} plays the next file.",
-      "The play controls are under the picture, with a bar to seek.",
+      "Your changes turn Hold on, so the scene stays. Click Hold, save or pick a tab to go on.",
+      "Play, Pause and Stop at the bottom run the music only; the bar seeks in the file.",
       "The trash can {trash} removes every file from the list; the files on disk stay."
     ],
-    keywords: ["files", "tracks", "songs", "music", "mp3", "wav", "flac", "play", "next", "previous"]
+    keywords: ["files", "tracks", "songs", "music", "mp3", "wav", "flac", "play"]
   },
   "audio.sensors": {
     title: "Audio sensors",
@@ -158,7 +160,7 @@ export const HELP_TOPICS = {
   },
   play: {
     title: "Play controls",
-    text: "The play controls start and stop the animation. While Files is the input, they run the music too.",
+    text: "The play controls start and stop the scene. The music has its own controls, at the bottom of the Playlist card.",
     tips: [
       "Play {play} starts the animation.",
       "Pause {pause} stops the animation where it is.",

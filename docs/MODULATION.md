@@ -124,6 +124,13 @@ knob's end, the knob ran out before the value reached its end.)
   `src/engine/submodes.ts`). The submode menu marks the other choices that
   show such a mapped setting with the orange MIDI icon, and the section's
   MIDI dialog says "only in ..." for it.
+- Common settings (`src/engine/common.ts`, added 2026-10-20): Pan X, Pan
+  Y, Zoom, Rotation and Opacity show under a Common heading at the bottom
+  of each effect that has them (Blend shows there too, before Opacity).
+  The MIDI button on a common setting assigns the control to that setting
+  in every effect at once, as a macro: one knob moves every Pan X. The
+  right-click and the remove button take the control off all of them. The
+  MIDI panel still lists and edits each setting on its own line.
 - Smooth steps: a 7-bit control has only 128 places, and it sends them at
   uneven times. The shown value follows the control like a critically
   damped spring (`Engine.follow`, `MIDI_SMOOTH_SECONDS` = 0.1 s): it speeds

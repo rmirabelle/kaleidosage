@@ -1,14 +1,14 @@
-import { useEffect, useLayoutEffect, useReducer, useRef, useState, useSyncExternalStore, type RefObject } from "react";
-import { Broadcast, Equalizer, MusicNote, MusicNotes, Plug, Plus, SpeakerHigh, SpeakerSimpleHigh, Trash, X } from "@phosphor-icons/react";
+import { useEffect, useLayoutEffect, useReducer, useRef, useSyncExternalStore, type RefObject } from "react";
+import { Broadcast, Equalizer, Plug, SpeakerSimpleHigh, X } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
 import { formatValue } from "../engine/params";
 import { AUDIO_BANDS, AUDIO_RELEASE, AUDIO_SOURCES, BAND_RANGES, FLOOR_DB, LINK_THRESHOLD, RELEASE_FACTOR, audioLinkList, pushRange, pushedValue, type AudioLink, type AudioBand } from "../engine/audio";
+import { midi } from "../lib/midi";
 import { GAIN_DB, THRESHOLD_DB, audioInput, type DeviceKind, type InputKind } from "../lib/audioInput";
 import { tracks } from "../lib/tracks";
 import { destinationName } from "./DestinationDialog";
 import { Dropdown } from "./Dropdown";
 import { Slider, trackPosition } from "./Slider";
-import { ConfirmDialog } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
 import { settingButtons } from "../lib/settingButtons";
 import { createPortal } from "react-dom";
@@ -223,6 +223,11 @@ function AudioLinks({ engine }: { engine: Engine }) {
         const farthest = formatValue(param, pushedValue(param, rest, end, amount));
         const effectiveDb = masterDb + threshold;
         const update = (next: Partial<AudioLink>) => engine.setAudioLink(key, { source, amount, release, threshold, ...next });
+        /* A move of the link's Threshold, Range or Release lights the setting's name and its section, as a MIDI control does. */
+        const tweak = (next: Partial<AudioLink>) => {
+          update(next);
+          midi.touch(key);
+        };
         return (
           <li key={key} className="midi-map-row audio-link-row">
             <span className="midi-map-control" data-tip={destinationName(key)}>{destinationName(key)}</span>
@@ -236,12 +241,12 @@ function AudioLinks({ engine }: { engine: Engine }) {
                 detent={0}
                 label={`${destinationName(key)} threshold offset`}
                 markerRef={keep(thresholdLines, key)}
-                onChange={(next) => update({ threshold: next })}
+                onChange={(next) => tweak({ threshold: next })}
               />
               <Worked value={`${effectiveDb} dB`} same={threshold === 0} />
             </span>
             <span className="audio-link-amount" data-tip={`Range: ${Math.round(amount * 100)}% of the way from ${formatValue(param, rest)} to ${formatValue(param, end)}, so the sound moves the setting as far as ${farthest}.`}>
-              <Slider min={0} max={1} step={0.01} value={amount} label={`${destinationName(key)} audio range`} markerRef={keep(rangeLines, key)} onChange={(next) => update({ amount: next })} />
+              <Slider min={0} max={1} step={0.01} value={amount} label={`${destinationName(key)} audio range`} markerRef={keep(rangeLines, key)} onChange={(next) => tweak({ amount: next })} />
               <Worked value={`${Math.round(amount * 100)}%`} />
             </span>
             <span className="audio-link-amount" data-tip={`Release: ${seconds(engine.state.audioRelease * release)}, the scene's Release (${seconds(engine.state.audioRelease)}) ${factorText(release)}. Above ×1 this setting falls back slower, below ×1 faster.`}>
@@ -252,7 +257,7 @@ function AudioLinks({ engine }: { engine: Engine }) {
                 value={Math.log2(release)}
                 detent={0}
                 label={`${destinationName(key)} release factor`}
-                onChange={(next) => update({ release: 2 ** next })}
+                onChange={(next) => tweak({ release: 2 ** next })}
               />
               <Worked value={seconds(engine.state.audioRelease * release)} same={release === 1} />
             </span>
@@ -280,77 +285,9 @@ const subscribeTracks = (listener: () => void) => tracks.subscribe(listener);
 const tracksVersion = () => tracks.version;
 
 /**
- * The tracks, under the Input menu while the tracks are the
- * input: Add files and Clear, then one row per track. A click on a track
- * plays it; the track that plays shows a speaker; X removes a track.
- */
-function TrackRows({ onAddTracks }: { onAddTracks: () => void }) {
-  useSyncExternalStore(subscribeTracks, tracksVersion);
-  const [clearAsked, setClearAsked] = useState(false);
-  const count = tracks.list.length;
-  return (
-    <>
-      {/* The column's heading, with its buttons at the right: Add File(s) and a trash can that asks before it clears the list. */}
-      <div className="stage-label audio-files-head">
-        <MusicNotes size={13} weight="bold" /> Files <HelpButton topic="audio.files" inline />
-        <span className="audio-files-head-buttons">
-          <button className="button secondary small" onClick={onAddTracks} data-tip="Add audio files at the end of the list">
-            <Plus size={13} weight="bold" /> Add File(s)
-          </button>
-          <button className="button secondary small icon-only" disabled={count === 0} onClick={() => setClearAsked(true)} data-tip="Remove every file from the list" aria-label="Remove every file from the list">
-            <Trash size={14} />
-          </button>
-        </span>
-      </div>
-      {clearAsked && createPortal(
-        <ConfirmDialog
-          title="Remove every file?"
-          message={`All ${count === 1 ? "1 file goes" : `${count} files go`} out of the list. The files on disk stay as they are.`}
-          confirmLabel="Remove all"
-          onCancel={() => setClearAsked(false)}
-          onConfirm={() => {
-            tracks.clear();
-            setClearAsked(false);
-          }}
-        />,
-        document.body
-      )}
-      {/* The column's body: the list of files on the FX panel's dark blue, and it scrolls. */}
-      <div className="audio-files-body">
-        {tracks.error && <p className="audio-error selectable">{tracks.error}</p>}
-        {tracks.list.length === 0 ? (
-          <EmptyState text="Add audio files to play them, one after the other.">
-            <button className="button secondary small" onClick={onAddTracks}>
-              <Plus size={13} weight="bold" /> Add File(s)
-            </button>
-          </EmptyState>
-        ) : (
-          <ol className="tracks-tracks">
-            {tracks.list.map((track, index) => {
-              const current = index === tracks.index;
-              return (
-                <li key={track.path} className={`tracks-track ${current ? "current" : ""}`} data-tip={track.path}>
-                  <button className="tracks-track-name" onClick={() => tracks.playTrack(index)} data-tip={`Play ${track.name}`}>
-                    {current && tracks.playing ? <SpeakerHigh size={12} weight="fill" /> : <MusicNote size={12} />}
-                    <span>{track.name}</span>
-                  </button>
-                  <button className="midi-map-clear" onClick={() => tracks.remove(index)} data-tip="Remove this file" aria-label={`Remove ${track.name}`}>
-                    <X size={11} weight="bold" />
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
-        )}
-      </div>
-    </>
-  );
-}
-
-/**
  * The Audio tab of the bottom panel, in columns: Source (the input and its
- * settings, then the level meters), the track list while the tracks are
- * the input, then the scene's audio links. The app always listens to the picked
+ * settings, then the level meters), then the scene's audio links. While
+ * the tracks are the input, their list is in the left side (FilesCard). The app always listens to the picked
  * input (see audioInput), so the tab has no on and off switch. The left
  * column has the Input menu (Nothing, then the PC sound of each output
  * device, in loopback, then each microphone or line input, then the
@@ -464,12 +401,6 @@ export function AudioPanel({ engine, onAddTracks, sceneName, inputTip, onInputTi
             : settings.kind === "none" ? <EmptyState text="Pick an Input to make settings move with the sound." />
             : <p className="midi-panel-empty">Starting…</p>}
         </div>
-        {/* While the tracks are the input, their list has a column of its own, after the Source column. */}
-        {settings.kind === "tracks" && (
-          <div className="midi-panel-devices audio-tracks-column" {...help("audio.files")}>
-            <TrackRows onAddTracks={onAddTracks} />
-          </div>
-        )}
         {/* With no input, nothing can move the links, so the column is not shown. */}
         {settings.kind !== "none" && (
           <div className="midi-panel-mappings audio-sensors-column" {...help("audio.sensors")}>

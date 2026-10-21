@@ -267,15 +267,20 @@ class MidiControl {
     return () => { this.touchListeners.delete(listener); };
   };
 
+  /** Lights the setting's name and its section as a MIDI step does (see onTouch): for a move of its audio link's Threshold, Range or Release in the Audio panel. */
+  touch(key: ParamKey) {
+    for (const listener of this.touchListeners) listener(key);
+  }
+
   setLearning(learning: boolean) {
     if (this.view.learning === learning && this.view.armed.length === 0) return;
     this.update({ learning, armed: [] });
   }
 
-  /** Waits for the next knob or fader move, and assigns that control to the slider. */
-  assign(key: ParamKey) {
-    if (NOT_MAPPABLE.includes(key)) return;
-    this.update({ learning: true, armed: [key] });
+  /** Waits for the next knob or fader move, and assigns that control to the sliders (a common setting's sliders in every effect, see commonKeys). */
+  assign(keys: readonly ParamKey[]) {
+    const armed = keys.filter((key) => !NOT_MAPPABLE.includes(key));
+    if (armed.length) this.update({ learning: true, armed });
   }
 
   /** Takes the slider off every control, and stops waiting for a control for it. The other sliders of a macro stay. */

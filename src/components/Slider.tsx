@@ -26,12 +26,14 @@ export function rangePosition(value: number, min: number, max: number) {
  * One handle in a recessed well. A click anywhere on the well moves the
  * handle there. The filled part runs from the start to the handle.
  */
-export function Slider({ min, max, step, value, onChange, label, detent, snapToDetent = true, snaps = [], markerRef }: Bounds & {
+export function Slider({ min, max, step, value, onChange, label, detent, snapToDetent = true, snaps = [], markerRef, progressRef }: Bounds & {
   value: number;
   onChange: (value: number) => void;
   label: string;
   /** A thin line at the live value, which the caller moves each frame (and hides while the value is at the handle). */
   markerRef?: Ref<HTMLDivElement>;
+  /** A playhead line that the caller moves along the whole slider each frame (the place in the scene's Length). */
+  progressRef?: Ref<HTMLDivElement>;
   /** The value with no effect: a tick mark shows it, and the handle snaps to it. */
   detent?: number;
   /** Other values the handle snaps to, each with a fainter tick mark. */
@@ -47,6 +49,7 @@ export function Slider({ min, max, step, value, onChange, label, detent, snapToD
       <div className="slider-well">
         <div className="slider-fill" style={{ left: 0, width: trackPosition(value, min, max) }} />
       </div>
+      {progressRef && <div className="slider-marker" ref={progressRef} />}
       {markerRef && <div className="slider-marker single idle" ref={markerRef} />}
       <input
         type="range"

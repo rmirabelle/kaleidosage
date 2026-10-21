@@ -3,38 +3,45 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#242832" />
+    <meta name="theme-color" content="#22252f" />
     <title>Kaleido Sage</title>
     <!--
       The splash window shows this page while the main window loads behind it.
       It has no script, so it paints the moment the webview reads it. Its look
-      matches the About dialog. Vite fills in the version (see vite.config.ts).
+      matches the start screen (StartScreen.tsx: the dotted background, the
+      icon's glow, the name and the subtitle), with the icon at the left of
+      the name. Vite fills in the version (see vite.config.ts).
     -->
     <style>
       html, body { height: 100%; margin: 0; }
       body {
+        position: relative;
         display: grid;
         place-items: center;
         overflow: hidden;
-        color: #d4d4d8;
-        background: radial-gradient(circle at 22% 46%, rgba(75,118,247,.09), transparent 42%), linear-gradient(180deg, #292d37, #242832);
+        background-color: #22252f;
+        background-image: radial-gradient(rgba(75,118,247,.18) 1px, transparent 1px);
+        background-size: 22px 22px;
         font-family: "Inter", "Segoe UI", system-ui, sans-serif;
         user-select: none;
         cursor: default;
       }
-      .splash { display: grid; grid-template-columns: 140px 1fr; align-items: center; gap: 24px; padding: 0 34px; }
-      .splash img { width: 140px; height: 140px; display: block; }
-      h1 { margin: 0; color: #a9ddf8; font-size: 26px; font-weight: 750; letter-spacing: -.02em; }
-      .version { margin-top: 3px; color: #848a9a; font-size: 11px; }
-      p { margin: 14px 0 4px; color: #eceef2; font-size: 13px; line-height: 1.4; }
-      .author { color: #858b9a; font-size: 11px; }
+      .splash { display: flex; align-items: center; gap: 22px; margin-top: -14px; }
+      .icon { position: relative; width: 112px; height: 112px; display: grid; place-items: center; }
+      .icon img { position: relative; width: 112px; height: 112px; display: block; }
+      .glow { position: absolute; left: 50%; top: 50%; width: 380px; height: 300px; transform: translate(-50%, -50%); background: radial-gradient(closest-side, rgba(75,118,247,.16), rgba(75,118,247,.10) 30%, rgba(75,118,247,.04) 60%, rgba(75,118,247,0)); }
+      .name { color: #a9ddf8; font-size: 44px; font-weight: 700; line-height: 1; letter-spacing: -.035em; }
+      h1 { margin: 8px 0 0; color: #4a4f5e; font-size: 21px; line-height: 1.2; letter-spacing: -.025em; }
+      .corner { position: fixed; bottom: 12px; color: #5d6272; font-size: 10.5px; }
+      .author { left: 16px; }
+      .version { right: 16px; }
       .spinner {
         position: fixed;
         left: 50%;
-        bottom: 22px;
-        width: 20px;
-        height: 20px;
-        margin-left: -10px;
+        bottom: 26px;
+        width: 18px;
+        height: 18px;
+        margin-left: -9px;
         border-radius: 50%;
         border: 2.5px solid rgba(255,255,255,.1);
         border-top-color: #4b76f7;
@@ -45,14 +52,14 @@
   </head>
   <body>
     <div class="splash">
-      <img src="/app-icon.png" alt="" width="140" height="140" />
+      <div class="icon"><div class="glow"></div><img src="/kaleido-sage-logo.png" alt="" width="112" height="112" /></div>
       <div>
-        <h1>Kaleido Sage</h1>
-        <div class="version">Version %APP_VERSION%</div>
-        <p>Any image, in endless motion.</p>
-        <span class="author">by Robert Mirabelle</span>
+        <div class="name">Kaleido Sage</div>
+        <h1>Visual FX Playground</h1>
       </div>
     </div>
     <div class="spinner"></div>
+    <span class="corner author">by Robert Mirabelle</span>
+    <span class="corner version">Version %APP_VERSION%</span>
   </body>
 </html>

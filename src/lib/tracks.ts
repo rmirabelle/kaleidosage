@@ -1,5 +1,6 @@
 import { convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
 import type { VideoFile } from "./videos";
+import { isPlaylistCopy } from "./playlistFile";
 
 /**
  * The tracks (see docs/AUDIO.md, part 7): audio files that the app plays
@@ -14,8 +15,8 @@ export interface Track {
   name: string;
 }
 
-/** Why the track changed: it ended, or the user went to another track. Each change moves the show to the next scene. */
-export type TrackChange = "ended" | "next" | "previous" | "picked";
+/** Why the track changed: it ended, or the user picked another track. Each change moves the show to the next scene. */
+export type TrackChange = "ended" | "picked";
 
 const STORE_KEY = "kaleidosage.tracks";
 /** The tap posts this many samples at a time (about 10.7 ms at 48 kHz). */
@@ -63,11 +64,53 @@ if (import.meta.hot) import.meta.hot.accept(() => window.location.reload());
 
 const nameOf = (path: string) => path.split(/[\\/]/).pop() ?? path;
 
+/** A play time as "4:05", or "1:02:05" from an hour on. */
+export function formatPlayTime(seconds: number) {
+  const whole = Math.round(seconds);
+  const [hours, minutes, rest] = [Math.floor(whole / 3600), Math.floor((whole % 3600) / 60), whole % 60];
+  const two = (value: number) => String(value).padStart(2, "0");
+  return hours ? `${hours}:${two(minutes)}:${two(rest)}` : `${minutes}:${two(rest)}`;
+}
+
+/**
+ * A track's length in seconds, read from the file's header by an audio
+ * element of its own that loads only the metadata. NaN when the file
+ * cannot be read.
+ */
+async function readLength(path: string): Promise<number> {
+  try {
+    const file = await invoke<VideoFile>("open_video_file", { path });
+    return await new Promise<number>((resolve) => {
+      const audio = new Audio();
+      audio.preload = "metadata";
+      const done = (seconds: number) => {
+        audio.onloadedmetadata = null;
+        audio.onerror = null;
+        audio.removeAttribute("src");
+        audio.load();
+        resolve(seconds);
+      };
+      audio.onloadedmetadata = () => done(Number.isFinite(audio.duration) ? audio.duration : NaN);
+      audio.onerror = () => done(NaN);
+      audio.src = convertFileSrc(file.id, "video");
+    });
+  } catch {
+    return NaN;
+  }
+}
+
+/**
+ * The user's own track list, as the last start left it. An open playlist's
+ * tracks are copies in the temp folder (see isPlaylistCopy), which the app
+ * removes at its start, so they are left out: older versions kept them.
+ */
 function loadTracks(): Track[] {
   try {
     /* The tracks were first kept under "kaleidosage.playlist". */
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) ?? localStorage.getItem("kaleidosage.playlist") ?? "[]") as unknown;
-    return Array.isArray(saved) ? saved.filter((path): path is string => typeof path === "string").map((path) => ({ path, name: nameOf(path) })) : [];
+    return Array.isArray(saved)
+      ? saved.filter((path): path is string => typeof path === "string" && !isPlaylistCopy(path)).map((path) => ({ path, name: nameOf(path) }))
+      : [];
   } catch {
     return [];
   }
@@ -91,6 +134,63 @@ class TrackList {
   private ready: Promise<void> | null = null;
   /** The track the audio element holds, so Play goes on from where it paused. */
   private loaded: string | null = null;
+  /** Each track's length in seconds, by path, once read (NaN for a file that cannot be read); see measure. */
+  private readonly lengths = new Map<string, number>();
+  private measuring = false;
+
+  constructor() {
+    /* After the module has loaded, so the app's other parts are ready. */
+    queueMicrotask(() => void this.measure());
+  }
+
+  /** The play time of every track, in seconds, and how many tracks have no known length (yet). */
+  get playTime() {
+    let seconds = 0;
+    let unknown = 0;
+    for (const track of this.list) {
+      const length = this.lengths.get(track.path);
+      if (length === undefined || Number.isNaN(length)) unknown++;
+      else seconds += length;
+    }
+    return { seconds, unknown };
+  }
+
+  /** The track's length in seconds, or null when it is not known (yet). */
+  lengthOf(path: string): number | null {
+    const length = this.lengths.get(path);
+    return length === undefined || Number.isNaN(length) ? null : length;
+  }
+
+  /** Lengths that a playlist kept (see playlistFile.ts), in track order, so they need not be read again. */
+  setLengths(seconds: readonly (number | null)[]) {
+    this.list.forEach((track, index) => {
+      const length = seconds[index];
+      if (typeof length === "number" && length > 0) this.lengths.set(track.path, length);
+    });
+    this.changed();
+  }
+
+  /** True while the lengths of new tracks are being read. */
+  get measuringLengths() {
+    return this.measuring;
+  }
+
+  /** Reads the length of each track that has none yet, one at a time; the subscribers hear of each one. */
+  private async measure() {
+    if (this.measuring || !isTauri()) return;
+    this.measuring = true;
+    try {
+      for (;;) {
+        const track = this.list.find((candidate) => !this.lengths.has(candidate.path));
+        if (!track) break;
+        this.lengths.set(track.path, await readLength(track.path));
+        this.changed();
+      }
+    } finally {
+      this.measuring = false;
+      this.changed();
+    }
+  }
 
   /** The sample rate of the samples that onSamples gets. */
   get sampleRate() {
@@ -128,7 +228,9 @@ class TrackList {
     for (const listener of this.listeners) listener();
   }
 
+  /** Keeps the user's own list for the next start. A playlist's list (its copies in the temp folder) is not kept: the user's own list stays saved under it (see restoreOwn). */
   private save() {
+    if (this.list.some((track) => isPlaylistCopy(track.path))) return;
     try { localStorage.setItem(STORE_KEY, JSON.stringify(this.list.map((track) => track.path))); } catch { /* The track list is empty at the next start. */ }
   }
 
@@ -148,7 +250,11 @@ class TrackList {
       audio.addEventListener("ended", () => this.step(1, "ended"));
       audio.addEventListener("play", () => { this.playing = true; this.changed(); });
       audio.addEventListener("pause", () => { this.playing = false; this.changed(); });
-      audio.addEventListener("loadedmetadata", () => this.changed());
+      audio.addEventListener("loadedmetadata", () => {
+        /* The playing file gives its length too. */
+        if (this.loaded && Number.isFinite(audio.duration)) this.lengths.set(this.loaded, audio.duration);
+        this.changed();
+      });
       audio.addEventListener("error", () => {
         this.error = `Could not play ${this.current?.name ?? "the file"}.`;
         this.changed();
@@ -227,33 +333,32 @@ class TrackList {
     this.go(this.index + by, why);
   }
 
-  next() {
-    this.step(1, "next");
-  }
-
-  /** Previous: back to the start of this track when it has played a few seconds, else the track before. */
-  previous() {
-    if (this.position > 3) {
-      this.seek(0);
-      return;
-    }
-    this.step(-1, "previous");
-  }
-
   playTrack(index: number) {
     this.go(index, "picked");
   }
 
   /** Adds files at the end of the track list; a file that is in it already is not added twice. */
+  /**
+   * A file that is in the list already is left out, and with nothing new
+   * nothing changes. A track of an opened playlist is a copy in the temp
+   * folder (see isPlaylistCopy), so there a file with the same name counts
+   * as the same file too.
+   */
   add(paths: string[]) {
-    const known = new Set(this.list.map((track) => track.path.toLowerCase()));
-    for (const path of paths) {
-      if (known.has(path.toLowerCase())) continue;
-      known.add(path.toLowerCase());
-      this.list.push({ path, name: nameOf(path) });
-    }
+    /* Windows paths: case and the kind of slash do not matter. */
+    const key = (path: string) => path.replace(/\//g, "\\").toLowerCase();
+    const known = new Set(this.list.map((track) => key(track.path)));
+    const copies = new Set(this.list.filter((track) => isPlaylistCopy(track.path)).map((track) => track.name.toLowerCase()));
+    const added = paths.filter((path) => {
+      if (known.has(key(path)) || copies.has(nameOf(path).toLowerCase())) return false;
+      known.add(key(path));
+      return true;
+    });
+    if (added.length === 0) return;
+    for (const path of added) this.list.push({ path, name: nameOf(path) });
     this.save();
     this.changed();
+    void this.measure();
   }
 
   remove(index: number) {
@@ -270,6 +375,18 @@ class TrackList {
     this.changed();
   }
 
+  /** Puts the tracks in the order of "paths" (a drag in the list). The track that plays stays the one that plays. */
+  reorder(paths: readonly string[]) {
+    const current = this.current;
+    const byPath = new Map(this.list.map((track) => [track.path, track]));
+    const next = paths.flatMap((path) => byPath.get(path) ?? []);
+    if (next.length !== this.list.length) return;
+    this.list = next;
+    if (current) this.index = next.indexOf(current);
+    this.save();
+    this.changed();
+  }
+
   /** Puts these files in the place of every track, stopped at the first one: for a playlist that opens. */
   replace(paths: string[]) {
     this.pause();
@@ -279,6 +396,7 @@ class TrackList {
     this.error = null;
     this.save();
     this.changed();
+    void this.measure();
   }
 
   clear() {
@@ -288,6 +406,17 @@ class TrackList {
     this.loaded = null;
     this.save();
     this.changed();
+  }
+
+  /** Close Playlist: the playlist's tracks go, and the user's own list (as saved before the playlist opened) comes back, stopped. */
+  restoreOwn() {
+    this.pause();
+    this.list = loadTracks();
+    this.index = 0;
+    this.loaded = null;
+    this.error = null;
+    this.changed();
+    void this.measure();
   }
 }
 

@@ -225,16 +225,52 @@ the analysis. The playlist then runs the show.
   `video://` protocol (no bytes through IPC). Web Audio sends it to the
   speakers and to an AudioWorklet tap, which mixes to mono and posts blocks
   of 512 samples to the analyzer.
-- Play controls: while the playlist is the input, the controls under the
-  picture are Previous, Play/Pause and Next, with the track name and a
-  bar to seek in the track. Play/Pause (Space) starts and stops the music
-  and the animation together. Stop (Shift+Space) also goes back to the
-  start of the track.
-- Scenes: at each new track (the end of a track, Next or Previous), the
-  show crossfades to the next scene tab: track 1 to tab 1, track 2 to tab
-  2, and round again. Later: a choice to change the scene every 16 or 32
-  beats instead.
+- Play controls (changed 2026-10-21; before, one set of controls under the
+  picture ran the music and the animation together): the music and the
+  scene play on their own. The Playlist card has a play toolbar at its
+  bottom (`PlaylistTransport` in `FilesCard.tsx`): Stop, Play/Pause, the
+  time in the file and a bar to seek in it (Rewind, which took the place
+  of Previous and Next on 2026-10-20, went on 2026-10-21). The controls on
+  the picture, Space and Shift+Space run the scene only. A scene that comes
+  in plays or stays paused as the scene before it did. Hold keeps the shown scene (a red HOLD
+  button after the Length value shows only while it is on): a
+  Length end or a new track does not change it, and the music plays on. A
+  change that the user makes to the scene with the mouse or the keys turns
+  Hold on by itself; MIDI knobs and audio links do not, so a live show with
+  knobs goes on. A click on Hold, a save of the scene or the playlist, or
+  a tab click turns it off, and the scene then plays to the end of
+  its Length.
+- Scenes: at the end of each scene's Length (a playhead line in the Length slider
+  shows the place in it), the show crossfades to the next scene tab, and
+  round again. Ranges with their own times, or that need two Lengths to
+  come back, do not make the scene longer. Each scene starts from 0 when it
+  shows (a tab click, a Length end or a new track), so it plays its whole
+  Length. A pause holds it. Each new track (the end of a track, or a pick in the list) also
+  goes to the next tab. The track end takes precedence: a Length that ends
+  in the last half Length of a track waits for the new track. A tab click
+  takes precedence over both: it cancels a switch that is on its way, the
+  order goes on from the clicked tab, and a new track does not take the
+  clicked scene away before it has played half its Length
+  (changed 2026-10-20; before, track N always went to tab N). Later: a
+  choice to change the scene every 16 or 32 beats instead.
 - The app does not play music at its start; the user starts it.
+- Order and layout (2026-10-20; the scene list also shows for any open
+  playlist): a drag moves a track in the Files list,
+  and a drag moves a scene tab (the scenes play in tab order). While Files
+  is the input, the left side is one panel of three columns: the Files
+  card (`FilesCard.tsx`), the scenes as a list (`SceneList.tsx`), not as
+  tabs, which filled many rows for a long show, and the Source and FX
+  column. A drag moves a scene in the list, and its X closes it. The
+  Audio panel keeps the input and the audio links. The line at the Files
+  card's right edge sets its width (`src/lib/panelLayout.ts`);
+  playlist.json keeps it as "layout.filesWidth", so a change counts as a
+  change of the playlist.
+- Play time: the Files card's footer shows the number of files and
+  their play time. The app reads each file's length from its header, once
+  (`TrackList.measure`). Save Playlist keeps the lengths in playlist.json
+  ("trackSeconds"), so the Open Playlist preview shows each track's length
+  and the total, and an opened playlist needs not read them again. A
+  playlist saved before 2026-10-20 shows them after its next save.
 
 ## 8. Playlist files (decided 2026-10-18)
 
@@ -264,6 +300,9 @@ files in it is "Tracks" (part 7), so one word means one thing.
   tab closes with no question, and the playlist's unsaved mark counts
   every scene's changes too. Closing the window asks once, for the
   playlist. The title bar shows "Show.ksplaylist › Scene.ksage".
+- Close Playlist (File menu, 2026-10-20): asks "Save changes?" once for the
+  playlist, then closes its scenes, takes its files out of the Files list
+  and shows the start screen. The audio settings stay as they are.
 
 ## Order of work
 

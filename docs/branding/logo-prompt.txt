@@ -1,0 +1,11 @@
+Generated using the built-in image_gen tool with transparent_background: true.
+Asset: public/kaleido-sage-logo.png
+
+Use case: logo-brand.
+Asset type: transparent PNG logo emblem for Kaleido Sage, a desktop Visual FX Playground that turns images into animated kaleidoscopes. Used at 112–128 px on a dark blue-gray #22252f UI, and larger on splash screens.
+Primary request: Design a fabulous, distinctive new kaleidoscopic emblem with exceptional polish. A bold sixfold radial prism flower / optical aperture, six broad folded crystalline ribbon petals rotating around a small sharply defined hexagonal negative-space center. Elegant precise symmetry, striking silhouette, clean generous separations, memorable geometry. Color should feel like refracted light in motion.
+Style: premium contemporary brand mark, vector-like geometric precision with restrained luminous gradients inside facets, subtle dimensional folding, gorgeous saturated jewel colors. Clear shapes rather than detailed ornament.
+Palette: luminous icy cyan and electric blue flowing into violet and vivid magenta, with very small mint highlights. Bright edges visible against dark backgrounds.
+Composition: one centered emblem, square canvas, emblem occupies about 88% of canvas, balanced margin. No typography or wordmark because app renders its own title.
+Background: genuinely transparent alpha, including spaces between petals and center aperture. No background tile, no disk, no checkerboard drawn into artwork.
+Avoid: text, letters, watermarks, mockups, multiple options, hairline details, tiny particles, external glow haze, drop shadow, black backing, photorealistic glass. Output a production-ready high-resolution transparent PNG.
