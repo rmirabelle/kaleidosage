@@ -2160,6 +2160,9 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .song-map-ruler { position: relative; height: 16px; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 .song-map-ruler span { position: absolute; transform: translateX(-50%); }
 .song-map-ruler span:first-child { transform: none; }
+.song-map-ruler { cursor: pointer; }
+.song-map-transport { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.song-map-transport .panel-buttons { border-radius: 5px; }
 .song-map-editor { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 8px; padding: 12px; border: 1px solid #30343f; border-radius: 6px; background: #1d2029; }
 .song-map-editor-title { width: 100%; color: #c3c7d0; font-size: 12px; font-weight: 700; }
 .song-map-field { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }

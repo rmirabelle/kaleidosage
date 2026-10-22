@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowCounterClockwise, ArrowsInLineHorizontal, MapTrifold, Scissors, Trash, X } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, ArrowsInLineHorizontal, MapTrifold, Play, Scissors, Trash, X } from "@phosphor-icons/react";
 import { changeSlice, deleteSlice, mergeWithNext, splitSlice } from "../engine/songMapEdits";
 import { TIER_NAMES, mapOf, planSong, type MapSlice, type Tier } from "../engine/songPlan";
 import { songFollow } from "../lib/songFollow";
 import { tracks } from "../lib/tracks";
 import { Dropdown } from "./Dropdown";
+import { MediaIcon } from "./MediaIcon";
 
 const subscribeFollow = (listener: () => void) => songFollow.subscribe(listener);
 const followVersion = () => songFollow.version;
+const subscribeTracks = (listener: () => void) => tracks.subscribe(listener);
+const tracksPlaying = () => tracks.playing;
 
 /** The names a slice can have: LinkSeg's labels (see song_sections.rs). */
 const NAMES = ["intro", "verse", "chorus", "bridge", "inst", "outro", "silence"] as const;
@@ -26,8 +29,10 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * Delete (the slice before it grows into its place). Each change applies
  * at once (see songFollow.editMap) and is kept with the song's analysis,
  * so Save Playlist keeps it. Reset to automatic gives back the analysis's
- * own map. Delete removes the selected slice, the arrow keys select
- * another, and Esc closes.
+ * own map. Under the map, Stop, Play or Pause and Play slice (from the
+ * selected slice's start) run the song, with its time; a click on the time
+ * ruler moves the song there. Delete removes the selected slice, the arrow
+ * keys select another, Space plays or pauses, and Esc closes.
  */
 export function SongMapDialog({ path, name, onClose }: { path: string; name: string; onClose: () => void }) {
   const version = useSyncExternalStore(subscribeFollow, followVersion);
@@ -39,6 +44,8 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
   const dialog = useRef<HTMLDivElement>(null);
   const strip = useRef<HTMLDivElement>(null);
   const playhead = useRef<HTMLDivElement>(null);
+  const clock = useRef<HTMLSpanElement>(null);
+  const playing = useSyncExternalStore(subscribeTracks, tracksPlaying);
   useEffect(() => { dialog.current?.focus(); }, []);
 
   /* The playhead follows the song in each animation frame, while this song plays. */
@@ -50,6 +57,8 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
         const shown = tracks.current?.path === path;
         line.style.display = shown ? "" : "none";
         if (shown) line.style.left = `${(tracks.position / Math.max(1e-3, analysis.duration)) * 100}%`;
+        const text = `${time(shown ? tracks.position : 0)} / ${time(analysis.duration)}`;
+        if (clock.current && clock.current.textContent !== text) clock.current.textContent = text;
       }
       frame = requestAnimationFrame(draw);
     };
@@ -96,6 +105,9 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
           else if (event.key === "Delete" || event.key === "Backspace") {
             if (slices.length > 1) apply(deleteSlice(slices, index));
             setSelected(Math.max(0, index - 1));
+          } else if (event.key === " ") {
+            event.preventDefault();
+            tracks.toggle();
           } else if (event.key === "ArrowLeft") setSelected(Math.max(0, index - 1));
           else if (event.key === "ArrowRight") setSelected(Math.min(slices.length - 1, index + 1));
         }}
@@ -134,10 +146,32 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
             {bars.map((bar) => <i key={bar} className="song-map-bar" style={{ left: at(bar) }} />)}
             <div ref={playhead} className="song-map-playhead" />
           </div>
-          <div className="song-map-ruler">
+          <div className="song-map-ruler" data-tip="Click to move the song here" onPointerDown={(event) => tracks.seek(timeAt(event))}>
             {Array.from({ length: Math.floor(duration / 30) + 1 }, (_, i) => (
               <span key={i} style={{ left: at(i * 30) }}>{time(i * 30)}</span>
             ))}
+          </div>
+          <div className="song-map-transport">
+            <div className="panel-buttons">
+              <button className="panel-button icon" onClick={() => tracks.stop()} data-tip="Stop the song, and go back to its start" aria-label="Stop the song">
+                <MediaIcon kind="stop" size={16} />
+              </button>
+              <button className="panel-button icon" onClick={() => tracks.toggle()} data-tip={playing ? "Pause the song `Space`" : "Play the song `Space`"} aria-label={playing ? "Pause the song" : "Play the song"}>
+                {playing ? <MediaIcon kind="pause" size={16} /> : <MediaIcon kind="play" size={16} />}
+              </button>
+              <button
+                className="panel-button"
+                disabled={!slice}
+                onClick={() => {
+                  tracks.seek(slice.start);
+                  if (!tracks.playing) void tracks.play();
+                }}
+                data-tip="Play the song from the start of the selected slice"
+              >
+                <Play size={14} weight="fill" /> Play slice
+              </button>
+            </div>
+            <span ref={clock} className="playlist-transport-time" />
           </div>
           {slice && (
             <div className="song-map-editor">
