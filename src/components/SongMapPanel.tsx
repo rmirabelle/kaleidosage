@@ -29,7 +29,7 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * slice's start, with the slice's scene, and the map then follows the
  * song that plays again; a right-click stops the
  * song where it is; a drag of the divider between
- * two slices moves it from bar to bar. A toolbar across the top holds the
+ * two slices moves it from bar to bar. A toolbar under the song's name holds the
  * selected slice's level, Hit and Keep Scene, Split, Merge with next and
  * Delete (the slice before it grows into its place), then Reset (the
  * analysis's own map); the Playlist card's controls play the song. Each change applies at
@@ -160,6 +160,7 @@ export function SongMapPanel({ sceneCount }: { sceneCount: number }) {
         event.stopPropagation();
       }}
     >
+      {title}
       <div className="song-map-toolbar">
         {slice && (
           <>
@@ -209,7 +210,6 @@ export function SongMapPanel({ sceneCount }: { sceneCount: number }) {
         </button>
       </div>
       <div className="song-map-body">
-        {title}
         <div ref={strip} className="song-map-strip" data-tip="Click a slice to select it and play the song from its start; right-click to stop the song where it is">
           {view.map((candidate, i) => {
             const sliceEnd = view[i + 1]?.start ?? duration;
