@@ -5,6 +5,7 @@ import { TIER_NAMES, mapOf, planSong, type MapSlice, type Tier } from "../engine
 import { songFollow } from "../lib/songFollow";
 import { tracks } from "../lib/tracks";
 import { Dropdown } from "./Dropdown";
+import { placeSeek } from "./Slider";
 import { MediaIcon } from "./MediaIcon";
 
 const subscribeFollow = (listener: () => void) => songFollow.subscribe(listener);
@@ -29,10 +30,12 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * Delete (the slice before it grows into its place). Each change applies
  * at once (see songFollow.editMap) and is kept with the song's analysis,
  * so Save Playlist keeps it. Reset to automatic gives back the analysis's
- * own map. Under the map, Stop, Play or Pause and Play slice (from the
- * selected slice's start) run the song, with its time; a click on the time
- * ruler moves the song there. Delete removes the selected slice, the arrow
- * keys select another, Space plays or pauses, and Esc closes.
+ * own map. A toolbar across the top holds every control: Stop, Play or
+ * Pause and Play slice (from the selected slice's start) with the song's
+ * time, then the selected slice's controls, then Reset. Under the map, a
+ * bar the width of the map moves in the song. Delete removes the selected
+ * slice, the arrow keys select another, Space plays or pauses, and Esc
+ * closes.
  */
 export function SongMapDialog({ path, name, onClose }: { path: string; name: string; onClose: () => void }) {
   const version = useSyncExternalStore(subscribeFollow, followVersion);
@@ -45,6 +48,10 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
   const strip = useRef<HTMLDivElement>(null);
   const playhead = useRef<HTMLDivElement>(null);
   const clock = useRef<HTMLSpanElement>(null);
+  const scrub = useRef<HTMLInputElement>(null);
+  const fill = useRef<HTMLDivElement>(null);
+  const cap = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
   const playing = useSyncExternalStore(subscribeTracks, tracksPlaying);
   useEffect(() => { dialog.current?.focus(); }, []);
 
@@ -57,6 +64,9 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
         const shown = tracks.current?.path === path;
         line.style.display = shown ? "" : "none";
         if (shown) line.style.left = `${(tracks.position / Math.max(1e-3, analysis.duration)) * 100}%`;
+        const now = shown ? tracks.position : 0;
+        if (scrub.current && !dragging.current) scrub.current.value = String(now);
+        placeSeek(scrub.current, fill.current, cap.current, Number(scrub.current?.value ?? 0) / Math.max(1e-3, analysis.duration));
         const text = `${time(shown ? tracks.position : 0)} / ${time(analysis.duration)}`;
         if (clock.current && clock.current.textContent !== text) clock.current.textContent = text;
       }
@@ -120,6 +130,74 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
           </div>
           <button className="about-dialog-close" onClick={onClose} aria-label="Close" data-tip="Close `Esc`"><X size={18} /></button>
         </header>
+        <div className="song-map-toolbar">
+          <div className="panel-buttons">
+            <button className="panel-button icon" onClick={() => tracks.stop()} data-tip="Stop the song, and go back to its start" aria-label="Stop the song">
+              <MediaIcon kind="stop" size={16} />
+            </button>
+            <button className="panel-button icon" onClick={() => tracks.toggle()} data-tip={playing ? "Pause the song `Space`" : "Play the song `Space`"} aria-label={playing ? "Pause the song" : "Play the song"}>
+              {playing ? <MediaIcon kind="pause" size={16} /> : <MediaIcon kind="play" size={16} />}
+            </button>
+            <button
+              className="panel-button"
+              disabled={!slice}
+              onClick={() => {
+                tracks.seek(slice.start);
+                if (!tracks.playing) void tracks.play();
+              }}
+              data-tip="Play the song from the start of the selected slice"
+            >
+              <Play size={14} weight="fill" /> Play slice
+            </button>
+          </div>
+          <span ref={clock} className="playlist-transport-time song-map-clock" />
+          <span className="song-map-toolbar-divider" />
+          {slice && (
+            <>
+              <span className="song-map-slice-info">Slice {index + 1} of {slices.length} · {time(slice.start)} – {time(end)}</span>
+              <div className="song-map-field">
+                <span>Level</span>
+                <div className="panel-buttons">
+                  {TIERS.map((tier) => (
+                    <button key={tier} className={`panel-button text-only ${slice.tier === tier ? "active" : ""}`} aria-pressed={slice.tier === tier} onClick={() => apply(changeSlice(slices, index, { tier }))}>
+                      {capital(TIER_NAMES[tier])}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="song-map-field">
+                <span>Name</span>
+                <Dropdown value={NAMES.includes(slice.label as typeof NAMES[number]) ? slice.label : "verse"} options={NAME_OPTIONS} label="Slice name" onChange={(label) => apply(changeSlice(slices, index, { label }))} />
+              </div>
+              <label className="song-map-field" data-tip={index === 0 ? "The first slice has nothing before it, so it cannot start with a drop" : "On a drop the picture rises before it, and changes hard on it"}>
+                <input type="checkbox" checked={slice.drop} disabled={index === 0} onChange={(event) => apply(changeSlice(slices, index, { drop: event.target.checked }))} />
+                <span className="song-map-field-note">Drop</span>
+              </label>
+              <div className="panel-buttons">
+                <button className="panel-button" onClick={() => apply(splitSlice(slices, index, analysis.downbeats, duration))} data-tip="Split this slice in two at the bar nearest its middle (or double-click the slice where you want the cut)">
+                  <Scissors size={15} /> Split
+                </button>
+                <button className="panel-button" disabled={index >= slices.length - 1} onClick={() => apply(mergeWithNext(slices, index))} data-tip="Join this slice with the next one; it keeps this slice's name and level">
+                  <ArrowsInLineHorizontal size={15} /> Merge
+                </button>
+                <button
+                  className="panel-button"
+                  disabled={slices.length < 2}
+                  onClick={() => {
+                    apply(deleteSlice(slices, index));
+                    setSelected(Math.max(0, index - 1));
+                  }}
+                  data-tip="Delete this slice: the slice before it grows into its place `Delete`"
+                >
+                  <Trash size={15} /> Delete
+                </button>
+              </div>
+            </>
+          )}
+          <button className="panel-button song-map-reset" disabled={!analysis.mapEdits} onClick={() => songFollow.editMap(path, null)} data-tip="Give back the map that the analysis found">
+            <ArrowCounterClockwise size={14} /> Reset
+          </button>
+        </div>
         <div className="song-map-body">
           <div ref={strip} className="song-map-strip" data-tip="Click a slice to select it; double-click to split it at that bar">
             {slices.map((candidate, i) => {
@@ -146,83 +224,30 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
             {bars.map((bar) => <i key={bar} className="song-map-bar" style={{ left: at(bar) }} />)}
             <div ref={playhead} className="song-map-playhead" />
           </div>
-          <div className="song-map-ruler" data-tip="Click to move the song here" onPointerDown={(event) => tracks.seek(timeAt(event))}>
+          <div className="slider playlist-seek song-map-scrub" data-tip="Drag to move in the song">
+            <div className="slider-well">
+              <div ref={fill} className="slider-fill" style={{ left: 0 }} />
+            </div>
+            <div ref={cap} className="seek-cap" />
+            <input
+              ref={scrub}
+              type="range"
+              min={0}
+              max={duration}
+              step={0.05}
+              aria-label="Place in the song"
+              onPointerDown={() => { dragging.current = true; }}
+              onPointerUp={() => { dragging.current = false; }}
+              onChange={(event) => tracks.seek(Number(event.target.value))}
+            />
+          </div>
+          <div className="song-map-ruler">
             {Array.from({ length: Math.floor(duration / 30) + 1 }, (_, i) => (
               <span key={i} style={{ left: at(i * 30) }}>{time(i * 30)}</span>
             ))}
           </div>
-          <div className="song-map-transport">
-            <div className="panel-buttons">
-              <button className="panel-button icon" onClick={() => tracks.stop()} data-tip="Stop the song, and go back to its start" aria-label="Stop the song">
-                <MediaIcon kind="stop" size={16} />
-              </button>
-              <button className="panel-button icon" onClick={() => tracks.toggle()} data-tip={playing ? "Pause the song `Space`" : "Play the song `Space`"} aria-label={playing ? "Pause the song" : "Play the song"}>
-                {playing ? <MediaIcon kind="pause" size={16} /> : <MediaIcon kind="play" size={16} />}
-              </button>
-              <button
-                className="panel-button"
-                disabled={!slice}
-                onClick={() => {
-                  tracks.seek(slice.start);
-                  if (!tracks.playing) void tracks.play();
-                }}
-                data-tip="Play the song from the start of the selected slice"
-              >
-                <Play size={14} weight="fill" /> Play slice
-              </button>
-            </div>
-            <span ref={clock} className="playlist-transport-time" />
-          </div>
-          {slice && (
-            <div className="song-map-editor">
-              <div className="song-map-editor-title">
-                Slice {index + 1} of {slices.length} · {time(slice.start)} – {time(end)}
-              </div>
-              <div className="song-map-field">
-                <span>Level</span>
-                <div className="panel-buttons">
-                  {TIERS.map((tier) => (
-                    <button key={tier} className={`panel-button text-only ${slice.tier === tier ? "active" : ""}`} aria-pressed={slice.tier === tier} onClick={() => apply(changeSlice(slices, index, { tier }))}>
-                      {capital(TIER_NAMES[tier])}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="song-map-field">
-                <span>Name</span>
-                <Dropdown value={NAMES.includes(slice.label as typeof NAMES[number]) ? slice.label : "verse"} options={NAME_OPTIONS} label="Slice name" onChange={(label) => apply(changeSlice(slices, index, { label }))} />
-              </div>
-              <label className="song-map-field" data-tip={index === 0 ? "The first slice has nothing before it, so it cannot start with a drop" : "On a drop the picture rises before it, and changes hard on it"}>
-                <span>Drop</span>
-                <input type="checkbox" checked={slice.drop} disabled={index === 0} onChange={(event) => apply(changeSlice(slices, index, { drop: event.target.checked }))} />
-                <span className="song-map-field-note">Starts with a drop</span>
-              </label>
-              <div className="panel-buttons song-map-actions">
-                <button className="panel-button" onClick={() => { apply(splitSlice(slices, index, analysis.downbeats, duration)); }} data-tip="Split this slice in two at the bar nearest its middle">
-                  <Scissors size={15} /> Split
-                </button>
-                <button className="panel-button" disabled={index >= slices.length - 1} onClick={() => apply(mergeWithNext(slices, index))} data-tip="Join this slice with the next one; it keeps this slice's name and level">
-                  <ArrowsInLineHorizontal size={15} /> Merge with next
-                </button>
-                <button
-                  className="panel-button"
-                  disabled={slices.length < 2}
-                  onClick={() => {
-                    apply(deleteSlice(slices, index));
-                    setSelected(Math.max(0, index - 1));
-                  }}
-                  data-tip="Delete this slice: the slice before it grows into its place `Delete`"
-                >
-                  <Trash size={15} /> Delete
-                </button>
-              </div>
-            </div>
-          )}
         </div>
         <footer className="about-dialog-actions song-map-footer">
-          <button className="button secondary" disabled={!analysis.mapEdits} onClick={() => songFollow.editMap(path, null)} data-tip="Give back the map that the analysis found">
-            <ArrowCounterClockwise size={14} /> Reset to automatic
-          </button>
           <button className="button primary" onClick={onClose}>Done</button>
         </footer>
       </div>
