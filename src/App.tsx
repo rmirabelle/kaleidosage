@@ -1247,6 +1247,36 @@ export default function App() {
     showStatus("Hold: this scene stays and plays on its own while you edit it. Click Hold, or play the music, to go on.", 4000);
   }, [holdScene, showStatus]);
 
+  /**
+   * While Hold is on and the song plays with Song follow, the song map slice
+   * that plays loops too: at its end the music goes back to its start. A
+   * jump to another place (a seek, a click on a slice, another track) loops
+   * the slice there.
+   */
+  useEffect(() => {
+    if (!sceneHeld || !tracksActive) return;
+    let loop: { path: string; start: number; end: number } | null = null;
+    let frame = 0;
+    const watch = () => {
+      frame = requestAnimationFrame(watch);
+      const path = tracks.current?.path;
+      const script = songFollow.script;
+      if (!tracks.playing || !path || path !== songFollow.currentPath || !script) return;
+      const position = tracks.position;
+      if (!loop || loop.path !== path || position < loop.start - 0.5 || position > loop.end + 0.5) {
+        const parts = script.plan.parts;
+        const part = parts.find((candidate) => candidate.start <= position && position < candidate.end) ?? parts[parts.length - 1];
+        loop = part ? { path, start: part.start, end: part.end } : null;
+        return;
+      }
+      /* The last slice loops a little before the song's end, so the song does not end and go to the next one. */
+      const early = loop.end >= tracks.duration - 0.05 ? 0.15 : 0.02;
+      if (position >= loop.end - early) tracks.seek(loop.start);
+    };
+    frame = requestAnimationFrame(watch);
+    return () => cancelAnimationFrame(frame);
+  }, [sceneHeld, tracksActive]);
+
   /** Play in the playlist hands the picture back to the song (or the show): Hold goes off. */
   useEffect(() => {
     let playing = tracks.playing;
