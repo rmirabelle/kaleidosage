@@ -291,8 +291,8 @@ button { border: 0; }
 /* The countdown to the next scene: the Playlist meter's size; it empties as the next scene comes, gray while nothing comes by itself, yellow then red at the end. */
 /* As a card of its own at the bottom of the left panel: a box like the other cards, under the FX card. */
 .panel-card.scene-transport { flex: 0 0 auto; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 6px; }
-/* The scene's name as the card's title (and the song's name on the Song Map page): pure blue, italic, one line; a long name is cut with "…". */
-.side-panel-title.source-title { flex: 1; min-width: 0; display: flex; color: #0000ff; font-style: italic; white-space: nowrap; }
+/* The scene's name as the card's title (and the song's name on the Song Map page): cyan, italic, one line; a long name is cut with "…". */
+.side-panel-title.source-title { flex: 1; min-width: 0; display: flex; color: #00ffff; font-style: italic; white-space: nowrap; }
 .panel-header-bar .side-panel-title.source-title { font-size: 18px; }
 /* Room on the right, so the last italic letter is not cut. */
 .side-panel-title.source-title span { min-width: 0; padding-right: 3px; overflow: hidden; text-overflow: ellipsis; }
