@@ -2192,7 +2192,8 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .song-map-toolbar .picked-scene:hover { background: #ffdc85; }
 /* The card's title bar: the song's name with an arrow on each side (see SongMapPanel). */
 .panel-header-bar.song-map-header { flex: none; justify-content: flex-start; gap: 10px; padding: 0 10px; }
-.song-map-header .side-panel-title.song-map-title { flex: 0 1 auto; margin: 0; padding: 7px 2px 6px; }
+/* The title keeps the card titles' own padding (see .panel-header-bar .side-panel-title), so this title bar is as tall as the Playlist's and the Scenes'. */
+.song-map-header .side-panel-title.song-map-title { flex: 0 1 auto; margin: 0; padding: 9px 2px 8px; }
 .panel-button.icon.song-map-song-step { flex: none; width: 24px; height: 24px; border: 1px solid #474c5e; border-radius: 5px; background: #30343f; }
 .song-map-wait { margin: 0; color: var(--muted); font-size: 12px; }
 .song-map-drop-tag { display: inline-grid; place-items: center; padding: 2px 4px; border-radius: 3px; color: #fff; background: #e53935; }
