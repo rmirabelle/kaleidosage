@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowCounterClockwise, ArrowsInLineHorizontal, CaretLeft, CaretRight, Scissors, Trash } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, ArrowsInLineHorizontal, CaretLeft, CaretRight, Lightning, PushPin, Scissors, Trash } from "@phosphor-icons/react";
 import { changeSlice, deleteSlice, mergeWithNext, moveDivider, splitSlice } from "../engine/songMapEdits";
 import { TIER_NAMES, mapOf, planSong, type MapSlice, type Tier } from "../engine/songPlan";
 import { songFollow } from "../lib/songFollow";
@@ -179,22 +179,22 @@ export function SongMapPanel({ sceneCount }: { sceneCount: number }) {
               <span>Slice</span>
               <div className="panel-buttons">
                 <button
-                  className={`panel-button text-only ${slice.keepScene ? "active" : ""}`}
+                  className={`panel-button ${slice.keepScene ? "active" : ""}`}
                   aria-pressed={Boolean(slice.keepScene)}
                   disabled={index === 0}
                   onClick={() => apply(changeSlice(slices, index, { keepScene: !slice.keepScene }))}
                   data-tip={index === 0 ? "The first slice has nothing before it, so there is no scene change to skip" : "Keep the scene as this slice starts: its level and hit still change the motion, but the next scene does not come in"}
                 >
-                  Keep Scene
+                  <PushPin size={15} /> Keep Scene
                 </button>
                 <button
-                  className={`panel-button text-only ${slice.drop ? "active" : ""}`}
+                  className={`panel-button ${slice.drop ? "active" : ""}`}
                   aria-pressed={slice.drop}
                   disabled={index === 0}
                   onClick={() => apply(changeSlice(slices, index, { drop: !slice.drop }))}
                   data-tip={index === 0 ? "The first slice has nothing before it, so it cannot start with a hit" : "Hit: the picture rises before this slice, and changes hard as it starts; then the slice moves at its level"}
                 >
-                  Hit
+                  <Lightning size={15} /> Hit
                 </button>
                 <button className="panel-button" onClick={() => apply(splitSlice(slices, index, analysis.downbeats, duration))} data-tip="Split this slice in two at the bar nearest its middle">
                   <Scissors size={15} /> Split
