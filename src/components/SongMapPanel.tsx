@@ -1,17 +1,14 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowCounterClockwise, ArrowsInLineHorizontal, Play, Scissors, Trash } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, ArrowsInLineHorizontal, Scissors, Trash } from "@phosphor-icons/react";
 import { changeSlice, deleteSlice, mergeWithNext, moveDivider, splitSlice } from "../engine/songMapEdits";
 import { TIER_NAMES, mapOf, planSong, type MapSlice, type Tier } from "../engine/songPlan";
 import { songFollow } from "../lib/songFollow";
 import { tracks } from "../lib/tracks";
 import { placeSeek } from "./Slider";
-import { MediaIcon } from "./MediaIcon";
 import { EmptyState } from "./EmptyState";
 
 const subscribeFollow = (listener: () => void) => songFollow.subscribe(listener);
 const followVersion = () => songFollow.version;
-const subscribeTracks = (listener: () => void) => tracks.subscribe(listener);
-const tracksPlaying = () => tracks.playing;
 
 const TIERS: readonly Tier[] = [0, 1, 2, 3];
 const capital = (text: string) => text[0].toUpperCase() + text.slice(1);
@@ -23,12 +20,11 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * The Song Map page of the bottom panel: the map of the song that plays,
  * while Song follow is on. Its slices (its parts) are each colored by
  * their level, with a red edge where a hit starts one. A click selects a
- * slice; a double-click splits it at that bar; a drag of the divider
- * between two slices moves it from bar to bar. A toolbar across the top
- * holds every control: Stop, Play or Pause and Play slice (from the
- * selected slice's start), then the selected slice's level, Hit and Keep
- * Scene, Split, Merge with next and Delete (the slice before it grows into
- * its place), then Reset (the analysis's own map). Each change applies at
+ * slice and plays the song from its start; a drag of the divider between
+ * two slices moves it from bar to bar. A toolbar across the top holds the
+ * selected slice's level, Hit and Keep Scene, Split, Merge with next and
+ * Delete (the slice before it grows into its place), then Reset (the
+ * analysis's own map); the Playlist card's controls play the song. Each change applies at
  * once (see songFollow.editMap) and is kept with the song's analysis, so
  * Save Playlist keeps it. Under the map, a bar the width of the map moves
  * in the song; the song's file name is above the map, and a status bar at
@@ -52,7 +48,6 @@ export function SongMapPanel() {
   const fill = useRef<HTMLDivElement>(null);
   const cap = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
-  const playing = useSyncExternalStore(subscribeTracks, tracksPlaying);
 
   /* The frame loop reads the slices through a ref, so it need not start again on each edit. */
   /** The map while a divider is dragged (see the dividers below); it applies when the drag ends. */
@@ -123,26 +118,6 @@ export function SongMapPanel() {
       }}
     >
       <div className="song-map-toolbar">
-        <div className="panel-buttons">
-          <button className="panel-button icon" onClick={() => tracks.stop()} data-tip="Stop the song, and go back to its start" aria-label="Stop the song">
-            <MediaIcon kind="stop" size={16} />
-          </button>
-          <button className="panel-button icon" onClick={() => tracks.toggle()} data-tip={playing ? "Pause the song `Space`" : "Play the song `Space`"} aria-label={playing ? "Pause the song" : "Play the song"}>
-            {playing ? <MediaIcon kind="pause" size={16} /> : <MediaIcon kind="play" size={16} />}
-          </button>
-          <button
-            className="panel-button"
-            disabled={!slice}
-            onClick={() => {
-              tracks.seek(slice.start);
-              if (!tracks.playing) void tracks.play();
-            }}
-            data-tip="Play the song from the start of the selected slice"
-          >
-            <Play size={14} weight="fill" /> Play slice
-          </button>
-        </div>
-        <span className="song-map-toolbar-divider" />
         {slice && (
           <>
             <div className="song-map-field">
@@ -164,7 +139,7 @@ export function SongMapPanel() {
               <span className="song-map-field-note">Keep Scene</span>
             </label>
             <div className="panel-buttons">
-              <button className="panel-button" onClick={() => apply(splitSlice(slices, index, analysis.downbeats, duration))} data-tip="Split this slice in two at the bar nearest its middle (or double-click the slice where you want the cut)">
+              <button className="panel-button" onClick={() => apply(splitSlice(slices, index, analysis.downbeats, duration))} data-tip="Split this slice in two at the bar nearest its middle">
                 <Scissors size={15} /> Split
               </button>
               <button className="panel-button" disabled={index >= slices.length - 1} onClick={() => apply(mergeWithNext(slices, index))} data-tip="Join this slice with the next one; it keeps this slice's name and level">
@@ -191,7 +166,7 @@ export function SongMapPanel() {
       <div className="song-map-body">
         {/* The song's file name, in quotes, as the scene card's title shows the scene's name. */}
         <h2 className="side-panel-title source-title song-map-title" data-tip={name}><span>{name}</span></h2>
-        <div ref={strip} className="song-map-strip" data-tip="Click a slice to select it; double-click to split it at that bar">
+        <div ref={strip} className="song-map-strip" data-tip="Click a slice to select it and play the song from its start">
           {view.map((candidate, i) => {
             const sliceEnd = view[i + 1]?.start ?? duration;
             return (
@@ -201,10 +176,10 @@ export function SongMapPanel() {
                 style={{ left: at(candidate.start), width: at(sliceEnd - candidate.start) }}
                 aria-pressed={i === index}
                 aria-label={`${capital(TIER_NAMES[candidate.tier])}, ${time(candidate.start)} to ${time(sliceEnd)}${candidate.drop ? ", starts with a hit" : ""}`}
-                onClick={() => setSelected(i)}
-                onDoubleClick={(event) => {
-                  apply(splitSlice(slices, i, analysis.downbeats, duration, timeAt(event)));
-                  setSelected(i + 1);
+                onClick={() => {
+                  setSelected(i);
+                  tracks.seek(candidate.start);
+                  if (!tracks.playing) void tracks.play();
                 }}
               >
                 {(candidate.drop || candidate.keepScene) && (
