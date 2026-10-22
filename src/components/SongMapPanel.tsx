@@ -35,7 +35,8 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * slice's start, with the slice's scene, and the map then follows the
  * song that plays again; a right-click stops the
  * song where it is; a drag of the divider between
- * two slices moves it from bar to bar. A toolbar across the top holds the
+ * two slices moves it from bar to bar. It is a card: a title bar with
+ * the song's name and the arrows, then a dark toolbar that holds the
  * selected slice's level, the Slice buttons (Keep Scene, Hit, Split at
  * the playhead,
  * Merge with next, and Delete: the slice before it grows into its place),
@@ -44,9 +45,7 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * play the song. Each change applies at
  * once (see songFollow.editMap) and is kept with the song's analysis, so
  * Save Playlist keeps it. Under the map, a bar the width of the map moves
- * in the song; the song's file name is above the map, and a status bar at
- * the bottom shows the song's length and tempo, the selected slice, and
- * the song's time. While the page has the keyboard focus,
+ * in the song. While the map has the keyboard focus,
  * Delete removes the selected slice.
  */
 /**
@@ -79,7 +78,6 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
   const index = Math.min(selected, slices.length - 1);
   const strip = useRef<HTMLDivElement>(null);
   const playhead = useRef<HTMLDivElement>(null);
-  const clock = useRef<HTMLSpanElement>(null);
   const scrub = useRef<HTMLInputElement>(null);
   const fill = useRef<HTMLDivElement>(null);
   const cap = useRef<HTMLDivElement>(null);
@@ -114,8 +112,6 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
         const now = shown ? tracks.position : 0;
         if (scrub.current && !dragging.current) scrub.current.value = String(now);
         placeSeek(scrub.current, fill.current, cap.current, Number(scrub.current?.value ?? 0) / Math.max(1e-3, analysis.duration));
-        const text = `${time(shown ? tracks.position : 0)} / ${time(analysis.duration)}`;
-        if (clock.current && clock.current.textContent !== text) clock.current.textContent = text;
         const current = shown ? slicesRef.current.filter((slice) => slice.start <= now).length - 1 : -1;
         if (current >= 0 && current !== lastPlaying) setSelected(current);
         lastPlaying = current;
@@ -126,9 +122,9 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
     return () => cancelAnimationFrame(frame);
   }, [analysis, path]);
 
-  /* The song's file name, in the style of the scene card's title shows the scene's name, with an arrow on each side to show the song before or after it. */
+  /* The card's title bar: the song's file name, in the style of the scene card's title, with an arrow on each side to show the song before or after it. */
   const title = (
-    <div className="song-map-title-row">
+    <div className="panel-header-bar song-map-header">
       <button className="panel-button icon song-map-song-step" disabled={trackIndex < 1} onClick={() => showSong(-1)} data-tip="Show the map of the song before this one" aria-label="Previous song's map">
         <CaretLeft size={13} />
       </button>
@@ -141,12 +137,14 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
 
   if (!analysis) {
     return (
-      <section className="bottom-panel-page song-map-page" aria-label="Song Map">
+      <section className="panel-card song-map-page" aria-label="Song Map">
         {songFollow.enabled && trackIndex >= 0 ? (
-          <div className="song-map-body">
+          <>
             {title}
-            <p className="song-map-wait">This song's map comes when its analysis is done.</p>
-          </div>
+            <div className="song-map-body">
+              <p className="song-map-wait">This song's map comes when its analysis is done.</p>
+            </div>
+          </>
         ) : (
           <EmptyState text="No song map yet: turn on Song follow in the Playlist card, and play a song." />
         )}
@@ -158,7 +156,6 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
   const at = (seconds: number) => `${(seconds / Math.max(1e-3, duration)) * 100}%`;
   const apply = (next: MapSlice[]) => songFollow.editMap(path, next);
   const slice = slices[index];
-  const end = slices[index + 1]?.start ?? duration;
   /* The song time under the pointer, for a double-click split. */
   const timeAt = (event: { clientX: number }) => {
     const box = strip.current!.getBoundingClientRect();
@@ -168,7 +165,7 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
 
   return (
     <section
-      className="bottom-panel-page song-map-page"
+      className="panel-card song-map-page"
       aria-label="Song Map"
       tabIndex={-1}
       onKeyDown={(event) => {
@@ -183,6 +180,7 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
         event.stopPropagation();
       }}
     >
+      {title}
       <div className="song-map-toolbar">
         {slice && (
           <>
@@ -260,7 +258,6 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
         </button>
       </div>
       <div className="song-map-body">
-        {title}
         <div ref={strip} className="song-map-strip" data-tip="Click a slice to select it and play the song from its start; right-click to stop the song where it is. Ctrl+click a scene in the scene list to play it on the selected slice">
           {view.map((candidate, i) => {
             const sliceEnd = view[i + 1]?.start ?? duration;
@@ -366,11 +363,6 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
             <span key={i} style={{ left: at(i * 30) }}>{time(i * 30)}</span>
           ))}
         </div>
-      </div>
-      <div className="song-map-status" aria-live="polite">
-        <span>{time(duration)} · {Math.round(analysis.tempo)} BPM</span>
-        {slice && <span>Slice {index + 1} of {slices.length} · {time(slice.start)} – {time(end)} · {Math.round(end - slice.start)} s</span>}
-        <span ref={clock} className="song-map-clock" />
       </div>
     </section>
   );

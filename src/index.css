@@ -262,6 +262,7 @@ button { border: 0; }
 }
 /* The Song Map card: its own width never widens a column ("contain"), and it scrolls when the window is short. */
 .song-map-dock { grid-row: 2; grid-column: 2 / 4; display: flex; flex-direction: column; max-height: 45vh; min-height: 0; contain: inline-size; }
+.song-map-dock { padding: 8px; }
 .song-map-dock > .song-map-page { flex: 1; min-height: 0; }
 .sidebar.with-scenes { position: relative; display: flex; flex: 0 0 auto; min-height: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: #14161c; }
 .sidebar.with-scenes::after { content: ""; position: absolute; z-index: 60; inset: 0; border-radius: inherit; box-shadow: inset 0 0 5px 1px rgba(0,0,0,.8); pointer-events: none; }
@@ -2157,13 +2158,14 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
  * The Song Map, under the scenes and the left panel (see SongMapPanel): the song's
  * slices large, each colored by its level, a red lightning mark where a
  * hit starts one, faint lines every 4 bars, and a
- * white playhead; a toolbar above it, and a scrub bar and a time ruler under it.
+ * white playhead; a card with a gray title bar and a dark toolbar above
+ * it, and a scrub bar and a time ruler under it.
  */
-.song-map-page { overflow-y: auto; }
+.panel-card.song-map-page { display: flex; flex-direction: column; overflow-y: auto; }
 /* The song's file name above the map, in the scene card title's style (see .source-title). */
 .side-panel-title.song-map-title { flex: none; margin: 0 0 4px; padding: 0 2px 4px; font-size: 18px; letter-spacing: .05em; }
 .song-map-page:focus { outline: none; }
-.song-map-body { display: flex; flex-direction: column; gap: 4px; padding: 16px 20px 10px; }
+.song-map-body { flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 12px 14px 8px; background: #20232b; }
 .song-map-strip { position: relative; height: 120px; overflow: hidden; border: 1px solid #2b2f3a; border-radius: 6px; background: #14161c; }
 .song-map-slice { position: absolute; top: 0; bottom: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; min-width: 0; padding: 6px 8px; overflow: hidden; border: 0; border-right: 2px solid #14161c; color: #fff; font: inherit; text-align: left; cursor: pointer; }
 .song-map-slice.tier-0 { background: #253049; }
@@ -2186,10 +2188,9 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .song-map-slice.selected.picking { box-shadow: inset 0 0 0 2px #f5ce69, inset 0 0 14px rgba(245,206,105,.45); }
 .song-map-toolbar .picked-scene { color: #1b1606; background: #f5ce69; }
 .song-map-toolbar .picked-scene:hover { background: #ffdc85; }
-/* The song's name with an arrow on each side (see SongMapPanel). */
-.song-map-title-row { display: flex; align-items: center; gap: 12px; padding: 12px 20px 10px; }
-.song-map-body > .song-map-title-row { padding: 0 0 4px; }
-.song-map-title-row .side-panel-title.song-map-title { flex: 0 1 auto; margin: 0; padding: 0 2px; }
+/* The card's title bar: the song's name with an arrow on each side (see SongMapPanel). */
+.panel-header-bar.song-map-header { flex: none; justify-content: flex-start; gap: 10px; padding: 0 10px; }
+.song-map-header .side-panel-title.song-map-title { flex: 0 1 auto; margin: 0; padding: 7px 2px 6px; }
 .panel-button.icon.song-map-song-step { flex: none; width: 24px; height: 24px; border: 1px solid #474c5e; border-radius: 5px; background: #30343f; }
 .song-map-wait { margin: 0; color: var(--muted); font-size: 12px; }
 .song-map-drop-tag { display: inline-grid; place-items: center; padding: 2px 4px; border-radius: 3px; color: #fff; background: #e53935; }
@@ -2204,12 +2205,10 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .song-map-ruler span { position: absolute; transform: translateX(-50%); }
 .song-map-ruler span:first-child { transform: none; }
 .song-map-ruler { cursor: pointer; }
-/* The editor's toolbar: one full-width row under the title, with every control; it wraps on a narrow window. */
-.song-map-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 4px 8px; border-top: 1px solid #30343f; border-bottom: 1px solid #30343f; background: #1d2029; }
+/* The editor's toolbar: one dark full-width row under the title bar, with every control; it wraps on a narrow window. */
+.song-map-toolbar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 4px 8px; border-bottom: 1px solid #30343f; background: #14161c; }
 .song-map-toolbar .panel-buttons { border-radius: 5px; }
 /* The dividers around the switches run the toolbar's full height, through its padding. */
-/* The status bar above the footer: the selected slice, where it is, and its length. */
-.song-map-status { flex: none; margin-top: auto; display: flex; justify-content: space-between; gap: 12px; min-height: 18px; padding: 6px 20px; border-top: 1px solid #30343f; color: #9ca1af; background: #1d2029; font-size: 11px; font-variant-numeric: tabular-nums; }
 .panel-button.song-map-reset { margin-left: auto; border: 1px solid #474c5e; border-radius: 5px; background: #30343f; }
 /* The scrub bar under the map: the map's full width. */
 .slider.playlist-seek.song-map-scrub { flex: none; width: 100%; margin-top: 12px; }
