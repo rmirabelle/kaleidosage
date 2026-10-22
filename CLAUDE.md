@@ -32,7 +32,11 @@ plays it full screen. Tauri 2 + React + WebGL 2.
   Without `--no-watch`, every Rust edit restarts the app, and the new window
   takes the focus from the user's other apps (a game exits). Restart the dev
   app only when the user agrees.
-- Stop it with `.\kill-dev.ps1` (tree-kills `kaleidosage.exe` and frees ports
-  14510 and 14511).
+- Stop it with `.\kill-dev.ps1`. It first closes the window the gentle way,
+  so unsaved changes get the "Save changes?" question, and waits up to 5
+  minutes for the user. Exit code 1 means the app is still open: tell the
+  user, and never use `-Force` (it loses unsaved work) without their go-ahead.
+  Then it tree-kills what is left of `kaleidosage.exe` and frees ports
+  14510 and 14511.
 - Do not start the dev app while an installed KaleidoSage is running; the
   single-instance plugin would route the launch to it.

@@ -38,6 +38,10 @@ generated executable and NSIS script again after the release build.
 
 1. Stop the Tauri dev process (`.\kill-dev.ps1`). The single-instance plugin
    routes a second launch to whichever KaleidoSage is already running.
+   `kill-dev.ps1` closes the window the gentle way, so unsaved changes get
+   their "Save changes?" question, and it waits for the answer. Never use
+   `-Force` (it loses unsaved changes) unless the user says so.
+   `publish.ps1` runs this close again before it builds.
 2. Synchronize the intended semantic version:
 
    ```powershell

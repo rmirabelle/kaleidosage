@@ -141,6 +141,15 @@ Invoke-Native -FailureMessage "GitHub CLI is not authenticated. Run: gh auth log
 Invoke-Native -AllowFailure { gh release view $tag *> $null }
 if ($LASTEXITCODE -eq 0) { throw "Release $tag already exists." }
 
+<#
+  An open Kaleido Sage (dev or installed) closes first, the gentle way: with
+  unsaved changes it asks "Save changes?", and the publish waits for the
+  answer. It stops here if the app stays open.
+#>
+Write-Host "==> Closing Kaleido Sage ..." -ForegroundColor Cyan
+& "$PSScriptRoot\kill-dev.ps1"
+if ($LASTEXITCODE -ne 0) { throw "Kaleido Sage is still open. Save or close it, then publish again." }
+
 Write-Host "==> Building KaleidoSage $tag ..." -ForegroundColor Cyan
 Invoke-Native -FailureMessage "Tauri build failed" { npm run tauri build }
 
