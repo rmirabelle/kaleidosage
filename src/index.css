@@ -2163,7 +2163,7 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .song-map-ruler span:first-child { transform: none; }
 .song-map-ruler { cursor: pointer; }
 /* The editor's toolbar: one full-width row under the title, with every control; it wraps on a narrow window. */
-.song-map-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 20px; border-top: 1px solid #30343f; border-bottom: 1px solid #30343f; background: #1d2029; }
+.song-map-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 4px; border-top: 1px solid #30343f; border-bottom: 1px solid #30343f; background: #1d2029; }
 .song-map-toolbar .panel-buttons { border-radius: 5px; }
 .song-map-toolbar-divider { width: 1px; height: 24px; background: #30343f; }
 /* The status bar above the footer: the selected slice, where it is, and its length. */
