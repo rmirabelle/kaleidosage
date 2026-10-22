@@ -25,12 +25,12 @@ const followVersion = () => songFollow.version;
 
 /** The Follow button's tip: what Follow does, and where the analysis of the track stands. */
 function followTip(enabled: boolean, status: FollowStatus) {
-  if (!enabled) return "Follow the song: analyze the track that plays, and let the music move the picture in place of the audio links";
+  if (!enabled) return "Song follow: analyze the track that plays, and let the music move the picture in place of the audio links";
   switch (status.state) {
-    case "analyzing": return `Follow the song is on: analyzing ${status.name}…`;
-    case "ready": return `Follow the song is on: the picture follows ${status.name} (${Math.round(status.tempo)} BPM). Click to turn it off.`;
-    case "error": return `Follow the song is on, but the analysis failed. Click to turn it off.`;
-    default: return "Follow the song is on. Click to turn it off.";
+    case "analyzing": return `Song follow is on: analyzing ${status.name}…`;
+    case "ready": return `Song follow is on: the picture follows ${status.name} (${Math.round(status.tempo)} BPM). Click to turn it off.`;
+    case "error": return `Song follow is on, but the analysis failed. Click to turn it off.`;
+    default: return "Song follow is on. Click to turn it off.";
   }
 }
 
@@ -150,7 +150,7 @@ export function FilesCard({ engine, onAddTracks }: { engine: Engine | null; onAd
   );
 }
 
-/** Follow the song on or off (see songFollow.ts). It pulses while the track is being analyzed. */
+/** Song follow on or off (see songFollow.ts). It pulses while the track is being analyzed. */
 function FollowButton() {
   useSyncExternalStore(subscribeFollow, followVersion);
   const { enabled, status } = songFollow;
@@ -160,7 +160,7 @@ function FollowButton() {
       aria-pressed={enabled}
       onClick={() => songFollow.toggle()}
       data-tip={followTip(enabled, status)}
-      aria-label="Follow the song"
+      aria-label="Song follow"
     >
       <Waveform size={16} weight={enabled ? "fill" : "regular"} />
     </button>
@@ -169,7 +169,7 @@ function FollowButton() {
 
 /**
  * Opens the song map editor (see SongMapDialog) for the song that plays.
- * It works once the song has its analysis, while Follow the song is on.
+ * It works once the song has its analysis, while Song follow is on.
  */
 function MapButton() {
   useSyncExternalStore(subscribeFollow, followVersion);
@@ -183,7 +183,7 @@ function MapButton() {
         className={`panel-button icon ${open ? "active" : ""}`}
         disabled={!ready}
         onClick={() => setOpen(true)}
-        data-tip={ready ? "Edit the song map: the song's slices, their levels, names and drops" : "Song map: turn on Follow the song and play a song first"}
+        data-tip={ready ? "Edit the song map: the song's slices, their levels, names and drops" : "Song map: turn on Song follow and play a song first"}
         aria-label="Edit the song map"
       >
         <MapTrifold size={16} />
@@ -278,7 +278,7 @@ function PlaylistTransport({ count, engine }: { count: number; engine: Engine | 
 }
 
 /**
- * Under the play toolbar while Follow the song is on: where the analysis
+ * Under the play toolbar while Song follow is on: where the analysis
  * stands and, once the picture follows the song, its tempo and how many
  * settings follow it (see Engine.soundFamily). The count is drawn in each
  * frame, as the scene can change at any time.
@@ -347,7 +347,7 @@ function ThresholdMeter({ level, threshold }: { level: RefObject<HTMLElement | n
       aria-valuemin={THRESHOLD_DB[0]}
       aria-valuemax={THRESHOLD_DB[1]}
       aria-valuenow={thresholdDb}
-      data-tip={following ? "The level of the music. Follow the song is on: the song's own analysis moves the picture, so the Master Threshold does not change the motion." : `The level of the music. The line is the Master Threshold (${thresholdDb} dB): drag it to change it.`}
+      data-tip={following ? "The level of the music. Song follow is on: the song's own analysis moves the picture, so the Master Threshold does not change the motion." : `The level of the music. The line is the Master Threshold (${thresholdDb} dB): drag it to change it.`}
       onPointerDown={(event) => {
         if (event.button !== 0 || following) return;
         const meter = event.currentTarget;

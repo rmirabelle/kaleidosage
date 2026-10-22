@@ -142,7 +142,7 @@ export const HELP_TOPICS = {
       "Detail follows the loudness slowly; sparkle follows the high sounds.",
       "Any other setting moves one step through its range on each beat.",
       "A range sets how far the sound moves the setting.",
-      "With Follow the song on, the song's plan moves it; else the live sound does.",
+      "With Song follow on, the song's plan moves it; else the live sound does.",
       "Enable All in the Audio panel turns on every setting with a range."
     ],
     keywords: ["audio switch", "audio link", "sensor", "speaker", "react", "music", "range", "beat", "all on"]

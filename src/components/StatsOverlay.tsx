@@ -162,7 +162,7 @@ export function StatsOverlay({ engine }: { engine: Engine }) {
       <footer className="perf-details">
         {snapshot.info.width} × {snapshot.info.height} · blur {snapshot.info.blurSamples} samples · {snapshot.info.shapeVersions} shape {snapshot.info.shapeVersions === 1 ? "version" : "versions"} per pixel
         {snapshot.song && (
-          <div data-tip="Follow the song: the time from the music player to the speakers, the mean step of the player's clock that the song clock smooths away, and how many jumps (seeks) it made">
+          <div data-tip="Song follow: the time from the music player to the speakers, the mean step of the player's clock that the song clock smooths away, and how many jumps (seeks) it made">
             Song clock: output {snapshot.song.latencyMs.toFixed(0)} ms · jitter {snapshot.song.jitterMs.toFixed(1)} ms · {snapshot.song.jumps} {snapshot.song.jumps === 1 ? "jump" : "jumps"}
           </div>
         )}

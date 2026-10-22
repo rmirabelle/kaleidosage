@@ -270,11 +270,11 @@ export function AudioPanel({ engine, onAddTracks, sceneName, inputTip, onInputTi
           {inputTip && settings.kind === "none" && <InputTip anchor={inputRef} onClose={onInputTipDone} />}
           {/* A failure, for example a microphone that Windows blocks. */}
           {status.state === "error" && <p className="audio-error audio-setting selectable">{status.message}</p>}
-          <div className={`audio-setting ${following ? "follow-off" : ""}`} aria-disabled={following || undefined} data-tip={following ? "Follow the song is on: the song's own analysis moves the picture, so this does not change the motion." : "Gain applied to the audio signal before threshold detection."}>
+          <div className={`audio-setting ${following ? "follow-off" : ""}`} aria-disabled={following || undefined} data-tip={following ? "Song follow is on: the song's own analysis moves the picture, so this does not change the motion." : "Gain applied to the audio signal before threshold detection."}>
             <span>Master Gain <output>{settings.gainDb > 0 ? "+" : ""}{settings.gainDb} dB</output></span>
             <Slider min={GAIN_DB[0]} max={GAIN_DB[1]} step={1} value={settings.gainDb} detent={0} label="Master Gain" onChange={(value) => audioInput.setGain(value)} />
           </div>
-          <div className={`audio-setting ${following ? "follow-off" : ""}`} aria-disabled={following || undefined} data-tip={following ? "Follow the song is on: the song's own analysis moves the picture, so this does not change the motion." : "The minimum loudness of the audio needed to trigger detection."}>
+          <div className={`audio-setting ${following ? "follow-off" : ""}`} aria-disabled={following || undefined} data-tip={following ? "Song follow is on: the song's own analysis moves the picture, so this does not change the motion." : "The minimum loudness of the audio needed to trigger detection."}>
             <span>Master Threshold <output>{settings.thresholdDb} dB</output></span>
             <Slider min={THRESHOLD_DB[0]} max={THRESHOLD_DB[1]} step={1} value={settings.thresholdDb} label="Master Threshold" onChange={(value) => audioInput.setThreshold(value)} />
           </div>

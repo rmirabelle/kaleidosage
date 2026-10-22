@@ -87,7 +87,7 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
     return (
       <div className="about-dialog-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
         <div className="about-dialog song-map-dialog" role="dialog" aria-modal="true" aria-label="Song map">
-          <p className="song-map-empty">This song has no analysis yet. Turn on Follow the song and play it first.</p>
+          <p className="song-map-empty">This song has no analysis yet. Turn on Song follow and play it first.</p>
           <div className="about-dialog-actions"><button className="button primary" onClick={onClose}>Close</button></div>
         </div>
       </div>

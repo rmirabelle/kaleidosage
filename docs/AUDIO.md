@@ -111,7 +111,7 @@ switch is on, the sound moves the setting by its family
 (`familyOf` in `src/engine/songScript.ts`): brightness and size follow
 the level and pulse on each beat, detail follows the level slowly,
 sparkle follows the high sounds, and every other setting moves one step
-through its range on each beat. With a song and Follow the song on, the
+through its range on each beat. With a song and Song follow on, the
 song's plan moves it (`songScript.ts`); otherwise the live sound of the
 input moves it (`src/engine/liveSound.ts`). The span is the range's
 handles, or with no range, from the slider value toward the end of the

@@ -1072,7 +1072,7 @@ export default function App() {
    * runs the music, and the controls on the picture run the scene.
    */
   const tracksActive = useSyncExternalStore((listener) => audioInput.subscribe(listener), () => audioInput.settings.kind === "tracks");
-  /** True while Follow the song is on with the tracks as the input (see songFollow.ts). */
+  /** True while Song follow is on with the tracks as the input (see songFollow.ts). */
   const followOn = useSyncExternalStore((listener) => songFollow.subscribe(listener), () => songFollow.enabled) && tracksActive;
   /** Hold means something with more than one scene (it keeps the scene), or while following a song (it gives the scene its own clock). */
   const holdUseful = docs.length > 1 || followOn;
@@ -1475,7 +1475,7 @@ export default function App() {
         await openScenePath(scene);
       }
       setLoading({ title, detail: "Audio files and settings…", progress: 1 });
-      /* The song analyses the playlist kept go first, so Follow the song needs none for these tracks. */
+      /* The song analyses the playlist kept go first, so Song follow needs none for these tracks. */
       opened.analyses?.forEach((text, index) => { if (text && opened.tracks[index]) songFollow.preload(opened.tracks[index], text); });
       tracks.replace(opened.tracks);
       /* The lengths the playlist kept, so the Files footer has its play time at once. */
@@ -1616,7 +1616,7 @@ export default function App() {
   }, [engine, sceneHeld, tracksActive]);
 
   /**
-   * With Follow the song on and the tracks as the input, the picture follows
+   * With Song follow on and the tracks as the input, the picture follows
    * the track's script (see songFollow.ts) once it is analyzed, unless Hold
    * gives the scene its own clock (see holdScene).
    */

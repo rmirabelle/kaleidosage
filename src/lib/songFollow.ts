@@ -5,7 +5,7 @@ import { SongClock } from "./songClock";
 import { tracks } from "./tracks";
 
 /**
- * Follow the song (phase 1 of reports/Intelligent music driven
+ * Song follow (phase 1 of reports/Intelligent music driven
  * animation.md): while it is on and the tracks are the input, the app
  * analyzes the track that plays (see songAnalysis.ts) and the picture
  * follows its script (see engine/songScript.ts). The other tracks are then
