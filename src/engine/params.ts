@@ -845,6 +845,13 @@ export function liveValue(param: Param, state: PlayState): number {
   /* A one-way curve plays whole on every trip; a wandering one goes on from trip to trip; the others go out on one trip and back on the next. */
   const travel = ONE_WAY.has(kind) ? (trips % 1 + 1) % 1 : (trips % 2 + 2) % 2;
   const part = WANDER.has(kind) ? wander(kind, trips, param.seed ?? 0) : easeCurve(kind, travel <= 1 ? travel : 2 - travel);
+  return rangeAt(param, part);
+}
+
+/** The value "part" of the way from a range's start handle (0) to its end handle (1). */
+export function rangeAt(param: Param, part: number): number {
+  const start = clamp(param.low ?? param.min, param.min, param.max);
+  const end = clamp(param.high ?? param.max, param.min, param.max);
   /* A log slider's range moves at the same speed along the slider, so in equal ratios. */
   if (param.scale === "log") return start * (end / start) ** part;
   return start + (end - start) * part;

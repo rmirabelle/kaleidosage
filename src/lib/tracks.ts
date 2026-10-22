@@ -6,8 +6,9 @@ import { isPlaylistCopy } from "./playlistFile";
  * The tracks (see docs/AUDIO.md, part 7): audio files that the app plays
  * itself, through the speakers, one after the other, and round again. The
  * same sound goes to the analysis: an AudioWorklet tap mixes it to mono
- * and posts it in blocks to "onSamples". The paths are kept in
- * localStorage; the app does not play music at its start.
+ * and posts it in blocks to "onSamples". Only a playlist file keeps
+ * tracks (see playlistFile.ts): outside a playlist, the list starts empty
+ * at each start of the app, and a new or opened scene empties it.
  */
 
 export interface Track {
@@ -18,7 +19,8 @@ export interface Track {
 /** Why the track changed: it ended, or the user picked another track. Each change moves the show to the next scene. */
 export type TrackChange = "ended" | "picked";
 
-const STORE_KEY = "kaleidosage.tracks";
+/** Where older versions kept the list between runs; the app removes it (see TrackList). */
+const OLD_STORE_KEYS = ["kaleidosage.tracks", "kaleidosage.playlist"];
 /** The tap posts this many samples at a time (about 10.7 ms at 48 kHz). */
 const TAP_BLOCK = 512;
 
@@ -99,25 +101,8 @@ async function readLength(path: string): Promise<number> {
   }
 }
 
-/**
- * The user's own track list, as the last start left it. An open playlist's
- * tracks are copies in the temp folder (see isPlaylistCopy), which the app
- * removes at its start, so they are left out: older versions kept them.
- */
-function loadTracks(): Track[] {
-  try {
-    /* The tracks were first kept under "kaleidosage.playlist". */
-    const saved = JSON.parse(localStorage.getItem(STORE_KEY) ?? localStorage.getItem("kaleidosage.playlist") ?? "[]") as unknown;
-    return Array.isArray(saved)
-      ? saved.filter((path): path is string => typeof path === "string" && !isPlaylistCopy(path)).map((path) => ({ path, name: nameOf(path) }))
-      : [];
-  } catch {
-    return [];
-  }
-}
-
 class TrackList {
-  list: Track[] = loadTracks();
+  list: Track[] = [];
   /** The track that plays, or that plays next on Play. */
   index = 0;
   playing = false;
@@ -139,8 +124,9 @@ class TrackList {
   private measuring = false;
 
   constructor() {
-    /* After the module has loaded, so the app's other parts are ready. */
-    queueMicrotask(() => void this.measure());
+    try {
+      for (const key of OLD_STORE_KEYS) localStorage.removeItem(key);
+    } catch { /* Nothing to remove. */ }
   }
 
   /** The play time of every track, in seconds, and how many tracks have no known length (yet). */
@@ -202,6 +188,12 @@ class TrackList {
     return this.audio?.currentTime ?? 0;
   }
 
+  /** Seconds from the audio element to the speakers: the audio context's own latency and the output device's. */
+  get latency() {
+    if (!this.context) return 0;
+    return this.context.baseLatency + (this.context.outputLatency || 0);
+  }
+
   get duration() {
     const duration = this.audio?.duration ?? 0;
     return Number.isFinite(duration) ? duration : 0;
@@ -226,12 +218,6 @@ class TrackList {
   private changed() {
     this.version++;
     for (const listener of this.listeners) listener();
-  }
-
-  /** Keeps the user's own list for the next start. A playlist's list (its copies in the temp folder) is not kept: the user's own list stays saved under it (see restoreOwn). */
-  private save() {
-    if (this.list.some((track) => isPlaylistCopy(track.path))) return;
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(this.list.map((track) => track.path))); } catch { /* The track list is empty at the next start. */ }
   }
 
   /** The audio element and the graph: element to the speakers, and to the tap. Made once, on the first Play (a user action, so the audio context may start). */
@@ -356,7 +342,6 @@ class TrackList {
     });
     if (added.length === 0) return;
     for (const path of added) this.list.push({ path, name: nameOf(path) });
-    this.save();
     this.changed();
     void this.measure();
   }
@@ -371,7 +356,6 @@ class TrackList {
       this.loaded = null;
       if (this.index >= this.list.length) this.index = 0;
     }
-    this.save();
     this.changed();
   }
 
@@ -383,7 +367,6 @@ class TrackList {
     if (next.length !== this.list.length) return;
     this.list = next;
     if (current) this.index = next.indexOf(current);
-    this.save();
     this.changed();
   }
 
@@ -394,7 +377,6 @@ class TrackList {
     this.index = 0;
     this.loaded = null;
     this.error = null;
-    this.save();
     this.changed();
     void this.measure();
   }
@@ -404,19 +386,8 @@ class TrackList {
     this.list = [];
     this.index = 0;
     this.loaded = null;
-    this.save();
-    this.changed();
-  }
-
-  /** Close Playlist: the playlist's tracks go, and the user's own list (as saved before the playlist opened) comes back, stopped. */
-  restoreOwn() {
-    this.pause();
-    this.list = loadTracks();
-    this.index = 0;
-    this.loaded = null;
     this.error = null;
     this.changed();
-    void this.measure();
   }
 }
 

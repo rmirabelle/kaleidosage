@@ -4,6 +4,8 @@ mod files;
 mod playlist_archive;
 mod sound_capture;
 mod screen;
+pub mod song_analysis;
+pub mod song_sections;
 mod updater;
 mod video_import;
 mod video_stream;
@@ -84,6 +86,7 @@ pub fn run() {
             browse::delete_browse_entry,
             browse::copy_browse_entry,
             files::read_image_file,
+            files::read_audio_file,
             video_stream::open_video_file,
             video_stream::begin_video_upload,
             video_stream::append_video_upload,
@@ -103,6 +106,7 @@ pub fn run() {
             files::reveal_file,
             files::cursor_position,
             screen::screen_color_at_cursor,
+            song_analysis::analyze_song,
             sound_capture::sound_devices,
             sound_capture::sound_start,
             sound_capture::sound_stop,

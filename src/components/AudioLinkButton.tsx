@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { SpeakerSimpleHigh, SpeakerSimpleX } from "@phosphor-icons/react";
+import { SpeakerSimpleHigh, SpeakerSimpleX, Waveform } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
 import { AUDIO_SOURCES, type AudioLink, type AudioSource } from "../engine/audio";
 import type { ParamKey } from "../engine/params";
+import { FAMILY_NAMES, type Family } from "../engine/songScript";
 import { audioInput } from "../lib/audioInput";
 import { help } from "../help/topics";
 import { KeyText } from "./HelpText";
@@ -35,11 +36,29 @@ export function AudioLinkButton({ engine, paramKey, label }: { engine: Engine; p
   const menuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
 
-  /* The lit icon glows with the push of the sound, in each frame, not through React state. */
+  /**
+   * The family by which the song script can move this setting (see
+   * Engine.songCandidate), or null, and whether it moves it now: only a
+   * range follows the song.
+   */
+  const [song, setSong] = useState<Family | null>(null);
+  const [following, setFollowing] = useState(false);
+
+  /**
+   * The lit icon glows with the push of the sound, or of the song script,
+   * in each frame, not through React state. Only a change of family
+   * renders again (React skips a set to the same value).
+   */
   useEffect(() => {
     const button = buttonRef.current;
-    if (!link || !button) return;
-    const stop = engine.onFrame(() => button.style.setProperty("--audio-push", engine.audioPush(paramKey).toFixed(3)));
+    if (!button) return;
+    const stop = engine.onFrame(() => {
+      setSong(engine.songCandidate(paramKey));
+      const family = engine.songFamily(paramKey);
+      setFollowing(family !== null);
+      const push = link ? engine.audioPush(paramKey) : family ? engine.songPush(paramKey) : 0;
+      button.style.setProperty("--audio-push", push.toFixed(3));
+    });
     return () => {
       stop();
       button.style.removeProperty("--audio-push");
@@ -87,12 +106,16 @@ export function AudioLinkButton({ engine, paramKey, label }: { engine: Engine; p
   };
   const title = link
     ? `Moves with the sound: ${audioSourceName(link.source)}, range ${Math.round(link.amount * 100)}%.${listening ? "" : " No input is listening (Audio panel, A)."} Click to change; right-click to remove.`
-    : "Make this setting move with the sound";
+    : song && following
+      ? `Follows the song (${FAMILY_NAMES[song]}). The music moves it between its handles. Click to link it to the sound instead.`
+      : song
+        ? `Can follow the song (${FAMILY_NAMES[song]}): give it a range, and the music moves it between the handles. Click to link it to the sound instead.`
+        : "Make this setting move with the sound";
   return (
     <>
       <button
         ref={buttonRef}
-        className={`audio-link ${link ? "on" : ""} ${position ? "active" : ""}`}
+        className={`audio-link ${link || following ? "on" : ""} ${position ? "active" : ""}`}
         {...help("audio.sensors")}
         data-tip={title}
         aria-label={`${label}: move with the sound`}
@@ -111,7 +134,7 @@ export function AudioLinkButton({ engine, paramKey, label }: { engine: Engine; p
           if (link) update(null);
         }}
       >
-        <SpeakerSimpleHigh size={14} weight={link ? "fill" : "regular"} />
+        {song && !link ? <Waveform size={14} weight={following ? "fill" : "regular"} /> : <SpeakerSimpleHigh size={14} weight={link ? "fill" : "regular"} />}
       </button>
       {position && createPortal(
         <div ref={menuRef} className="toolbar-dropdown audio-link-menu" role="menu" aria-label={`${label}: move with the sound`} style={position}>

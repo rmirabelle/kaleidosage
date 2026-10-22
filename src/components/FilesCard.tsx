@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { CaretDoubleLeft, CaretDoubleRight, Plus, SpeakerHigh, Trash, X } from "@phosphor-icons/react";
+import { CaretDoubleLeft, CaretDoubleRight, Plus, SpeakerHigh, Trash, Waveform, X } from "@phosphor-icons/react";
 import { MediaIcon } from "./MediaIcon";
 import { trackPosition } from "./Slider";
 import { FLOOR_DB } from "../engine/audio";
+import type { Engine } from "../engine/engine";
+import { PARAM_KEYS } from "../engine/params";
+import { TIER_NAMES } from "../engine/songPlan";
 import { THRESHOLD_DB, audioInput } from "../lib/audioInput";
 import { panelLayout } from "../lib/panelLayout";
 import { formatPlayTime, tracks } from "../lib/tracks";
+import { songFollow, type FollowStatus } from "../lib/songFollow";
 import { help } from "../help/topics";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
@@ -15,6 +19,19 @@ import { useDragReorder } from "./useDragReorder";
 
 const subscribeTracks = (listener: () => void) => tracks.subscribe(listener);
 const tracksVersion = () => tracks.version;
+const subscribeFollow = (listener: () => void) => songFollow.subscribe(listener);
+const followVersion = () => songFollow.version;
+
+/** The Follow button's tip: what Follow does, and where the analysis of the track stands. */
+function followTip(enabled: boolean, status: FollowStatus) {
+  if (!enabled) return "Follow the song: analyze the track that plays, and let the music move the picture in place of the audio links";
+  switch (status.state) {
+    case "analyzing": return `Follow the song is on: analyzing ${status.name}…`;
+    case "ready": return `Follow the song is on: the picture follows ${status.name} (${Math.round(status.tempo)} BPM). Click to turn it off.`;
+    case "error": return `Follow the song is on, but the analysis failed. Click to turn it off.`;
+    default: return "Follow the song is on. Click to turn it off.";
+  }
+}
 
 /**
  * The audio files, while Files is the input: the first column of the left
@@ -29,8 +46,9 @@ const tracksVersion = () => tracks.version;
  * toolbar at the bottom runs the music on its own (see PlaylistTransport);
  * the controls on the picture run the scene.
  */
-export function FilesCard({ onAddTracks }: { onAddTracks: () => void }) {
+export function FilesCard({ engine, onAddTracks }: { engine: Engine | null; onAddTracks: () => void }) {
   useSyncExternalStore(subscribeTracks, tracksVersion);
+  useSyncExternalStore(subscribeFollow, followVersion);
   const width = useSyncExternalStore(panelLayout.subscribe, () => panelLayout.filesWidth);
   const collapsed = useSyncExternalStore(panelLayout.subscribe, () => panelLayout.filesCollapsed);
   const [clearAsked, setClearAsked] = useState(false);
@@ -68,6 +86,7 @@ export function FilesCard({ onAddTracks }: { onAddTracks: () => void }) {
           </div>
           <div className="files-card-body">
             {tracks.error && <p className="audio-error selectable">{tracks.error}</p>}
+            {songFollow.enabled && songFollow.status.state === "error" && <p className="audio-error selectable">{songFollow.status.message}</p>}
             {count === 0 ? (
               <EmptyState text="Add audio files to play them, one after the other.">
                 <button className="button secondary small" onClick={onAddTracks}>
@@ -109,7 +128,7 @@ export function FilesCard({ onAddTracks }: { onAddTracks: () => void }) {
             )}
           </div>
           {count > 0 && <FilesFooter count={count} />}
-          <PlaylistTransport count={count} />
+          <PlaylistTransport count={count} engine={engine} />
         </section>
       </aside>
       <FilesSplitter />
@@ -130,6 +149,23 @@ export function FilesCard({ onAddTracks }: { onAddTracks: () => void }) {
   );
 }
 
+/** Follow the song on or off (see songFollow.ts). It pulses while the track is being analyzed. */
+function FollowButton() {
+  useSyncExternalStore(subscribeFollow, followVersion);
+  const { enabled, status } = songFollow;
+  return (
+    <button
+      className={`panel-button icon ${enabled ? "active" : ""} ${enabled && status.state === "analyzing" ? "analyzing" : ""}`}
+      aria-pressed={enabled}
+      onClick={() => songFollow.toggle()}
+      data-tip={followTip(enabled, status)}
+      aria-label="Follow the song"
+    >
+      <Waveform size={16} weight={enabled ? "fill" : "regular"} />
+    </button>
+  );
+}
+
 /** A time in the file as "1:05". */
 const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
 
@@ -142,7 +178,7 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * only. The time and the bar follow the music in each animation frame, not
  * through React state; a drag on the bar seeks.
  */
-function PlaylistTransport({ count }: { count: number }) {
+function PlaylistTransport({ count, engine }: { count: number; engine: Engine | null }) {
   const bar = useRef<HTMLInputElement>(null);
   const fill = useRef<HTMLDivElement>(null);
   const level = useRef<HTMLElement>(null);
@@ -184,6 +220,7 @@ function PlaylistTransport({ count }: { count: number }) {
           <button className="panel-button icon" disabled={empty} onClick={() => tracks.toggle()} data-tip={tracks.playing ? "Pause the music" : "Play the music"} aria-label={tracks.playing ? "Pause the music" : "Play the music"}>
             {tracks.playing ? <MediaIcon kind="pause" size={16} /> : <MediaIcon kind="play" size={16} />}
           </button>
+          <FollowButton />
         </div>
         <div className="slider playlist-seek">
           <div className="slider-well">
@@ -203,8 +240,40 @@ function PlaylistTransport({ count }: { count: number }) {
         </div>
         <span ref={clock} className="playlist-transport-time" />
       </div>
+      <FollowStatusLine engine={engine} />
     </div>
   );
+}
+
+/**
+ * Under the play toolbar while Follow the song is on: where the analysis
+ * stands and, once the picture follows the song, its tempo and how many
+ * settings follow it (see Engine.songFamily). The count is drawn in each
+ * frame, as the scene can change at any time.
+ */
+function FollowStatusLine({ engine }: { engine: Engine | null }) {
+  useSyncExternalStore(subscribeFollow, followVersion);
+  const line = useRef<HTMLParagraphElement>(null);
+  const { enabled, status } = songFollow;
+  useEffect(() => {
+    if (!engine || status.state !== "ready") return;
+    let frame = 0;
+    const draw = () => {
+      const count = PARAM_KEYS.filter((key) => engine.songFamily(key)).length;
+      const now = engine.songNow;
+      const part = now && engine.script?.script.plan.parts.filter((candidate) => candidate.start <= now.time).pop();
+      const live = now ? ` At ${time(now.time)}${part ? `, ${part.label} (${TIER_NAMES[part.tier]})` : ""}: intensity ${Math.round(now.intensity * 100)}%, pace ×${now.pace.toFixed(2)}.` : "";
+      const text = `Following the song, ${Math.round(status.tempo)} BPM.${live} ${count === 0
+        ? "No range follows it: give Zoom, Exposure, Bloom, Segments or another size, light or detail setting a range."
+        : `${count === 1 ? "1 range follows" : `${count} ranges follow`} it (lit waveform icons); the other ranges play at its pace.`}`;
+      if (line.current && line.current.textContent !== text) line.current.textContent = text;
+      frame = requestAnimationFrame(draw);
+    };
+    frame = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(frame);
+  }, [engine, status]);
+  if (!enabled || status.state === "off" || status.state === "error") return null;
+  return <p ref={line} className="follow-status">{status.state === "analyzing" ? `Analyzing ${status.name}…` : ""}</p>;
 }
 
 /** The place of a loudness on the meter, from FLOOR_DB (0) to 0 dBFS (1). */

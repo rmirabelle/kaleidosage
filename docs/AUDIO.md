@@ -217,8 +217,9 @@ A third kind of input, under its own heading in the Input menu: the app
 plays audio files itself, through the speakers, and the same sound goes to
 the analysis. The playlist then runs the show.
 
-- Files: picked in the Open dialog (several at once), kept in
-  `localStorage` (paths only), shown in the Audio panel under the Input
+- Files: picked in the Open dialog (several at once). Only a playlist
+  file keeps them: outside a playlist the list starts empty at each start
+  of the app, and a new or opened scene empties it. Shown in the Audio panel under the Input
   menu: click a track to play it, X removes it, Add files adds more. The
   playlist repeats forever.
 - Playback: an `<audio>` element streams each file through the app's

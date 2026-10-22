@@ -48,6 +48,7 @@ import { audioInput } from "./lib/audioInput";
 import { panelLayout } from "./lib/panelLayout";
 import { isPlaylistCopy } from "./lib/playlistFile";
 import { tracks } from "./lib/tracks";
+import { songFollow } from "./lib/songFollow";
 import { helpSettings } from "./lib/helpSettings";
 import { PLAYLIST_EXTENSION, openPlaylistFile, playlistFingerprint, readManifest, savePlaylistFile, type PlaylistAudio } from "./lib/playlistFile";
 import { revealMainWindow } from "./lib/splash";
@@ -786,14 +787,14 @@ export default function App() {
   const switchRequestRef = useRef(0);
   /** How a scene last came into view through a tab switch: picked by the user or not, and the scene's play clock then. */
   const sceneShownRef = useRef<{ id: number | null; byUser: boolean; clock: number }>({ id: null, byUser: false, clock: 0 });
-  const crossfadeToDoc = useCallback(async (id: number, auto = false) => {
+  const crossfadeToDoc = useCallback(async (id: number, auto = false, fade = CROSSFADE_SECONDS) => {
     const request = ++switchRequestRef.current;
     if (!engine || (id !== activeIdRef.current && !storedRef.current.has(id))) return;
     if (!auto) holdScene(false);
     /* A click on the shown scene's own tab keeps it, as a pick of the user. */
     if (id !== activeIdRef.current) {
       /* While paused (stopped) the new scene shows at once, with no fade. */
-      if (!engine.state.paused) await engine.fadeOut(CROSSFADE_SECONDS);
+      if (!engine.state.paused) await engine.fadeOut(fade);
       if (request !== switchRequestRef.current) return;
       /* The new scene starts from 0, as Stop puts it (see Engine.rewind), and plays or stays paused as the scene before it did. */
       const paused = engine.state.paused;
@@ -827,12 +828,12 @@ export default function App() {
     if (picked) addTracks(Array.isArray(picked) ? picked : [picked]);
   }, [addTracks]);
 
-  /** Selects the next tab (step 1) or the one before it (step -1); the last tab goes round to the first. */
-  const switchByStep = useCallback((step: 1 | -1, auto = false) => {
+  /** Selects the next tab (step 1) or the one before it (step -1); the last tab goes round to the first. "fade": the crossfade's seconds (0 cuts). */
+  const switchByStep = useCallback((step: 1 | -1, auto = false, fade = CROSSFADE_SECONDS) => {
     const list = docsRef.current;
     const index = list.findIndex((doc) => doc.id === activeIdRef.current);
     if (index < 0 || list.length < 2) return;
-    void crossfadeToDoc(list[(index + step + list.length) % list.length].id, auto);
+    void crossfadeToDoc(list[(index + step + list.length) % list.length].id, auto, fade);
   }, [crossfadeToDoc]);
 
   /** True when any open scene, or the open playlist, has changes that are not saved. */
@@ -1090,12 +1091,40 @@ export default function App() {
       const ended = clock > lastClock && position < lastPosition;
       lastClock = clock;
       lastPosition = position;
-      if (pending || !ended || docsRef.current.length < 2 || sceneHeldRef.current) return;
+      /* While the picture follows the song, the song plan's cues change the scene instead (see below). */
+      if (pending || !ended || engine.script || docsRef.current.length < 2 || sceneHeldRef.current) return;
       if (tracks.playing && tracks.duration > 0 && tracks.duration - tracks.position < engine.params.cycle.value / 2) return;
       switchByStepRef.current(1, true);
       pending = switchRequestRef.current;
     });
   }, [activeId, engine, tracksActive]);
+
+  /**
+   * While the picture follows the song (see songFollow.ts), the next tab
+   * comes in at the song plan's cues (see songPlan.ts): with a cut on a
+   * drop, and with a crossfade of up to two beats at another change of
+   * level. A cue is taken a frame early, so the cut lands on its beat. A
+   * jump in the song (a seek) passes its cues; Hold keeps the scene.
+   */
+  useEffect(() => {
+    if (!engine || !tracksActive) return;
+    let last = -1;
+    return engine.onFrame(() => {
+      const following = engine.script;
+      const now = engine.songNow;
+      if (!following || !now || !tracks.playing) {
+        last = -1;
+        return;
+      }
+      const early = now.time + 1 / 60;
+      const jumped = last < 0 || early < last || early - last > 0.5;
+      const cue = jumped ? undefined : following.script.plan.cues.find((candidate) => candidate.time > last && candidate.time <= early);
+      last = early;
+      if (!cue || docsRef.current.length < 2 || sceneHeldRef.current) return;
+      const beat = following.script.tempo > 0 ? 60 / following.script.tempo : 0.5;
+      switchByStepRef.current(1, true, cue.drop ? 0 : Math.min(CROSSFADE_SECONDS, 2 * beat));
+    });
+  }, [engine, tracksActive]);
 
   /**
    * Each new track (the end of a track, or a pick in the list) also
@@ -1206,10 +1235,13 @@ export default function App() {
   /**
    * Outside a playlist, a new or opened scene starts quiet: the app stops
    * listening (Input Nothing), so the Playlist and Scenes columns of Files
-   * mode go too. In a playlist the playlist's input stays.
+   * mode go too, and the track list empties (only a playlist keeps tracks).
+   * In a playlist the playlist's input and tracks stay.
    */
   const quietOutsidePlaylist = () => {
-    if (playlistPathRef.current === null && audioInput.settings.kind !== "none") audioInput.setSource("none", null);
+    if (playlistPathRef.current !== null) return;
+    if (audioInput.settings.kind !== "none") audioInput.setSource("none", null);
+    tracks.clear();
   };
 
   /** Starts a new, untitled scene in a new tab. The scene that was shown stays in its own tab. The app stops listening outside a playlist (see quietOutsidePlaylist). */
@@ -1349,8 +1381,8 @@ export default function App() {
   /**
    * Close Playlist: asks "Save changes?" for the playlist when it has
    * changes (its scenes are the playlist's, so they need no question of
-   * their own), then closes its scenes, and the Files list goes back to the
-   * user's own files. The start screen shows. The audio settings stay as
+   * their own), then closes its scenes, and the Files list empties (only a
+   * playlist keeps tracks). The start screen shows. The audio settings stay as
    * they are.
    */
   const closePlaylist = useCallback(async () => {
@@ -1358,7 +1390,7 @@ export default function App() {
     if (!engine || !path) return;
     if (!(await askToSavePlaylistRef.current("Save changes before closing the playlist?", "Closing the playlist closes its scenes and its files."))) return;
     holdScene(false);
-    tracks.restoreOwn();
+    tracks.clear();
     if (fullscreen) await exitFullscreen();
     sceneGenerationRef.current++;
     setSceneGeneration(sceneGenerationRef.current);
@@ -1513,6 +1545,17 @@ export default function App() {
     follow();
     return audioInput.subscribe(follow);
   }, [engine]);
+
+  /** With Follow the song on and the tracks as the input, the picture follows the track's script (see songFollow.ts) once it is analyzed. */
+  useEffect(() => {
+    if (!engine) return;
+    const apply = () => {
+      const script = tracksActive ? songFollow.script : null;
+      engine.script = script && { script, time: () => songFollow.clock.time(), playing: () => tracks.playing };
+    };
+    apply();
+    return songFollow.subscribe(apply);
+  }, [engine, tracksActive]);
 
   /** Once the engine runs (or failed to start), the main window replaces the splash. */
   useEffect(() => {
@@ -1820,7 +1863,7 @@ export default function App() {
           * alone.
           */}
         <div className={`sidebar ${sceneListShown ? "with-scenes" : ""}`}>
-          {sceneListShown && tracksActive && <FilesCard onAddTracks={() => void pickTracks()} />}
+          {sceneListShown && tracksActive && <FilesCard engine={engine} onAddTracks={() => void pickTracks()} />}
           {sceneListShown && <SceneList tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} inPlaylist={playlistPath !== null} />}
           {/* The left panel: the Source section, then the Designer (the effects). */}
           {engine && !startScreen && panelOpen && (

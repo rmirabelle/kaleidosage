@@ -24,6 +24,12 @@ zip = { version = "9.0.3", default-features = false }
 tempfile = "3"
 tokio = { version = "1", features = ["fs", "io-util"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+beat-this = { version = "1.1", default-features = false }
+ebur128 = "0.1"
+realfft = "3"
+
+[dev-dependencies]
+beat-this = { version = "1.1", default-features = false, features = ["decode"] }
 
 [target.'cfg(windows)'.dependencies]
 tauri-plugin-single-instance = "2"
@@ -50,3 +56,19 @@ windows = { version = "0.61.3", features = [
   "Win32_UI_Shell",
   "Win32_UI_WindowsAndMessaging"
 ] }
+
+# The song analysis runs about 30 times slower unoptimized, so the dev app builds its crates optimized.
+[profile.dev.package]
+beat-this = { opt-level = 3 }
+ebur128 = { opt-level = 3 }
+realfft = { opt-level = 3 }
+rustfft = { opt-level = 3 }
+rten = { opt-level = 3 }
+rten-base = { opt-level = 3 }
+rten-gemm = { opt-level = 3 }
+rten-model-file = { opt-level = 3 }
+rten-onnx = { opt-level = 3 }
+rten-shape-inference = { opt-level = 3 }
+rten-simd = { opt-level = 3 }
+rten-tensor = { opt-level = 3 }
+rten-vecmath = { opt-level = 3 }

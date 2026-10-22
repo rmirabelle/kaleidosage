@@ -1,7 +1,9 @@
-import { NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, defaultValue, hexToRgb, liveValue, rangeClock, startRangeAt, type GroupKey, type ParamKey } from "./params";
+import { GROUP_PARAMS, NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, defaultValue, hexToRgb, liveValue, rangeAt, rangeClock, startRangeAt, type GroupKey, type ParamKey } from "./params";
 import { KaleidoRenderer, type FrameValues, type ImageSource } from "./renderer";
 import { followPush, levelAbove, pushRange, pushedValue, type AudioLink, type AudioSignal } from "./audio";
 import { copyVideo, cueVideo, releaseVideo, seekVideo, syncVideo, videoLoopPlan, videoLoopTime } from "./video";
+import { FAMILIES, intensityAt, positionAt, speedAt, type SongScript } from "./songScript";
+import { isShown } from "./submodes";
 
 /** While paused, how long the same frame values must last before the picture counts as still and frames stop (see needsDraw). */
 const SETTLE_MS = 1000;
@@ -97,6 +99,9 @@ export function juliaPoint(shape: number, edge: number): [number, number] {
  * tiling, a repeating first image is repeated past its edges, not mirrored.
  */
 export const repeatingImages = new WeakSet<object>();
+
+/** The effect group of each setting (see GROUP_PARAMS). */
+const GROUP_OF = new Map((Object.entries(GROUP_PARAMS) as [GroupKey, ParamKey[]][]).flatMap(([group, keys]) => keys.map((key) => [key, group] as const)));
 
 /** The Droste spiral's length of one copy in the shader's log space: log(1 / size). */
 const drosteCopy = (size: number) => -Math.log(Math.min(0.95, Math.max(0.05, size)));
@@ -426,6 +431,55 @@ export class Engine {
    * so a video plays the ranges with no sound.
    */
   audio: AudioSignal | null = null;
+  /**
+   * The song script that the picture follows (see songScript.ts), the
+   * song's clock, and whether the song plays; or null. The app sets it.
+   * A setting with an audio link follows its link, not the script.
+   */
+  script: { script: SongScript; time: () => number; playing: () => boolean } | null = null;
+  /** The song's time in this frame (see frame): read once, so every value of a frame has the same time. */
+  private songTime = 0;
+
+  /**
+   * The family by which the song script moves this setting now (see
+   * FAMILIES), or null: the script moves only ranges that the scene
+   * shows (their effect is on, and its submode shows the slider), and an
+   * audio link that the user set wins over it.
+   */
+  songFamily(key: ParamKey) {
+    const param = this.params[key];
+    return param.drift && param.on ? this.songCandidate(key) : null;
+  }
+
+  /** The family by which the song script would move this setting if it had a range (see songFamily), or null. */
+  songCandidate(key: ParamKey) {
+    const family = FAMILIES[key];
+    if (!this.script || !family || this.state.audioLinks[key]) return null;
+    const group = GROUP_OF.get(key);
+    if ((group && !this.state.groups[group]) || !isShown(key, this.state)) return null;
+    return family;
+  }
+
+  /** For the Playlist card: the song's time in this frame, its intensity there (0 to 1), and the pace of animation time (see speedAt); null with no script. */
+  get songNow() {
+    if (!this.script) return null;
+    const { script } = this.script;
+    return { time: this.songTime, intensity: intensityAt(script, this.songTime), pace: this.script.playing() ? speedAt(script, this.songTime) : 0 };
+  }
+
+  /** A range's value from the song script, or null when the script does not move it (see songFamily). */
+  private scriptValue(key: ParamKey) {
+    const family = this.songFamily(key);
+    if (!family || !this.script) return null;
+    return rangeAt(this.params[key], positionAt(this.script.script, family, this.songTime));
+  }
+
+  /** How far the song script moves this setting now, from 0 (its start handle) to 1 (its end handle); 0 when it does not move it. */
+  songPush(key: ParamKey) {
+    const family = this.songFamily(key);
+    return family && this.script ? positionAt(this.script.script, family, this.songTime) : 0;
+  }
+
   /** The links' states (see LinkFollower). */
   private readonly linkFollowers = new Map<ParamKey, LinkFollower>();
 
@@ -625,7 +679,7 @@ export class Engine {
     /* A bypassed setting has no effect: its value with no effect, or its start-up default. */
     if (this.bypassedParams.has(key)) return NO_EFFECT[key] ?? defaultValue(key);
     const param = this.params[key];
-    const value = liveValue(param, this.state);
+    const value = this.scriptValue(key) ?? liveValue(param, this.state);
     if (!param.drift) return value;
     /* A range keeps its last value here, so a range turned off glides from where it was. The sound's push comes after, and is not kept. */
     const shown = this.glided.get(key);
@@ -820,7 +874,10 @@ export class Engine {
    */
   step(elapsed: number) {
     if (!this.state.paused) this.state.clock += elapsed;
-    const animated = this.state.paused ? 0 : elapsed * this.speed;
+    /* With a song script, animation time runs at the music's speed, and stands while the song does. */
+    const pace = !this.script ? 1 : this.script.playing() ? speedAt(this.script.script, this.songTime) : 0;
+    const music = Number.isFinite(pace) ? pace : 1;
+    const animated = this.state.paused ? 0 : elapsed * this.speed * music;
     this.state.time += animated;
     /** Flow is a speed, so its live value is added up over time; a drifting flow speeds up and slows down smoothly. */
     this.state.warpTime += animated * (this.live("warpFlow") + this.warpFlowOffset);
@@ -849,6 +906,7 @@ export class Engine {
     if (interval > 0) this.stats.frameMs += (Math.min(interval, 1000) - this.stats.frameMs) * 0.1;
     const elapsed = Math.min(interval / 1000, 0.1);
     this.lastTime = now;
+    if (this.script) this.songTime = this.script.time();
     const animated = this.step(elapsed);
     this.glide(elapsed);
     this.followAudio(elapsed);

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { CheckCircle, Gauge, Warning, WarningOctagon } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
 import type { PassName } from "../engine/gpuTimer";
+import { songFollow } from "../lib/songFollow";
 
 const PASS_LABELS: Record<PassName, string> = { fold: "Warp, map, fold", refold: "Later shape FX", blur: "Blur", trails: "Trails", smear: "Time smear", contours: "Contours", relief: "Relief", driver: "Driver", camera: "Camera", sort: "Pixel sort", particles: "Particles", rays: "Light rays", bloom: "Bloom", sharpen: "Sharpen", color: "Color", levels: "Levels" };
 /** The panel updates a few times per second, so the numbers can be read. */
@@ -33,6 +34,8 @@ interface Snapshot {
   gpuBytes: number;
   heap: { used: number; limit: number } | null;
   info: { width: number; height: number; blurSamples: number; shapeVersions: number };
+  /** The song clock's numbers while the picture follows a song (see songClock.ts), or null. */
+  song: { latencyMs: number; jitterMs: number; jumps: number } | null;
 }
 
 /** Chromium's heap size (WebView2 has it; other browsers do not). */
@@ -91,7 +94,8 @@ export function StatsOverlay({ engine }: { engine: Engine }) {
         passes,
         gpuBytes: engine.gpuBytes,
         heap: heapNow(),
-        info: { width: info.width, height: info.height, blurSamples: info.blurSamples, shapeVersions: info.shapeVersions }
+        info: { width: info.width, height: info.height, blurSamples: info.blurSamples, shapeVersions: info.shapeVersions },
+        song: engine.script ? { ...songFollow.clock.stats } : null
       });
       setHistory((samples) => [...samples, fps].slice(-HISTORY));
       windowStart = now;
@@ -157,6 +161,11 @@ export function StatsOverlay({ engine }: { engine: Engine }) {
 
       <footer className="perf-details">
         {snapshot.info.width} × {snapshot.info.height} · blur {snapshot.info.blurSamples} samples · {snapshot.info.shapeVersions} shape {snapshot.info.shapeVersions === 1 ? "version" : "versions"} per pixel
+        {snapshot.song && (
+          <div data-tip="Follow the song: the time from the music player to the speakers, the mean step of the player's clock that the song clock smooths away, and how many jumps (seeks) it made">
+            Song clock: output {snapshot.song.latencyMs.toFixed(0)} ms · jitter {snapshot.song.jitterMs.toFixed(1)} ms · {snapshot.song.jumps} {snapshot.song.jumps === 1 ? "jump" : "jumps"}
+          </div>
+        )}
       </footer>
     </section>
   );

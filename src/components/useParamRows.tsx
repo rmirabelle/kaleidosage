@@ -43,12 +43,12 @@ export function useParamRows(engine: Engine) {
       if (element.textContent !== text) element.textContent = text;
       element.classList.toggle("held", heldValue !== undefined);
     }
-    /* A line is blue while the sound moves its setting (the audio color), else the drift color. */
+    /* A line is blue while the sound or the song script moves its setting (the audio color), else the drift color. */
     for (const [key, element] of markers.current) {
       const param = engine.params[key];
       const [min, max] = sliderLimits(param);
       element.style.left = rangePosition(toSlider(param, engine.live(key)), min, max);
-      element.classList.toggle("audio", engine.audioPush(key) > 1e-3);
+      element.classList.toggle("audio", engine.audioPush(key) > 1e-3 || engine.songFamily(key) !== null);
     }
     for (const [key, element] of singleMarkers.current) {
       const param = engine.params[key];

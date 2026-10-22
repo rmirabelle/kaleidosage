@@ -89,6 +89,23 @@ pub async fn read_image_file(path: String) -> Result<Response, String> {
 }
 
 /**
+ * Reads a whole audio file of the tracks and returns its raw bytes, for the
+ * song analysis (see src/lib/songAnalysis.ts). The "video" stream that
+ * plays the file sends it in chunks, so it cannot give the whole file.
+ */
+#[tauri::command]
+pub async fn read_audio_file(path: String) -> Result<Response, String> {
+    let file = Path::new(&path);
+    if !is_audio_path(file) {
+        return Err(format!("{path} is not a supported audio file"));
+    }
+    tokio::fs::read(file)
+        .await
+        .map(Response::new)
+        .map_err(|error| format!("Could not read {path}: {error}"))
+}
+
+/**
  * Saves an exported PNG image or MP4 video to the path the user picked. The
  * file bytes are the raw request body, and the "path" header holds the
  * path, percent-encoded.

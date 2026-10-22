@@ -105,6 +105,7 @@ export function AboutDialog({ version, initialUpdateInfo, onClose, beforeInstall
             <p>Any image or video, in endless motion.</p>
             <span>by Robert Mirabelle</span>
             <UpdateSection state={state} onCheck={() => void check()} onDownload={() => void download()} />
+            <ModelCredits />
           </div>
         </div>
         {!downloading && (
@@ -113,6 +114,21 @@ export function AboutDialog({ version, initialUpdateInfo, onClose, beforeInstall
           </footer>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The models that Follow the song uses (see src-tauri/src/song_analysis.rs
+ * and song_sections.rs), credited as their licenses ask: LinkSeg's weights
+ * are CC-BY 4.0, Beat This! is MIT.
+ */
+function ModelCredits() {
+  return (
+    <div className="about-credits selectable">
+      <b>Follow the song uses</b>
+      <span>Beat This! by F. Foscarin, J. Schlüter and G. Widmer (ISMIR 2024), MIT license; Rust port by danigb.</span>
+      <span>LinkSeg by M. Buisson, B. McFee and S. Essid, “Using Pairwise Link Prediction and Graph Attention Networks for Music Structure Analysis” (ISMIR 2024), model weights under CC-BY 4.0 (creativecommons.org/licenses/by/4.0); ONNX port by linkseg-web, MIT license.</span>
     </div>
   );
 }
