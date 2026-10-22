@@ -233,7 +233,7 @@ export function SongMapPanel({ sceneCount }: { sceneCount: number }) {
               >
                 {scenes[i] && (
                   <span className="song-map-tags">
-                    <span className="song-map-scene-tag" data-tip={`Scene ${scenes[i].scene + 1}`}>S{scenes[i].scene + 1}</span>
+                    <span className="song-map-scene-tag" data-tip={`Scene ${scenes[i].scene + 1}`}>{scenes[i].scene + 1}</span>
                   </span>
                 )}
                 {(candidate.drop || candidate.keepScene) && (
