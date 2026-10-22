@@ -1,14 +1,15 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, useSyncExternalStore, type RefObject } from "react";
 import { Broadcast, Equalizer, Plug, SpeakerSimpleHigh, X } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
-import { formatValue } from "../engine/params";
-import { AUDIO_BANDS, AUDIO_RELEASE, AUDIO_SOURCES, BAND_RANGES, FLOOR_DB, LINK_THRESHOLD, RELEASE_FACTOR, audioLinkList, pushRange, pushedValue, type AudioLink, type AudioBand } from "../engine/audio";
-import { midi } from "../lib/midi";
+import { AUDIO_BANDS, BAND_RANGES, FLOOR_DB, audioLinkable, soundList, type AudioBand } from "../engine/audio";
+import { PARAM_KEYS } from "../engine/params";
+import { FAMILY_LABELS, FAMILY_NAMES, familyOf } from "../engine/songScript";
 import { GAIN_DB, THRESHOLD_DB, audioInput, type DeviceKind, type InputKind } from "../lib/audioInput";
 import { tracks } from "../lib/tracks";
+import { songFollow } from "../lib/songFollow";
 import { destinationName } from "./DestinationDialog";
 import { Dropdown } from "./Dropdown";
-import { Slider, trackPosition } from "./Slider";
+import { Slider } from "./Slider";
 import { EmptyState } from "./EmptyState";
 import { settingButtons } from "../lib/settingButtons";
 import { createPortal } from "react-dom";
@@ -84,190 +85,70 @@ function AudioMeters({ thresholdDb }: { thresholdDb: number }) {
 }
 
 /**
- * The scene's audio links, one row each: the setting, what it follows, its
- * range (how far the sound moves it), its release factor, its threshold
- * offset, and an X that removes the link. New links start at a setting's
- * own audio button.
+ * The scene's settings whose audio switch is on, one row each: the setting,
+ * what moves it (its family, see familyOf), a bar of how far the sound
+ * moves it now, and an X that turns its switch off. A setting's own speaker
+ * turns its switch on or off too. Enable All turns on the switch of every
+ * setting that has a range; Disable All turns every switch off.
  */
-/** The Release slider works in steps of 1 from 0 to RELEASE_STEPS, in equal ratios from AUDIO_RELEASE.min to AUDIO_RELEASE.max. */
-const RELEASE_STEPS = 100;
-const releaseSeconds = (step: number) => AUDIO_RELEASE.min * (AUDIO_RELEASE.max / AUDIO_RELEASE.min) ** (step / RELEASE_STEPS);
-const releaseStep = (seconds: number) => Math.round((Math.log(seconds / AUDIO_RELEASE.min) / Math.log(AUDIO_RELEASE.max / AUDIO_RELEASE.min)) * RELEASE_STEPS);
-const seconds = (value: number) => (value < 1 ? `${Math.round(value * 1000)} ms` : `${value.toFixed(2)} s`);
-/** A link's factor slider works in quarter steps of log2, from ×0.25 to ×4. */
-const factorText = (factor: number) => `×${factor >= 1 ? factor.toFixed(factor % 1 ? 2 : 0) : factor.toFixed(2)}`;
-
-/**
- * The scene's Release: how long a linked setting takes to fall back after
- * a hit or a loud part, the scene's general feel. Each link's factor makes
- * that link faster or slower than it. The slider moves in equal ratios,
- * so short times have as much room as long ones.
- */
-function ReleaseSetting({ engine }: { engine: Engine }) {
-  const [, redraw] = useReducer((count: number) => count + 1, 0);
-  const value = engine.state.audioRelease;
-  return (
-    <div className="audio-setting audio-release" data-tip="How long a setting takes to fall back after a hit or a loud part. Each link's factor makes it faster or slower than this.">
-      <span>Release (this scene) <output>{seconds(value)}</output></span>
-      <Slider
-        min={0}
-        max={RELEASE_STEPS}
-        step={1}
-        value={releaseStep(value)}
-        detent={releaseStep(AUDIO_RELEASE.default)}
-        label="Release"
-        onChange={(step) => {
-          engine.state.audioRelease = releaseSeconds(step);
-          redraw();
-        }}
-      />
-    </div>
-  );
-}
-
-/**
- * A link control's output: the worked-out value (what the slider makes),
- * and for Range the slider's own value after it, smaller. With "same" (the
- * link uses the global value as it is), it keeps its place but shows
- * nothing, so only the links that differ stand out.
- */
-function Worked({ value, own, same = false }: { value: string; own?: string; same?: boolean }) {
-  return <output className={`audio-link-worked ${same ? "same" : ""}`} aria-hidden={same || undefined}><b>{value}</b>{own && <small>{own}</small>}</output>;
-}
-
-/**
- * The scene's audio links, one row each: the setting, what it follows, its
- * threshold offset, its range (how far the sound moves it) and its release
- * factor, and an X that removes the link. Each slider shows what it works
- * out to for this setting: the threshold in dBFS, the farthest value the
- * sound reaches, and the release in seconds. New links start at a
- * setting's own audio button.
- */
-function AudioLinks({ engine }: { engine: Engine }) {
+function SoundSettings({ engine }: { engine: Engine }) {
   const [, redraw] = useReducer((count: number) => count + 1, 0);
   /* "Show audio buttons" hides itself once the FX panel's audio buttons are on. */
   useSyncExternalStore(settingButtons.subscribe, () => settingButtons.shown("audio"));
   useEffect(() => engine.onParamChange(redraw), [engine]);
-  const links = audioLinkList(engine.state.audioLinks);
-  /**
-   * Live lines on the link sliders, moved in each animation frame (not
-   * through React state): on the Threshold slider, the band's peak on the
-   * slider's own scale (dB from the Threshold), gray below the link's
-   * threshold and blue above it, so the threshold can be set just under
-   * the hits; on the Range slider, how far the sound pushes the setting now.
-   */
-  const thresholdLines = useRef(new Map<string, HTMLDivElement>());
-  const rangeLines = useRef(new Map<string, HTMLDivElement>());
-  const linksRef = useRef(links);
-  linksRef.current = links;
+  const keys = soundList(engine.state.sound);
+  /* The bars follow the sound in each animation frame, not through React state. */
+  const bars = useRef(new Map<string, HTMLElement>());
+  const keysRef = useRef(keys);
+  keysRef.current = keys;
   useEffect(() => {
     let frame = 0;
     const draw = () => {
-      const analyzer = audioInput.analyzer;
-      const masterDb = audioInput.settings.thresholdDb;
-      for (const [key, source, amount, , threshold] of linksRef.current) {
-        const peak = analyzer?.decibels[source === "kick" ? "bass" : source] ?? FLOOR_DB;
-        const line = thresholdLines.current.get(key);
-        if (line) {
-          const shown = analyzer !== null && peak > FLOOR_DB;
-          line.classList.toggle("idle", !shown);
-          if (shown) {
-            const offset = Math.min(LINK_THRESHOLD[1], Math.max(LINK_THRESHOLD[0], peak - masterDb));
-            line.style.left = trackPosition(offset, LINK_THRESHOLD[0], LINK_THRESHOLD[1]);
-            line.classList.toggle("under", peak < masterDb + threshold);
-          }
-        }
-        const range = rangeLines.current.get(key);
-        if (range) {
-          const push = engine.audioPush(key) * amount;
-          range.classList.toggle("idle", push < 1e-3);
-          if (push >= 1e-3) range.style.left = trackPosition(push, 0, 1);
-        }
+      for (const key of keysRef.current) {
+        const bar = bars.current.get(key);
+        if (bar) bar.style.width = `${Math.round(engine.audioPush(key) * 100)}%`;
       }
       frame = requestAnimationFrame(draw);
     };
     frame = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frame);
   }, [engine]);
-  const keep = (lines: typeof thresholdLines, key: string) => (element: HTMLDivElement | null) => {
-    if (element) lines.current.set(key, element);
-    else lines.current.delete(key);
-  };
-  if (links.length === 0) {
-    return (
-      <EmptyState text="Click the speaker beside a setting to make it move with the sound.">
-        {/* The speakers show only while the FX panel's audio buttons are on: one click turns them on. */}
-        {!settingButtons.shown("audio") && (
-          <button className="button secondary small" onClick={() => settingButtons.set("audio", true)}>
-            <SpeakerSimpleHigh size={14} /> Show audio buttons
-          </button>
-        )}
-      </EmptyState>
-    );
-  }
-  const masterDb = audioInput.settings.thresholdDb;
+  const canTurnOn = PARAM_KEYS.some((key) => engine.params[key].on && audioLinkable(key, engine.params[key]) && !engine.state.sound[key]);
   return (
-    <ul className="midi-map-list audio-link-list">
-      {/* The column headers, in the rows' own grid, so each lines up over its column. */}
-      <li className="midi-map-row audio-link-row audio-link-head" aria-hidden="true">
-        <span>Setting</span>
-        <span>Moves with</span>
-        <span data-tip="The loudness above which the setting moves: the Threshold plus this link's offset">Threshold</span>
-        <span data-tip="How far the sound can move the setting, and the farthest value it reaches">Range</span>
-        <span data-tip="How long the setting takes to fall back: the scene's Release times this link's factor">Release</span>
-        <span />
-      </li>
-      {links.map(([key, source, amount, release, threshold]) => {
-        const param = engine.params[key];
-        const { rest, end } = pushRange(param);
-        const farthest = formatValue(param, pushedValue(param, rest, end, amount));
-        const effectiveDb = masterDb + threshold;
-        const update = (next: Partial<AudioLink>) => engine.setAudioLink(key, { source, amount, release, threshold, ...next });
-        /* A move of the link's Threshold, Range or Release lights the setting's name and its section, as a MIDI control does. */
-        const tweak = (next: Partial<AudioLink>) => {
-          update(next);
-          midi.touch(key);
-        };
-        return (
-          <li key={key} className="midi-map-row audio-link-row">
-            <span className="midi-map-control" data-tip={destinationName(key)}>{destinationName(key)}</span>
-            <Dropdown value={source} options={AUDIO_SOURCES} label={`What ${destinationName(key)} follows`} onChange={(next) => update({ source: next })} />
-            <span className="audio-link-amount" data-tip={`This setting moves only above ${effectiveDb} dB: the Threshold (${masterDb} dB) ${threshold === 0 ? "as it is" : `${threshold > 0 ? "plus" : "minus"} ${Math.abs(threshold)} dB`}.`}>
-              <Slider
-                min={LINK_THRESHOLD[0]}
-                max={LINK_THRESHOLD[1]}
-                step={1}
-                value={threshold}
-                detent={0}
-                label={`${destinationName(key)} threshold offset`}
-                markerRef={keep(thresholdLines, key)}
-                onChange={(next) => tweak({ threshold: next })}
-              />
-              <Worked value={`${effectiveDb} dB`} same={threshold === 0} />
-            </span>
-            <span className="audio-link-amount" data-tip={`Range: ${Math.round(amount * 100)}% of the way from ${formatValue(param, rest)} to ${formatValue(param, end)}, so the sound moves the setting as far as ${farthest}.`}>
-              <Slider min={0} max={1} step={0.01} value={amount} label={`${destinationName(key)} audio range`} markerRef={keep(rangeLines, key)} onChange={(next) => tweak({ amount: next })} />
-              <Worked value={`${Math.round(amount * 100)}%`} />
-            </span>
-            <span className="audio-link-amount" data-tip={`Release: ${seconds(engine.state.audioRelease * release)}, the scene's Release (${seconds(engine.state.audioRelease)}) ${factorText(release)}. Above ×1 this setting falls back slower, below ×1 faster.`}>
-              <Slider
-                min={Math.log2(RELEASE_FACTOR[0])}
-                max={Math.log2(RELEASE_FACTOR[1])}
-                step={0.25}
-                value={Math.log2(release)}
-                detent={0}
-                label={`${destinationName(key)} release factor`}
-                onChange={(next) => tweak({ release: 2 ** next })}
-              />
-              <Worked value={seconds(engine.state.audioRelease * release)} same={release === 1} />
-            </span>
-            <button className="midi-map-clear" data-tip="Remove this audio link" aria-label={`Remove the audio link from ${destinationName(key)}`} onClick={() => engine.setAudioLink(key, null)}>
-              <X size={12} weight="bold" />
+    <>
+      <div className="panel-buttons sound-all">
+        <button className="panel-button text-only" disabled={!canTurnOn} onClick={() => engine.setSoundAll(true)} data-tip="Turn on the audio switch of every setting that has a range">Enable All</button>
+        <button className="panel-button text-only" disabled={keys.length === 0} onClick={() => engine.setSoundAll(false)} data-tip="Turn off every audio switch of this scene">Disable All</button>
+      </div>
+      {keys.length === 0 ? (
+        <EmptyState text="Click the speaker beside a setting to make it move with the sound, or use Enable All.">
+          {/* The speakers show only while the FX panel's audio buttons are on: one click turns them on. */}
+          {!settingButtons.shown("audio") && (
+            <button className="button secondary small" onClick={() => settingButtons.set("audio", true)}>
+              <SpeakerSimpleHigh size={14} /> Show audio buttons
             </button>
-          </li>
-        );
-      })}
-    </ul>
+          )}
+        </EmptyState>
+      ) : (
+        <ul className="midi-map-list sound-list">
+          {keys.map((key) => {
+            const family = familyOf(key);
+            return (
+              <li key={key} className="midi-map-row sound-row">
+                <span className="midi-map-control" data-tip={destinationName(key)}>{destinationName(key)}</span>
+                <span className="sound-family" data-tip={`Moves with ${FAMILY_NAMES[family]}`}>{FAMILY_LABELS[family]}</span>
+                <span className="audio-meter-well sound-push" data-tip="How far the sound moves the setting now">
+                  <i ref={(element) => { if (element) bars.current.set(key, element); else bars.current.delete(key); }} />
+                </span>
+                <button className="midi-map-clear" data-tip="Turn off this setting's audio switch" aria-label={`Turn off the audio switch of ${destinationName(key)}`} onClick={() => engine.setSound(key, false)}>
+                  <X size={12} weight="bold" />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </>
   );
 }
 
@@ -342,6 +223,8 @@ export function AudioPanel({ engine, onAddTracks, sceneName, inputTip, onInputTi
   useSyncExternalStore(subscribe, version);
   useSyncExternalStore(subscribeTracks, tracksVersion);
   const { status, settings, devices } = audioInput;
+  /* While the picture follows a song, Gain and Threshold do not change the motion (see songFollow.ts): they are grayed out. */
+  const following = useSyncExternalStore(songFollow.subscribe.bind(songFollow), () => songFollow.enabled) && settings.kind === "tracks";
   const listening = status.state === "on";
   const inputRef = useRef<HTMLLabelElement>(null);
   useEffect(() => { void audioInput.refreshDevices(); }, []);
@@ -387,11 +270,11 @@ export function AudioPanel({ engine, onAddTracks, sceneName, inputTip, onInputTi
           {inputTip && settings.kind === "none" && <InputTip anchor={inputRef} onClose={onInputTipDone} />}
           {/* A failure, for example a microphone that Windows blocks. */}
           {status.state === "error" && <p className="audio-error audio-setting selectable">{status.message}</p>}
-          <div className="audio-setting" data-tip="Gain applied to the audio signal before threshold detection.">
+          <div className={`audio-setting ${following ? "follow-off" : ""}`} aria-disabled={following || undefined} data-tip={following ? "Follow the song is on: the song's own analysis moves the picture, so this does not change the motion." : "Gain applied to the audio signal before threshold detection."}>
             <span>Master Gain <output>{settings.gainDb > 0 ? "+" : ""}{settings.gainDb} dB</output></span>
             <Slider min={GAIN_DB[0]} max={GAIN_DB[1]} step={1} value={settings.gainDb} detent={0} label="Master Gain" onChange={(value) => audioInput.setGain(value)} />
           </div>
-          <div className="audio-setting" data-tip="The minimum loudness of the audio needed to trigger detection.">
+          <div className={`audio-setting ${following ? "follow-off" : ""}`} aria-disabled={following || undefined} data-tip={following ? "Follow the song is on: the song's own analysis moves the picture, so this does not change the motion." : "The minimum loudness of the audio needed to trigger detection."}>
             <span>Master Threshold <output>{settings.thresholdDb} dB</output></span>
             <Slider min={THRESHOLD_DB[0]} max={THRESHOLD_DB[1]} step={1} value={settings.thresholdDb} label="Master Threshold" onChange={(value) => audioInput.setThreshold(value)} />
           </div>
@@ -406,8 +289,7 @@ export function AudioPanel({ engine, onAddTracks, sceneName, inputTip, onInputTi
           <div className="midi-panel-mappings audio-sensors-column" {...help("audio.sensors")}>
             {/* The scene's audio links ("audio sensors"), under the name of the scene they belong to. */}
             <div className="stage-label audio-levels-label audio-sensors-label" data-tip={sceneName}><Broadcast size={13} weight="bold" /> Audio sensors: <span className="audio-sensors-scene">{sceneName}</span> <HelpButton topic="audio.sensors" inline /></div>
-            <ReleaseSetting engine={engine} />
-            <AudioLinks engine={engine} />
+            <SoundSettings engine={engine} />
           </div>
         )}
       </div>

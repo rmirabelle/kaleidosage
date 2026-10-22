@@ -181,19 +181,27 @@ describe("scene files", () => {
   });
 });
 
-describe("scene audio links", () => {
+describe("scene audio switches", () => {
   it("are saved, read back, and count as a change", () => {
     const params = createParams();
     const state = createPlayState();
     const before = sceneFingerprint(params, state, [1, null]);
-    state.audioLinks = { zoom: { source: "kick", amount: 0.8, release: 2, threshold: -6 } };
+    state.sound = { zoom: true, panX: true };
     expect(sceneFingerprint(params, state, [1, null])).not.toBe(before);
-    const linked = sceneFingerprint(params, state, [1, null]);
-    state.audioRelease = 0.6;
-    expect(sceneFingerprint(params, state, [1, null])).not.toBe(linked);
     const loadedState = createPlayState();
     applyScene(serializeScene(params, state, { image: IMAGE }), createParams(), loadedState);
-    expect(loadedState.audioLinks).toEqual({ zoom: { source: "kick", amount: 0.8, release: 2, threshold: -6 } });
-    expect(loadedState.audioRelease).toBe(0.6);
+    expect(loadedState.sound).toEqual({ zoom: true, panX: true });
+  });
+
+  it("come from an older scene's audio links", () => {
+    const params = createParams();
+    const state = createPlayState();
+    const file = JSON.parse(serializeScene(params, state, { image: IMAGE })) as { state: Record<string, unknown> };
+    delete file.state.sound;
+    file.state.audioLinks = [["zoom", "kick", 0.8, 2, -6], ["twirl", "bass", 0.5]];
+    file.state.audioRelease = 0.6;
+    const loadedState = createPlayState();
+    applyScene(JSON.stringify(file), createParams(), loadedState);
+    expect(loadedState.sound).toEqual({ zoom: true, twirl: true });
   });
 });

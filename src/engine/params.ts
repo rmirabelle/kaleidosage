@@ -1,5 +1,4 @@
 import type { BlendMode, BlurMask, CameraRepeat, DriverMode, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, ParticleBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
-import type { AudioLink } from "./audio";
 
 export const PARAM_KEYS = [
   "cycle",
@@ -286,12 +285,11 @@ export interface PlayState {
   /** How each shape step's result combines with the picture without it. Randomize does not change it. */
   layerBlend: Record<ShapeStep, LayerBlend>;
   /**
-   * The settings that move with the sound, and how (see docs/AUDIO.md). Part
+   * The settings whose audio switch is on: they move with the sound (see
+   * docs/AUDIO.md, part 3), from a song's plan or from the live sound. Part
    * of the scene: each scene reacts in its own way to the same sound.
    */
-  audioLinks: Partial<Record<ParamKey, AudioLink>>;
-  /** How long a linked setting takes to fall back after a hit, in seconds: the scene's feel (see followPush). Each link can be faster or slower (AudioLink.release). */
-  audioRelease: number;
+  sound: Partial<Record<ParamKey, true>>;
   /**
    * The blur mask, which sets where the picture is blurred: 0 a circle with
    * a sharp center, 1 a circle with a blurred center, 2 a straight gradient,
@@ -781,7 +779,7 @@ export function createPlayState(): PlayState {
     /* No effect is in the list at start-up, so every effect group is off. */
     groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, sort: false, particles: false, rays: false, bloom: false, sharpen: false, color: false, levels: false },
     locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, sort: false, particles: false, rays: false, bloom: false, sharpen: false, color: false, levels: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, audioLinks: {}, audioRelease: 0.25, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, sortOrder: 0, particleBlend: 0, particleStops: defaultGradientStops(), driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, sortOrder: 0, particleBlend: 0, particleStops: defaultGradientStops(), driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */

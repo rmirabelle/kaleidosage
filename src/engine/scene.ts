@@ -1,6 +1,6 @@
 import { CONTOUR_TONES, EASES, MAX_CUSTOM_SECONDS, MAX_GRADIENT_STOPS, PARAM_KEYS, REFERENCE_CYCLE, defaultFxOrder, defaultGradientStops, defaultPictureOrder, defaultShapeOrder, effectShows, type ContourTone, type Ease, type GradientStop, type GroupKey, type Param, type Params, type PlayState } from "./params";
 import { isShapeStep, type FxStep } from "./renderer";
-import { AUDIO_RELEASE, audioLinkList, readAudioLinks } from "./audio";
+import { readSound, soundList } from "./audio";
 
 export const SCENE_EXTENSION = "ksage";
 /** 3: reads as 2 (it changed only an effect that was later removed). 2: ranges share one cycle, and a custom range keeps its own seconds. 1: each range had its own rate, and a speed. */
@@ -55,7 +55,7 @@ export function serializeScene(params: Params, state: PlayState, { image, image2
     app: "KaleidoSage",
     version: SCENE_VERSION,
     params: savedParams,
-    state: { groups: { ...groups }, blendMode, tiling, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, particleBlend, particleStops: particleStops.map((stop) => ({ ...stop })), driverSource, driverMode, videoCrossfade, time, clock, warpTime, driverTime, mapTravel, cameraX, cameraY, effects: [...fxOrder], shapeStack, pictureOrder, layerBlend: { ...layerBlend }, audioLinks: audioLinkList(state.audioLinks), audioRelease: state.audioRelease },
+    state: { groups: { ...groups }, blendMode, tiling, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, particleBlend, particleStops: particleStops.map((stop) => ({ ...stop })), driverSource, driverMode, videoCrossfade, time, clock, warpTime, driverTime, mapTravel, cameraX, cameraY, effects: [...fxOrder], shapeStack, pictureOrder, layerBlend: { ...layerBlend }, sound: soundList(state.sound) },
     image,
     ...(image2 ? { image2 } : {})
   };
@@ -238,10 +238,8 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   for (const step of ["warp", "map", "kaleidoscope"] as const) {
     state.layerBlend[step] = mode(blends[step], [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? 0;
   }
-  /* Scenes from before audio links have none. */
-  state.audioLinks = readAudioLinks(saved.audioLinks, params);
-  /* Scenes from before the Release get the default. */
-  state.audioRelease = isNumber(saved.audioRelease) ? clamp(saved.audioRelease, AUDIO_RELEASE.min, AUDIO_RELEASE.max) : AUDIO_RELEASE.default;
+  /* Scenes from before the audio switches had a link per setting: each linked setting has its switch on (see readSound). */
+  state.sound = readSound(saved.sound, saved.audioLinks, params);
   /* Scenes from before the masked blur had a motion blur mode instead; they get the default mask. */
   state.blurMask = mode(saved.blurMask, [0, 1, 2, 3, 4, 5] as const) ?? state.blurMask;
   state.trailMode = mode(saved.trailMode, [1, 2] as const) ?? state.trailMode;
@@ -288,7 +286,7 @@ export function sceneFingerprint(params: Params, state: PlayState, imageIds: rea
     return [value, low, high, on, ease ?? null, custom ?? false, custom ? seconds : null];
   });
   const { groups, blendMode, tiling, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, particleBlend, particleStops, driverSource, driverMode, videoCrossfade, fxOrder, layerBlend } = state;
-  return JSON.stringify([settings, groups, blendMode, tiling, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, particleBlend, particleStops, driverSource, driverMode, videoCrossfade, fxOrder, layerBlend, audioLinkList(state.audioLinks), state.audioRelease, imageIds]);
+  return JSON.stringify([settings, groups, blendMode, tiling, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, particleBlend, particleStops, driverSource, driverMode, videoCrossfade, fxOrder, layerBlend, soundList(state.sound), imageIds]);
 }
 
 /** Uint8Array.fromBase64 and toBase64, in newer browsers; much faster for a large video. */

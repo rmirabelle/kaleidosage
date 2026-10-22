@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compileScript, positionAt, pulseAt, speedAt, travelAt, type SongAnalysis } from "./songScript";
+import { BEAT_TRIP, beatTravelAt, compileScript, familyOf, positionAt, pulseAt, speedAt, travelAt, type SongAnalysis } from "./songScript";
 
 const RATE = 100;
 
@@ -66,6 +66,20 @@ describe("song script", () => {
     expect(travelAt(script, 12)).toBeCloseTo(sum, 1);
     expect(travelAt(script, 0)).toBe(0);
     expect(travelAt(script, 19) - travelAt(script, 18)).toBeCloseTo(1.7, 1);
+  });
+
+  it("moves a setting with no match in the sound one step on each beat", () => {
+    expect(familyOf("panX")).toBe("beat");
+    expect(familyOf("zoom")).toBe("scale");
+    /* The song is one "rising" part: each beat's step is 85% of a full step. */
+    const step = 0.85 / BEAT_TRIP;
+    expect(beatTravelAt(script, 0.5)).toBeCloseTo(step, 5);
+    expect(beatTravelAt(script, 10)).toBeCloseTo(20 * step, 5);
+    /* Most of a step comes soon after its beat. */
+    expect(beatTravelAt(script, 10.1) - beatTravelAt(script, 10)).toBeGreaterThan(0.4 * step);
+    expect(positionAt(script, "beat", 10)).toBeCloseTo(0.5 - 0.5 * Math.cos(Math.PI * 20 * step), 5);
+    /* An offset gives each setting its own place in the wave. */
+    expect(positionAt(script, "beat", 10, 0.5)).not.toBeCloseTo(positionAt(script, "beat", 10), 2);
   });
 
   it("runs animation time slowly in soft parts and fast in loud parts", () => {

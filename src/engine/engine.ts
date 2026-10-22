@@ -1,8 +1,9 @@
 import { GROUP_PARAMS, NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, defaultValue, hexToRgb, liveValue, rangeAt, rangeClock, startRangeAt, type GroupKey, type ParamKey } from "./params";
 import { KaleidoRenderer, type FrameValues, type ImageSource } from "./renderer";
-import { followPush, levelAbove, pushRange, pushedValue, type AudioLink, type AudioSignal } from "./audio";
+import { audioLinkable, pushRange, pushedValue, type AudioSignal } from "./audio";
 import { copyVideo, cueVideo, releaseVideo, seekVideo, syncVideo, videoLoopPlan, videoLoopTime } from "./video";
-import { FAMILIES, intensityAt, positionAt, speedAt, travelAt, type SongScript } from "./songScript";
+import { familyOf, intensityAt, positionAt, speedAt, travelAt, type Family, type SongScript } from "./songScript";
+import { LiveSound } from "./liveSound";
 import { isShown } from "./submodes";
 
 /** While paused, how long the same frame values must last before the picture counts as still and frames stop (see needsDraw). */
@@ -48,11 +49,6 @@ function springStep(follower: Follower, current: number, target: number, elapsed
   const push = (follower.speed + omega * change) * elapsed;
   follower.speed = (follower.speed - omega * push) * decay;
   return target + (change + push) * decay;
-}
-/** A link's state (see followAudio): the beat count it last saw, and its push now (0 to 1), after its release. */
-interface LinkFollower {
-  beats: number;
-  push: number;
 }
 
 /** A held range plays on again over this time: the held value curves into the playing range (see planResume). */
@@ -493,24 +489,10 @@ export class Engine {
     this.followed = false;
   }
 
-  /**
-   * The family by which the song script moves this setting now (see
-   * FAMILIES), or null: the script moves only ranges that the scene
-   * shows (their effect is on, and its submode shows the slider), and an
-   * audio link that the user set wins over it.
-   */
-  songFamily(key: ParamKey) {
-    const param = this.params[key];
-    return param.drift && param.on ? this.songCandidate(key) : null;
-  }
-
-  /** The family by which the song script would move this setting if it had a range (see songFamily), or null. */
-  songCandidate(key: ParamKey) {
-    const family = FAMILIES[key];
-    if (!this.script || !family || this.state.audioLinks[key]) return null;
+  /** True when the setting shows in the scene: its effect is on, and its submode shows its slider. */
+  isShown(key: ParamKey) {
     const group = GROUP_OF.get(key);
-    if ((group && !this.state.groups[group]) || !isShown(key, this.state)) return null;
-    return family;
+    return !(group && !this.state.groups[group]) && isShown(key, this.state);
   }
 
   /** For the Playlist card: the song's time in this frame, its intensity there (0 to 1), and the pace of animation time (see speedAt); null with no script. */
@@ -520,85 +502,76 @@ export class Engine {
     return { time: this.songTime, intensity: intensityAt(script, this.songTime), pace: this.script.playing() ? speedAt(script, this.songTime) : 0 };
   }
 
-  /** A range's value from the song script, or null when the script does not move it (see songFamily). */
-  private scriptValue(key: ParamKey) {
-    const family = this.songFamily(key);
-    if (!family || !this.script) return null;
-    return rangeAt(this.params[key], positionAt(this.script.script, family, this.songTime));
+  /** The live sound's shapes for the switched-on settings (see liveSound.ts), moved on in each frame. */
+  private readonly liveSound = new LiveSound();
+
+  /** True when the setting's audio switch is on (see PlayState.sound). */
+  soundOn(key: ParamKey) {
+    return Boolean(this.state.sound[key]) && audioLinkable(key, this.params[key]);
   }
 
-  /** How far the song script moves this setting now, from 0 (its start handle) to 1 (its end handle); 0 when it does not move it. */
-  songPush(key: ParamKey) {
-    const family = this.songFamily(key);
-    return family && this.script ? positionAt(this.script.script, family, this.songTime) : 0;
-  }
-
-  /** The links' states (see LinkFollower). */
-  private readonly linkFollowers = new Map<ParamKey, LinkFollower>();
-
-  /** Links "key" to the sound, or (null) removes its link. The row and the Audio panel hear of it through paramChanged. */
-  setAudioLink(key: ParamKey, link: AudioLink | null) {
-    if (link) this.state.audioLinks[key] = { ...link };
-    else delete this.state.audioLinks[key];
-    this.linkFollowers.delete(key);
+  /** Turns the setting's audio switch on or off. The row and the Audio panel hear of it through paramChanged. */
+  setSound(key: ParamKey, on: boolean) {
+    if (on && audioLinkable(key, this.params[key])) this.state.sound[key] = true;
+    else delete this.state.sound[key];
     this.paramChanged(key);
   }
 
-  /** How far the sound pushes the setting now, from 0 to 1, before its amount: for the row's audio button, which pulses with it. */
+  /**
+   * Enable All: the audio switch of every setting that has a range turns on
+   * (a range says how far the setting may move). Disable All: every switch
+   * turns off.
+   */
+  setSoundAll(on: boolean) {
+    for (const key of PARAM_KEYS) {
+      const param = this.params[key];
+      const next = on ? Boolean(this.state.sound[key]) || Boolean(param.on && audioLinkable(key, param)) : false;
+      if (next === Boolean(this.state.sound[key])) continue;
+      this.setSound(key, next);
+    }
+  }
+
+  /**
+   * What moves a switched-on setting now: the song's plan while the
+   * picture follows a song, else the live sound while the app listens, else
+   * nothing (the setting plays as it would with its switch off). A MIDI
+   * hold wins over both.
+   */
+  private soundSource(key: ParamKey): "song" | "live" | null {
+    if (!this.soundOn(key) || this.isHeld(key)) return null;
+    return this.script ? "song" : this.audio ? "live" : null;
+  }
+
+  /** The family by which the sound moves this setting now (see familyOf), or null when nothing moves it. */
+  soundFamily(key: ParamKey): Family | null {
+    return this.soundSource(key) ? familyOf(key) : null;
+  }
+
+  /** Each beat-moved setting's own place in the beat wave, from its seed, so they do not all move as one. */
+  private beatOffset(key: ParamKey) {
+    return (((this.params[key].seed ?? 0) * 0.618034) % 1) * 2;
+  }
+
+  /** How far the sound moves the setting now, from 0 (its start handle, or its slider value) to 1 (its end handle); 0 when nothing moves it. */
   audioPush(key: ParamKey) {
-    if (!this.state.audioLinks[key] || !this.audio) return 0;
-    return this.linkFollowers.get(key)?.push ?? 0;
+    const source = this.soundSource(key);
+    if (!source) return 0;
+    const family = familyOf(key);
+    const offset = family === "beat" ? this.beatOffset(key) : 0;
+    return source === "song" ? positionAt(this.script!.script, family, this.songTime, offset) : this.liveSound.position(family, offset);
   }
 
   /**
-   * Moves every link on by "elapsed" real seconds: its push goes up at
-   * once to what the sound gives (a band's level above the link's own
-   * threshold, or 1 on a new beat for a kick), and falls back over the scene's Release times the link's factor
-   * (see followPush). Real time, so the links react while the animation is
-   * paused too.
+   * The value the sound gives the setting now, or null when nothing moves
+   * it (see docs/AUDIO.md, part 3): between its range's handles, or with no
+   * range, from its slider value toward the end of the slider with more
+   * room (see pushRange).
    */
-  private followAudio(elapsed: number) {
-    const audio = this.audio;
-    for (const key of this.linkFollowers.keys()) {
-      if (!this.state.audioLinks[key]) this.linkFollowers.delete(key);
-    }
-    for (const [key, link] of Object.entries(this.state.audioLinks) as [ParamKey, AudioLink][]) {
-      let follower = this.linkFollowers.get(key);
-      if (!follower) {
-        follower = { beats: audio?.beats ?? 0, push: 0 };
-        this.linkFollowers.set(key, follower);
-      }
-      const beat = audio !== null && audio.beats !== follower.beats;
-      if (audio) follower.beats = audio.beats;
-      /* The link's own threshold: the app's Threshold plus its offset. A beat counts for it only when the bass is above it. */
-      const threshold = (audio?.thresholdDb ?? 0) + (link.threshold ?? 0);
-      const target = !audio ? 0
-        : link.source === "kick" ? (beat && audio.decibels.bass >= threshold ? 1 : 0)
-        : levelAbove(audio.decibels[link.source], threshold);
-      follower.push = followPush(follower.push, target, elapsed, this.state.audioRelease * (link.release ?? 1));
-    }
-  }
-
-  /**
-   * True when the sound moves this setting now: it has an audio link, the
-   * app listens, and no MIDI hold has it (a hold wins: the link waits
-   * until the range plays again).
-   */
-  private audioMoves(key: ParamKey) {
-    return Boolean(this.state.audioLinks[key] && this.audio && !this.isHeld(key));
-  }
-
-  /**
-   * The value with its audio link (see docs/AUDIO.md, part 3): from "base"
-   * (a range's start handle, or the slider's value) toward the end that
-   * pushRange picks, by the link's amount times the push. With no sound
-   * the value is at rest.
-   */
-  private withAudio(key: ParamKey, base: number) {
-    const link = this.state.audioLinks[key];
-    if (!link || !this.audioMoves(key)) return base;
+  private soundValue(key: ParamKey) {
+    if (!this.soundSource(key)) return null;
     const param = this.params[key];
-    return pushedValue(param, base, pushRange(param).end, link.amount * this.audioPush(key));
+    const part = this.audioPush(key);
+    return param.on ? rangeAt(param, part) : pushedValue(param, param.value, pushRange(param).end, part);
   }
 
   /**
@@ -627,10 +600,11 @@ export class Engine {
   /** The range's value "later" real seconds from now (nothing moves while paused). */
   private rangeAhead(key: ParamKey, later: number) {
     /* A range that follows the song is where the song will be then. */
-    const family = this.songFamily(key);
-    if (family && this.script) {
+    if (this.soundOn(key) && this.script) {
+      const family = familyOf(key);
       const ahead = this.script.playing() ? later : 0;
-      return rangeAt(this.params[key], positionAt(this.script.script, family, this.songTime + ahead));
+      const offset = family === "beat" ? this.beatOffset(key) : 0;
+      return rangeAt(this.params[key], positionAt(this.script.script, family, this.songTime + ahead, offset));
     }
     const moving = this.state.paused ? 0 : later;
     return liveValue(this.params[key], { ...this.state, time: this.state.time + moving * this.speed, clock: this.state.clock + moving });
@@ -667,7 +641,6 @@ export class Engine {
   settle() {
     this.glided.clear();
     this.followers.clear();
-    this.linkFollowers.clear();
   }
 
   /** True while a MIDI control holds any range (see isHeld). */
@@ -738,18 +711,22 @@ export class Engine {
     /* A bypassed setting has no effect: its value with no effect, or its start-up default. */
     if (this.bypassedParams.has(key)) return NO_EFFECT[key] ?? defaultValue(key);
     const param = this.params[key];
-    const value = this.scriptValue(key) ?? liveValue(param, this.state);
+    /* A setting whose audio switch is on goes where the sound puts it (see soundValue); a range keeps that value, to glide on from it. */
+    const sound = this.soundValue(key);
+    if (sound !== null) {
+      if (param.on) this.glided.set(key, sound);
+      return sound;
+    }
+    const value = liveValue(param, this.state);
     if (!param.drift) return value;
-    /* A range keeps its last value here, so a range turned off glides from where it was. The sound's push comes after, and is not kept. */
+    /* A range keeps its last value here, so a range turned off glides from where it was. */
     const shown = this.glided.get(key);
     if (param.on || shown === undefined) {
-      /* A range with an audio link stops playing while the app listens: it rests at its start handle, and the sound moves it (see pushRange). */
-      const resting = param.on && this.audioMoves(key) ? pushRange(param).rest : value;
-      const held = param.on ? this.holds.get(key)?.value ?? resting : resting;
+      const held = param.on ? this.holds.get(key)?.value ?? value : value;
       this.glided.set(key, held);
-      return this.withAudio(key, held);
+      return held;
     }
-    return this.withAudio(key, shown);
+    return shown;
   }
 
   /** From one value to another; for an angle that turns all the way round, the short way round the circle. */
@@ -973,10 +950,16 @@ export class Engine {
   /**
    * With a song script, the clocks move by the song's time, not the
    * frame's: a paused song holds the picture, and a jump in the song (a
-   * seek, a new track, a new scene) plays the motion again to the new place
-   * (see followTo). Returns the song time to move the clocks by now.
+   * seek, a new track, a new scene) puts the picture at the new place (see
+   * followTo). A paused scene holds the picture too. Returns the song time
+   * to move the clocks by now.
    */
   private songStep() {
+    /* A paused scene holds its whole picture while the music plays on; on Play it catches up with the song (see followTo). */
+    if (this.state.paused) {
+      this.followed = false;
+      return 0;
+    }
     const time = this.script!.time();
     const step = time - this.songTime;
     if (!this.followed || step > SONG_JUMP || step < -SONG_BACK) {
@@ -1002,7 +985,7 @@ export class Engine {
     this.lastTime = now;
     const animated = this.step(this.script ? this.songStep() : elapsed);
     this.glide(elapsed);
-    this.followAudio(elapsed);
+    this.liveSound.step(this.audio, elapsed);
 
     const paused = this.state.paused;
     for (const slot of [0, 1] as const) {

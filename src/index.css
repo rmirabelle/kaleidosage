@@ -285,6 +285,15 @@ button { border: 0; }
   pointer-events: none;
 }
 .slider.playlist-seek:hover .seek-cap { border-color: var(--accent); }
+/* The song map (see SongMap): the song's parts in the Playlist card's bar, darker for calm parts and brighter for peak parts, with red marks at the drops. */
+.song-map-parts { position: absolute; inset: 0; }
+.song-map-part { position: absolute; top: 0; bottom: 0; border-right: 1px solid #14161c; }
+.song-map-part.tier-0 { background: #253049; }
+.song-map-part.tier-1 { background: #2f4f8f; }
+.song-map-part.tier-2 { background: #3a72d6; }
+.song-map-part.tier-3 { background: #5fa8ff; }
+.song-map-drop { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #e53935; }
+.slider.playlist-seek.song-map .slider-well { height: 10px; top: 4px; }
 .slider.playlist-seek:has(input:disabled) .seek-cap { opacity: .4; }
 .playlist-transport .slider.playlist-seek input[type=range]::-webkit-slider-thumb { width: 10px; height: 18px; margin-top: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
 /* The scene's play toolbar at the bottom of the left panel, under the FX card (see SceneTransport): the Playlist toolbar's look and height. */
@@ -589,6 +598,15 @@ button { border: 0; }
 .audio-link-menu-mark { width: 13px; }
 /* A link row: the setting, what it follows, its range, its release factor, its threshold offset, and X. */
 .audio-link-row { grid-template-columns: minmax(140px, 220px) minmax(120px, 150px) repeat(3, minmax(170px, 230px)) 26px; }
+/* The Audio panel's list of switched-on settings: the setting, its family, a bar of how far the sound moves it, and an X; All on and All off above it. */
+.sound-row { grid-template-columns: minmax(140px, 220px) 90px minmax(120px, 260px) 26px; }
+.sound-family { color: var(--muted); font-size: 11px; }
+.audio-meter-well.sound-push { display: block; height: 10px; }
+.panel-buttons.sound-all { margin: 4px 0 8px 16px; border-radius: 5px; }
+/* Gain and Threshold while the picture follows a song: they do not change the motion, so they are grayed out and take no input. */
+.audio-setting.follow-off > span, .audio-setting.follow-off .slider { opacity: .45; pointer-events: none; }
+.playlist-level.follow-off .audio-meter-threshold, .playlist-level.follow-off .playlist-threshold-value { opacity: .35; }
+.playlist-level.follow-off { cursor: default; }
 /* A link control's output: the worked-out value, then the slider's own value, smaller and gray. */
 /* Left-aligned, so the readout sits right after its slider and the free space comes after it. */
 .audio-link-row .audio-link-worked { display: flex; flex-direction: column; align-items: flex-start; width: 64px; margin-left: 6px; line-height: 1.15; text-align: left; }

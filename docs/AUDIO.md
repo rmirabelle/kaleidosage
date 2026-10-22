@@ -101,6 +101,24 @@ each frame. It does not use React state.
 
 ## 3. Links (what a setting does with a band)
 
+**Changed 2026-10-22: one audio switch per setting replaces the links.**
+The rest of this part, and parts 4 and 5, are the history of the links.
+A setting's speaker is now an on/off switch (`PlayState.sound`, saved in
+the scene as `sound`, a list of setting names). An older scene opens with
+each of its linked settings switched on; the link's source, range,
+threshold and release, and the scene's Release, are left out. While the
+switch is on, the sound moves the setting by its family
+(`familyOf` in `src/engine/songScript.ts`): brightness and size follow
+the level and pulse on each beat, detail follows the level slowly,
+sparkle follows the high sounds, and every other setting moves one step
+through its range on each beat. With a song and Follow the song on, the
+song's plan moves it (`songScript.ts`); otherwise the live sound of the
+input moves it (`src/engine/liveSound.ts`). The span is the range's
+handles, or with no range, from the slider value toward the end of the
+slider with more room (`pushRange`). The Audio panel lists the
+switched-on settings, with Enable All (every setting with a range) and
+Disable All. A MIDI hold wins over the sound.
+
 ```ts
 type AudioBand = "level" | "bass" | "mids" | "highs" | "beat";
 interface AudioLink {

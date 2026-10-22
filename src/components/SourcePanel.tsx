@@ -12,6 +12,8 @@ import { HelpButton } from "./HelpButton";
 import { MediaIcon } from "./MediaIcon";
 import { placeSeek } from "./Slider";
 import { scenePosition } from "../engine/loop";
+import { TIER_NAMES } from "../engine/songPlan";
+import type { SongScript } from "../engine/songScript";
 import { tracks } from "../lib/tracks";
 
 /** How the picture fades from A to B: an even crossfade, or B appearing by brightness. */
@@ -131,6 +133,12 @@ const SCRUB_STEPS = 1000;
  * only; the music has its own toolbar in the Playlist card. The bars and
  * the time follow the scene in each animation frame, not through React
  * state.
+ *
+ * While the picture follows a song (see songFollow.ts), the song's time
+ * runs the scene: Pause freezes the whole picture while the music plays
+ * on, and Play lets it catch up with the song (see Engine.songStep). The
+ * bar is then off (the Playlist card's bar moves in the song), and the
+ * countdown runs to the next change of scene (the song plan's next cue).
  */
 export function SceneTransport({ engine, paused, onTogglePause, onStop, show, autoNext, held, onToggleHold }: {
   engine: Engine;
@@ -156,28 +164,53 @@ export function SceneTransport({ engine, paused, onTogglePause, onStop, show, au
   autoNextRef.current = autoNext;
   const heldRef = useRef(held);
   heldRef.current = held;
+  /** The song the picture follows, or null; only a change renders again (React skips a set to the same value). */
+  const [song, setSong] = useState<SongScript | null>(null);
+  const songRef = useRef(song);
+  songRef.current = song;
   useEffect(() => engine.onFrame(() => {
-    const position = scenePosition(engine.state);
-    const length = engine.params.cycle.value;
+    setSong(engine.script?.script ?? null);
+    const following = songRef.current;
+    const now = engine.songNow;
+    /* The place on the bar, the time, and the countdown's time left and span: in the song, or in the scene's Length. */
+    let position: number, text: string, left: number, span: number, idle: boolean;
+    if (following && now) {
+      /* The bar is off; the time shows the song's part and its level. */
+      position = 0;
+      const part = following.plan.parts.filter((candidate) => candidate.start <= now.time).pop();
+      text = part ? `${part.label}, ${TIER_NAMES[part.tier]}` : "";
+      const next = following.plan.cues.find((cue) => cue.time > now.time);
+      const before = following.plan.cues.filter((cue) => cue.time <= now.time).pop()?.time ?? 0;
+      left = next ? next.time - now.time : following.duration - now.time;
+      span = (next?.time ?? following.duration) - before;
+      idle = heldRef.current || !autoNextRef.current || !next;
+    } else {
+      position = scenePosition(engine.state);
+      const length = engine.params.cycle.value;
+      text = `${time(position * length)} / ${time(length)}`;
+      left = nextSceneIn(position, length, autoNextRef.current);
+      span = length;
+      idle = heldRef.current || !autoNextRef.current;
+    }
     if (bar.current && !dragging.current) bar.current.value = String(Math.round(position * SCRUB_STEPS));
     placeSeek(bar.current, fill.current, cap.current, Number(bar.current?.value ?? 0) / SCRUB_STEPS);
-    const text = `${time(position * length)} / ${time(length)}`;
     if (clock.current && clock.current.textContent !== text) clock.current.textContent = text;
     /* The countdown: the bar empties as the next scene comes near; gray while no scene comes by itself (or Hold is on), yellow in the last 10 seconds, red in the last 5. */
-    const left = nextSceneIn(position, length, autoNextRef.current);
     if (countdown.current) {
-      const idle = heldRef.current || !autoNextRef.current;
-      countdown.current.style.width = `${Math.min(1, left / length) * 100}%`;
+      countdown.current.style.width = `${Math.min(1, left / Math.max(1e-3, span)) * 100}%`;
       countdown.current.classList.toggle("under", idle);
       countdown.current.classList.toggle("soon", !idle && left <= 10 && left > 5);
       countdown.current.classList.toggle("now", !idle && left <= 5);
     }
   }), [engine]);
+
   return (
     <div className="panel-card playlist-transport scene-transport" aria-label="Scene controls" {...help("play")}>
       {show && (
         <div className="scene-countdown-row">
-          <span className="audio-meter-well scene-countdown" data-tip="The time to the next scene: the end of the Length, or a new track when that comes first. Yellow: 10 seconds left; red: 5.">
+          <span className="audio-meter-well scene-countdown" data-tip={song
+            ? "The time to the next scene: the song's next drop or change of level. Yellow: 10 seconds left; red: 5."
+            : "The time to the next scene: the end of the Length, or a new track when that comes first. Yellow: 10 seconds left; red: 5."}>
             <i ref={countdown} />
           </span>
           <button
@@ -198,17 +231,24 @@ export function SceneTransport({ engine, paused, onTogglePause, onStop, show, au
             className="panel-button icon"
             onClick={onStop}
             disabled={paused}
-            data-tip="Stop `Shift+Space`: pause the scene, and go back to its start"
+            data-tip={song ? "Stop `Shift+Space`: freeze the picture; the music plays on" : "Stop `Shift+Space`: pause the scene, and go back to its start"}
             aria-keyshortcuts="Shift+Space"
             aria-label="Stop"
           >
             <MediaIcon kind="stop" size={16} />
           </button>
-          <button className="panel-button icon" onClick={onTogglePause} data-tip={paused ? "Play the scene `Space`" : "Pause the scene `Space`"} aria-label={paused ? "Play" : "Pause"}>
+          <button
+            className="panel-button icon"
+            onClick={onTogglePause}
+            data-tip={song
+              ? (paused ? "Play the scene `Space`: the picture catches up with the song" : "Pause the scene `Space`: freeze the picture; the music plays on")
+              : (paused ? "Play the scene `Space`" : "Pause the scene `Space`")}
+            aria-label={paused ? "Play" : "Pause"}
+          >
             {paused ? <MediaIcon kind="play" size={16} /> : <MediaIcon kind="pause" size={16} />}
           </button>
         </div>
-        <div className="slider playlist-seek" data-tip="Drag to scrub the scene in its Length">
+        <div className="slider playlist-seek" data-tip={song ? "The song moves the scene: move in the song with the Playlist card's bar" : "Drag to scrub the scene in its Length"}>
           <div className="slider-well">
             <div ref={fill} className="slider-fill" style={{ left: 0 }} />
           </div>
@@ -219,6 +259,7 @@ export function SceneTransport({ engine, paused, onTogglePause, onStop, show, au
             min={0}
             max={SCRUB_STEPS}
             step={1}
+            disabled={song !== null}
             aria-label="Place in the scene's Length"
             onPointerDown={() => { dragging.current = true; }}
             onPointerUp={() => { dragging.current = false; }}

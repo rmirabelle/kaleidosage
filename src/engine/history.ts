@@ -1,13 +1,13 @@
 import { PARAM_KEYS, type Param, type Params, type PlayState } from "./params";
 import { sceneFingerprint } from "./scene";
-import { audioLinkList } from "./audio";
+import { soundList } from "./audio";
 
 /** The most steps that Undo can go back. */
 const LIMIT = 200;
 
 type SavedParam = Pick<Param, "value" | "low" | "high" | "on" | "ease" | "custom" | "seconds" | "startTime">;
 type SavedState = Pick<PlayState, "groups" | "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode"
-  | "overlayColor" | "colorBlend" | "trailColor" | "smearShape" | "contourTone" | "contourBlend" | "cameraBlend" | "skyColor" | "cameraRepeat" | "videoCrossfade" | "fxOrder" | "layerBlend" | "audioLinks" | "audioRelease" | "particleStops">;
+  | "overlayColor" | "colorBlend" | "trailColor" | "smearShape" | "contourTone" | "contourBlend" | "cameraBlend" | "skyColor" | "cameraRepeat" | "videoCrossfade" | "fxOrder" | "layerBlend" | "sound" | "particleStops">;
 
 /** The settings at one step, and their fingerprint, to tell whether two steps differ. */
 interface Snapshot {
@@ -45,8 +45,7 @@ function take(params: Params, state: PlayState): Snapshot {
       videoCrossfade: state.videoCrossfade,
       fxOrder: [...state.fxOrder],
       layerBlend: { ...state.layerBlend },
-      audioLinks: Object.fromEntries(audioLinkList(state.audioLinks).map(([key, source, amount, release, threshold]) => [key, { source, amount, release, threshold }])),
-      audioRelease: state.audioRelease,
+      sound: Object.fromEntries(soundList(state.sound).map((key) => [key, true])),
       particleStops: state.particleStops.map((stop) => ({ ...stop }))
     }
   };
@@ -118,8 +117,8 @@ export class SettingsHistory {
 
   private restore(step: Snapshot) {
     for (const key of PARAM_KEYS) Object.assign(this.params[key], step.params[key]);
-    const { groups, layerBlend, fxOrder, audioLinks, particleStops, ...modes } = step.state;
-    Object.assign(this.state, modes, { fxOrder: [...fxOrder], audioLinks: structuredClone(audioLinks), particleStops: particleStops.map((stop) => ({ ...stop })) });
+    const { groups, layerBlend, fxOrder, sound, particleStops, ...modes } = step.state;
+    Object.assign(this.state, modes, { fxOrder: [...fxOrder], sound: { ...sound }, particleStops: particleStops.map((stop) => ({ ...stop })) });
     Object.assign(this.state.groups, groups);
     Object.assign(this.state.layerBlend, layerBlend);
     this.current = step;

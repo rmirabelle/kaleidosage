@@ -62,26 +62,16 @@ describe("settings history", () => {
   });
 });
 
-describe("settings history and audio links", () => {
-  it("undoes a change of the scene's Release", () => {
+describe("settings history and audio switches", () => {
+  it("undoes and redoes an audio switch", () => {
     const params = createParams();
     const state = createPlayState();
     const history = new SettingsHistory(params, state);
-    state.audioRelease = 1.5;
+    state.sound.zoom = true;
     history.commit();
     expect(history.undo()).toBe(true);
-    expect(state.audioRelease).toBe(0.25);
-  });
-
-  it("undoes a new audio link", () => {
-    const params = createParams();
-    const state = createPlayState();
-    const history = new SettingsHistory(params, state);
-    state.audioLinks.zoom = { source: "bass", amount: 0.5 };
-    history.commit();
-    expect(history.undo()).toBe(true);
-    expect(state.audioLinks).toEqual({});
+    expect(state.sound).toEqual({});
     expect(history.redo()).toBe(true);
-    expect(state.audioLinks).toEqual({ zoom: { source: "bass", amount: 0.5, release: 1, threshold: 0 } });
+    expect(state.sound).toEqual({ zoom: true });
   });
 });

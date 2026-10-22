@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AudioAnalyzer, FLOOR_DB, TOP_DB, audioLinkList, followPush, levelAbove, pushRange, pushedValue, readAudioLinks } from "./audio";
+import { AudioAnalyzer, FLOOR_DB, TOP_DB, followPush, levelAbove, pushRange, pushedValue, readSound, soundList } from "./audio";
 import { createParams } from "./params";
 
 const RATE = 48000;
@@ -186,35 +186,18 @@ describe("audio links", () => {
     expect(pushRange(params.panX).end).toBe(max);
   });
 
-  it("list the links in setting order, whatever order they were made in", () => {
-    const one = audioLinkList({ zoom: { source: "bass", amount: 0.5 }, panX: { source: "kick", amount: 1 } });
-    const other = audioLinkList({ panX: { source: "kick", amount: 1 }, zoom: { source: "bass", amount: 0.5 } });
-    expect(one).toEqual(other);
+  it("list the switched-on settings in setting order, whatever order they were switched on in", () => {
+    expect(soundList({ zoom: true, panX: true })).toEqual(soundList({ panX: true, zoom: true }));
+    expect(soundList({ panX: true, zoom: true })).toEqual(["zoom", "panX"]);
   });
 
-  it("read back only good links from a scene file", () => {
+  it("read the switched-on settings from a scene file, and an older file's links as switches", () => {
     const params = createParams();
-    const links = readAudioLinks([
-      ["zoom", "bass", 0.4],
-      ["panX", "kick", 7],
-      ["warpAmount", "jump", 0.5],
-      ["cycle", "bass", 0.5],
-      ["noSuchSetting", "bass", 0.5],
-      ["rotation", "loudness", 0.5],
-      ["twirl", "mids", "half"],
-      "broken"
-    ], params);
-    expect(links).toEqual({ zoom: { source: "bass", amount: 0.4, release: 1, threshold: 0 }, panX: { source: "kick", amount: 1, release: 1, threshold: 0 } });
-    /* A release factor is kept inside ×0.25 to ×4; links from before it get ×1. */
-    expect(readAudioLinks([["zoom", "bass", 0.5, 2], ["panX", "bass", 0.5, 99]], params)).toEqual({
-      zoom: { source: "bass", amount: 0.5, release: 2, threshold: 0 },
-      panX: { source: "bass", amount: 0.5, release: 4, threshold: 0 }
-    });
-    /* A threshold offset is kept inside -24 to +24 dB. */
-    expect(readAudioLinks([["zoom", "bass", 0.5, 1, 6], ["panX", "bass", 0.5, 1, -99]], params)).toEqual({
-      zoom: { source: "bass", amount: 0.5, release: 1, threshold: 6 },
-      panX: { source: "bass", amount: 0.5, release: 1, threshold: -24 }
-    });
-    expect(readAudioLinks(undefined, params)).toEqual({});
+    expect(readSound(["zoom", "panX", "cycle", "noSuchSetting", 7], undefined, params)).toEqual({ zoom: true, panX: true });
+    /* An older scene's links: every linked setting that can move has its switch on; the link's source and range are left out. */
+    expect(readSound(undefined, [["zoom", "bass", 0.4], ["panX", "kick", 1, 2, -6], ["cycle", "bass", 0.5], "broken"], params)).toEqual({ zoom: true, panX: true });
+    /* "sound" wins over old links, and nothing gives none. */
+    expect(readSound(["twirl"], [["zoom", "bass", 0.4]], params)).toEqual({ twirl: true });
+    expect(readSound(undefined, undefined, params)).toEqual({});
   });
 });

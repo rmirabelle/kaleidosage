@@ -136,15 +136,16 @@ export const HELP_TOPICS = {
   },
   "audio.sensors": {
     title: "Audio sensors",
-    text: "An audio sensor makes one setting of the scene move with the sound. Click the speaker {audio} beside a setting to pick what it follows: Level, Bass, Mids, Highs or Beat.",
+    text: "The speaker {audio} beside a setting is its audio switch: click it to make the setting move with the sound, and again to stop.",
     tips: [
-      "Threshold: only sound above it moves the setting.",
-      "Range: how far the sound can move the setting.",
-      "Release: how long the setting takes to fall back after a hit.",
-      "The scene's Release sets the general feel of all its sensors.",
-      "A setting with a range rests at its start handle; sound moves it toward the end handle."
+      "Brightness and size follow the loudness and pulse on each beat.",
+      "Detail follows the loudness slowly; sparkle follows the high sounds.",
+      "Any other setting moves one step through its range on each beat.",
+      "A range sets how far the sound moves the setting.",
+      "With Follow the song on, the song's plan moves it; else the live sound does.",
+      "Enable All in the Audio panel turns on every setting with a range."
     ],
-    keywords: ["audio link", "sensor", "speaker", "react", "music", "threshold", "range", "release", "beat", "kick"]
+    keywords: ["audio switch", "audio link", "sensor", "speaker", "react", "music", "range", "beat", "all on"]
   },
   midi: {
     title: "MIDI",

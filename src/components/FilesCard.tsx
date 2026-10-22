@@ -14,6 +14,7 @@ import { songFollow, type FollowStatus } from "../lib/songFollow";
 import { help } from "../help/topics";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
+import { SongMap } from "./SongMap";
 import { HelpButton } from "./HelpButton";
 import { useDragReorder } from "./useDragReorder";
 
@@ -176,7 +177,9 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * Play or Pause, a bar to seek in the file drawn like the effects'
  * sliders, and the time in the file. It runs the music
  * only. The time and the bar follow the music in each animation frame, not
- * through React state; a drag on the bar seeks.
+ * through React state; a drag on the bar seeks. While the picture follows
+ * the song, the bar is the song's map (see SongMap): its parts by level,
+ * and its drops.
  */
 function PlaylistTransport({ count, engine }: { count: number; engine: Engine | null }) {
   const bar = useRef<HTMLInputElement>(null);
@@ -187,6 +190,7 @@ function PlaylistTransport({ count, engine }: { count: number; engine: Engine | 
   /* The Threshold line is placed by React (see ThresholdMeter), the bar by this frame loop. */
   const clock = useRef<HTMLSpanElement>(null);
   const dragging = useRef(false);
+  const song = useSyncExternalStore(subscribeFollow, () => songFollow.enabled ? songFollow.script : null);
   useEffect(() => {
     let frame = 0;
     const draw = () => {
@@ -223,9 +227,12 @@ function PlaylistTransport({ count, engine }: { count: number; engine: Engine | 
           </button>
           <FollowButton />
         </div>
-        <div className="slider playlist-seek">
+        <div
+          className={`slider playlist-seek ${song ? "song-map" : ""}`}
+          data-tip={song ? "The song's parts: darker for calm parts, brighter for peak parts; red marks are drops. Drag to move in the song." : undefined}
+        >
           <div className="slider-well">
-            <div ref={fill} className="slider-fill" style={{ left: 0 }} />
+            {song ? <SongMap song={song} /> : <div ref={fill} className="slider-fill" style={{ left: 0 }} />}
           </div>
           <div ref={cap} className="seek-cap" />
           <input
@@ -250,7 +257,7 @@ function PlaylistTransport({ count, engine }: { count: number; engine: Engine | 
 /**
  * Under the play toolbar while Follow the song is on: where the analysis
  * stands and, once the picture follows the song, its tempo and how many
- * settings follow it (see Engine.songFamily). The count is drawn in each
+ * settings follow it (see Engine.soundFamily). The count is drawn in each
  * frame, as the scene can change at any time.
  */
 function FollowStatusLine({ engine }: { engine: Engine | null }) {
@@ -261,7 +268,7 @@ function FollowStatusLine({ engine }: { engine: Engine | null }) {
     if (!engine || status.state !== "ready") return;
     let frame = 0;
     const draw = () => {
-      const count = PARAM_KEYS.filter((key) => engine.songFamily(key)).length;
+      const count = PARAM_KEYS.filter((key) => engine.soundFamily(key) && engine.isShown(key)).length;
       const now = engine.songNow;
       const part = now && engine.script?.script.plan.parts.filter((candidate) => candidate.start <= now.time).pop();
       const live = now ? ` At ${time(now.time)}${part ? `, ${part.label} (${TIER_NAMES[part.tier]})` : ""}: intensity ${Math.round(now.intensity * 100)}%, pace ×${now.pace.toFixed(2)}.` : "";
@@ -269,8 +276,8 @@ function FollowStatusLine({ engine }: { engine: Engine | null }) {
       const analyzed = songFollow.analyzedCount(paths);
       const songs = paths.length > 1 ? ` ${analyzed} of ${paths.length} songs analyzed.` : "";
       const text = `Following the song, ${Math.round(status.tempo)} BPM.${live}${songs} ${count === 0
-        ? "No range follows it: give Zoom, Exposure, Bloom, Segments or another size, light or detail setting a range."
-        : `${count === 1 ? "1 range follows" : `${count} ranges follow`} it (lit waveform icons); the other ranges play at its pace.`}`;
+        ? "No setting follows it: click the speaker beside a setting, or use Enable All in the Audio panel."
+        : `${count === 1 ? "1 setting follows" : `${count} settings follow`} it (lit waveform icons); the other ranges play at its pace.`}`;
       if (line.current && line.current.textContent !== text) line.current.textContent = text;
       frame = requestAnimationFrame(draw);
     };
@@ -293,6 +300,8 @@ const meterPlace = (decibels: number) => Math.min(1, Math.max(0, (decibels - FLO
  */
 function ThresholdMeter({ level, threshold }: { level: RefObject<HTMLElement | null>; threshold: RefObject<HTMLElement | null> }) {
   const thresholdDb = useSyncExternalStore((listener) => audioInput.subscribe(listener), () => audioInput.settings.thresholdDb);
+  /* While the picture follows the song, the Threshold does not change the motion: the line is grayed out and takes no drags. */
+  const following = useSyncExternalStore(subscribeFollow, () => songFollow.enabled);
   const set = (decibels: number) => audioInput.setThreshold(Math.round(Math.min(THRESHOLD_DB[1], Math.max(THRESHOLD_DB[0], decibels))));
   const at = (element: HTMLElement, clientX: number) => {
     const box = element.getBoundingClientRect();
@@ -300,16 +309,17 @@ function ThresholdMeter({ level, threshold }: { level: RefObject<HTMLElement | n
   };
   return (
     <span
-      className="audio-meter-well playlist-level"
+      className={`audio-meter-well playlist-level ${following ? "follow-off" : ""}`}
       role="slider"
-      tabIndex={0}
+      tabIndex={following ? -1 : 0}
+      aria-disabled={following || undefined}
       aria-label="Master Threshold"
       aria-valuemin={THRESHOLD_DB[0]}
       aria-valuemax={THRESHOLD_DB[1]}
       aria-valuenow={thresholdDb}
-      data-tip={`The level of the music. The line is the Master Threshold (${thresholdDb} dB): drag it to change it.`}
+      data-tip={following ? "The level of the music. Follow the song is on: the song's own analysis moves the picture, so the Master Threshold does not change the motion." : `The level of the music. The line is the Master Threshold (${thresholdDb} dB): drag it to change it.`}
       onPointerDown={(event) => {
-        if (event.button !== 0) return;
+        if (event.button !== 0 || following) return;
         const meter = event.currentTarget;
         meter.setPointerCapture(event.pointerId);
         set(at(meter, event.clientX));
@@ -325,7 +335,7 @@ function ThresholdMeter({ level, threshold }: { level: RefObject<HTMLElement | n
       }}
       onKeyDown={(event) => {
         const step = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1 }[event.key];
-        if (step === undefined) return;
+        if (step === undefined || following) return;
         /* Here, so the arrows do not also reach the app's shortcuts. */
         event.preventDefault();
         event.stopPropagation();

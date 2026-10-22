@@ -13,83 +13,42 @@ export type AudioBand = "level" | "bass" | "mids" | "highs";
 export const AUDIO_BANDS: readonly AudioBand[] = ["level", "bass", "mids", "highs"];
 
 /**
- * What a linked setting follows (see docs/AUDIO.md, part 3): a band's
- * level, or the beats: "kick" pushes the value on each beat and lets it
- * fall back. ("jump", a new random place on each beat, was removed; scene
- * files with it open with that link left out.)
- */
-export type AudioSource = AudioBand | "kick";
-export const AUDIO_SOURCES: readonly (readonly [AudioSource, string])[] = [
-  ["level", "Level"],
-  ["bass", "Bass"],
-  ["mids", "Mids"],
-  ["highs", "Highs"],
-  ["kick", "Beat"]
-];
-
-/** A setting's link to the sound. Scenes keep their links (see PlayState.audioLinks). */
-export interface AudioLink {
-  source: AudioSource;
-  /** How far the sound can move the value, from 0 to 1 (the Range column in the Audio panel). */
-  amount: number;
-  /** Times the scene's Release (PlayState.audioRelease): how much slower (above 1) or faster this setting falls back. Missing means 1. */
-  release?: number;
-  /** Added to the app's Threshold for this link, in dB: above 0 only louder sound moves the setting. Missing means 0. */
-  threshold?: number;
-}
-
-/** The scene's Release, in seconds, and its limits (see followPush). */
-export const AUDIO_RELEASE: { default: number; min: number; max: number } = { default: 0.25, min: 0.02, max: 3 };
-/** A link's release factor: its limits. */
-export const RELEASE_FACTOR: readonly [number, number] = [0.25, 4];
-/** A link's threshold offset, in dB: its limits. */
-export const LINK_THRESHOLD: readonly [number, number] = [-24, 24];
-const clamp = (value: number, [low, high]: readonly [number, number]) => Math.min(high, Math.max(low, value));
-
-/**
- * One step of a link's push (0 to 1) toward "target" over "elapsed"
- * seconds: up at once, so a hit shows at once, and down to about a third
- * in "release" seconds. This is the response curve: Release sets how long
- * a setting takes to fall back after a hit or a loud part.
+ * One step of a push (0 to 1) toward "target" over "elapsed" seconds: up
+ * at once, so a hit shows at once, and down to about a third in "release"
+ * seconds.
  */
 export function followPush(value: number, target: number, elapsed: number, release: number): number {
   if (target >= value) return target;
   return target + (value - target) * Math.exp(-elapsed / Math.max(1e-3, release));
 }
 
-/** True when the setting can have an audio link: one that moves (it can have a range), but not the scene length, which times every range. */
+/** True when the setting can move with the sound: one that moves (it can have a range), but not the scene length, which times every range. */
 export const audioLinkable = (key: ParamKey, param: Param) => Boolean(param.drift) && key !== "cycle";
 
 /**
- * The links in PARAM_KEYS order, as [setting, source, amount, release factor, threshold offset]: for scene
- * files, the unsaved-changes check and Undo, so the order in which the
- * links were made does not count.
+ * The settings whose audio switch is on (see PlayState.sound), in
+ * PARAM_KEYS order: for scene files, the unsaved-changes check and Undo,
+ * so the order in which they were switched on does not count.
  */
-export function audioLinkList(links: Partial<Record<ParamKey, AudioLink>>): [ParamKey, AudioSource, number, number, number][] {
-  return PARAM_KEYS.flatMap((key) => {
-    const link = links[key];
-    return link ? [[key, link.source, link.amount, link.release ?? 1, link.threshold ?? 0] as [ParamKey, AudioSource, number, number, number]] : [];
-  });
-}
+export const soundList = (sound: Partial<Record<ParamKey, true>>): ParamKey[] => PARAM_KEYS.filter((key) => sound[key]);
 
-/** The links saved in a scene file (see audioLinkList). Unknown settings and sources are skipped; amounts are kept from 0 to 1, and release factors inside RELEASE_FACTOR. */
-export function readAudioLinks(value: unknown, params: Params): Partial<Record<ParamKey, AudioLink>> {
-  const links: Partial<Record<ParamKey, AudioLink>> = {};
-  if (!Array.isArray(value)) return links;
-  for (const entry of value) {
-    if (!Array.isArray(entry)) continue;
-    const [key, source, amount, release, threshold] = entry as unknown[];
-    if (typeof key !== "string" || !(PARAM_KEYS as readonly string[]).includes(key)) continue;
-    if (!audioLinkable(key as ParamKey, params[key as ParamKey])) continue;
-    if (!AUDIO_SOURCES.some(([known]) => known === source)) continue;
-    if (typeof amount !== "number" || !Number.isFinite(amount)) continue;
-    /* Links from before the release factor have none: 1. */
-    const factor = typeof release === "number" && Number.isFinite(release) ? clamp(release, RELEASE_FACTOR) : 1;
-    /* Links from before the threshold offset have none: 0 dB. */
-    const offset = typeof threshold === "number" && Number.isFinite(threshold) ? clamp(threshold, LINK_THRESHOLD) : 0;
-    links[key as ParamKey] = { source: source as AudioSource, amount: Math.min(1, Math.max(0, amount)), release: factor, threshold: offset };
+/**
+ * The settings that move with the sound in a scene file: "sound", a list of
+ * setting names. Older scene files had a link per setting instead
+ * ("audioLinks": [setting, source, amount, ...] each); each linked setting
+ * now has its switch on, and the link's other values are left out. Unknown
+ * settings, and settings that cannot move, are skipped.
+ */
+export function readSound(sound: unknown, oldLinks: unknown, params: Params): Partial<Record<ParamKey, true>> {
+  const names = Array.isArray(sound) ? sound
+    : Array.isArray(oldLinks) ? oldLinks.map((entry) => (Array.isArray(entry) ? entry[0] : null))
+    : [];
+  const result: Partial<Record<ParamKey, true>> = {};
+  for (const name of names) {
+    if (typeof name !== "string" || !(PARAM_KEYS as readonly string[]).includes(name)) continue;
+    if (audioLinkable(name as ParamKey, params[name as ParamKey])) result[name as ParamKey] = true;
   }
-  return links;
+  return result;
 }
 
 /** What the engine reads from the sound: the band levels and loudnesses, the threshold, and the beat count (see AudioAnalyzer). */

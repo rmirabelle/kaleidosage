@@ -48,12 +48,12 @@ export function useParamRows(engine: Engine) {
       const param = engine.params[key];
       const [min, max] = sliderLimits(param);
       element.style.left = rangePosition(toSlider(param, engine.live(key)), min, max);
-      element.classList.toggle("audio", engine.audioPush(key) > 1e-3 || engine.songFamily(key) !== null);
+      element.classList.toggle("audio", engine.soundFamily(key) !== null);
     }
     for (const [key, element] of singleMarkers.current) {
       const param = engine.params[key];
       const [min, max] = sliderLimits(param);
-      const moving = engine.audioPush(key) > 1e-3;
+      const moving = engine.soundFamily(key) !== null;
       element.classList.toggle("idle", !moving);
       if (moving) element.style.left = trackPosition(toSlider(param, engine.live(key)), min, max);
     }
