@@ -25,7 +25,7 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * of one song, at first the song that plays. The arrows on each side of
  * the song's name show the map of the song before or after it in the
  * playlist, and do nothing else. The slices (the song's parts) are each
- * colored by their level, with a red edge where a hit starts one, and
+ * colored by their level, with a red lightning mark where a hit starts one, and
  * show the number of the scene that the show's schedule gives them (see
  * showSchedule.ts): amber for a scene the user picked, bright for the
  * scene selected in the scene list. While a slice is selected, a Ctrl+click
@@ -267,7 +267,7 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
             return (
               <button
                 key={candidate.start}
-                className={`song-map-slice tier-${candidate.tier} ${i === index ? "selected" : ""} ${i === index && ctrlHeld ? "picking" : ""} ${candidate.drop ? "drop" : ""}`}
+                className={`song-map-slice tier-${candidate.tier} ${i === index ? "selected" : ""} ${i === index && ctrlHeld ? "picking" : ""}`}
                 style={{ left: at(candidate.start), width: at(sliceEnd - candidate.start) }}
                 aria-pressed={i === index}
                 aria-label={`${capital(TIER_NAMES[candidate.tier])}, ${time(candidate.start)} to ${time(sliceEnd)}${candidate.drop ? ", starts with a hit" : ""}`}
@@ -295,7 +295,7 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
                 )}
                 {(candidate.drop || candidate.keepScene) && (
                   <span className="song-map-center-tags">
-                    {candidate.drop && <span className="song-map-drop-tag">Hit</span>}
+                    {candidate.drop && <span className="song-map-drop-tag" data-tip="Hit: the picture rises before this slice, and changes hard as it starts" aria-hidden="true"><Lightning size={12} weight="fill" /></span>}
                     {candidate.keepScene && <span className="song-map-keep-tag">Keep Scene</span>}
                   </span>
                 )}

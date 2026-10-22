@@ -2130,7 +2130,7 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .start-model-credits { position: absolute; z-index: 1; left: 50%; bottom: 16px; width: min(760px, calc(100% - 60px)); transform: translateX(-50%); color: #5d6272; font-size: 10.5px; line-height: 1.45; }
 /**
  * The Song Map page of the bottom panel (see SongMapPanel): the song's
- * slices large, each colored by its level, a red edge and tag where a
+ * slices large, each colored by its level, a red lightning mark where a
  * hit starts one, faint lines every 4 bars, and a
  * white playhead; a toolbar above it, and a scrub bar and a time ruler under it.
  */
@@ -2148,7 +2148,6 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .song-map-slice:hover { filter: brightness(1.15); }
 /* The selected slice (the one that plays, or the last one clicked): a red outline and a red glow. */
 .song-map-slice.selected { z-index: 1; box-shadow: inset 0 0 0 2px #e53935, inset 0 0 18px rgba(229,57,53,.45); }
-.song-map-slice.drop { border-left: 3px solid #e53935; }
 /* The tags at a slice's top left: Hit (red) and Keep Scene (gray). */
 .song-map-tags { position: absolute; top: 6px; left: 6px; display: flex; gap: 4px; }
 /* Hit and Keep Scene sit in the middle of their slice. */
@@ -2168,7 +2167,7 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .song-map-title-row .side-panel-title.song-map-title { flex: 0 1 auto; margin: 0; padding: 0 2px; }
 .panel-button.icon.song-map-song-step { flex: none; width: 24px; height: 24px; border: 1px solid #474c5e; border-radius: 5px; background: #30343f; }
 .song-map-wait { margin: 0; color: var(--muted); font-size: 12px; }
-.song-map-drop-tag { padding: 1px 5px; border-radius: 3px; color: #fff; background: #e53935; font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.song-map-drop-tag { display: inline-grid; place-items: center; padding: 2px 4px; border-radius: 3px; color: #fff; background: #e53935; }
 .song-map-slice-name { font-size: 12px; font-weight: 700; white-space: nowrap; }
 .song-map-bar { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.1); pointer-events: none; }
 /* A slice divider's grab zone: 10px wide, centered on the divider; it lights while hovered or dragged. */
