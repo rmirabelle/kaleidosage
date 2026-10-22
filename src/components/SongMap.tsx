@@ -12,7 +12,7 @@ export function SongMap({ song }: { song: SongScript }) {
   return (
     <div className="song-map-parts">
       {song.plan.parts.map((part) => (
-        <i key={part.start} className={`song-map-part tier-${part.tier}`} style={{ left: at(part.start), width: at(part.end - part.start) }} title={`${part.label}, ${TIER_NAMES[part.tier]}`} />
+        <i key={part.start} className={`song-map-part tier-${part.tier}`} style={{ left: at(part.start), width: at(part.end - part.start) }} title={`${TIER_NAMES[part.tier][0].toUpperCase()}${TIER_NAMES[part.tier].slice(1)} part`} />
       ))}
       {song.plan.drops.map((drop) => <b key={drop.time} className="song-map-drop" style={{ left: at(drop.time) }} />)}
     </div>

@@ -4,7 +4,6 @@ import { changeSlice, deleteSlice, mergeWithNext, moveDivider, splitSlice } from
 import { TIER_NAMES, mapOf, planSong, type MapSlice, type Tier } from "../engine/songPlan";
 import { songFollow } from "../lib/songFollow";
 import { tracks } from "../lib/tracks";
-import { Dropdown } from "./Dropdown";
 import { placeSeek } from "./Slider";
 import { MediaIcon } from "./MediaIcon";
 
@@ -13,9 +12,6 @@ const followVersion = () => songFollow.version;
 const subscribeTracks = (listener: () => void) => tracks.subscribe(listener);
 const tracksPlaying = () => tracks.playing;
 
-/** The names a slice can have: LinkSeg's labels (see song_sections.rs). */
-const NAMES = ["intro", "verse", "chorus", "bridge", "inst", "outro", "silence"] as const;
-const NAME_OPTIONS = NAMES.map((name) => [name, name[0].toUpperCase() + name.slice(1)] as const);
 const TIERS: readonly Tier[] = [0, 1, 2, 3];
 const capital = (text: string) => text[0].toUpperCase() + text.slice(1);
 
@@ -27,7 +23,7 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * colored by its level, with a red edge where a drop starts it. A click
  * selects a slice; a double-click splits it at that bar; a drag of the
  * divider between two slices moves it from bar to bar. For the selected
- * slice: its level, its name and its drop, and Split, Merge with next and
+ * slice: its level and its drop, and Split, Merge with next and
  * Delete (the slice before it grows into its place). Each change applies
  * at once (see songFollow.editMap) and is kept with the song's analysis,
  * so Save Playlist keeps it. Reset to automatic gives back the analysis's
@@ -173,10 +169,6 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
                   ))}
                 </div>
               </div>
-              <div className="song-map-field">
-                <span>Name</span>
-                <Dropdown value={NAMES.includes(slice.label as typeof NAMES[number]) ? slice.label : "verse"} options={NAME_OPTIONS} label="Slice name" onChange={(label) => apply(changeSlice(slices, index, { label }))} />
-              </div>
               <label className="song-map-field" data-tip={index === 0 ? "The first slice has nothing before it, so it cannot start with a drop" : "On a drop the picture rises before it, and changes hard on it"}>
                 <input type="checkbox" checked={slice.drop} disabled={index === 0} onChange={(event) => apply(changeSlice(slices, index, { drop: event.target.checked }))} />
                 <span className="song-map-field-note">Drop</span>
@@ -216,7 +208,7 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
                   className={`song-map-slice tier-${candidate.tier} ${i === index ? "selected" : ""} ${candidate.drop ? "drop" : ""}`}
                   style={{ left: at(candidate.start), width: at(sliceEnd - candidate.start) }}
                   aria-pressed={i === index}
-                  aria-label={`${capital(candidate.label)}, ${TIER_NAMES[candidate.tier]}, ${time(candidate.start)} to ${time(sliceEnd)}${candidate.drop ? ", starts with a drop" : ""}`}
+                  aria-label={`${capital(TIER_NAMES[candidate.tier])}, ${time(candidate.start)} to ${time(sliceEnd)}${candidate.drop ? ", starts with a drop" : ""}`}
                   onClick={() => setSelected(i)}
                   onDoubleClick={(event) => {
                     apply(splitSlice(slices, i, analysis.downbeats, duration, timeAt(event)));
@@ -224,8 +216,7 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
                   }}
                 >
                   {candidate.drop && <span className="song-map-drop-tag">Drop</span>}
-                  <span className="song-map-slice-name">{capital(candidate.label)}</span>
-                  <span className="song-map-slice-level">{capital(TIER_NAMES[candidate.tier])}</span>
+                  <span className="song-map-slice-name">{capital(TIER_NAMES[candidate.tier])}</span>
                 </button>
               );
             })}

@@ -2157,7 +2157,6 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .song-map-slice.drop { border-left: 3px solid #e53935; }
 .song-map-drop-tag { position: absolute; top: 6px; left: 6px; padding: 1px 5px; border-radius: 3px; color: #fff; background: #e53935; font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .song-map-slice-name { font-size: 12px; font-weight: 700; white-space: nowrap; }
-.song-map-slice-level { font-size: 10px; opacity: .8; white-space: nowrap; }
 .song-map-bar { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.1); pointer-events: none; }
 /* A slice divider's grab zone: 10px wide, centered on the divider; it lights while hovered or dragged. */
 .song-map-divider { position: absolute; z-index: 3; top: 0; bottom: 0; width: 10px; margin-left: -5px; cursor: col-resize; touch-action: none; }

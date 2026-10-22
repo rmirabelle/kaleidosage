@@ -299,7 +299,7 @@ function FollowStatusLine({ engine }: { engine: Engine | null }) {
       const count = PARAM_KEYS.filter((key) => engine.soundFamily(key) && engine.isShown(key)).length;
       const now = engine.songNow;
       const part = now && engine.script?.script.plan.parts.filter((candidate) => candidate.start <= now.time).pop();
-      const live = now ? ` At ${time(now.time)}${part ? `, ${part.label} (${TIER_NAMES[part.tier]})` : ""}: intensity ${Math.round(now.intensity * 100)}%, pace ×${now.pace.toFixed(2)}.` : "";
+      const live = now ? ` At ${time(now.time)}${part ? `, ${TIER_NAMES[part.tier]} part` : ""}: intensity ${Math.round(now.intensity * 100)}%, pace ×${now.pace.toFixed(2)}.` : "";
       const paths = tracks.list.map((track) => track.path);
       const analyzed = songFollow.analyzedCount(paths);
       const songs = paths.length > 1 ? ` ${analyzed} of ${paths.length} songs analyzed.` : "";
