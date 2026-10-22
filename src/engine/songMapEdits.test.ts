@@ -15,6 +15,9 @@ describe("song map edits", () => {
   it("changes a slice's name, level and drop, but never a drop on the first slice", () => {
     expect(changeSlice(slices, 1, { tier: 2, label: "bridge", drop: true })[1]).toEqual({ start: 10, label: "bridge", tier: 2, drop: true });
     expect(changeSlice(slices, 0, { drop: true })[0].drop).toBe(false);
+    expect(changeSlice(slices, 2, { keepScene: true })[2]).toEqual({ ...slices[2], keepScene: true });
+    expect(changeSlice(changeSlice(slices, 2, { keepScene: true }), 2, { keepScene: false })[2]).toEqual(slices[2]);
+    expect(changeSlice(slices, 0, { keepScene: true })[0]).toEqual(slices[0]);
   });
 
   it("deletes a slice: the slice before it grows into its place", () => {
@@ -66,5 +69,12 @@ describe("an edited song map", () => {
     expect(plan.drops.map((drop) => drop.time)).toEqual([20]);
     expect(plan.cues).toEqual([{ time: 10, drop: false }, { time: 20, drop: true }]);
     expect(mapOf(plan)).toEqual(slices);
+  });
+
+  it("gives no cue for a slice that keeps the scene, but keeps its drop", () => {
+    const plan = planSong({ ...analysis, mapEdits: changeSlice(slices, 2, { keepScene: true }) });
+    expect(plan.cues).toEqual([{ time: 10, drop: false }]);
+    expect(plan.drops.map((drop) => drop.time)).toEqual([20]);
+    expect(mapOf(plan)[2].keepScene).toBe(true);
   });
 });

@@ -25,6 +25,8 @@ export interface Part {
   tier: Tier;
   /** The part's mean intensity (0 to 1, see SongAnalysis.curves.intensity). */
   intensity: number;
+  /** True when the user set that the scene stays as this part starts (see MapSlice.keepScene). */
+  keepScene?: boolean;
 }
 
 export interface Drop {
@@ -47,6 +49,8 @@ export interface MapSlice {
   label: string;
   tier: Tier;
   drop: boolean;
+  /** True: the scene stays as this slice starts; its level and drop still change the motion. Missing means false. */
+  keepScene?: boolean;
 }
 
 /** A place where the picture changes its look (see App's scene changes): a drop, or a part with another level. */
@@ -101,7 +105,8 @@ export function planSong(analysis: SongAnalysis): SongPlan {
       end: edits[index + 1]?.start ?? duration,
       label: slice.label,
       tier: slice.tier,
-      intensity: 0
+      intensity: 0,
+      ...(slice.keepScene && index > 0 ? { keepScene: true } : {})
     }));
     for (const part of parts) part.intensity = mean(curves.intensity, rate, part.start, part.end);
     const wanted = new Set(edits.slice(1).filter((slice) => slice.drop).map((slice) => slice.start));
@@ -172,8 +177,10 @@ function finishPlan(analysis: SongAnalysis, parts: Part[], isDrop: (part: Part, 
   });
 
   const dropTimes = new Set(drops.map((drop) => drop.time));
+  /* A part that keeps the scene gives no cue: the scene stays. */
   const cues = parts.slice(1).flatMap<Cue>((part, index) =>
-    dropTimes.has(part.start) ? [{ time: part.start, drop: true }]
+    part.keepScene ? []
+      : dropTimes.has(part.start) ? [{ time: part.start, drop: true }]
       : part.tier !== parts[index].tier ? [{ time: part.start, drop: false }]
       : []);
   return { parts, drops, cues };
@@ -182,5 +189,5 @@ function finishPlan(analysis: SongAnalysis, parts: Part[], isDrop: (part: Part, 
 /** The plan as a map the user can edit: one slice per part, with its name, its level, and whether a drop starts it. */
 export function mapOf(plan: SongPlan): MapSlice[] {
   const drops = new Set(plan.drops.map((drop) => drop.time));
-  return plan.parts.map((part) => ({ start: part.start, label: part.label, tier: part.tier, drop: drops.has(part.start) }));
+  return plan.parts.map((part) => ({ start: part.start, label: part.label, tier: part.tier, drop: drops.has(part.start), ...(part.keepScene ? { keepScene: true } : {}) }));
 }

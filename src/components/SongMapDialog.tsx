@@ -23,7 +23,8 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * colored by its level, with a red edge where a drop starts it. A click
  * selects a slice; a double-click splits it at that bar; a drag of the
  * divider between two slices moves it from bar to bar. For the selected
- * slice: its level and its drop, and Split, Merge with next and
+ * slice: its level, its drop, and Keep scene (the slice starts with no
+ * change of scene), and Split, Merge with next and
  * Delete (the slice before it grows into its place). Each change applies
  * at once (see songFollow.editMap) and is kept with the song's analysis,
  * so Save Playlist keeps it. Reset to automatic gives back the analysis's
@@ -173,6 +174,10 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
                 <input type="checkbox" checked={slice.drop} disabled={index === 0} onChange={(event) => apply(changeSlice(slices, index, { drop: event.target.checked }))} />
                 <span className="song-map-field-note">Drop</span>
               </label>
+              <label className="song-map-field" data-tip={index === 0 ? "The first slice has nothing before it, so there is no scene change to skip" : "Keep the scene as this slice starts: its level and drop still change the motion, but the next scene does not come in"}>
+                <input type="checkbox" checked={Boolean(slice.keepScene)} disabled={index === 0} onChange={(event) => apply(changeSlice(slices, index, { keepScene: event.target.checked }))} />
+                <span className="song-map-field-note">Keep scene</span>
+              </label>
               <div className="panel-buttons">
                 <button className="panel-button" onClick={() => apply(splitSlice(slices, index, analysis.downbeats, duration))} data-tip="Split this slice in two at the bar nearest its middle (or double-click the slice where you want the cut)">
                   <Scissors size={15} /> Split
@@ -215,7 +220,12 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
                     setSelected(i + 1);
                   }}
                 >
-                  {candidate.drop && <span className="song-map-drop-tag">Drop</span>}
+                  {(candidate.drop || candidate.keepScene) && (
+                    <span className="song-map-tags">
+                      {candidate.drop && <span className="song-map-drop-tag">Drop</span>}
+                      {candidate.keepScene && <span className="song-map-keep-tag">Same scene</span>}
+                    </span>
+                  )}
                   <span className="song-map-slice-name">{capital(TIER_NAMES[candidate.tier])}</span>
                 </button>
               );

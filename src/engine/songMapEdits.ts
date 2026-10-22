@@ -7,9 +7,13 @@ import type { MapSlice } from "./songPlan";
  * start (the analysis's downbeats).
  */
 
-/** Changes one slice's name, level or drop. The first slice has no drop: nothing comes before it. */
-export function changeSlice(slices: readonly MapSlice[], index: number, change: Partial<Pick<MapSlice, "label" | "tier" | "drop">>): MapSlice[] {
-  return slices.map((slice, i) => (i === index ? { ...slice, ...change, drop: i === 0 ? false : change.drop ?? slice.drop } : slice));
+/** Changes one slice's name, level, drop or keep scene. The first slice has neither a drop nor a scene to keep: nothing comes before it. */
+export function changeSlice(slices: readonly MapSlice[], index: number, change: Partial<Pick<MapSlice, "label" | "tier" | "drop" | "keepScene">>): MapSlice[] {
+  return slices.map((slice, i) => {
+    if (i !== index) return slice;
+    const { keepScene, ...next } = { ...slice, ...change, drop: i === 0 ? false : change.drop ?? slice.drop };
+    return keepScene && i > 0 ? { ...next, keepScene: true } : next;
+  });
 }
 
 /**
