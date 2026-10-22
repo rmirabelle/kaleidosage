@@ -2150,6 +2150,8 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .song-map-slice.drop { border-left: 3px solid #e53935; }
 /* The tags at a slice's top left: Hit (red) and Keep Scene (gray). */
 .song-map-tags { position: absolute; top: 6px; left: 6px; display: flex; gap: 4px; }
+/* Hit and Keep Scene sit in the middle of their slice. */
+.song-map-center-tags { position: absolute; top: 50%; left: 50%; display: flex; gap: 4px; transform: translate(-50%, -50%); white-space: nowrap; pointer-events: none; }
 .song-map-keep-tag { padding: 1px 5px; border-radius: 3px; color: #fff; background: rgba(20,22,28,.7); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .song-map-scene-tag { padding: 1px 5px; border-radius: 3px; color: #fff; background: rgba(20,22,28,.7); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 /* The song's name with an arrow on each side (see SongMapPanel). */

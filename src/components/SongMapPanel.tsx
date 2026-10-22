@@ -231,9 +231,13 @@ export function SongMapPanel({ sceneCount }: { sceneCount: number }) {
                   tracks.pause();
                 }}
               >
-                {(candidate.drop || candidate.keepScene || scenes[i]) && (
+                {scenes[i] && (
                   <span className="song-map-tags">
-                    {scenes[i] && <span className="song-map-scene-tag" data-tip={`Scene ${scenes[i].scene + 1}`}>S{scenes[i].scene + 1}</span>}
+                    <span className="song-map-scene-tag" data-tip={`Scene ${scenes[i].scene + 1}`}>S{scenes[i].scene + 1}</span>
+                  </span>
+                )}
+                {(candidate.drop || candidate.keepScene) && (
+                  <span className="song-map-center-tags">
                     {candidate.drop && <span className="song-map-drop-tag">Hit</span>}
                     {candidate.keepScene && <span className="song-map-keep-tag">Keep Scene</span>}
                   </span>
