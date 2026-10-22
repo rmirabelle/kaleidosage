@@ -204,7 +204,7 @@ function PlaylistTransport({ count, engine }: { count: number; engine: Engine | 
       const loudness = audioInput.analyzer?.decibels.level ?? FLOOR_DB;
       if (level.current) {
         level.current.style.width = `${meterPlace(loudness) * 100}%`;
-        level.current.classList.toggle("under", loudness < audioInput.settings.thresholdDb);
+        level.current.classList.toggle("under", !songFollow.enabled && loudness < audioInput.settings.thresholdDb);
       }
       const text = duration ? `${time(tracks.position)} / ${time(duration)}` : "";
       if (clock.current && clock.current.textContent !== text) clock.current.textContent = text;
@@ -299,31 +299,38 @@ const meterPlace = (decibels: number) => Math.min(1, Math.max(0, (decibels - FLO
  * The music's level meter, which also sets the Master Threshold: the line
  * on it is the Threshold. While the mouse is over the meter, the line grows
  * into a handle with the value; a press or a drag anywhere on the meter
- * moves it there, and the arrow keys move it by 1 dB. The bar and the line
- * are drawn by PlaylistTransport's frame loop.
+ * moves it there, and the arrow keys move it by 1 dB. While Song follow is
+ * on, the song's analysis moves the picture and the Threshold has no use:
+ * the meter shows the level only, with no line. The bar and the line are
+ * drawn by PlaylistTransport's frame loop.
  */
 function ThresholdMeter({ level, threshold }: { level: RefObject<HTMLElement | null>; threshold: RefObject<HTMLElement | null> }) {
   const thresholdDb = useSyncExternalStore((listener) => audioInput.subscribe(listener), () => audioInput.settings.thresholdDb);
-  /* While the picture follows the song, the Threshold does not change the motion: the line is grayed out and takes no drags. */
   const following = useSyncExternalStore(subscribeFollow, () => songFollow.enabled);
   const set = (decibels: number) => audioInput.setThreshold(Math.round(Math.min(THRESHOLD_DB[1], Math.max(THRESHOLD_DB[0], decibels))));
   const at = (element: HTMLElement, clientX: number) => {
     const box = element.getBoundingClientRect();
     return FLOOR_DB + ((clientX - box.left) / box.width) * -FLOOR_DB;
   };
+  if (following) {
+    return (
+      <span className="audio-meter-well playlist-level follow-off" data-tip="The level of the music">
+        <i ref={level as RefObject<HTMLElement>} />
+      </span>
+    );
+  }
   return (
     <span
-      className={`audio-meter-well playlist-level ${following ? "follow-off" : ""}`}
+      className="audio-meter-well playlist-level"
       role="slider"
-      tabIndex={following ? -1 : 0}
-      aria-disabled={following || undefined}
+      tabIndex={0}
       aria-label="Master Threshold"
       aria-valuemin={THRESHOLD_DB[0]}
       aria-valuemax={THRESHOLD_DB[1]}
       aria-valuenow={thresholdDb}
-      data-tip={following ? "The level of the music. Song follow is on: the song's own analysis moves the picture, so the Master Threshold does not change the motion." : `The level of the music. The line is the Master Threshold (${thresholdDb} dB): drag it to change it.`}
+      data-tip={`The level of the music. The line is the Master Threshold (${thresholdDb} dB): drag it to change it.`}
       onPointerDown={(event) => {
-        if (event.button !== 0 || following) return;
+        if (event.button !== 0) return;
         const meter = event.currentTarget;
         meter.setPointerCapture(event.pointerId);
         set(at(meter, event.clientX));
@@ -339,7 +346,7 @@ function ThresholdMeter({ level, threshold }: { level: RefObject<HTMLElement | n
       }}
       onKeyDown={(event) => {
         const step = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1 }[event.key];
-        if (step === undefined || following) return;
+        if (step === undefined) return;
         /* Here, so the arrows do not also reach the app's shortcuts. */
         event.preventDefault();
         event.stopPropagation();

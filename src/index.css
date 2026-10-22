@@ -627,7 +627,7 @@ button { border: 0; }
 .panel-buttons.sound-all { margin: 4px 0 8px 16px; border-radius: 5px; }
 /* Gain and Threshold while the picture follows a song: they do not change the motion, so they are grayed out and take no input. */
 .audio-setting.follow-off > span, .audio-setting.follow-off .slider { opacity: .45; pointer-events: none; }
-.playlist-level.follow-off .audio-meter-threshold, .playlist-level.follow-off .playlist-threshold-value { opacity: .35; }
+/* While Song follow is on, the meter shows the level only (see ThresholdMeter). */
 .playlist-level.follow-off { cursor: default; }
 /* A link control's output: the worked-out value, then the slider's own value, smaller and gray. */
 /* Left-aligned, so the readout sits right after its slider and the free space comes after it. */
