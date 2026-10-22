@@ -2166,7 +2166,8 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .song-map-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 20px; border-top: 1px solid #30343f; border-bottom: 1px solid #30343f; background: #1d2029; }
 .song-map-toolbar .panel-buttons { border-radius: 5px; }
 .song-map-toolbar-divider { width: 1px; height: 24px; background: #30343f; }
-.song-map-slice-info { color: #c3c7d0; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* The status bar above the footer: the selected slice, where it is, and its length. */
+.song-map-status { min-height: 18px; padding: 6px 20px; border-top: 1px solid #30343f; color: #9ca1af; background: #1d2029; font-size: 11px; font-variant-numeric: tabular-nums; }
 .panel-button.song-map-reset { margin-left: auto; border: 1px solid #474c5e; border-radius: 5px; background: #30343f; }
 /* The scrub bar under the map: the map's full width. */
 .slider.playlist-seek.song-map-scrub { flex: none; width: 100%; margin-top: 4px; }
