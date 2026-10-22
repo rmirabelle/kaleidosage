@@ -203,15 +203,16 @@ export function SongMapPanel({ sceneCount }: { sceneCount: number }) {
                   <ArrowsInLineHorizontal size={15} /> Merge
                 </button>
                 <button
-                  className="panel-button"
+                  className="panel-button icon"
                   disabled={slices.length < 2}
+                  aria-label="Delete this slice"
                   onClick={() => {
                     apply(deleteSlice(slices, index));
                     setSelected(Math.max(0, index - 1));
                   }}
                   data-tip="Delete this slice: the slice before it grows into its place `Delete`"
                 >
-                  <Trash size={15} /> Delete
+                  <Trash size={15} />
                 </button>
               </div>
             </div>
