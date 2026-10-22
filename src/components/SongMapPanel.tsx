@@ -31,8 +31,9 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * its place), then Reset (the analysis's own map). Each change applies at
  * once (see songFollow.editMap) and is kept with the song's analysis, so
  * Save Playlist keeps it. Under the map, a bar the width of the map moves
- * in the song; a status bar at the bottom shows the song, the selected
- * slice, and the song's time. While the page has the keyboard focus,
+ * in the song; the song's file name is above the map, and a status bar at
+ * the bottom shows the song's length and tempo, the selected slice, and
+ * the song's time. While the page has the keyboard focus,
  * Delete removes the selected slice and the arrow keys select another.
  */
 export function SongMapPanel() {
@@ -188,6 +189,8 @@ export function SongMapPanel() {
         </button>
       </div>
       <div className="song-map-body">
+        {/* The song's file name, in quotes, as the scene card's title shows the scene's name. */}
+        <h2 className="side-panel-title source-title song-map-title" data-tip={name}><span>{name}</span></h2>
         <div ref={strip} className="song-map-strip" data-tip="Click a slice to select it; double-click to split it at that bar">
           {view.map((candidate, i) => {
             const sliceEnd = view[i + 1]?.start ?? duration;
@@ -272,7 +275,7 @@ export function SongMapPanel() {
         </div>
       </div>
       <div className="song-map-status" aria-live="polite">
-        <span>{name} · {time(duration)} · {Math.round(analysis.tempo)} BPM</span>
+        <span>{time(duration)} · {Math.round(analysis.tempo)} BPM</span>
         {slice && <span>Slice {index + 1} of {slices.length} · {time(slice.start)} – {time(end)} · {Math.round(end - slice.start)} s</span>}
         <span ref={clock} className="song-map-clock" />
       </div>

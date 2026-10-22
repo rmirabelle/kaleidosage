@@ -2132,6 +2132,8 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
  * white playhead; a toolbar above it, and a scrub bar and a time ruler under it.
  */
 .song-map-page { overflow-y: auto; }
+/* The song's file name above the map, in the scene card title's style (see .source-title). */
+.side-panel-title.song-map-title { flex: none; margin: 0 0 4px; }
 .song-map-page:focus { outline: none; }
 .song-map-body { display: flex; flex-direction: column; gap: 4px; padding: 16px 20px 10px; }
 .song-map-strip { position: relative; height: 120px; overflow: hidden; border: 1px solid #2b2f3a; border-radius: 6px; background: #14161c; }
