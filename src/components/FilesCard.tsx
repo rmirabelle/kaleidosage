@@ -14,7 +14,6 @@ import { songFollow, type FollowStatus } from "../lib/songFollow";
 import { help } from "../help/topics";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
-import { SongMap } from "./SongMap";
 import { SongMapDialog } from "./SongMapDialog";
 import { HelpButton } from "./HelpButton";
 import { useDragReorder } from "./useDragReorder";
@@ -205,8 +204,7 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * sliders, and the time in the file. It runs the music
  * only. The time and the bar follow the music in each animation frame, not
  * through React state; a drag on the bar seeks. While the picture follows
- * the song, the bar is the song's map (see SongMap): its parts by level,
- * and its drops.
+ * the song, Space and Shift+Space run these controls (see App).
  */
 function PlaylistTransport({ count, engine }: { count: number; engine: Engine | null }) {
   const bar = useRef<HTMLInputElement>(null);
@@ -246,21 +244,18 @@ function PlaylistTransport({ count, engine }: { count: number; engine: Engine | 
       <ThresholdMeter level={level} threshold={threshold} />
       <div className="playlist-transport-row">
         <div className="panel-buttons">
-          <button className="panel-button icon" disabled={empty} onClick={() => tracks.stop()} data-tip="Stop the music, and go back to the start of the file" aria-label="Stop the music">
+          <button className="panel-button icon" disabled={empty} onClick={() => tracks.stop()} data-tip={song ? "Stop the music, and go back to the start of the file `Shift+Space`" : "Stop the music, and go back to the start of the file"} aria-label="Stop the music">
             <MediaIcon kind="stop" size={16} />
           </button>
-          <button className="panel-button icon" disabled={empty} onClick={() => tracks.toggle()} data-tip={tracks.playing ? "Pause the music" : "Play the music"} aria-label={tracks.playing ? "Pause the music" : "Play the music"}>
+          <button className="panel-button icon" disabled={empty} onClick={() => tracks.toggle()} data-tip={`${tracks.playing ? "Pause the music" : "Play the music"}${song ? " `Space`" : ""}`} aria-label={tracks.playing ? "Pause the music" : "Play the music"}>
             {tracks.playing ? <MediaIcon kind="pause" size={16} /> : <MediaIcon kind="play" size={16} />}
           </button>
           <FollowButton />
           <MapButton />
         </div>
-        <div
-          className={`slider playlist-seek ${song ? "song-map" : ""}`}
-          data-tip={song ? "The song's parts: darker for calm parts, brighter for peak parts; red marks are drops. Drag to move in the song." : undefined}
-        >
+        <div className="slider playlist-seek">
           <div className="slider-well">
-            {song ? <SongMap song={song} /> : <div ref={fill} className="slider-fill" style={{ left: 0 }} />}
+            <div ref={fill} className="slider-fill" style={{ left: 0 }} />
           </div>
           <div ref={cap} className="seek-cap" />
           <input

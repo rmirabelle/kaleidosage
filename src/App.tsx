@@ -1729,7 +1729,8 @@ export default function App() {
         m: toggleMidiPanel,
         a: toggleAudioPanel,
         p: () => setStatsOpen((open) => !open),
-        " ": event.shiftKey ? stop : togglePause,
+        /* While the picture follows a song, Space and Shift+Space run the song (the Playlist card's controls), not the scene. */
+        " ": engine?.script ? (event.shiftKey ? () => tracks.stop() : () => tracks.toggle()) : event.shiftKey ? stop : togglePause,
         o: () => void openImage(),
         x: randomize,
         n: nudge,

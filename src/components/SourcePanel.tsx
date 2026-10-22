@@ -231,8 +231,8 @@ export function SceneTransport({ engine, paused, onTogglePause, onStop, show, au
             className="panel-button icon"
             onClick={onStop}
             disabled={paused}
-            data-tip={song ? "Stop `Shift+Space`: freeze the picture; the music plays on" : "Stop `Shift+Space`: pause the scene, and go back to its start"}
-            aria-keyshortcuts="Shift+Space"
+            data-tip={song ? "Stop: freeze the picture; the music plays on" : "Stop `Shift+Space`: pause the scene, and go back to its start"}
+            aria-keyshortcuts={song ? undefined : "Shift+Space"}
             aria-label="Stop"
           >
             <MediaIcon kind="stop" size={16} />
@@ -241,7 +241,7 @@ export function SceneTransport({ engine, paused, onTogglePause, onStop, show, au
             className="panel-button icon"
             onClick={onTogglePause}
             data-tip={song
-              ? (paused ? "Play the scene `Space`: the picture catches up with the song" : "Pause the scene `Space`: freeze the picture; the music plays on")
+              ? (paused ? "Play the scene: the picture catches up with the song" : "Pause the scene: freeze the picture; the music plays on")
               : (paused ? "Play the scene `Space`" : "Pause the scene `Space`")}
             aria-label={paused ? "Play" : "Pause"}
           >
