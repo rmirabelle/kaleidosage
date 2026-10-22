@@ -1482,9 +1482,18 @@ export default function App() {
       if (manifest.trackSeconds) tracks.setLengths(manifest.trackSeconds);
       await audioInput.applySettings(manifest.audio);
       if (manifest.filesWidth) panelLayout.setFilesWidth(manifest.filesWidth);
-      const target = docsRef.current[Math.min(manifest.activeScene, docsRef.current.length - 1)];
-      if (target) switchToDoc(target.id);
-      else setStartScreen(true);
+      /**
+       * A show starts at its beginning: the first scene and the first track. The scene is set to play from its
+       * start, and waits for the music (see the music gate below); the music waits for Play.
+       */
+      const target = docsRef.current[0];
+      if (target) {
+        switchToDoc(target.id);
+        engine.rewind();
+        engine.state.paused = false;
+        setPaused(false);
+        holdScene(false);
+      } else setStartScreen(true);
       markPlaylistClean(path);
       showStatus(`Opened ${name}`);
     } catch (error) {
@@ -1492,7 +1501,7 @@ export default function App() {
     } finally {
       setLoading(null);
     }
-  }, [blankScene, engine, markPlaylistClean, openScenePath, selectDocId, showError, showStatus, switchToDoc, writeDocs]);
+  }, [blankScene, engine, holdScene, markPlaylistClean, openScenePath, selectDocId, showError, showStatus, switchToDoc, writeDocs]);
 
   /* A playlist picked in the Open dialog closes the open scenes, so their changes, and the playlist's, are saved or given up first. */
   const openPickedPlaylist = useCallback(async (path: string) => {
@@ -1595,6 +1604,16 @@ export default function App() {
     follow();
     return audioInput.subscribe(follow);
   }, [engine]);
+
+  /**
+   * The music gate: with the tracks as the input and Hold off, the playlist
+   * leads, so the scene moves only while the music plays; it stays set to
+   * play, and starts with the music. Hold gives the scene its own clock.
+   */
+  useEffect(() => {
+    if (!engine) return;
+    engine.musicGate = tracksActive && !sceneHeld ? () => tracks.playing : null;
+  }, [engine, sceneHeld, tracksActive]);
 
   /**
    * With Follow the song on and the tracks as the input, the picture follows

@@ -462,6 +462,16 @@ export class Engine {
   private following: SongSource | null = null;
   /** The song's time in this frame (see frame): read once, so every value of a frame has the same time. */
   private songTime = 0;
+  /**
+   * The music gate (the app sets it): while it returns false, the scene's
+   * clocks stand still though the scene is set to play, as when the
+   * playlist leads and its music is stopped. Null: no gate.
+   */
+  musicGate: (() => boolean) | null = null;
+  /** True while the music gate holds the scene still (see musicGate). */
+  private get gated() {
+    return this.musicGate !== null && !this.musicGate();
+  }
   /** True once the clocks follow the song's time (see followTo); a new scene or script makes them follow again. */
   private followed = false;
 
@@ -826,10 +836,14 @@ export class Engine {
    */
   seekTo(clock: number) {
     const paused = this.state.paused;
+    /* A scrub moves the scene even while the music gate holds it still (see musicGate). */
+    const gate = this.musicGate;
+    this.musicGate = null;
     this.rewind();
     this.state.paused = false;
     for (let left = Math.max(0, clock); left > 1e-9; left -= SCRUB_STEP) this.step(Math.min(SCRUB_STEP, left));
     this.state.paused = paused;
+    this.musicGate = gate;
     this.wake();
   }
 
@@ -862,7 +876,7 @@ export class Engine {
     const trails = values.fxOrder.includes("trails") && values.trailMode !== 0;
     const forced = this.awake || Boolean(this.fade) || this.fadeWaiters.length > 0 || this.snapshotWaiters.length > 0;
     this.awake = false;
-    if (!this.state.paused || trails || forced) {
+    if ((!this.state.paused && !this.gated) || trails || forced) {
       this.stillKey = null;
       return true;
     }
@@ -927,11 +941,12 @@ export class Engine {
    * paused). Returns the animation time that passed.
    */
   step(elapsed: number) {
-    if (!this.state.paused) this.state.clock += elapsed;
+    const still = this.state.paused || this.gated;
+    if (!still) this.state.clock += elapsed;
     /* With a song script, "elapsed" is song time (see frame), and animation time runs at the music's speed. */
     const pace = this.script ? speedAt(this.script.script, this.songTime) : 1;
     const music = Number.isFinite(pace) ? pace : 1;
-    const animated = this.state.paused ? 0 : elapsed * this.speed * music;
+    const animated = still ? 0 : elapsed * this.speed * music;
     this.state.time += animated;
     /** Flow is a speed, so its live value is added up over time; a drifting flow speeds up and slows down smoothly. */
     this.state.warpTime += animated * (this.live("warpFlow") + this.warpFlowOffset);
