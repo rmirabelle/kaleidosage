@@ -42,8 +42,8 @@ export function StartScreen({ version, onNewScene, onOpen }: Props) {
       </div>
       <div className="start-model-credits selectable">
         <div>Credits:</div>
-        <div>Beat This! by F. Foscarin, J. Schlüter and G. Widmer (ISMIR 2024, MIT license; Rust port by danigb).</div>
-        <div>LinkSeg by M. Buisson, B. McFee and S. Essid (ISMIR 2024; model weights under CC BY 4.0, creativecommons.org/licenses/by/4.0; ONNX port by linkseg-web, MIT license).</div>
+        <div>Beat This! by F. Foscarin, J. Schlüter and G. Widmer (MIT license; Rust port by danigb).</div>
+        <div>LinkSeg by M. Buisson, B. McFee and S. Essid (model weights under CC BY 4.0, creativecommons.org/licenses/by/4.0; ONNX port by linkseg-web, MIT license).</div>
       </div>
     </section>
   );
