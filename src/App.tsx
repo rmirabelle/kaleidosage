@@ -1157,7 +1157,8 @@ export default function App() {
       const early = now.time + 1 / 60;
       const jumped = last < 0 || early < last || early - last > 0.5;
       const cue = jumped ? undefined : following.script.plan.cues.find((candidate) => candidate.time > last && candidate.time <= early);
-      last = early;
+      /* After a jump (a play, a seek, a click on a slice), the watch starts at the playing place: the song clock sits a little before it (the output latency), and a cue there must not fire. */
+      last = jumped ? Math.max(early, tracks.position) : early;
       if (!cue || docsRef.current.length < 2 || sceneHeldRef.current) return;
       const beat = following.script.tempo > 0 ? 60 / following.script.tempo : 0.5;
       switchByStepRef.current(1, true, cue.drop ? 0 : Math.min(CROSSFADE_SECONDS, 2 * beat));
