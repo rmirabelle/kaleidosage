@@ -114,7 +114,7 @@ export function planSong(analysis: SongAnalysis): SongPlan {
     }));
     for (const part of parts) part.intensity = mean(curves.intensity, rate, part.start, part.end);
     const wanted = new Set(edits.slice(1).filter((slice) => slice.drop).map((slice) => slice.start));
-    return finishPlan(analysis, parts, (part) => wanted.has(part.start), false);
+    return finishPlan(analysis, parts, (part) => wanted.has(part.start));
   }
 
   /* Part starts move to the nearest bar start; a part that is too short joins the one before it. */
@@ -142,7 +142,7 @@ export function planSong(analysis: SongAnalysis): SongPlan {
     part.tier = tier;
   }
   /* A drop: a part start of a rising or peak part where the intensity and the bass jump up (see dropScore). */
-  return finishPlan(analysis, parts, (part, score) => part.tier >= 2 && score >= DROP_SCORE, true);
+  return finishPlan(analysis, parts, (part, score) => part.tier >= 2 && score >= DROP_SCORE);
 }
 
 /**
@@ -150,13 +150,10 @@ export function planSong(analysis: SongAnalysis): SongPlan {
  * starts that are drops, from the part and its jump score (how hard the
  * intensity and the bass jump up there). The strongest drop has strength
  * 1; each drop gets its rise and, when the music goes quiet just before
- * it, its pause. Every part but the first is a cue. In an automatic map
- * ("automatic"), a part at the same level as the one before it, with no
- * drop, joins that part.
+ * it, its pause. Every part but the first is a cue.
  */
-function finishPlan(analysis: SongAnalysis, allParts: Part[], isDrop: (part: Part, score: number) => boolean, automatic: boolean): SongPlan {
+function finishPlan(analysis: SongAnalysis, parts: Part[], isDrop: (part: Part, score: number) => boolean): SongPlan {
   const { curves, curveRate: rate } = analysis;
-  let parts = allParts;
   const downbeats = analysis.downbeats.length ? analysis.downbeats : analysis.beats;
   const bar = analysis.tempo > 0 ? 240 / analysis.tempo : 2;
   const beat = bar / 4;
@@ -184,17 +181,6 @@ function finishPlan(analysis: SongAnalysis, allParts: Part[], isDrop: (part: Par
   });
 
   const dropTimes = new Set(drops.map((drop) => drop.time));
-  /* In an automatic map, a part at the same level as the one before it, with no drop, joins it; it keeps the first part's name. */
-  if (automatic) {
-    const joined: Part[] = [];
-    for (const part of parts) {
-      const last = joined[joined.length - 1];
-      if (last && part.tier === last.tier && !dropTimes.has(part.start)) last.end = part.end;
-      else joined.push(part);
-    }
-    for (const part of joined) part.intensity = mean(curves.intensity, rate, part.start, part.end);
-    parts = joined;
-  }
   const cues = parts.slice(1).map<Cue>((part) => ({ time: part.start, drop: dropTimes.has(part.start) }));
   return { parts, drops, cues };
 }

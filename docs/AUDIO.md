@@ -288,8 +288,8 @@ the analysis. The playlist then runs the show.
   slice brought in the next scene, and Keep Scene kept the one before).
   Fill picks the next scenes for a song's slices that have none. A picked
   scene follows its scene when the tabs move; a closed scene's picks go.
-  In an automatic map, a slice at the same level as the one before it,
-  with no hit, joins that slice. A jump (a seek, a click on a slice, a new track) brings in
+  An automatic map keeps one slice per section that the analysis finds,
+  also where the level does not change. A jump (a seek, a click on a slice, a new track) brings in
   that slice's scene. A tab click shows its tab until the next slice that
   changes the scene; Hold keeps the scene. While Hold is on, the slice
   that plays loops in the music too; a click on a slice with another scene

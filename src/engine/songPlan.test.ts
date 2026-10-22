@@ -59,12 +59,12 @@ describe("song plan", () => {
     expect(plan.cues).toEqual([{ time: 8, drop: false }, { time: 16, drop: true }, { time: 32, drop: false }]);
   });
 
-  it("joins a part with the same level as the part before it", () => {
+  it("keeps a part with the same level as the part before it as its own slice", () => {
     const analysis = song();
     analysis.sections.splice(2, 1, { start: 15.8, end: 24.1, label: "chorus" }, { start: 24.1, end: 32.1, label: "chorus" });
     const split = planSong(analysis);
-    expect(split.parts.map((part) => [part.start, part.end, part.tier])).toEqual([[0, 8, 0], [8, 16, 1], [16, 32, 3], [32, 40, 0]]);
-    expect(split.cues).toEqual([{ time: 8, drop: false }, { time: 16, drop: true }, { time: 32, drop: false }]);
+    expect(split.parts.map((part) => [part.start, part.end, part.tier])).toEqual([[0, 8, 0], [8, 16, 1], [16, 24, 3], [24, 32, 3], [32, 40, 0]]);
+    expect(split.cues).toEqual([{ time: 8, drop: false }, { time: 16, drop: true }, { time: 24, drop: false }, { time: 32, drop: false }]);
   });
 
   it("joins a part that is too short to the part before it", () => {
