@@ -15,6 +15,7 @@ import { MidiIcon } from "./components/MidiIcon";
 import { MidiPanel } from "./components/MidiPanel";
 import { AudioPanel } from "./components/AudioPanel";
 import { BottomPanelTabs, type BottomTab } from "./components/BottomPanelTabs";
+import { SongMapPanel } from "./components/SongMapPanel";
 import { SceneTransport, SourcePanel } from "./components/SourcePanel";
 import { StartScreen } from "./components/StartScreen";
 import { LoadingOverlay, type Loading } from "./components/LoadingOverlay";
@@ -230,6 +231,11 @@ export default function App() {
   const toggleMidiPanel = useCallback(() => showBottomTab("midi"), [showBottomTab]);
   const toggleAudioPanel = useCallback(() => showBottomTab("audio"), [showBottomTab]);
   const closeBottomPanel = useCallback(() => setMidiPanelOpen(false), []);
+  /** The Playlist card's map button: shows the Song Map page (it does not close it). */
+  const showSongMap = useCallback(() => {
+    setBottomTab("songmap");
+    setMidiPanelOpen(true);
+  }, []);
   /** True while the Audio panel shows its tip at the Input menu (see onNeedAudioInput). */
   const [inputTip, setInputTip] = useState(false);
   const askForAudioInput = useCallback(() => {
@@ -1955,7 +1961,7 @@ export default function App() {
           * alone.
           */}
         <div className={`sidebar ${sceneListShown ? "with-scenes" : ""}`}>
-          {sceneListShown && tracksActive && <FilesCard engine={engine} onAddTracks={() => void pickTracks()} />}
+          {sceneListShown && tracksActive && <FilesCard engine={engine} onAddTracks={() => void pickTracks()} onShowSongMap={showSongMap} />}
           {sceneListShown && <SceneList tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} inPlaylist={playlistPath !== null} />}
           {/* The left panel: the Source section, then the Designer (the effects). */}
           {engine && !startScreen && panelOpen && (
@@ -2051,7 +2057,9 @@ export default function App() {
           <div className="midi-panel-grip" onPointerDown={resizeMidiPanel} data-tip="Drag to make the MIDI panel taller or shorter" />
           <div className="midi-panel-body">
             <BottomPanelTabs tab={bottomTab} onTab={setBottomTab} onClose={closeBottomPanel} />
-            {bottomTab === "midi" ? <MidiPanel engine={engine} open={midiPanelOpen} /> : <AudioPanel engine={engine} sceneName={sceneFileName} onAddTracks={() => void pickTracks()} inputTip={inputTip && midiPanelOpen} onInputTipDone={() => setInputTip(false)} />}
+            {bottomTab === "midi" ? <MidiPanel engine={engine} open={midiPanelOpen} />
+              : bottomTab === "songmap" ? <SongMapPanel />
+              : <AudioPanel engine={engine} sceneName={sceneFileName} onAddTracks={() => void pickTracks()} inputTip={inputTip && midiPanelOpen} onInputTipDone={() => setInputTip(false)} />}
           </div>
         </div>
       )}

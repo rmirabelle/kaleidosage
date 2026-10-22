@@ -14,7 +14,6 @@ import { songFollow, type FollowStatus } from "../lib/songFollow";
 import { help } from "../help/topics";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
-import { SongMapDialog } from "./SongMapDialog";
 import { HelpButton } from "./HelpButton";
 import { useDragReorder } from "./useDragReorder";
 
@@ -47,7 +46,7 @@ function followTip(enabled: boolean, status: FollowStatus) {
  * toolbar at the bottom runs the music on its own (see PlaylistTransport);
  * the controls on the picture run the scene.
  */
-export function FilesCard({ engine, onAddTracks }: { engine: Engine | null; onAddTracks: () => void }) {
+export function FilesCard({ engine, onAddTracks, onShowSongMap }: { engine: Engine | null; onAddTracks: () => void; onShowSongMap: () => void }) {
   useSyncExternalStore(subscribeTracks, tracksVersion);
   useSyncExternalStore(subscribeFollow, followVersion);
   const width = useSyncExternalStore(panelLayout.subscribe, () => panelLayout.filesWidth);
@@ -129,7 +128,7 @@ export function FilesCard({ engine, onAddTracks }: { engine: Engine | null; onAd
             )}
           </div>
           {count > 0 && <FilesFooter count={count} />}
-          <PlaylistTransport count={count} engine={engine} />
+          <PlaylistTransport count={count} engine={engine} onShowSongMap={onShowSongMap} />
         </section>
       </aside>
       <FilesSplitter />
@@ -167,29 +166,12 @@ function FollowButton() {
   );
 }
 
-/**
- * Opens the song map editor (see SongMapDialog) for the song that plays.
- * It works once the song has its analysis, while Song follow is on.
- */
-function MapButton() {
-  useSyncExternalStore(subscribeFollow, followVersion);
-  const [open, setOpen] = useState(false);
-  const path = songFollow.enabled ? songFollow.currentPath : null;
-  const ready = path !== null && songFollow.analysisFor(path) !== undefined;
-  const name = tracks.list.find((track) => track.path === path)?.name ?? "";
+/** Shows the Song Map page of the bottom panel (see SongMapPanel), which edits the map of the song that plays. */
+function MapButton({ onShow }: { onShow: () => void }) {
   return (
-    <>
-      <button
-        className={`panel-button icon ${open ? "active" : ""}`}
-        disabled={!ready}
-        onClick={() => setOpen(true)}
-        data-tip={ready ? "Edit the song map: the song's slices, their levels and hits" : "Song map: turn on Song follow and play a song first"}
-        aria-label="Edit the song map"
-      >
-        <MapTrifold size={16} />
-      </button>
-      {open && path && createPortal(<SongMapDialog path={path} name={name} onClose={() => setOpen(false)} />, document.body)}
-    </>
+    <button className="panel-button icon" onClick={onShow} data-tip="Show the song map: the song's slices, their levels and hits" aria-label="Show the song map">
+      <MapTrifold size={16} />
+    </button>
   );
 }
 
@@ -206,7 +188,7 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * through React state; a drag on the bar seeks. While the picture follows
  * the song, Space and Shift+Space run these controls (see App).
  */
-function PlaylistTransport({ count, engine }: { count: number; engine: Engine | null }) {
+function PlaylistTransport({ count, engine, onShowSongMap }: { count: number; engine: Engine | null; onShowSongMap: () => void }) {
   const bar = useRef<HTMLInputElement>(null);
   const fill = useRef<HTMLDivElement>(null);
   const cap = useRef<HTMLDivElement>(null);
@@ -251,7 +233,7 @@ function PlaylistTransport({ count, engine }: { count: number; engine: Engine | 
             {tracks.playing ? <MediaIcon kind="pause" size={16} /> : <MediaIcon kind="play" size={16} />}
           </button>
           <FollowButton />
-          <MapButton />
+          <MapButton onShow={onShowSongMap} />
         </div>
         <div className="slider playlist-seek">
           <div className="slider-well">

@@ -1,7 +1,7 @@
 import type { MapSlice } from "./songPlan";
 
 /**
- * The song map editor's changes (see SongMapDialog): each takes the slices
+ * The song map editor's changes (see SongMapPanel): each takes the slices
  * in time order and returns a new list; the first slice always starts at
  * 0, and each slice ends where the next one starts. A slice starts on a bar
  * start (the analysis's downbeats).
