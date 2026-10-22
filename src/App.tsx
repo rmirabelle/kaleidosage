@@ -127,6 +127,7 @@ interface StoredScene {
   driver: DriverVideo | null;
   savedFingerprint: string;
   history: SettingsHistory;
+  openGroup: string | null;
 }
 
 let nextDocId = 1;
@@ -280,6 +281,8 @@ export default function App() {
    * so it stays when the panel hides (full screen, H) and shows again.
    */
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const openGroupRef = useRef(openGroup);
+  openGroupRef.current = openGroup;
   const [status, setStatus] = useState<Status | null>(null);
   const [cursorIdle, setCursorIdle] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -733,7 +736,8 @@ export default function App() {
       images: imagesRef.current,
       driver: driverRef.current,
       savedFingerprint: savedFingerprintRef.current,
-      history
+      history,
+      openGroup: openGroupRef.current
     });
     writeDocs(docsRef.current.map((doc) => doc.id === id ? { ...doc, dirty: dirtyNow } : doc));
   }, [engine, fingerprint, writeDocs]);
@@ -741,8 +745,7 @@ export default function App() {
   /**
    * Puts a stored scene back into the engine and selects its tab. MIDI
    * holds and the momentary bypass and solo of the scene before it end,
-   * and the trails start again from the still picture. Each scene comes in
-   * with its effect groups closed.
+   * and the trails start again from the still picture.
    */
   const restoreDoc = useCallback((id: number) => {
     const stored = storedRef.current.get(id);
@@ -771,7 +774,8 @@ export default function App() {
     dirtyRef.current = doc.dirty;
     setDirty(doc.dirty);
     historyRef.current = stored.history;
-    setOpenGroup(null);
+    /* Each scene opens its own last open group again; while the picture follows the songs, it comes in with its groups closed. */
+    setOpenGroup(songFollow.enabled && audioInput.settings.kind === "tracks" ? null : stored.openGroup);
     setPaused(engine.state.paused);
     setRandomLoading(null);
     setRevision((value) => value + 1);
