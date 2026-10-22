@@ -284,16 +284,15 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
                   <span className="song-map-tags">
                     <span
                       className={`song-map-scene-tag ${scenes[i].picked ? "picked" : ""} ${scenes[i].scene === activeScene ? "current" : ""}`}
-                      data-tip={`Scene ${scenes[i].scene + 1}${scenes[i].picked ? ", picked by you" : ""}${scenes[i].scene === activeScene ? ", the scene selected in the scene list" : ""}`}
+                      data-tip={`${candidate.keepScene ? "Keeps scene" : "Scene"} ${scenes[i].scene + 1}${scenes[i].picked ? ", picked by you" : ""}${scenes[i].scene === activeScene ? ", the scene selected in the scene list" : ""}`}
                     >
-                      {scenes[i].scene + 1}
+                      {candidate.keepScene ? "Keep" : scenes[i].scene + 1}
                     </span>
                   </span>
                 )}
-                {(candidate.drop || candidate.keepScene) && (
+                {candidate.drop && (
                   <span className="song-map-center-tags">
-                    {candidate.drop && <span className="song-map-drop-tag" data-tip="Hit: the picture rises before this slice, and changes hard as it starts" aria-hidden="true"><Lightning size={12} weight="fill" /></span>}
-                    {candidate.keepScene && <span className="song-map-keep-tag">Keep Scene</span>}
+                    <span className="song-map-drop-tag" data-tip="Hit: the picture rises before this slice, and changes hard as it starts" aria-hidden="true"><Lightning size={12} weight="fill" /></span>
                   </span>
                 )}
                 <span className="song-map-slice-name">{capital(TIER_NAMES[candidate.tier])}</span>
