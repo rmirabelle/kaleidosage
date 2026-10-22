@@ -142,8 +142,9 @@ const SCRUB_STEPS = 1000;
  * countdown runs to the next change of scene (the song plan's next cue).
  *
  * While Song follow is on with music in the Playlist, the Playlist card's
- * controls and the Song Map run the show, so this card is one full-width
- * Scene Hold button only. A paused scene plays again as that starts, as
+ * controls and the Song Map run the show, so in place of this card the
+ * left panel ends in one full-width Scene Hold button, under a divider,
+ * below the FX card (whose list scrolls on its own). A paused scene plays again as that starts, as
  * no Play button is left to start it.
  */
 export function SceneTransport({ engine, paused, onTogglePause, onStop, show, autoNext, held, onToggleHold }: {
@@ -216,7 +217,7 @@ export function SceneTransport({ engine, paused, onTogglePause, onStop, show, au
 
   if (spaceRunsSong) {
     return (
-      <div className="panel-card playlist-transport scene-transport following" aria-label="Scene controls" {...help("play")}>
+      <div className="scene-transport scene-hold-bar" aria-label="Scene controls" {...help("play")}>
         <button
           className={`hold-toggle wide ${held ? "on" : ""}`}
           aria-pressed={held}
