@@ -121,10 +121,6 @@ export function SongMapPanel() {
       <div className="song-map-toolbar">
         {slice && (
           <>
-            <label className="song-map-field" data-tip={index === 0 ? "The first slice has nothing before it, so there is no scene change to skip" : "Keep the scene as this slice starts: its level and hit still change the motion, but the next scene does not come in"}>
-              <input type="checkbox" checked={Boolean(slice.keepScene)} disabled={index === 0} onChange={(event) => apply(changeSlice(slices, index, { keepScene: event.target.checked }))} />
-              <span className="song-map-field-note">Keep Scene</span>
-            </label>
             <div className="song-map-field">
               <span>Level</span>
               <div className="panel-buttons">
@@ -135,10 +131,16 @@ export function SongMapPanel() {
                 ))}
               </div>
             </div>
+            <span className="song-map-toolbar-divider" />
+            <label className="song-map-field" data-tip={index === 0 ? "The first slice has nothing before it, so there is no scene change to skip" : "Keep the scene as this slice starts: its level and hit still change the motion, but the next scene does not come in"}>
+              <input type="checkbox" checked={Boolean(slice.keepScene)} disabled={index === 0} onChange={(event) => apply(changeSlice(slices, index, { keepScene: event.target.checked }))} />
+              <span className="song-map-field-note">Keep Scene</span>
+            </label>
             <label className="song-map-field" data-tip={index === 0 ? "The first slice has nothing before it, so it cannot start with a hit" : "Hit: the picture rises before this slice, and changes hard as it starts; then the slice moves at its level"}>
               <input type="checkbox" checked={slice.drop} disabled={index === 0} onChange={(event) => apply(changeSlice(slices, index, { drop: event.target.checked }))} />
               <span className="song-map-field-note">Hit</span>
             </label>
+            <span className="song-map-toolbar-divider" />
             <div className="panel-buttons">
               <button className="panel-button" onClick={() => apply(splitSlice(slices, index, analysis.downbeats, duration))} data-tip="Split this slice in two at the bar nearest its middle">
                 <Scissors size={15} /> Split
