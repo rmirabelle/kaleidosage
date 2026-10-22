@@ -176,7 +176,7 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
               </label>
               <label className="song-map-field" data-tip={index === 0 ? "The first slice has nothing before it, so there is no scene change to skip" : "Keep the scene as this slice starts: its level and hit still change the motion, but the next scene does not come in"}>
                 <input type="checkbox" checked={Boolean(slice.keepScene)} disabled={index === 0} onChange={(event) => apply(changeSlice(slices, index, { keepScene: event.target.checked }))} />
-                <span className="song-map-field-note">Keep scene</span>
+                <span className="song-map-field-note">Keep Scene</span>
               </label>
               <div className="panel-buttons">
                 <button className="panel-button" onClick={() => apply(splitSlice(slices, index, analysis.downbeats, duration))} data-tip="Split this slice in two at the bar nearest its middle (or double-click the slice where you want the cut)">
@@ -223,7 +223,7 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
                   {(candidate.drop || candidate.keepScene) && (
                     <span className="song-map-tags">
                       {candidate.drop && <span className="song-map-drop-tag">Hit</span>}
-                      {candidate.keepScene && <span className="song-map-keep-tag">Same scene</span>}
+                      {candidate.keepScene && <span className="song-map-keep-tag">Keep Scene</span>}
                     </span>
                   )}
                   <span className="song-map-slice-name">{capital(TIER_NAMES[candidate.tier])}</span>
