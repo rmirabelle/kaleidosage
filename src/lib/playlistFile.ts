@@ -34,11 +34,13 @@ export interface PlaylistManifest {
   filesWidth?: number;
   /** Each track's length in seconds, in track order (null when not known), for the Open Playlist dialog; missing in older playlists. */
   trackSeconds?: (number | null)[];
+  /** True when Song follow was on at the save (see songFollow.ts): the playlist opens with it on. Missing in older playlists. */
+  songFollow?: boolean;
 }
 
 /** playlist.json, without the scene and track entries, which the Rust side adds. */
-export function writeManifest({ audio, activeScene, filesWidth, trackSeconds }: PlaylistManifest): string {
-  return JSON.stringify({ app: "KaleidoSage", kind: "playlist", version: PLAYLIST_VERSION, audio, activeScene, ...(filesWidth ? { layout: { filesWidth } } : {}), ...(trackSeconds ? { trackSeconds } : {}) });
+export function writeManifest({ audio, activeScene, filesWidth, trackSeconds, songFollow }: PlaylistManifest): string {
+  return JSON.stringify({ app: "KaleidoSage", kind: "playlist", version: PLAYLIST_VERSION, audio, activeScene, ...(filesWidth ? { layout: { filesWidth } } : {}), ...(trackSeconds ? { trackSeconds } : {}), ...(songFollow !== undefined ? { songFollow } : {}) });
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -48,7 +50,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
  * out, so the app keeps its own; a playlist from a newer version still
  * opens.
  */
-export function readManifest(text: string): { audio: Partial<PlaylistAudio>; activeScene: number; filesWidth?: number; trackSeconds?: (number | null)[] } {
+export function readManifest(text: string): { audio: Partial<PlaylistAudio>; activeScene: number; filesWidth?: number; trackSeconds?: (number | null)[]; songFollow?: boolean } {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -70,7 +72,13 @@ export function readManifest(text: string): { audio: Partial<PlaylistAudio>; act
   const trackSeconds = Array.isArray(parsed.trackSeconds)
     ? parsed.trackSeconds.map((seconds) => typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0 ? seconds : null)
     : undefined;
-  return { audio, activeScene, ...(typeof filesWidth === "number" && filesWidth > 0 ? { filesWidth } : {}), ...(trackSeconds ? { trackSeconds } : {}) };
+  return {
+    audio,
+    activeScene,
+    ...(typeof filesWidth === "number" && filesWidth > 0 ? { filesWidth } : {}),
+    ...(trackSeconds ? { trackSeconds } : {}),
+    ...(typeof parsed.songFollow === "boolean" ? { songFollow: parsed.songFollow } : {})
+  };
 }
 
 /**

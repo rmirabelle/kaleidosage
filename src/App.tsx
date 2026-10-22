@@ -333,10 +333,10 @@ export default function App() {
     const { kind, device, gainDb, thresholdDb } = audioInput.settings;
     return { kind, device, gainDb, thresholdDb };
   }, []);
-  /* A new song analysis, or an edit of a song map, is a change too: Save Playlist keeps it (see songFollow.ts). */
+  /* A new song analysis, an edit of a song map, or Song follow turned on or off is a change too: Save Playlist keeps it (see songFollow.ts). */
   const playlistNow = useCallback(() => {
     const paths = tracks.list.map((track) => track.path);
-    return `${playlistFingerprint(playlistScenes(), paths, playlistAudio(), panelLayout.filesWidth)} ${songFollow.analyzedCount(paths)} ${songFollow.edits}`;
+    return `${playlistFingerprint(playlistScenes(), paths, playlistAudio(), panelLayout.filesWidth)} ${songFollow.analyzedCount(paths)} ${songFollow.edits} ${songFollow.enabled}`;
   }, [playlistAudio, playlistScenes]);
   const playlistChanged = useCallback(() => playlistPathRef.current !== null && playlistNow() !== playlistSavedRef.current, [playlistNow]);
   /** The playlist as it is now counts as saved. */
@@ -1413,7 +1413,8 @@ export default function App() {
         audio: playlistAudio(),
         activeScene,
         filesWidth: panelLayout.filesWidth,
-        trackSeconds: tracks.list.map((track) => tracks.lengthOf(track.path))
+        trackSeconds: tracks.list.map((track) => tracks.lengthOf(track.path)),
+        songFollow: songFollow.enabled
       }, scenes, tracks.list.map((track) => track.path), tracks.list.map((track) => songFollow.analysisText(track.path)));
     } catch (error) {
       showError(`Could not save the playlist. ${String(error)}`);
@@ -1495,6 +1496,8 @@ export default function App() {
       tracks.replace(opened.tracks);
       /* The lengths the playlist kept, so the Files footer has its play time at once. */
       if (manifest.trackSeconds) tracks.setLengths(manifest.trackSeconds);
+      /* Song follow as it was at the save; an older playlist leaves it as it is. */
+      if (manifest.songFollow !== undefined) songFollow.setEnabled(manifest.songFollow);
       await audioInput.applySettings(manifest.audio);
       if (manifest.filesWidth) panelLayout.setFilesWidth(manifest.filesWidth);
       /**

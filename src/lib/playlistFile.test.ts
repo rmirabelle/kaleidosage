@@ -15,6 +15,12 @@ describe("playlist files", () => {
     expect(() => readManifest("not json")).toThrow("not a Kaleido Sage playlist");
   });
 
+  it("read back Song follow, and leave it out of older playlists", () => {
+    expect(readManifest(writeManifest({ audio: AUDIO, activeScene: 0, songFollow: true })).songFollow).toBe(true);
+    expect(readManifest(writeManifest({ audio: AUDIO, activeScene: 0, songFollow: false })).songFollow).toBe(false);
+    expect(readManifest(writeManifest({ audio: AUDIO, activeScene: 0 })).songFollow).toBeUndefined();
+  });
+
   it("read back the Files column width, and leave it out of older playlists", () => {
     expect(readManifest(writeManifest({ audio: AUDIO, activeScene: 0, filesWidth: 420 })).filesWidth).toBe(420);
     expect(readManifest(writeManifest({ audio: AUDIO, activeScene: 0 })).filesWidth).toBeUndefined();
