@@ -56,7 +56,10 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
   const playing = useSyncExternalStore(subscribeTracks, tracksPlaying);
   useEffect(() => { dialog.current?.focus(); }, []);
 
-  /* The playhead follows the song in each animation frame, while this song plays. */
+  /* The frame loop reads the slices through a ref, so it need not start again on each edit. */
+  const slicesRef = useRef(slices);
+  slicesRef.current = slices;
+  /* The playhead follows the song in each animation frame, while this song plays, and the slice it is in gets a subtle highlight. */
   useEffect(() => {
     let frame = 0;
     const draw = () => {
@@ -70,6 +73,8 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
         placeSeek(scrub.current, fill.current, cap.current, Number(scrub.current?.value ?? 0) / Math.max(1e-3, analysis.duration));
         const text = `${time(shown ? tracks.position : 0)} / ${time(analysis.duration)}`;
         if (clock.current && clock.current.textContent !== text) clock.current.textContent = text;
+        const current = shown ? slicesRef.current.filter((slice) => slice.start <= now).length - 1 : -1;
+        strip.current?.querySelectorAll(".song-map-slice").forEach((element, i) => element.classList.toggle("playing", i === current));
       }
       frame = requestAnimationFrame(draw);
     };
