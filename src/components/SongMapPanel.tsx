@@ -47,7 +47,7 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * in the song; the song's file name is above the map, and a status bar at
  * the bottom shows the song's length and tempo, the selected slice, and
  * the song's time. While the page has the keyboard focus,
- * Delete removes the selected slice and the arrow keys select another.
+ * Delete removes the selected slice.
  */
 /**
  * "sceneCount": the number of scenes (tabs) that the schedule goes round.
@@ -99,9 +99,8 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
   slicesRef.current = view;
   /**
    * The playhead follows the song in each animation frame, while this song
-   * plays, and the slice it is in gets a subtle highlight. Each time
-   * another slice starts to play (or the playhead jumps into it), that
-   * slice is selected too.
+   * plays. Each time another slice starts to play (or the playhead jumps
+   * into it), that slice is selected.
    */
   useEffect(() => {
     let frame = 0;
@@ -118,7 +117,6 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
         const text = `${time(shown ? tracks.position : 0)} / ${time(analysis.duration)}`;
         if (clock.current && clock.current.textContent !== text) clock.current.textContent = text;
         const current = shown ? slicesRef.current.filter((slice) => slice.start <= now).length - 1 : -1;
-        strip.current?.querySelectorAll(".song-map-slice").forEach((element, i) => element.classList.toggle("playing", i === current));
         if (current >= 0 && current !== lastPlaying) setSelected(current);
         lastPlaying = current;
       }
@@ -179,9 +177,7 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
         if (event.key === "Delete" || event.key === "Backspace") {
           if (slices.length > 1) apply(deleteSlice(slices, index));
           setSelected(Math.max(0, index - 1));
-        } else if (event.key === "ArrowLeft") setSelected(Math.max(0, index - 1));
-        else if (event.key === "ArrowRight") setSelected(Math.min(slices.length - 1, index + 1));
-        else return;
+        } else return;
         /* A key this page used does not also reach the app's shortcuts. */
         event.preventDefault();
         event.stopPropagation();
