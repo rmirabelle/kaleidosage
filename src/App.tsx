@@ -232,11 +232,6 @@ export default function App() {
   const toggleMidiPanel = useCallback(() => showBottomTab("midi"), [showBottomTab]);
   const toggleAudioPanel = useCallback(() => showBottomTab("audio"), [showBottomTab]);
   const closeBottomPanel = useCallback(() => setMidiPanelOpen(false), []);
-  /** The Playlist card's map button: shows the Song Map page (it does not close it). */
-  const showSongMap = useCallback(() => {
-    setBottomTab("songmap");
-    setMidiPanelOpen(true);
-  }, []);
   /** True while the Audio panel shows its tip at the Input menu (see onNeedAudioInput). */
   const [inputTip, setInputTip] = useState(false);
   const askForAudioInput = useCallback(() => {
@@ -2034,47 +2029,57 @@ export default function App() {
         {/**
           * The left side. With a playlist open, or Files as the input, it is
           * one panel of columns: the audio files (Files only), the scenes (a
-          * list in place of the tabs), then the left panel. Else the wrapper
-          * has no box of its own (see .sidebar), and the left panel stands
-          * alone.
+          * list in place of the tabs), then the left panel. While the
+          * picture follows the songs, the Song Map sits under the scenes and
+          * the left panel, as wide as both. Else the wrapper has no box of
+          * its own (see .sidebar), and the left panel stands alone.
           */}
         <div className={`sidebar ${sceneListShown ? "with-scenes" : ""}`}>
-          {sceneListShown && tracksActive && <FilesCard engine={engine} onAddTracks={() => void pickTracks()} onShowSongMap={showSongMap} />}
-          {sceneListShown && <SceneList tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} inPlaylist={playlistPath !== null} onPick={(id) => songFollow.pickScene(docsRef.current.findIndex((doc) => doc.id === id))} />}
-          {/* The left panel: the Source section, then the Designer (the effects). */}
-          {engine && !startScreen && panelOpen && (
-            <ControlPanel
-              /* A change outside the panel (Randomize, Undo, a new scene) makes a new panel, so all of its state reloads. */
-              key={`controls-${revision}`}
-              engine={engine}
-              openGroup={openGroup}
-              onOpenGroup={openEffectGroup}
-              onWork={holdForWork}
-              onRandomize={randomize}
-              onNudge={nudge}
-              onReset={() => setResetAsked(true)}
-              onRandomizeGroup={randomizeOneGroup}
-              driverVideoName={driverVideoName}
-              onPickDriverVideo={() => setOpenRequest({ kind: "image", slot: 0, target: "driver" })}
-              onNeedAudioInput={askForAudioInput}
-              transport={<SceneTransport engine={engine} paused={paused} onTogglePause={togglePause} onStop={stop} show={holdUseful} autoNext={tracksActive && docs.length > 1} held={holdUseful && sceneHeld} onToggleHold={() => holdScene(!sceneHeldRef.current)} />}
-              source={(
-                <SourcePanel
+          {sceneListShown && tracksActive && <FilesCard engine={engine} onAddTracks={() => void pickTracks()} />}
+          <div className="sidebar-stack">
+            <div className="sidebar-columns">
+              {sceneListShown && <SceneList tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} inPlaylist={playlistPath !== null} onPick={(id) => songFollow.pickScene(docsRef.current.findIndex((doc) => doc.id === id))} />}
+              {/* The left panel: the Source section, then the Designer (the effects). */}
+              {engine && !startScreen && panelOpen && (
+                <ControlPanel
+                  /* A change outside the panel (Randomize, Undo, a new scene) makes a new panel, so all of its state reloads. */
+                  key={`controls-${revision}`}
                   engine={engine}
-                  sceneName={sceneFileName.replace(/\.ksage$/i, "")}
-                  images={images}
-                  randomLoading={randomLoading}
-                  onOpenImage={(slot) => void openImage(slot)}
-                  onRandomImage={(slot) => void randomImage(slot)}
-                  onSearchImage={setSearchSlot}
-                  onPatternImage={loadPattern}
-                  onRemoveImage={removeImage}
-                  onSwapImages={swapImages}
-                  onRestoreImage={restoreUnderImage}
+                  openGroup={openGroup}
+                  onOpenGroup={openEffectGroup}
+                  onWork={holdForWork}
+                  onRandomize={randomize}
+                  onNudge={nudge}
+                  onReset={() => setResetAsked(true)}
+                  onRandomizeGroup={randomizeOneGroup}
+                  driverVideoName={driverVideoName}
+                  onPickDriverVideo={() => setOpenRequest({ kind: "image", slot: 0, target: "driver" })}
+                  onNeedAudioInput={askForAudioInput}
+                  transport={<SceneTransport engine={engine} paused={paused} onTogglePause={togglePause} onStop={stop} show={holdUseful} autoNext={tracksActive && docs.length > 1} held={holdUseful && sceneHeld} onToggleHold={() => holdScene(!sceneHeldRef.current)} />}
+                  source={(
+                    <SourcePanel
+                      engine={engine}
+                      sceneName={sceneFileName.replace(/\.ksage$/i, "")}
+                      images={images}
+                      randomLoading={randomLoading}
+                      onOpenImage={(slot) => void openImage(slot)}
+                      onRandomImage={(slot) => void randomImage(slot)}
+                      onSearchImage={setSearchSlot}
+                      onPatternImage={loadPattern}
+                      onRemoveImage={removeImage}
+                      onSwapImages={swapImages}
+                      onRestoreImage={restoreUnderImage}
+                    />
+                  )}
                 />
               )}
-            />
-          )}
+            </div>
+            {sceneListShown && followOn && (
+              <div className="song-map-dock">
+                <SongMapPanel sceneCount={docs.length} activeScene={docs.findIndex((doc) => doc.id === activeId)} onSlicePick={pickSlice} />
+              </div>
+            )}
+          </div>
         </div>
         {/* The picture under its document tab; full screen hides the tab. */}
         <div className="document">
@@ -2136,7 +2141,6 @@ export default function App() {
           <div className="midi-panel-body">
             <BottomPanelTabs tab={bottomTab} onTab={setBottomTab} onClose={closeBottomPanel} />
             {bottomTab === "midi" ? <MidiPanel engine={engine} open={midiPanelOpen} />
-              : bottomTab === "songmap" ? <SongMapPanel sceneCount={docs.length} activeScene={docs.findIndex((doc) => doc.id === activeId)} onSlicePick={pickSlice} />
               : <AudioPanel engine={engine} sceneName={sceneFileName} onAddTracks={() => void pickTracks()} inputTip={inputTip && midiPanelOpen} onInputTipDone={() => setInputTip(false)} />}
           </div>
         </div>

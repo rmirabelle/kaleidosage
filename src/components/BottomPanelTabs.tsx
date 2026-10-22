@@ -1,18 +1,17 @@
 import type { ReactNode } from "react";
-import { MapTrifold, SpeakerSimpleHigh, X } from "@phosphor-icons/react";
+import { SpeakerSimpleHigh, X } from "@phosphor-icons/react";
 import { HelpButton } from "./HelpButton";
 import { MidiIcon } from "./MidiIcon";
 
-export type BottomTab = "midi" | "audio" | "songmap";
+export type BottomTab = "midi" | "audio";
 
 const TABS: readonly (readonly [BottomTab, string, string, ReactNode])[] = [
   ["audio", "Audio", "Sound that the settings react to `a`", <SpeakerSimpleHigh size={16} />],
-  ["midi", "MIDI", "MIDI controllers and mappings `m`", <MidiIcon size={14} />],
-  ["songmap", "Song Map", "The map of the song that plays: its slices, levels and hits", <MapTrifold size={15} />]
+  ["midi", "MIDI", "MIDI controllers and mappings `m`", <MidiIcon size={14} />]
 ];
 
 /**
- * The bottom panel's top row, by itself: the tabs (Audio, MIDI, Song Map) at the
+ * The bottom panel's top row, by itself: the tabs (Audio, MIDI) at the
  * left, as buttons like the document tabs, and the close button at the
  * right. Each tab's own buttons are in its toolbar, under this row.
  */

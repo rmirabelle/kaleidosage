@@ -21,7 +21,7 @@ const capital = (text: string) => text[0].toUpperCase() + text.slice(1);
 const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
 
 /**
- * The Song Map page of the bottom panel, while Song follow is on: the map
+ * The Song Map, under the scenes and the left panel (see App), while Song follow is on: the map
  * of one song, at first the song that plays. The arrows on each side of
  * the song's name show the map of the song before or after it in the
  * playlist, and do nothing else. The slices (the song's parts) are each

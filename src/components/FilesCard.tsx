@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { CaretDoubleLeft, CaretDoubleRight, MapTrifold, Plus, SpeakerHigh, Trash, Waveform, X } from "@phosphor-icons/react";
+import { CaretDoubleLeft, CaretDoubleRight, Plus, SpeakerHigh, Trash, Waveform, X } from "@phosphor-icons/react";
 import { MediaIcon } from "./MediaIcon";
 import { placeSeek } from "./Slider";
 import { FLOOR_DB } from "../engine/audio";
@@ -46,7 +46,7 @@ function followTip(enabled: boolean, status: FollowStatus) {
  * toolbar at the bottom runs the music on its own (see PlaylistTransport);
  * the controls on the picture run the scene.
  */
-export function FilesCard({ engine, onAddTracks, onShowSongMap }: { engine: Engine | null; onAddTracks: () => void; onShowSongMap: () => void }) {
+export function FilesCard({ engine, onAddTracks }: { engine: Engine | null; onAddTracks: () => void }) {
   useSyncExternalStore(subscribeTracks, tracksVersion);
   useSyncExternalStore(subscribeFollow, followVersion);
   const width = useSyncExternalStore(panelLayout.subscribe, () => panelLayout.filesWidth);
@@ -128,7 +128,7 @@ export function FilesCard({ engine, onAddTracks, onShowSongMap }: { engine: Engi
             )}
           </div>
           {count > 0 && <FilesFooter count={count} />}
-          <PlaylistTransport count={count} engine={engine} onShowSongMap={onShowSongMap} />
+          <PlaylistTransport count={count} engine={engine} />
         </section>
       </aside>
       <FilesSplitter />
@@ -166,14 +166,6 @@ function FollowButton() {
   );
 }
 
-/** Shows the Song Map page of the bottom panel (see SongMapPanel), which edits the map of the song that plays. */
-function MapButton({ onShow }: { onShow: () => void }) {
-  return (
-    <button className="panel-button icon" onClick={onShow} data-tip="Show the song map: the song's slices, their levels and hits" aria-label="Show the song map">
-      <MapTrifold size={16} />
-    </button>
-  );
-}
 
 /** A time in the file as "1:05". */
 const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
@@ -188,7 +180,7 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * through React state; a drag on the bar seeks. While the picture follows
  * the song, Space and Shift+Space run these controls (see App).
  */
-function PlaylistTransport({ count, engine, onShowSongMap }: { count: number; engine: Engine | null; onShowSongMap: () => void }) {
+function PlaylistTransport({ count, engine }: { count: number; engine: Engine | null }) {
   const bar = useRef<HTMLInputElement>(null);
   const fill = useRef<HTMLDivElement>(null);
   const cap = useRef<HTMLDivElement>(null);
@@ -234,7 +226,6 @@ function PlaylistTransport({ count, engine, onShowSongMap }: { count: number; en
             {tracks.playing ? <MediaIcon kind="pause" size={16} /> : <MediaIcon kind="play" size={16} />}
           </button>
           <FollowButton />
-          <MapButton onShow={onShowSongMap} />
         </div>
         <div className="slider playlist-seek">
           <div className="slider-well">
