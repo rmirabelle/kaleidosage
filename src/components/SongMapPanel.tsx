@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowCounterClockwise, ArrowsInLineHorizontal, CaretLeft, CaretRight, Lightning, PushPin, Scissors, Trash, X } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, ArrowUUpLeft, ArrowsInLineHorizontal, CaretLeft, CaretRight, Lightning, PushPin, Scissors, Trash } from "@phosphor-icons/react";
 import { changeSlice, deleteSlice, mergeWithNext, moveDivider, splitAt } from "../engine/songMapEdits";
 import { TIER_NAMES, mapOf, planSong, type MapSlice, type Tier } from "../engine/songPlan";
 import type { ScheduledSlice } from "../engine/showSchedule";
@@ -194,10 +194,15 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
                 ))}
               </div>
             </div>
-            {/* The selected slice: Keep Scene and Hit stay pressed while they are on; Split, Merge and Delete change the slices. */}
+            {/* The selected slice: first its picked scene, if any (a click undoes the pick); Keep Scene and Hit stay pressed while they are on; Split, Merge and Delete change the slices. */}
             <div className="song-map-field song-map-slice-tools">
               <span>Slice</span>
               <div className="panel-buttons">
+                {slice.scene !== undefined && (
+                  <button className="panel-button picked-scene" onClick={() => apply(changeSlice(slices, index, { scene: undefined }))} data-tip="You picked this scene (Ctrl+click in the scene list). Click to undo the pick: the slice plays the scene of the show's order again">
+                    Scene {slice.scene + 1} <ArrowUUpLeft size={13} weight="bold" />
+                  </button>
+                )}
                 <button
                   className={`panel-button ${slice.keepScene ? "active" : ""}`}
                   aria-pressed={Boolean(slice.keepScene)}
@@ -216,11 +221,6 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
                 >
                   <Lightning size={15} /> Hit
                 </button>
-                {slice.scene !== undefined && (
-                  <button className="panel-button picked-scene" onClick={() => apply(changeSlice(slices, index, { scene: undefined }))} data-tip="You picked this scene (Ctrl+click in the scene list). Click to play the scene of the show's order again">
-                    Scene {slice.scene + 1} <X size={12} weight="bold" />
-                  </button>
-                )}
                 <button
                   className="panel-button"
                   disabled={tracks.current?.path !== path}
