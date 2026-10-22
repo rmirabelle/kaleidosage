@@ -1880,8 +1880,7 @@ export default function App() {
           : event.shiftKey ? stop : togglePause,
         o: () => void openImage(),
         x: randomize,
-        n: nudge,
-        s: () => void savePng()
+        n: nudge
       };
       const action = run[key];
       if (!action) return;
@@ -1892,7 +1891,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [aboutOpen, shortcutsOpen, closeScene, crossfadeToDoc, engine, exitFullscreen, newScene, nudge, openImage, openRequest, videoDialogOpen, searchSlot, openScene, randomize, redo, savePlaylist, savePng, saveScene, startScreen, stop, switchByStep, toggleAudioPanel, toggleFullscreen, toggleMidiPanel, togglePause, undo]);
+  }, [aboutOpen, shortcutsOpen, closeScene, crossfadeToDoc, engine, exitFullscreen, newScene, nudge, openImage, openRequest, videoDialogOpen, searchSlot, openScene, randomize, redo, savePlaylist, saveScene, startScreen, stop, switchByStep, toggleAudioPanel, toggleFullscreen, toggleMidiPanel, togglePause, undo]);
 
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
@@ -1925,7 +1924,7 @@ export default function App() {
       /* The picture's own commands (an image or video in, a PNG or video out); the scene and playlist commands have menus of their own. */
       items: [
         { label: "Open Image or Video…", icon: <ColorFolder size={18} />, shortcut: "O", run: () => void openImage() },
-        { label: "Save PNG", disabled: startScreen, icon: <Camera size={15} />, shortcut: "S", run: () => void savePng() },
+        { label: "Save PNG", disabled: startScreen, icon: <Camera size={15} />, run: () => void savePng() },
         { label: "Export Video…", icon: <FilmStrip size={15} />, run: openVideoDialog },
         "separator",
         { label: "Exit", icon: <SignOut size={15} />, shortcut: "Alt+F4", run: () => void (isTauri() ? getCurrentWindow().close() : window.close()) }

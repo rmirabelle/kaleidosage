@@ -64,6 +64,13 @@ describe("song map edits", () => {
     expect(splitAt(slices, downbeats, 27.3)[3]).toEqual({ start: 28, label: "chorus", tier: 3, drop: false });
   });
 
+  it("splits at the playhead itself with Snap off, but not near a slice start", () => {
+    expect(splitAt(slices, null, 13.1).map((slice) => slice.start)).toEqual([0, 10, 13.1, 20]);
+    expect(splitAt(slices, null, 10.2)).toEqual(slices);
+    expect(moveDivider(slices, 1, null, 30, 13.37)[1].start).toBe(13.37);
+    expect(moveDivider(slices, 1, null, 30, 25)[1].start).toBe(19.75);
+  });
+
   it("does not split again at the same place, or at a slice start", () => {
     const once = splitAt(slices, downbeats, 13.1);
     expect(splitAt(once, downbeats, 13.1)).toEqual(once);

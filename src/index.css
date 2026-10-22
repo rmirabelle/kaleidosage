@@ -2192,9 +2192,6 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .song-map-scene-tag.current { box-shadow: 0 0 0 1px #fff; }
 /* While Ctrl is held, the selected slice shows the pick color, the same as the scene under the pointer in the scene list. */
 .song-map-slice.selected.picking { box-shadow: inset 0 0 0 2px #f5ce69, inset 0 0 14px rgba(245,206,105,.45); }
-.song-map-toolbar .picked-scene { color: #1b1606; background: #f5ce69; }
-.song-map-toolbar .picked-scene:hover { background: #ffdc85; }
-.song-map-toolbar .picked-scene svg { color: #1b1606; }
 /* The card's title bar: the song's name with an arrow on each side (see SongMapPanel). */
 .panel-header-bar.song-map-header { flex: none; justify-content: flex-start; gap: 10px; padding: 0 10px; }
 /* The title keeps the card titles' own padding (see .panel-header-bar .side-panel-title), so this title bar is as tall as the Playlist's and the Scenes'. */
@@ -2216,7 +2213,7 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .song-map-ruler span:first-child { transform: none; }
 .song-map-ruler { cursor: pointer; }
 /* The editor's toolbar: one dark full-width row under the title bar, with every control; it wraps on a narrow window. */
-.song-map-toolbar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 4px 8px; border-bottom: 1px solid #30343f; background: #14161c; }
+.song-map-toolbar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 4px; border-bottom: 1px solid #30343f; background: #14161c; }
 .song-map-toolbar .panel-buttons { border-radius: 5px; }
 /* The dividers around the switches run the toolbar's full height, through its padding. */
 /* The song's own buttons: Auto Fill at the left end of the toolbar, with room after it, and Reset Map at the right end. */

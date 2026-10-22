@@ -187,7 +187,7 @@ export const HELP_TOPICS = {
   },
   export: {
     title: "Pictures and videos",
-    text: "Save PNG `s` saves the picture as it is now. Export Video makes an MP4 of the scene, which can repeat with no jump.",
+    text: "Save PNG saves the picture as it is now. Export Video makes an MP4 of the scene, which can repeat with no jump.",
     tips: [
       "A video plays the ranges; audio sensors do not move in it.",
       "The video is made in the background; the app stays usable.",

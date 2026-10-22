@@ -74,18 +74,26 @@ export function mergeWithNext(slices: readonly MapSlice[], index: number): MapSl
   return slices.filter((_, i) => i !== index + 1);
 }
 
+/** With Snap off (see SongMapPanel), a slice is never shorter than this many seconds. */
+export const FREE_GAP = 0.25;
+
+/** The bar start nearest "at". */
+const nearestBar = (downbeats: readonly number[], at: number) => downbeats.reduce((best, time) => (Math.abs(time - at) < Math.abs(best - at) ? time : best));
+
 /**
- * Splits the slice that plays at "at" (the playhead) in two, at the bar
- * start nearest "at". Both halves keep the slice's name, level and scene
- * choice; the second has no drop. When that bar start is a slice start
- * already (a second press at the same place, or the song's start), or
- * with no bar starts, nothing changes: so a slice is never shorter than
- * one bar, and two slices never start at the same place.
+ * Splits the slice that plays at "at" (the playhead) in two: at the bar
+ * start nearest "at", or with Snap off ("downbeats" null) at "at" itself.
+ * Both halves keep the slice's name, level and scene choice; the second
+ * has no drop. When that place is a slice start already (a second press at
+ * the same place, or the song's start), or within FREE_GAP of one with
+ * Snap off, or with no bar starts, nothing changes: so two slices never
+ * start at the same place.
  */
-export function splitAt(slices: readonly MapSlice[], downbeats: readonly number[], at: number): MapSlice[] {
-  if (downbeats.length === 0) return [...slices];
-  const split = downbeats.reduce((best, time) => (Math.abs(time - at) < Math.abs(best - at) ? time : best));
-  if (split < 0.01 || slices.some((slice) => Math.abs(slice.start - split) < 0.01)) return [...slices];
+export function splitAt(slices: readonly MapSlice[], downbeats: readonly number[] | null, at: number): MapSlice[] {
+  if (downbeats?.length === 0) return [...slices];
+  const split = downbeats ? nearestBar(downbeats, at) : at;
+  const gap = downbeats ? 0.01 : FREE_GAP;
+  if (split < gap || slices.some((slice) => Math.abs(slice.start - split) < gap)) return [...slices];
   const index = slices.filter((slice) => slice.start < split).length - 1;
   if (index < 0) return [...slices];
   return [...slices.slice(0, index + 1), { ...slices[index], start: split, drop: false }, ...slices.slice(index + 1)];
@@ -93,15 +101,22 @@ export function splitAt(slices: readonly MapSlice[], downbeats: readonly number[
 
 /**
  * Moves the divider at the start of slice "index" to the bar start nearest
- * "at": the slice before it and this slice change size, and each keeps at
- * least one bar. The first slice has no divider at its start.
+ * "at", or with Snap off ("downbeats" null) to "at" itself: the slice
+ * before it and this slice change size, and each keeps at least one bar
+ * (FREE_GAP with Snap off). The first slice has no divider at its start.
  */
-export function moveDivider(slices: readonly MapSlice[], index: number, downbeats: readonly number[], duration: number, at: number): MapSlice[] {
+export function moveDivider(slices: readonly MapSlice[], index: number, downbeats: readonly number[] | null, duration: number, at: number): MapSlice[] {
   if (index < 1 || index >= slices.length) return [...slices];
   const from = slices[index - 1].start;
   const to = slices[index + 1]?.start ?? duration;
-  const inside = downbeats.filter((time) => time > from + 0.01 && time < to - 0.01);
-  if (inside.length === 0) return [...slices];
-  const place = inside.reduce((best, time) => (Math.abs(time - at) < Math.abs(best - at) ? time : best));
+  let place: number;
+  if (downbeats) {
+    const inside = downbeats.filter((time) => time > from + 0.01 && time < to - 0.01);
+    if (inside.length === 0) return [...slices];
+    place = nearestBar(inside, at);
+  } else {
+    if (to - from < 2 * FREE_GAP) return [...slices];
+    place = Math.min(to - FREE_GAP, Math.max(from + FREE_GAP, at));
+  }
   return slices.map((slice, i) => (i === index ? { ...slice, start: place } : slice));
 }

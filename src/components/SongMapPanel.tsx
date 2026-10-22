@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowCounterClockwise, ArrowUUpLeft, ArrowsInLineHorizontal, CaretLeft, CaretRight, Lightning, ListNumbers, Scissors, Trash } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, ArrowsInLineHorizontal, CaretLeft, CaretRight, Lightning, ListNumbers, Scissors, Trash } from "@phosphor-icons/react";
 import { changeSlice, deleteSlice, fillScenes, mergeWithNext, moveDivider, splitAt } from "../engine/songMapEdits";
 import { TIER_NAMES, mapOf, planSong, type MapSlice, type Tier } from "../engine/songPlan";
 import type { ScheduledSlice } from "../engine/showSchedule";
@@ -12,6 +12,12 @@ import { useCtrlHeld } from "./useCtrlHeld";
 const subscribeFollow = (listener: () => void) => songFollow.subscribe(listener);
 const followVersion = () => songFollow.version;
 const subscribeTracks = (listener: () => void) => tracks.subscribe(listener);
+
+/** Where the Snap switch is kept for the next start; remembering it is a convenience only. */
+const SNAP_KEY = "kaleidosage.songMap.snap";
+const readSnap = () => {
+  try { return localStorage.getItem(SNAP_KEY) !== "off"; } catch { return true; }
+};
 const tracksVersion = () => tracks.version;
 
 const TIERS: readonly Tier[] = [0, 1, 2, 3];
@@ -35,11 +41,11 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * slice's start, with the slice's scene, and the map then follows the
  * song that plays again; a right-click stops the
  * song where it is; a drag of the divider between
- * two slices moves it from bar to bar. It is a card: a title bar with
+ * two slices moves it (from bar to bar while Snap is on). It is a card: a title bar with
  * the song's name and the arrows, then a dark toolbar that holds the
- * selected slice's level, the Slice buttons (the picked scene, where a
- * click undoes the pick; Hit; Split at the playhead; Merge with next; and
- * Delete: the slice before it grows into its place), and Reset Map (the
+ * selected slice's level, the Slice buttons (Hit; Split at the playhead;
+ * Merge with next; and Delete: the slice before it grows into its place),
+ * Snap (Split and a divider drag go to bar starts), and Reset Map (the
  * analysis's own map). Auto Fill, at the toolbar's left, picks a scene for
  * each slice with none, in scene list order. The Playlist card's controls
  * play the song. Each change applies at
@@ -86,6 +92,12 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick }: { s
   const cap = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const ctrlHeld = useCtrlHeld();
+  /** Snap: Split and a divider drag go to the nearest bar start; off, to the exact place (see songMapEdits.ts). */
+  const [snap, setSnapState] = useState(readSnap);
+  const setSnap = (on: boolean) => {
+    setSnapState(on);
+    try { localStorage.setItem(SNAP_KEY, on ? "on" : "off"); } catch { /* It is on again at the next start. */ }
+  };
   /* The selected slice, for a Ctrl+click in the scene list; none while the page does not show. */
   useEffect(() => {
     songFollow.selectSlice(analysis && slices.length ? { path, index } : null);
@@ -207,15 +219,10 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick }: { s
                 ))}
               </div>
             </div>
-            {/* The selected slice: first its picked scene, if any (a click undoes the pick); Hit stays pressed while it is on; Split, Merge and Delete change the slices. */}
+            {/* The selected slice: Hit stays pressed while it is on; Split, Merge and Delete change the slices. */}
             <div className="song-map-field song-map-slice-tools">
               <span>Slice</span>
               <div className="panel-buttons">
-                {slice.scene !== undefined && (
-                  <button className="panel-button picked-scene" onClick={() => apply(changeSlice(slices, index, { scene: undefined }))} data-tip="You picked this scene (Ctrl+click in the scene list, or Auto Fill). Click to undo the pick: the slice then changes nothing">
-                    Scene {slice.scene + 1} <ArrowUUpLeft size={13} weight="bold" />
-                  </button>
-                )}
                 <button
                   className={`panel-button ${slice.drop ? "active" : ""}`}
                   aria-pressed={slice.drop}
@@ -229,12 +236,12 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick }: { s
                   className="panel-button"
                   disabled={tracks.current?.path !== path}
                   onClick={() => {
-                    const next = splitAt(slices, analysis.downbeats, tracks.position);
+                    const next = splitAt(slices, snap ? analysis.downbeats : null, tracks.position);
                     if (next.length === slices.length) return;
                     apply(next);
                     setSelected(next.filter((candidate) => candidate.start <= tracks.position + 0.01).length - 1);
                   }}
-                  data-tip={tracks.current?.path !== path ? "Play this song to split at the playhead" : "Split the slice at the playhead, at the bar nearest it. Nothing happens at a bar where a slice starts already"}
+                  data-tip={tracks.current?.path !== path ? "Play this song to split at the playhead" : snap ? "Split the slice at the playhead, at the bar nearest it. Nothing happens at a bar where a slice starts already" : "Split the slice exactly at the playhead (Snap is off)"}
                 >
                   <Scissors size={15} /> Split
                 </button>
@@ -255,6 +262,10 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick }: { s
                 </button>
               </div>
             </div>
+            <label className="panel-check-inline song-map-snap" data-tip="Snap: Split and a divider drag go to the nearest bar start. Off, they go exactly where you put them">
+              <input type="checkbox" checked={snap} onChange={(event) => setSnap(event.target.checked)} />
+              Snap
+            </label>
           </>
         )}
         <button className="panel-button song-map-reset" disabled={!analysis.mapEdits} onClick={() => songFollow.editMap(path, null)} data-tip="Give back the map that the analysis found: its slices, levels and hits, with no picked scenes">
@@ -312,7 +323,7 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick }: { s
               key={`divider-${k}`}
               className="song-map-divider"
               style={{ left: at(candidate.start) }}
-              data-tip="Drag to move this divider: both slices change size"
+              data-tip={snap ? "Drag to move this divider from bar to bar: both slices change size" : "Drag to move this divider: both slices change size (Snap is off)"}
               onPointerDown={(event) => {
                 if (event.button !== 0) return;
                 event.preventDefault();
@@ -321,7 +332,7 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick }: { s
                 const base = slices;
                 let latest = base;
                 const move = (moveEvent: PointerEvent) => {
-                  latest = moveDivider(base, k + 1, analysis.downbeats, duration, timeAt(moveEvent));
+                  latest = moveDivider(base, k + 1, snap ? analysis.downbeats : null, duration, timeAt(moveEvent));
                   setDraft(latest);
                 };
                 const end = () => {
