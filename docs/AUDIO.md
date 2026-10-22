@@ -285,9 +285,10 @@ the analysis. The playlist then runs the show.
   map, a slice at the same level as the one before it, with no hit, keeps
   the scene. A jump (a seek, a click on a slice, a new track) brings in
   that slice's scene. A tab click shows its tab until the next slice that
-  changes the scene; Hold keeps the scene. The Song Map page shows every
-  song in a row, each slice with its scene number; a click plays that song
-  from the slice's start.
+  changes the scene; Hold keeps the scene. The Song Map page shows one
+  song's map, with each slice's scene number; arrows beside the song's
+  name show the song before or after it, and a click on a slice plays that
+  song from the slice's start.
 - The app does not play music at its start; the user starts it.
 - Order and layout (2026-10-20; the scene list also shows for any open
   playlist): a drag moves a track in the Files list,
