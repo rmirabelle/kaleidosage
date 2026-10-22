@@ -127,7 +127,6 @@ interface StoredScene {
   driver: DriverVideo | null;
   savedFingerprint: string;
   history: SettingsHistory;
-  openGroup: string | null;
 }
 
 let nextDocId = 1;
@@ -281,8 +280,6 @@ export default function App() {
    * so it stays when the panel hides (full screen, H) and shows again.
    */
   const [openGroup, setOpenGroup] = useState<string | null>(null);
-  const openGroupRef = useRef(openGroup);
-  openGroupRef.current = openGroup;
   const [status, setStatus] = useState<Status | null>(null);
   const [cursorIdle, setCursorIdle] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -736,8 +733,7 @@ export default function App() {
       images: imagesRef.current,
       driver: driverRef.current,
       savedFingerprint: savedFingerprintRef.current,
-      history,
-      openGroup: openGroupRef.current
+      history
     });
     writeDocs(docsRef.current.map((doc) => doc.id === id ? { ...doc, dirty: dirtyNow } : doc));
   }, [engine, fingerprint, writeDocs]);
@@ -745,7 +741,8 @@ export default function App() {
   /**
    * Puts a stored scene back into the engine and selects its tab. MIDI
    * holds and the momentary bypass and solo of the scene before it end,
-   * and the trails start again from the still picture.
+   * and the trails start again from the still picture. Each scene comes in
+   * with its effect groups closed.
    */
   const restoreDoc = useCallback((id: number) => {
     const stored = storedRef.current.get(id);
@@ -774,7 +771,7 @@ export default function App() {
     dirtyRef.current = doc.dirty;
     setDirty(doc.dirty);
     historyRef.current = stored.history;
-    setOpenGroup(stored.openGroup);
+    setOpenGroup(null);
     setPaused(engine.state.paused);
     setRandomLoading(null);
     setRevision((value) => value + 1);
@@ -1187,18 +1184,14 @@ export default function App() {
   }, [engine, tracksActive]);
 
   /**
-   * A click on a slice of the Song Map (see SongMapPanel): when the slice's
-   * scene is not the one shown, it comes in with its effect groups closed;
-   * while Hold is on, Hold goes off and the scene comes in here, as the
-   * schedule brings it in (else the show's frame loop brings it in).
+   * A click on a slice of the Song Map (see SongMapPanel): while Hold is on
+   * and the slice's scene is not the one shown, Hold goes off and the
+   * slice's scene comes in, as the schedule brings it in.
    */
   const pickSlice = useCallback((slice: ScheduledSlice) => {
+    if (!sceneHeldRef.current) return;
     const doc = docsRef.current[slice.scene];
     if (!doc || doc.id === activeIdRef.current) return;
-    /* The slice's scene comes in with its effect groups closed. */
-    const stored = storedRef.current.get(doc.id);
-    if (stored) stored.openGroup = null;
-    if (!sceneHeldRef.current) return;
     holdScene(false);
     const tempo = songFollow.script?.tempo ?? 0;
     const cut = slice.runStart === slice.start && slice.drop;
