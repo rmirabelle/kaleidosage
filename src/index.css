@@ -2151,9 +2151,10 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .song-map-slice.tier-2 { background: #3a72d6; }
 .song-map-slice.tier-3 { background: #5fa8ff; color: #0d1b33; }
 .song-map-slice:hover { filter: brightness(1.15); }
-/* The slice the playhead is in: a subtle outline; the selected slice's white outline wins. */
-.song-map-slice.playing { box-shadow: inset 0 0 0 1px rgba(255,255,255,.45), inset 0 0 14px rgba(255,255,255,.12); }
+/* The slice the playhead is in: a red outline and a red glow; selected too, it keeps the white outline inside the red. */
+.song-map-slice.playing { box-shadow: inset 0 0 0 2px #e53935, inset 0 0 18px rgba(229,57,53,.45); }
 .song-map-slice.selected { z-index: 1; box-shadow: inset 0 0 0 2px #fff; }
+.song-map-slice.selected.playing { box-shadow: inset 0 0 0 2px #e53935, inset 0 0 0 4px #fff, inset 0 0 18px rgba(229,57,53,.45); }
 .song-map-slice.drop { border-left: 3px solid #e53935; }
 .song-map-drop-tag { position: absolute; top: 6px; left: 6px; padding: 1px 5px; border-radius: 3px; color: #fff; background: #e53935; font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .song-map-slice-name { font-size: 12px; font-weight: 700; white-space: nowrap; }
