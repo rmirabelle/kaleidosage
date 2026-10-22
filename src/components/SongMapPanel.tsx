@@ -29,7 +29,7 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * slice's start, with the slice's scene, and the map then follows the
  * song that plays again; a right-click stops the
  * song where it is; a drag of the divider between
- * two slices moves it from bar to bar. A toolbar under the song's name holds the
+ * two slices moves it from bar to bar. A toolbar across the top holds the
  * selected slice's level, Hit and Keep Scene, Split, Merge with next and
  * Delete (the slice before it grows into its place), then Reset (the
  * analysis's own map); the Playlist card's controls play the song. Each change applies at
@@ -105,11 +105,11 @@ export function SongMapPanel({ sceneCount }: { sceneCount: number }) {
   const title = (
     <div className="song-map-title-row">
       <button className="panel-button icon song-map-song-step" disabled={trackIndex < 1} onClick={() => showSong(-1)} data-tip="Show the map of the song before this one" aria-label="Previous song's map">
-        <CaretLeft size={16} />
+        <CaretLeft size={13} />
       </button>
       <h2 className="side-panel-title source-title song-map-title" data-tip={name}><span>{name}</span></h2>
       <button className="panel-button icon song-map-song-step" disabled={trackIndex < 0 || trackIndex >= tracks.list.length - 1} onClick={() => showSong(1)} data-tip="Show the map of the song after this one" aria-label="Next song's map">
-        <CaretRight size={16} />
+        <CaretRight size={13} />
       </button>
     </div>
   );
@@ -160,7 +160,6 @@ export function SongMapPanel({ sceneCount }: { sceneCount: number }) {
         event.stopPropagation();
       }}
     >
-      {title}
       <div className="song-map-toolbar">
         {slice && (
           <>
@@ -210,6 +209,7 @@ export function SongMapPanel({ sceneCount }: { sceneCount: number }) {
         </button>
       </div>
       <div className="song-map-body">
+        {title}
         <div ref={strip} className="song-map-strip" data-tip="Click a slice to select it and play the song from its start; right-click to stop the song where it is">
           {view.map((candidate, i) => {
             const sliceEnd = view[i + 1]?.start ?? duration;

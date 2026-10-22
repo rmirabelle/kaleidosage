@@ -2158,7 +2158,7 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .song-map-title-row { display: flex; align-items: center; gap: 12px; padding: 12px 20px 10px; }
 .song-map-body > .song-map-title-row { padding: 0 0 4px; }
 .song-map-title-row .side-panel-title.song-map-title { flex: 0 1 auto; margin: 0; padding: 0 2px; }
-.panel-button.song-map-song-step { flex: none; border: 1px solid #474c5e; border-radius: 5px; background: #30343f; }
+.panel-button.icon.song-map-song-step { flex: none; width: 24px; height: 24px; border: 1px solid #474c5e; border-radius: 5px; background: #30343f; }
 .song-map-wait { margin: 0; color: var(--muted); font-size: 12px; }
 .song-map-drop-tag { padding: 1px 5px; border-radius: 3px; color: #fff; background: #e53935; font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .song-map-slice-name { font-size: 12px; font-weight: 700; white-space: nowrap; }
