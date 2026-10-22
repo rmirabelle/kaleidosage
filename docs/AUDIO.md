@@ -279,19 +279,18 @@ the analysis. The playlist then runs the show.
   choice to change the scene every 16 or 32 beats instead.
 - Show schedule (2026-10-22): with Song follow on, the scenes follow a
   fixed schedule across the whole playlist (`showSchedule.ts`) instead of
-  Lengths and new tracks. A slice plays the scene the user picked for it
-  (Ctrl+click on a scene in the scene list, or Fill); any other slice
-  keeps the scene of the slice before it, and the first slice of a song
-  with no pick plays the scene after the previous song's last one, in tab
-  order (after the last tab, the first). So a pick never moves when the
-  scenes or the songs change order (changed 2026-10-22; before, each
-  slice brought in the next scene, and Keep Scene kept the one before).
-  Fill picks the next scenes for a song's slices that have none. A picked
-  scene follows its scene when the tabs move; a closed scene's picks go.
+  Lengths and new tracks. A slice with a scene the user picked (Ctrl+click
+  on a scene in the scene list, or Auto Fill) brings in that scene, as a
+  cue. A slice with no pick changes nothing: the scene that shows stays,
+  also one the user clicked in the scene list. A jump (a play, a seek, a
+  click on a slice, a new track) shows the last pick at or before that
+  place in the song, if any. A pick never moves when the scenes or the
+  songs change order (changed 2026-10-22; before, each slice brought in
+  the next scene, then each slice kept the scene before it). Auto Fill
+  picks the next scenes for a song's slices that have none. A picked scene
+  follows its scene when the tabs move; a closed scene's picks go.
   An automatic map keeps one slice per section that the analysis finds,
-  also where the level does not change. A jump (a seek, a click on a slice, a new track) brings in
-  that slice's scene. A tab click shows its tab until the next slice that
-  changes the scene; Hold keeps the scene. While Hold is on, the slice
+  also where the level does not change. Hold keeps the scene. While Hold is on, the slice
   that plays loops in the music too; a click on a slice with another scene
   turns Hold off and brings that scene in. The Song Map page shows one
   song's map, with each slice's scene number; arrows beside the song's

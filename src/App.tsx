@@ -1148,13 +1148,14 @@ export default function App() {
 
   /**
    * While the picture follows the song (see songFollow.ts), the show's
-   * schedule picks the scene (see showSchedule.ts): as the song comes to a
-   * slice that brings in a scene, or jumps into another one (a seek, a
-   * click on a slice, a new track), that slice's scene comes in, with a cut
-   * on a drop and with a crossfade of up to two beats otherwise. A slice is
-   * taken a frame early, so the cut lands on its beat. Between these
-   * changes the scene stays, so a tab click shows its tab until the next
-   * one; Hold keeps the scene.
+   * schedule changes the scene (see showSchedule.ts): as the song comes to
+   * a slice with a picked scene, that scene comes in, with a cut on a drop
+   * and with a crossfade of up to two beats otherwise. A slice with no
+   * pick changes nothing. A jump (a play, a seek, a click on a slice, a new
+   * track) shows the last pick at or before that place in the song, if
+   * any. A slice is taken a frame early, so the cut lands on its beat.
+   * Between picks the scene stays, so a tab click shows its tab until the
+   * next pick; Hold keeps the scene.
    */
   useEffect(() => {
     if (!engine || !tracksActive) return;
@@ -1175,11 +1176,13 @@ export default function App() {
       last = time;
       const slice = sliceAt(songFollow.schedule(docsRef.current.length)[tracks.index] ?? [], time);
       if (!slice) return;
-      /* The scene is part of the run, so a scene picked for the slice that plays comes in at once. */
-      const run = `${tracks.index} ${slice.runStart} ${slice.scene}`;
-      if (run === shownRun) return;
+      /* The pick is part of the run, so a scene picked for the slice that plays comes in at once. */
+      const run = `${tracks.index} ${slice.runStart} ${slice.lastPick}`;
+      if (run === shownRun && !jumped) return;
       shownRun = run;
-      const doc = docsRef.current[slice.scene];
+      const scene = jumped ? slice.lastPick : slice.scene;
+      if (scene === null) return;
+      const doc = docsRef.current[scene];
       if (!doc || doc.id === activeIdRef.current || sceneHeldRef.current) return;
       const beat = following.script.tempo > 0 ? 60 / following.script.tempo : 0.5;
       const cut = slice.runStart === slice.start && slice.drop;
@@ -1189,12 +1192,12 @@ export default function App() {
 
   /**
    * A click on a slice of the Song Map (see SongMapPanel): while Hold is on
-   * and the slice's scene is not the one shown, Hold goes off and the
-   * slice's scene comes in, as the schedule brings it in.
+   * and the last pick at or before the slice is not the scene shown, Hold
+   * goes off and that scene comes in, as the schedule brings it in.
    */
   const pickSlice = useCallback((slice: ScheduledSlice) => {
-    if (!sceneHeldRef.current) return;
-    const doc = docsRef.current[slice.scene];
+    if (!sceneHeldRef.current || slice.lastPick === null) return;
+    const doc = docsRef.current[slice.lastPick];
     if (!doc || doc.id === activeIdRef.current) return;
     holdScene(false);
     const tempo = songFollow.script?.tempo ?? 0;

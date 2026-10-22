@@ -12,28 +12,22 @@ function plan(starts: number[], drops: number[] = [], picks: Record<number, numb
 }
 
 describe("the show's scene schedule", () => {
-  it("keeps the scene of the slice before; each song brings in the next scene, and the order goes round", () => {
-    const schedule = scheduleShow([plan([0, 10, 20], [10]), null, plan([0, 10])], 3);
-    expect(schedule.map((song) => song.map((slice) => slice.scene))).toEqual([[0, 0, 0], [1], [2, 2]]);
-    expect(schedule[0].map((slice) => [slice.change, slice.drop, slice.runStart])).toEqual([[true, false, 0], [false, true, 0], [false, false, 0]]);
-    expect(schedule[1][0].change).toBe(true);
-    expect(scheduleShow([plan([0]), plan([0]), plan([0])], 2).map((song) => song[0].scene)).toEqual([0, 1, 0]);
+  it("gives a slice its picked scene; a slice with no pick has none, but knows the last pick before it in its song", () => {
+    const schedule = scheduleShow([plan([0, 10, 20, 30], [10], { 10: 5 }), null, plan([0, 10], [], { 10: 2 })], 9);
+    expect(schedule.map((song) => song.map((slice) => slice.scene))).toEqual([[null, 5, null, null], [null], [null, 2]]);
+    expect(schedule.map((song) => song.map((slice) => slice.lastPick))).toEqual([[null, 5, 5, 5], [null], [null, 2]]);
+    expect(schedule[0].map((slice) => [slice.drop, slice.runStart])).toEqual([[false, -1], [true, 10], [false, 10], [false, 10]]);
   });
 
-  it("plays a picked scene, and the slices after it keep it", () => {
-    const schedule = scheduleShow([plan([0, 10, 20, 30], [], { 10: 5 }), plan([0, 10], [], { 10: 2 })], 9);
-    expect(schedule.map((song) => song.map((slice) => slice.scene))).toEqual([[0, 5, 5, 5], [6, 2]]);
-    expect(schedule[0].map((slice) => [slice.change, slice.runStart])).toEqual([[true, 0], [true, 10], [false, 10], [false, 10]]);
-    expect(schedule[1].map((slice) => slice.picked)).toEqual([false, true]);
-    /* A picked scene that is no longer there: the slice keeps the scene before it. */
-    expect(scheduleShow([plan([0, 10], [], { 10: 7 })], 3)[0].map((slice) => slice.scene)).toEqual([0, 0]);
+  it("leaves out a picked scene that is no longer there", () => {
+    expect(scheduleShow([plan([0, 10], [], { 0: 1, 10: 7 })], 3)[0].map((slice) => [slice.scene, slice.lastPick])).toEqual([[1, 1], [null, 1]]);
   });
 
   it("finds the slice that plays at a time", () => {
     const [slices] = scheduleShow([plan([0, 10, 20])], 2);
     expect(sliceAt(slices, 0)?.start).toBe(0);
     expect(sliceAt(slices, 15)?.start).toBe(10);
-    expect(sliceAt(slices, 99)?.scene).toBe(0);
+    expect(sliceAt(slices, 99)?.start).toBe(20);
     expect(sliceAt([], 5)).toBeUndefined();
   });
 });

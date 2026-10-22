@@ -26,9 +26,9 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * the song's name show the map of the song before or after it in the
  * playlist, and do nothing else. The slices (the song's parts) are each
  * colored by their level, with a red lightning mark where a hit starts one, and
- * show the number of the scene that the show's schedule gives them (see
- * showSchedule.ts): amber for a scene the user picked, bright for the
- * scene selected in the scene list. While a slice is selected, a Ctrl+click
+ * show the number of the scene the user picked for them, in amber, with
+ * an outline for the scene selected in the scene list; a slice with no
+ * pick has no number, as it changes nothing (see showSchedule.ts). While a slice is selected, a Ctrl+click
  * on a scene in the scene list picks that scene for it (see
  * songFollow.pickScene); while Ctrl is held, the selected slice shows the
  * same amber as the scene under the pointer. A click selects a slice and plays its song from the
@@ -190,8 +190,8 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick }: { s
         <button
           className="panel-button song-map-fill"
           disabled={slices.every((candidate) => candidate.scene !== undefined)}
-          onClick={() => apply(fillScenes(slices, scenes[0]?.scene ?? 0, sceneCount))}
-          data-tip="Auto Fill: pick a scene for each slice of this song that has none, so each slice plays the next scene in the scene list. Your own picks stay"
+          onClick={() => apply(fillScenes(slices, slices[0]?.scene ?? Math.max(0, activeScene), sceneCount))}
+          data-tip="Auto Fill: pick a scene for each slice of this song that has none, so each slice plays the next scene in the scene list (from the selected scene, when the first slice has none). Your own picks stay"
         >
           <ListNumbers size={15} /> Auto Fill
         </button>
@@ -212,7 +212,7 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick }: { s
               <span>Slice</span>
               <div className="panel-buttons">
                 {slice.scene !== undefined && (
-                  <button className="panel-button picked-scene" onClick={() => apply(changeSlice(slices, index, { scene: undefined }))} data-tip="You picked this scene (Ctrl+click in the scene list, or Fill). Click to undo the pick: the slice keeps the scene of the slice before it again">
+                  <button className="panel-button picked-scene" onClick={() => apply(changeSlice(slices, index, { scene: undefined }))} data-tip="You picked this scene (Ctrl+click in the scene list, or Auto Fill). Click to undo the pick: the slice then changes nothing">
                     Scene {slice.scene + 1} <ArrowUUpLeft size={13} weight="bold" />
                   </button>
                 )}
@@ -284,13 +284,14 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick }: { s
                   tracks.pause();
                 }}
               >
-                {scenes[i] && (
+                {/* Only a slice with a picked scene has a number: a slice with no pick changes nothing. */}
+                {scenes[i]?.scene != null && (
                   <span className="song-map-tags">
                     <span
-                      className={`song-map-scene-tag ${scenes[i].picked ? "picked" : ""} ${scenes[i].scene === activeScene ? "current" : ""}`}
-                      data-tip={`Scene ${scenes[i].scene + 1}${scenes[i].picked ? ", picked by you" : i > 0 ? ", kept from the slice before" : ", the next one after the song before"}${scenes[i].scene === activeScene ? "; the scene selected in the scene list" : ""}`}
+                      className={`song-map-scene-tag picked ${scenes[i].scene === activeScene ? "current" : ""}`}
+                      data-tip={`Scene ${scenes[i].scene! + 1} comes in here${scenes[i].scene === activeScene ? "; it is the scene selected in the scene list" : ""}`}
                     >
-                      {scenes[i].scene + 1}
+                      {scenes[i].scene! + 1}
                     </span>
                   </span>
                 )}
