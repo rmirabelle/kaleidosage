@@ -20,7 +20,8 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * The Song Map page of the bottom panel: the map of the song that plays,
  * while Song follow is on. Its slices (its parts) are each colored by
  * their level, with a red edge where a hit starts one. A click selects a
- * slice and plays the song from its start; a drag of the divider between
+ * slice and plays the song from its start, and a right-click stops the
+ * song where it is; a drag of the divider between
  * two slices moves it from bar to bar. A toolbar across the top holds the
  * selected slice's level, Hit and Keep Scene, Split, Merge with next and
  * Delete (the slice before it grows into its place), then Reset (the
@@ -166,7 +167,7 @@ export function SongMapPanel() {
       <div className="song-map-body">
         {/* The song's file name, in quotes, as the scene card's title shows the scene's name. */}
         <h2 className="side-panel-title source-title song-map-title" data-tip={name}><span>{name}</span></h2>
-        <div ref={strip} className="song-map-strip" data-tip="Click a slice to select it and play the song from its start">
+        <div ref={strip} className="song-map-strip" data-tip="Click a slice to select it and play the song from its start; right-click to stop the song where it is">
           {view.map((candidate, i) => {
             const sliceEnd = view[i + 1]?.start ?? duration;
             return (
@@ -180,6 +181,10 @@ export function SongMapPanel() {
                   setSelected(i);
                   tracks.seek(candidate.start);
                   if (!tracks.playing) void tracks.play();
+                }}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  tracks.pause();
                 }}
               >
                 {(candidate.drop || candidate.keepScene) && (
