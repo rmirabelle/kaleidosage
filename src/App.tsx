@@ -50,7 +50,7 @@ import { panelLayout } from "./lib/panelLayout";
 import { isPlaylistCopy } from "./lib/playlistFile";
 import { tracks } from "./lib/tracks";
 import { songFollow } from "./lib/songFollow";
-import { sliceAt } from "./engine/showSchedule";
+import { sliceAt, type ScheduledSlice } from "./engine/showSchedule";
 import { helpSettings } from "./lib/helpSettings";
 import { PLAYLIST_EXTENSION, isPlaylistFile, openPlaylistFile, playlistFingerprint, readManifest, savePlaylistFile, type PlaylistAudio } from "./lib/playlistFile";
 import { revealMainWindow } from "./lib/splash";
@@ -1184,6 +1184,21 @@ export default function App() {
   }, [engine, tracksActive]);
 
   /**
+   * A click on a slice of the Song Map (see SongMapPanel): while Hold is on
+   * and the slice's scene is not the one shown, Hold goes off and the
+   * slice's scene comes in, as the schedule brings it in.
+   */
+  const pickSlice = useCallback((slice: ScheduledSlice) => {
+    if (!sceneHeldRef.current) return;
+    const doc = docsRef.current[slice.scene];
+    if (!doc || doc.id === activeIdRef.current) return;
+    holdScene(false);
+    const tempo = songFollow.script?.tempo ?? 0;
+    const cut = slice.runStart === slice.start && slice.drop;
+    void crossfadeToDoc(doc.id, true, cut ? 0 : Math.min(CROSSFADE_SECONDS, 2 * (tempo > 0 ? 60 / tempo : 0.5)));
+  }, [crossfadeToDoc, holdScene]);
+
+  /**
    * Each new track (the end of a track, or a pick in the list) also
    * crossfades to the next tab. A scene that the user picked
    * stays for at least half its Length of play time: the user's pick takes
@@ -2116,7 +2131,7 @@ export default function App() {
           <div className="midi-panel-body">
             <BottomPanelTabs tab={bottomTab} onTab={setBottomTab} onClose={closeBottomPanel} />
             {bottomTab === "midi" ? <MidiPanel engine={engine} open={midiPanelOpen} />
-              : bottomTab === "songmap" ? <SongMapPanel sceneCount={docs.length} />
+              : bottomTab === "songmap" ? <SongMapPanel sceneCount={docs.length} onSlicePick={pickSlice} />
               : <AudioPanel engine={engine} sceneName={sceneFileName} onAddTracks={() => void pickTracks()} inputTip={inputTip && midiPanelOpen} onInputTipDone={() => setInputTip(false)} />}
           </div>
         </div>

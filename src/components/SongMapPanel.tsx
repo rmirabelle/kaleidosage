@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { ArrowCounterClockwise, ArrowsInLineHorizontal, CaretLeft, CaretRight, Lightning, PushPin, Scissors, Trash } from "@phosphor-icons/react";
 import { changeSlice, deleteSlice, mergeWithNext, moveDivider, splitSlice } from "../engine/songMapEdits";
 import { TIER_NAMES, mapOf, planSong, type MapSlice, type Tier } from "../engine/songPlan";
+import type { ScheduledSlice } from "../engine/showSchedule";
 import { songFollow } from "../lib/songFollow";
 import { tracks } from "../lib/tracks";
 import { placeSeek } from "./Slider";
@@ -41,8 +42,8 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * the song's time. While the page has the keyboard focus,
  * Delete removes the selected slice and the arrow keys select another.
  */
-/** "sceneCount": the number of scenes (tabs) that the schedule goes round. */
-export function SongMapPanel({ sceneCount }: { sceneCount: number }) {
+/** "sceneCount": the number of scenes (tabs) that the schedule goes round. "onSlicePick": a click on a slice, with its place in the schedule. */
+export function SongMapPanel({ sceneCount, onSlicePick }: { sceneCount: number; onSlicePick: (slice: ScheduledSlice) => void }) {
   const version = useSyncExternalStore(subscribeFollow, followVersion);
   useSyncExternalStore(subscribeTracks, tracksVersion);
   const schedule = songFollow.enabled ? songFollow.schedule(sceneCount) : [];
@@ -237,6 +238,7 @@ export function SongMapPanel({ sceneCount }: { sceneCount: number }) {
                 onClick={() => {
                   setSelected(i);
                   /* The song plays from the slice's start, and the slice's scene comes in (see App's show schedule); the map follows the song that plays again. */
+                  if (scenes[i]) onSlicePick(scenes[i]);
                   tracks.playAt(trackIndex, candidate.start);
                   setViewed(null);
                 }}

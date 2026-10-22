@@ -286,7 +286,8 @@ the analysis. The playlist then runs the show.
   the scene. A jump (a seek, a click on a slice, a new track) brings in
   that slice's scene. A tab click shows its tab until the next slice that
   changes the scene; Hold keeps the scene. While Hold is on, the slice
-  that plays loops in the music too. The Song Map page shows one
+  that plays loops in the music too; a click on a slice with another scene
+  turns Hold off and brings that scene in. The Song Map page shows one
   song's map, with each slice's scene number; arrows beside the song's
   name show the song before or after it, and a click on a slice plays that
   song from the slice's start.
