@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { CircleHalfTilt, FlipHorizontal, GridFour, MagicWand, Sun } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
@@ -15,6 +15,7 @@ import { scenePosition } from "../engine/loop";
 import { TIER_NAMES } from "../engine/songPlan";
 import type { SongScript } from "../engine/songScript";
 import { tracks } from "../lib/tracks";
+import { songFollow } from "../lib/songFollow";
 
 /** How the picture fades from A to B: an even crossfade, or B appearing by brightness. */
 const BLEND_MODES: readonly (readonly [BlendMode, string, ReactNode])[] = [
@@ -167,6 +168,7 @@ export function SceneTransport({ engine, paused, onTogglePause, onStop, show, au
   heldRef.current = held;
   /** The song the picture follows, or null; only a change renders again (React skips a set to the same value). */
   const [song, setSong] = useState<SongScript | null>(null);
+  const spaceRunsSong = useSyncExternalStore((listener) => songFollow.subscribe(listener), () => songFollow.enabled) && tracks.list.length > 0;
   const songRef = useRef(song);
   songRef.current = song;
   useEffect(() => engine.onFrame(() => {
@@ -228,12 +230,13 @@ export function SceneTransport({ engine, paused, onTogglePause, onStop, show, au
       )}
       <div className="playlist-transport-row">
         <div className="panel-buttons">
+          {/* With Song follow on, Space runs the song (see App), so these buttons show no key. */}
           <button
             className="panel-button icon"
             onClick={onStop}
             disabled={paused}
-            data-tip={song ? "Stop: freeze the picture; the music plays on" : "Stop `Shift+Space`: pause the scene, and go back to its start"}
-            aria-keyshortcuts={song ? undefined : "Shift+Space"}
+            data-tip={song ? "Stop: freeze the picture; the music plays on" : spaceRunsSong ? "Stop: pause the scene, and go back to its start" : "Stop `Shift+Space`: pause the scene, and go back to its start"}
+            aria-keyshortcuts={song || spaceRunsSong ? undefined : "Shift+Space"}
             aria-label="Stop"
           >
             <MediaIcon kind="stop" size={16} />
@@ -243,6 +246,7 @@ export function SceneTransport({ engine, paused, onTogglePause, onStop, show, au
             onClick={onTogglePause}
             data-tip={song
               ? (paused ? "Play the scene: the picture catches up with the song" : "Pause the scene: freeze the picture; the music plays on")
+              : spaceRunsSong ? (paused ? "Play the scene" : "Pause the scene")
               : (paused ? "Play the scene `Space`" : "Pause the scene `Space`")}
             aria-label={paused ? "Play" : "Pause"}
           >

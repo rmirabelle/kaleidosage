@@ -1277,11 +1277,14 @@ export default function App() {
     return () => cancelAnimationFrame(frame);
   }, [sceneHeld, tracksActive]);
 
-  /** Play in the playlist hands the picture back to the song (or the show): Hold goes off. */
+  /** True while Space resumes the song: that resume keeps Hold on (see below). */
+  const resumeKeepsHoldRef = useRef(false);
+  /** Play in the playlist hands the picture back to the song (or the show): Hold goes off. Space only pauses and resumes the song, so Hold stays. */
   useEffect(() => {
     let playing = tracks.playing;
     return tracks.subscribe(() => {
-      if (tracks.playing && !playing && sceneHeldRef.current) holdScene(false);
+      if (tracks.playing && !playing && sceneHeldRef.current && !resumeKeepsHoldRef.current) holdScene(false);
+      if (tracks.playing) resumeKeepsHoldRef.current = false;
       playing = tracks.playing;
     });
   }, [holdScene]);
@@ -1846,8 +1849,13 @@ export default function App() {
         m: toggleMidiPanel,
         a: toggleAudioPanel,
         p: () => setStatsOpen((open) => !open),
-        /* While the picture follows a song, Space and Shift+Space run the song (the Playlist card's controls), not the scene. */
-        " ": engine?.script ? (event.shiftKey ? () => tracks.stop() : () => tracks.toggle()) : event.shiftKey ? stop : togglePause,
+        /* With Song follow on (also while Hold is on, or while the song is analyzed), Space and Shift+Space run the song (the Playlist card's controls), not the scene. */
+        " ": songFollow.enabled && audioInput.settings.kind === "tracks"
+          ? (event.shiftKey ? () => tracks.stop() : () => {
+            resumeKeepsHoldRef.current = !tracks.playing;
+            tracks.toggle();
+          })
+          : event.shiftKey ? stop : togglePause,
         o: () => void openImage(),
         x: randomize,
         n: nudge,

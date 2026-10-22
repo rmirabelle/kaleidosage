@@ -197,7 +197,8 @@ function PlaylistTransport({ count, engine, onShowSongMap }: { count: number; en
   /* The Threshold line is placed by React (see ThresholdMeter), the bar by this frame loop. */
   const clock = useRef<HTMLSpanElement>(null);
   const dragging = useRef(false);
-  const song = useSyncExternalStore(subscribeFollow, () => songFollow.enabled ? songFollow.script : null);
+  /* With Song follow on, Space and Shift+Space run these controls (see App). */
+  const song = useSyncExternalStore(subscribeFollow, () => songFollow.enabled);
   useEffect(() => {
     let frame = 0;
     const draw = () => {
