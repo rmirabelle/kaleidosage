@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { SpeakerSimpleHigh, Waveform } from "@phosphor-icons/react";
+import { SpeakerSimpleHigh } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
 import type { ParamKey } from "../engine/params";
 import { FAMILY_NAMES, familyOf } from "../engine/songScript";
@@ -14,9 +14,10 @@ const isListening = () => audioInput.status.state === "on";
  * setting, beside its slider (the MIDI button is beside the name). A click
  * turns it on or off; a right-click turns it off. While it is on, the
  * sound moves the setting by its family (see docs/AUDIO.md, part 3): from
- * the song's plan while the picture follows a song, with a waveform icon,
- * or from the live sound, with a speaker. The lit icon glows with how far
- * the sound moves the setting now.
+ * the song's plan while the picture follows a song, or from the live
+ * sound. The icon is a speaker either way (only the tip says which), so it
+ * does not change when Hold gives the scene its own clock. The lit icon
+ * glows with how far the sound moves the setting now.
  */
 export function AudioLinkButton({ engine, paramKey, label }: { engine: Engine; paramKey: ParamKey; label: string }) {
   const [on, setOn] = useState(engine.soundOn(paramKey));
@@ -24,7 +25,7 @@ export function AudioLinkButton({ engine, paramKey, label }: { engine: Engine; p
     if (key === paramKey) setOn(engine.soundOn(paramKey));
   }), [engine, paramKey]);
   const listening = useSyncExternalStore(subscribe, isListening);
-  /** True while the picture follows a song: the icon is then a waveform. Only a change renders again (React skips a set to the same value). */
+  /** True while the picture follows a song, for the tip. Only a change renders again (React skips a set to the same value). */
   const [song, setSong] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -62,7 +63,7 @@ export function AudioLinkButton({ engine, paramKey, label }: { engine: Engine; p
         if (on) engine.setSound(paramKey, false);
       }}
     >
-      {on && song ? <Waveform size={14} weight="fill" /> : <SpeakerSimpleHigh size={14} weight={on ? "fill" : "regular"} />}
+      <SpeakerSimpleHigh size={14} weight={on ? "fill" : "regular"} />
     </button>
   );
 }
