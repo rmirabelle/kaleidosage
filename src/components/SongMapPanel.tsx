@@ -20,7 +20,8 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * The Song Map page of the bottom panel: the map of the song that plays,
  * while Song follow is on. Its slices (its parts) are each colored by
  * their level, with a red edge where a hit starts one. A click selects a
- * slice and plays the song from its start, and a right-click stops the
+ * slice and plays the song from its start (while the song plays, the next
+ * scene comes in too, unless the slice keeps the scene), and a right-click stops the
  * song where it is; a drag of the divider between
  * two slices moves it from bar to bar. A toolbar across the top holds the
  * selected slice's level, Hit and Keep Scene, Split, Merge with next and
@@ -33,7 +34,8 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * the song's time. While the page has the keyboard focus,
  * Delete removes the selected slice and the arrow keys select another.
  */
-export function SongMapPanel() {
+/** "onSceneJump": a click on a slice while the song plays (not on the first slice, and not on one that keeps the scene) brings in the next scene; true for a slice with a hit. */
+export function SongMapPanel({ onSceneJump }: { onSceneJump: (hit: boolean) => void }) {
   const version = useSyncExternalStore(subscribeFollow, followVersion);
   const path = songFollow.enabled ? songFollow.currentPath ?? "" : "";
   const analysis = path ? songFollow.analysisFor(path) : undefined;
@@ -181,8 +183,11 @@ export function SongMapPanel() {
                 aria-label={`${capital(TIER_NAMES[candidate.tier])}, ${time(candidate.start)} to ${time(sliceEnd)}${candidate.drop ? ", starts with a hit" : ""}`}
                 onClick={() => {
                   setSelected(i);
+                  /* While the song plays, a jump to a slice changes the scene as its start would; while it is stopped, the scene stays. */
+                  const playing = tracks.playing;
                   tracks.seek(candidate.start);
-                  if (!tracks.playing) void tracks.play();
+                  if (!playing) void tracks.play();
+                  else if (i > 0 && !candidate.keepScene) onSceneJump(candidate.drop);
                 }}
                 onContextMenu={(event) => {
                   event.preventDefault();

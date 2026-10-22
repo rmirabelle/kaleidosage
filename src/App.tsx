@@ -231,6 +231,17 @@ export default function App() {
   const toggleMidiPanel = useCallback(() => showBottomTab("midi"), [showBottomTab]);
   const toggleAudioPanel = useCallback(() => showBottomTab("audio"), [showBottomTab]);
   const closeBottomPanel = useCallback(() => setMidiPanelOpen(false), []);
+  /**
+   * A click on a slice of the Song Map while the song plays: the next scene
+   * comes in, as at a cue (a cut on a hit, else a short crossfade), unless
+   * Hold keeps the scene or there is only one scene.
+   */
+  const jumpToNextScene = useCallback((hit: boolean) => {
+    if (docsRef.current.length < 2 || sceneHeldRef.current) return;
+    const tempo = engine?.script?.script.tempo ?? 0;
+    switchByStepRef.current(1, true, hit ? 0 : Math.min(CROSSFADE_SECONDS, 2 * (tempo > 0 ? 60 / tempo : 0.5)));
+  }, [engine]);
+
   /** The Playlist card's map button: shows the Song Map page (it does not close it). */
   const showSongMap = useCallback(() => {
     setBottomTab("songmap");
@@ -2059,7 +2070,7 @@ export default function App() {
           <div className="midi-panel-body">
             <BottomPanelTabs tab={bottomTab} onTab={setBottomTab} onClose={closeBottomPanel} />
             {bottomTab === "midi" ? <MidiPanel engine={engine} open={midiPanelOpen} />
-              : bottomTab === "songmap" ? <SongMapPanel />
+              : bottomTab === "songmap" ? <SongMapPanel onSceneJump={jumpToNextScene} />
               : <AudioPanel engine={engine} sceneName={sceneFileName} onAddTracks={() => void pickTracks()} inputTip={inputTip && midiPanelOpen} onInputTipDone={() => setInputTip(false)} />}
           </div>
         </div>
