@@ -39,9 +39,9 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * the song's name and the arrows, then a dark toolbar that holds the
  * selected slice's level, the Slice buttons (the picked scene, where a
  * click undoes the pick; Hit; Split at the playhead; Merge with next; and
- * Delete: the slice before it grows into its place), then Fill (a picked
- * scene for each slice with none, in scene list order) and Reset Map (the
- * analysis's own map); the Playlist card's controls
+ * Delete: the slice before it grows into its place), and Reset Map (the
+ * analysis's own map). Auto Fill, at the toolbar's left, picks a scene for
+ * each slice with none, in scene list order. The Playlist card's controls
  * play the song. Each change applies at
  * once (see songFollow.editMap) and is kept with the song's analysis, so
  * Save Playlist keeps it. Under the map, a bar the width of the map moves
@@ -187,6 +187,14 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick }: { s
     >
       {title}
       <div className="song-map-toolbar">
+        <button
+          className="panel-button song-map-fill"
+          disabled={slices.every((candidate) => candidate.scene !== undefined)}
+          onClick={() => apply(fillScenes(slices, scenes[0]?.scene ?? 0, sceneCount))}
+          data-tip="Auto Fill: pick a scene for each slice of this song that has none, so each slice plays the next scene in the scene list. Your own picks stay"
+        >
+          <ListNumbers size={15} /> Auto Fill
+        </button>
         {slice && (
           <>
             <div className="song-map-field">
@@ -249,19 +257,9 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick }: { s
             </div>
           </>
         )}
-        <div className="song-map-song-tools">
-          <button
-            className="panel-button song-map-fill"
-            disabled={slices.every((candidate) => candidate.scene !== undefined)}
-            onClick={() => apply(fillScenes(slices, scenes[0]?.scene ?? 0, sceneCount))}
-            data-tip="Fill: pick a scene for each slice of this song that has none, so each slice plays the next scene in the scene list. Your own picks stay"
-          >
-            <ListNumbers size={15} /> Fill
-          </button>
-          <button className="panel-button song-map-reset" disabled={!analysis.mapEdits} onClick={() => songFollow.editMap(path, null)} data-tip="Give back the map that the analysis found: its slices, levels and hits, with no picked scenes">
-            <ArrowCounterClockwise size={14} /> Reset Map
-          </button>
-        </div>
+        <button className="panel-button song-map-reset" disabled={!analysis.mapEdits} onClick={() => songFollow.editMap(path, null)} data-tip="Give back the map that the analysis found: its slices, levels and hits, with no picked scenes">
+          <ArrowCounterClockwise size={14} /> Reset Map
+        </button>
       </div>
       <div className="song-map-body">
         <div ref={strip} className="song-map-strip" data-tip="Click a slice to select it and play the song from its start; right-click to stop the song where it is. Ctrl+click a scene in the scene list to play it on the selected slice">
