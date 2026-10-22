@@ -51,9 +51,12 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
 /**
  * "sceneCount": the number of scenes (tabs) that the schedule goes round.
  * "activeScene": the tab index of the scene selected in the scene list.
+ * "held": true while Scene Hold keeps the scene; the slice that plays then
+ * shows a HOLD mark (it loops in the music). The mark only shows the state:
+ * a click on the slice still plays it.
  * "onSlicePick": a click on a slice, with its place in the schedule.
  */
-export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCount: number; activeScene: number; onSlicePick: (slice: ScheduledSlice) => void }) {
+export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick }: { sceneCount: number; activeScene: number; held: boolean; onSlicePick: (slice: ScheduledSlice) => void }) {
   const version = useSyncExternalStore(subscribeFollow, followVersion);
   useSyncExternalStore(subscribeTracks, tracksVersion);
   const schedule = songFollow.enabled ? songFollow.schedule(sceneCount) : [];
@@ -156,6 +159,8 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
   const at = (seconds: number) => `${(seconds / Math.max(1e-3, duration)) * 100}%`;
   const apply = (next: MapSlice[]) => songFollow.editMap(path, next);
   const slice = slices[index];
+  /* The slice that Scene Hold loops: the selected one, which is the one that plays. */
+  const heldSlice = held && tracks.current?.path === path ? index : -1;
   /* The song time under the pointer, for a double-click split. */
   const timeAt = (event: { clientX: number }) => {
     const box = strip.current!.getBoundingClientRect();
@@ -290,9 +295,10 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
                     </span>
                   </span>
                 )}
-                {candidate.drop && (
+                {(candidate.drop || i === heldSlice) && (
                   <span className="song-map-center-tags">
-                    <span className="song-map-drop-tag" data-tip="Hit: the picture rises before this slice, and changes hard as it starts" aria-hidden="true"><Lightning size={12} weight="fill" /></span>
+                    {candidate.drop && <span className="song-map-drop-tag" data-tip="Hit: the picture rises before this slice, and changes hard as it starts" aria-hidden="true"><Lightning size={12} weight="fill" /></span>}
+                    {i === heldSlice && <span className="song-map-hold-tag hold-badge-label">Hold</span>}
                   </span>
                 )}
                 <span className="song-map-slice-name">{capital(TIER_NAMES[candidate.tier])}</span>

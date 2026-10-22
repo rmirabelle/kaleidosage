@@ -2079,7 +2079,7 @@ export default function App() {
             </div>
             {sceneListShown && followOn && (
               <div className="song-map-dock">
-                <SongMapPanel sceneCount={docs.length} activeScene={docs.findIndex((doc) => doc.id === activeId)} onSlicePick={pickSlice} />
+                <SongMapPanel sceneCount={docs.length} activeScene={docs.findIndex((doc) => doc.id === activeId)} held={sceneHeld} onSlicePick={pickSlice} />
               </div>
             )}
           </div>

@@ -140,6 +140,11 @@ const SCRUB_STEPS = 1000;
  * on, and Play lets it catch up with the song (see Engine.songStep). The
  * bar is then off (the Playlist card's bar moves in the song), and the
  * countdown runs to the next change of scene (the song plan's next cue).
+ *
+ * While Song follow is on with music in the Playlist, the Playlist card's
+ * controls and the Song Map run the show, so this card is one full-width
+ * Scene Hold button only. A paused scene plays again as that starts, as
+ * no Play button is left to start it.
  */
 export function SceneTransport({ engine, paused, onTogglePause, onStop, show, autoNext, held, onToggleHold }: {
   engine: Engine;
@@ -170,6 +175,10 @@ export function SceneTransport({ engine, paused, onTogglePause, onStop, show, au
   const spaceRunsSong = useSyncExternalStore((listener) => songFollow.subscribe(listener), () => songFollow.enabled) && tracks.list.length > 0;
   const songRef = useRef(song);
   songRef.current = song;
+  /* Only as Song follow starts: a later Pause is the user's own. */
+  useEffect(() => {
+    if (spaceRunsSong && paused) onTogglePause();
+  }, [spaceRunsSong]);
   useEffect(() => engine.onFrame(() => {
     setSong(engine.script?.script ?? null);
     const following = songRef.current;
@@ -205,6 +214,22 @@ export function SceneTransport({ engine, paused, onTogglePause, onStop, show, au
     }
   }), [engine]);
 
+  if (spaceRunsSong) {
+    return (
+      <div className="panel-card playlist-transport scene-transport following" aria-label="Scene controls" {...help("play")}>
+        <button
+          className={`hold-toggle wide ${held ? "on" : ""}`}
+          aria-pressed={held}
+          onClick={onToggleHold}
+          data-tip={held
+            ? "Scene Hold is on: this scene stays and plays on its own, and the slice that plays loops in the music. Click to follow the song again."
+            : "Scene Hold: keep this scene, and loop the slice that plays. A change you make to the scene turns it on by itself."}
+        >
+          <span className="hold-badge-label">Scene Hold</span>
+        </button>
+      </div>
+    );
+  }
   return (
     <div className="panel-card playlist-transport scene-transport" aria-label="Scene controls" {...help("play")}>
       {show && (
