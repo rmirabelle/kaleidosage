@@ -104,12 +104,12 @@ export function SongMapPanel({ sceneCount }: { sceneCount: number }) {
   /* The song's file name, in quotes, as the scene card's title shows the scene's name, with an arrow on each side to show the song before or after it. */
   const title = (
     <div className="song-map-title-row">
-      <button className="panel-button song-map-song-step" disabled={trackIndex < 1} onClick={() => showSong(-1)} data-tip="Show the map of the song before this one" aria-label="Previous song's map">
-        <CaretLeft size={16} />
+      <button className="panel-button song-map-song-step" disabled={trackIndex < 1} onClick={() => showSong(-1)} data-tip="Show the map of the song before this one" >
+        <CaretLeft size={15} /> Previous
       </button>
       <h2 className="side-panel-title source-title song-map-title" data-tip={name}><span>{name}</span></h2>
-      <button className="panel-button song-map-song-step" disabled={trackIndex < 0 || trackIndex >= tracks.list.length - 1} onClick={() => showSong(1)} data-tip="Show the map of the song after this one" aria-label="Next song's map">
-        <CaretRight size={16} />
+      <button className="panel-button song-map-song-step" disabled={trackIndex < 0 || trackIndex >= tracks.list.length - 1} onClick={() => showSong(1)} data-tip="Show the map of the song after this one" >
+        Next <CaretRight size={15} />
       </button>
     </div>
   );
