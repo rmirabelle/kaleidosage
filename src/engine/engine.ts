@@ -85,6 +85,9 @@ function fullHue(degrees: number): [number, number, number] {
 /** Dev only: a running Engine keeps its old code after a hot update, so engine edits reload the window. */
 if (import.meta.hot) import.meta.hot.accept(() => window.location.reload());
 
+/** The real time of one step of a scrub (see Engine.seekTo), in seconds: as fine as a fast screen's frames. */
+const SCRUB_STEP = 1 / 120;
+
 /** Owns the parameters, the animation clock and the render loop. */
 /**
  * The Julia point: the point at angle "shape" on the edge of the Mandelbrot
@@ -832,6 +835,24 @@ export class Engine {
     this.state.cameraX = 0;
     this.state.cameraY = 0;
     this.renderer.resetTrails();
+    this.wake();
+  }
+
+  /**
+   * Scrub: moves the scene to "clock" real seconds after its start, as if
+   * it had played there. From the start (see rewind) it steps forward in
+   * steps of SCRUB_STEP without drawing, so the values that add up over
+   * time (warp flow, driver time, tunnel travel, camera flight) are where
+   * playing would have put them; the ranges follow the time. The trails
+   * start again from the picture there. It stays playing or paused as it
+   * was.
+   */
+  seekTo(clock: number) {
+    const paused = this.state.paused;
+    this.rewind();
+    this.state.paused = false;
+    for (let left = Math.max(0, clock); left > 1e-9; left -= SCRUB_STEP) this.step(Math.min(SCRUB_STEP, left));
+    this.state.paused = paused;
     this.wake();
   }
 

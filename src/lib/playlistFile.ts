@@ -11,6 +11,9 @@ import type { AudioSettings } from "./audioInput";
 
 export const PLAYLIST_EXTENSION = "ksplaylist";
 
+/** True for a playlist file's path (by its extension). */
+export const isPlaylistFile = (path: string) => path.toLowerCase().endsWith(`.${PLAYLIST_EXTENSION}`);
+
 /**
  * True for a file that is the open playlist's own copy: in a folder that
  * the app made in the temp folder (see playlist_archive.rs). Save Playlist

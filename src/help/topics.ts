@@ -160,15 +160,16 @@ export const HELP_TOPICS = {
   },
   play: {
     title: "Play controls",
-    text: "The play controls start and stop the scene. The music has its own controls, at the bottom of the Playlist card.",
+    text: "The play controls at the bottom of the left panel, under FX, start and stop the scene, with a bar and the time of its Length. The music has its own controls, at the bottom of the Playlist card.",
     tips: [
       "Play {play} starts the animation.",
       "Pause {pause} stops the animation where it is.",
       "Stop {stop} pauses and goes back to the start.",
       "Space plays or pauses; Shift + Space stops.",
+      "Drag the bar to scrub the scene. The bar above counts down to the next scene.",
       "Full screen {fullscreen}, F, or a double-click on the picture plays full screen.",
       "Esc leaves full screen.",
-      "H hides the settings, so only the picture shows."
+      "H hides the panels, so only the picture shows."
     ],
     keywords: ["play", "pause", "stop", "full screen", "fullscreen", "space"]
   },

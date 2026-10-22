@@ -1,11 +1,11 @@
-import { FolderOpen, MusicNotes, Plus } from "@phosphor-icons/react";
+import { FolderOpen, Plus } from "@phosphor-icons/react";
 
 interface Props {
   /** The app's version, after the author ("" until it is known). */
   version: string;
   onNewScene: () => void;
-  onOpenScene: () => void;
-  onOpenPlaylist: () => void;
+  /** Opens the Open dialog, which lists scenes and playlists. */
+  onOpen: () => void;
 }
 
 /**
@@ -14,7 +14,7 @@ interface Props {
  * scene or a playlist. The author and the version are on one quiet line
  * under the tagline, above the buttons.
  */
-export function StartScreen({ version, onNewScene, onOpenScene, onOpenPlaylist }: Props) {
+export function StartScreen({ version, onNewScene, onOpen }: Props) {
   return (
     <section className="start-screen">
       <div className="start-above">
@@ -31,11 +31,8 @@ export function StartScreen({ version, onNewScene, onOpenScene, onOpenPlaylist }
           <button className="button primary large" onClick={onNewScene}>
             <Plus size={19} weight="bold" /> New Scene
           </button>
-          <button className="button secondary large" onClick={onOpenScene}>
-            <FolderOpen size={19} weight="bold" /> Open Scene
-          </button>
-          <button className="button secondary large" onClick={onOpenPlaylist}>
-            <MusicNotes size={19} weight="bold" /> Open Playlist
+          <button className="button secondary large" onClick={onOpen}>
+            <FolderOpen size={19} weight="bold" /> Open Scene/Playlist
           </button>
         </div>
       </div>

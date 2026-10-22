@@ -95,9 +95,8 @@ function ImageCard({ slot, image, loading, onOpen, onRandom, onSearch, onPattern
   return (
     /* App reads data-image-slot to send a dropped file to this slot. */
     <div className="source-card" data-image-slot={slot}>
-      {/* The file name, above the image; an empty slot keeps the line's height, so both cards line up. */}
-      <div className="source-label" data-tip={image?.label}>{image?.label ?? " "}</div>
-      <div className={`source-thumb ${image ? "" : "empty"}`}>
+      {/* The file name shows in the image's tooltip. */}
+      <div className={`source-thumb ${image ? "" : "empty"}`} data-tip={image?.label}>
         {image?.under ? (
           /* A pattern over an image: the image's left half, then the pattern's right half. A click on the image half takes the pattern off. */
           <>

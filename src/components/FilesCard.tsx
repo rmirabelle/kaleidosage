@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } fro
 import { createPortal } from "react-dom";
 import { CaretDoubleLeft, CaretDoubleRight, Plus, SpeakerHigh, Trash, Waveform, X } from "@phosphor-icons/react";
 import { MediaIcon } from "./MediaIcon";
-import { trackPosition } from "./Slider";
+import { placeSeek } from "./Slider";
 import { FLOOR_DB } from "../engine/audio";
 import type { Engine } from "../engine/engine";
 import { PARAM_KEYS } from "../engine/params";
@@ -181,6 +181,7 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
 function PlaylistTransport({ count, engine }: { count: number; engine: Engine | null }) {
   const bar = useRef<HTMLInputElement>(null);
   const fill = useRef<HTMLDivElement>(null);
+  const cap = useRef<HTMLDivElement>(null);
   const level = useRef<HTMLElement>(null);
   const threshold = useRef<HTMLElement>(null);
   /* The Threshold line is placed by React (see ThresholdMeter), the bar by this frame loop. */
@@ -194,7 +195,7 @@ function PlaylistTransport({ count, engine }: { count: number; engine: Engine | 
         bar.current.max = String(duration || 1);
         bar.current.value = String(tracks.position);
       }
-      if (fill.current) fill.current.style.width = trackPosition(Number(bar.current?.value ?? 0), 0, duration || 1);
+      placeSeek(bar.current, fill.current, cap.current, Number(bar.current?.value ?? 0) / (duration || 1));
       /* The level from FLOOR_DB (empty) to 0 dBFS (full). */
       const loudness = audioInput.analyzer?.decibels.level ?? FLOOR_DB;
       if (level.current) {
@@ -226,6 +227,7 @@ function PlaylistTransport({ count, engine }: { count: number; engine: Engine | 
           <div className="slider-well">
             <div ref={fill} className="slider-fill" style={{ left: 0 }} />
           </div>
+          <div ref={cap} className="seek-cap" />
           <input
             ref={bar}
             type="range"

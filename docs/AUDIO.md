@@ -231,10 +231,15 @@ the analysis. The playlist then runs the show.
   scene play on their own. The Playlist card has a play toolbar at its
   bottom (`PlaylistTransport` in `FilesCard.tsx`): Stop, Play/Pause, the
   time in the file and a bar to seek in it (Rewind, which took the place
-  of Previous and Next on 2026-10-20, went on 2026-10-21). The controls on
-  the picture, Space and Shift+Space run the scene only. A scene that comes
-  in plays or stays paused as the scene before it did. Hold keeps the shown scene (a red HOLD
-  button after the Length value shows only while it is on): a
+  of Previous and Next on 2026-10-20, went on 2026-10-21). The scene's
+  toolbar at the bottom of the left panel, under the FX card (`SceneTransport` in
+  `SourcePanel.tsx`; before, a bar over the picture), Space and
+  Shift+Space run the scene only. Its bar scrubs the scene in its Length
+  (`Engine.seekTo` steps the scene there from its start without drawing),
+  and a bar above it counts down to the next scene. A scene that comes
+  in plays or stays paused as the scene before it did. Hold keeps the shown scene (a HOLD
+  button after the next-scene countdown in the scene's toolbar: gray while
+  off, red and blinking while on; a click turns it on or off): a
   Length end or a new track does not change it, and the music plays on. A
   change that the user makes to the scene with the mouse or the keys turns
   Hold on by itself; MIDI knobs and audio links do not, so a live show with

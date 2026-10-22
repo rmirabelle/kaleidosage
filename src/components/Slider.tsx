@@ -9,6 +9,22 @@ interface Bounds {
 
 /** How far a handle's center stays from each end of the slider: half the handle width. */
 const SLIDER_INSET = 7;
+/** The same for the toolbars' scrub bars, whose fader cap is 10px wide (see .seek-cap in index.css). */
+const SEEK_INSET = 5;
+
+/**
+ * Places a toolbar scrub bar's fill and fader cap at "fraction" (0 to 1) of
+ * the bar, on whole pixels. The bar's own handle is unseen (it still takes
+ * the drags): it moves by parts of a pixel, and the line on the cap then
+ * seemed to wobble as it moved.
+ */
+export function placeSeek(input: HTMLInputElement | null, fill: HTMLElement | null, cap: HTMLElement | null, fraction: number) {
+  const width = input?.clientWidth ?? 0;
+  if (!width) return;
+  const center = Math.round(SEEK_INSET + Math.min(1, Math.max(0, fraction)) * (width - SEEK_INSET * 2));
+  if (fill) fill.style.width = `${center}px`;
+  if (cap) cap.style.transform = `translateX(${center - SEEK_INSET}px)`;
+}
 const RANGE_INSET = 4;
 
 /** A position along a slider, as a CSS length from its left edge. */

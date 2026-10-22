@@ -148,9 +148,9 @@ button { border: 0; }
 .menubar-divider { height: 1px; margin: 4px 7px; background: #3a3f4d; }
 
 /*
- * The bars over the picture: Stop and Play at the bottom center, and
- * Full screen at the top right, each a button group on a
- * see-through glass strip. They fade in while the mouse is over the picture (or a key
+ * The bar over the picture: Full screen at the top right, a button group
+ * on a see-through glass strip (the scene's play controls are at the bottom
+ * of the Source card). They fade in while the mouse is over the picture (or a key
  * moves focus into them), and fade out when the mouse leaves.
  */
 .stage-controls {
@@ -167,14 +167,10 @@ button { border: 0; }
   pointer-events: none;
   transition: opacity .2s;
 }
-.stage-controls.play { left: 50%; bottom: 14px; transform: translateX(-50%); }
 .stage-controls.view { top: 14px; right: 14px; }
 /* Each bar's button group has round outer corners. */
 .stage-controls .panel-buttons { border-radius: 5px; }
 .stage:hover .stage-controls, .stage-controls:has(:focus-visible) { opacity: 1; pointer-events: auto; }
-/* HOLD (Files only, see holdScene in App): a small red button after the Length value, only while Hold is on. */
-.hold-badge { height: 20px; margin-left: 4px; padding: 0 8px; border: 0; border-radius: 4px; color: #fff; background: #e53935; font: inherit; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
-.hold-badge:hover { background: #f05350; }
 /* Its label blinks while Hold is on (not with reduced motion). */
 .hold-badge-label { animation: hold-blink 1s steps(1, end) infinite; }
 @keyframes hold-blink { 50% { opacity: 0; } }
@@ -265,6 +261,54 @@ button { border: 0; }
 .playlist-level:hover .playlist-threshold-value, .playlist-level:focus-visible .playlist-threshold-value { opacity: 1; }
 .playlist-transport-row { display: flex; align-items: center; gap: 10px; }
 .slider.playlist-seek { flex: 1; min-width: 40px; margin-top: 0; }
+/**
+ * The scrub bars of the Playlist and scene toolbars have a fader cap for a
+ * handle, like an old mixing desk's slider: a tall, narrow block, shaded
+ * like metal, with a blue line down its middle. The cap is drawn on whole
+ * pixels (see placeSeek); the bar's own handle, the same size, is unseen
+ * and takes the drags.
+ */
+.seek-cap {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  left: 0;
+  width: 10px;
+  height: 18px;
+  box-sizing: border-box;
+  border: 1px solid #1b1e25;
+  border-radius: 2px;
+  background:
+    linear-gradient(90deg, transparent 3px, var(--accent) 3px, var(--accent) 5px, transparent 5px),
+    linear-gradient(90deg, #b9bdc9, #f2f4f8 45%, #b9bdc9);
+  box-shadow: 0 1px 3px rgba(0,0,0,.6);
+  pointer-events: none;
+}
+.slider.playlist-seek:hover .seek-cap { border-color: var(--accent); }
+.slider.playlist-seek:has(input:disabled) .seek-cap { opacity: .4; }
+.playlist-transport .slider.playlist-seek input[type=range]::-webkit-slider-thumb { width: 10px; height: 18px; margin-top: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+/* The scene's play toolbar at the bottom of the left panel, under the FX card (see SceneTransport): the Playlist toolbar's look and height. */
+/* The countdown to the next scene: the Playlist meter's size; it empties as the next scene comes, gray while nothing comes by itself, yellow then red at the end. */
+/* As a card of its own at the bottom of the left panel: a box like the other cards, under the FX card. */
+.panel-card.scene-transport { flex: 0 0 auto; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 6px; }
+/* The scene's name as the card's title, in quotes: one line; a long name is cut with "…", and its closing quote stays. */
+.side-panel-title.source-title { flex: 1; min-width: 0; display: flex; color: var(--secondary); white-space: nowrap; }
+.side-panel-title.source-title span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.side-panel-title.source-title::before { content: "“"; }
+.side-panel-title.source-title::after { content: "”"; }
+/* The Length row inside the scene's card, above the sources, with a line under it. */
+.panel-root-row.source-length { border-bottom: 1px solid #2b2f3a; }
+.panel-root-row.source-length > .panel-row { padding: 8px 10px; }
+.scene-countdown-row { display: flex; align-items: center; gap: 8px; }
+.audio-meter-well.scene-countdown { display: block; flex: 1; height: 16px; }
+/* HOLD after the countdown: always there, a subtle gray while off; solid red with a blinking label while on (see .hold-badge-label). */
+.hold-toggle { flex: 0 0 auto; height: 18px; padding: 0 8px; border: 1px solid #3a3f4d; border-radius: 4px; color: #6f7686; background: #1b1e25; font: inherit; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
+.hold-toggle:hover:not(:disabled) { color: #c3c7d0; border-color: #5a6072; }
+.hold-toggle:not(.on) .hold-badge-label { animation: none; }
+.hold-toggle.on, .hold-toggle.on:hover { border-color: #e53935; color: #fff; background: #e53935; }
+.scene-countdown i { transition: width .1s linear; }
+.audio-meter-well.scene-countdown i.soon { background: #f5c542; }
+.audio-meter-well.scene-countdown i.now { background: #e53935; }
 .slider.playlist-seek input:disabled { cursor: default; }
 .playlist-transport .panel-buttons { border-radius: 5px; }
 /* Follow the song while its track is analyzed. */
@@ -427,7 +471,7 @@ button { border: 0; }
 /* The Source and FX cards in the left panel: each a box with mildly rounded corners, its title bar across the top, and 10px around its content. */
 .panel-card { overflow: hidden; border: 1px solid var(--border); border-radius: 6px; background: #1b1e25; }
 .panel-card > .panel-header-bar { margin: 0; }
-.source-section { flex: 0 0 auto; margin-bottom: 8px; }
+.source-section { flex: 0 0 auto; margin: 8px 0; }
 .fx-card { display: flex; flex: 1; flex-direction: column; min-height: 0; margin-bottom: 8px; }
 /* 10px around the groups: each group already has 6px above it, so the list adds 4px at the top. */
 .fx-card > .panel-scroll { margin: 0; padding: 4px 6px 10px 10px; }
@@ -1567,7 +1611,6 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .source-letter { pointer-events: none; z-index: 1; position: absolute; left: 4px; top: 4px; padding: 1px 5px; border-radius: 3px; color: #fff; background: rgba(0,0,0,.62); font-size: 10px; font-weight: 700; }
 .source-remove { position: absolute; right: 4px; top: 4px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 3px; color: #fff; background: rgba(0,0,0,.62); cursor: pointer; }
 .source-remove:hover { background: rgba(200,50,50,.85); }
-.source-label { margin-bottom: 5px; overflow: hidden; color: var(--muted); font-size: 11px; font-style: italic; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
 /* The icon buttons: close together, centered under the slot. */
 /* The slot's buttons, over the bottom of its image on a dark fade: shown while the mouse is over the slot or a button has focus. */
 .source-actions { position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; gap: 0; padding: 2px 0; background: rgba(0,0,0,.82); opacity: 0; transition: opacity .15s ease; }
@@ -1841,7 +1884,7 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .open-listing-notice.success > svg { color: var(--accent); }
 .open-list-header, .open-entry {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px 72px;
+  grid-template-columns: minmax(0, 1fr) 64px 150px 72px;
   gap: 12px;
   align-items: center;
   padding: 0 14px;

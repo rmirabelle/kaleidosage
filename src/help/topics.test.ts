@@ -24,7 +24,7 @@ const REQUIRED: readonly (readonly [string, string])[] = [
   ["../components/AudioPanel.tsx", "audio.sensors"],
   ["../components/AudioLinkButton.tsx", "audio.sensors"],
   ["../components/MidiPanel.tsx", "midi"],
-  ["../components/StageControls.tsx", "play"],
+  ["../components/SourcePanel.tsx", "play"],
   ["../components/TitleBar.tsx", "playlist"],
   ["../components/ExportVideoDialog.tsx", "export"]
 ];

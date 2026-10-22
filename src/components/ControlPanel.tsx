@@ -35,14 +35,15 @@ interface Props {
   onRandomizeGroup: (group: GroupKey) => void;
   /** The Source section (see SourcePanel), at the top of the panel, above the Designer. */
   source: ReactNode;
+  /** The scene's play toolbar (see SceneTransport), at the bottom of the panel, under the FX card. */
+  transport: ReactNode;
+  /** A press anywhere in the panel but the scene's play toolbar: the user works on the scene (it turns Hold on, see App). */
+  onWork: () => void;
   /** The file name of the Driver effect's own video, or null, and the button that picks one. */
   driverVideoName: string | null;
   onPickDriverVideo: () => void;
   /** The FX audio button was turned on while the app listens to nothing: the app opens the Audio panel at its Input. */
   onNeedAudioInput: () => void;
-  /** True while Hold keeps the shown scene (Files only, see holdScene in App): HOLD then shows after the Length; a click on it turns Hold off. */
-  held: boolean;
-  onReleaseHold: () => void;
 }
 
 const TRAIL_KEYS: ParamKey[] = ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"];
@@ -72,7 +73,7 @@ const CAMERA_REPEATS = [[0, "Mirror"], [1, "Tile"], [2, "None"]] as const;
 
 /** The left panel: the Source section, then the Designer: its toolbar, the scene length, and the effect groups. */
 
-export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, driverVideoName, onPickDriverVideo, onNeedAudioInput, held, onReleaseHold }: Props) {
+export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, transport, onWork, driverVideoName, onPickDriverVideo, onNeedAudioInput }: Props) {
   const row = useParamRows(engine);
   /** True while MIDI holds any range: the Effects header then shows a play button that plays them all again. */
   const [anyHeld, setAnyHeld] = useState(engine.anyHeld);
@@ -329,19 +330,12 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
   };
 
   return (
-    <aside className={`side-panel control-panel ${midiButtons || audioButtons ? "" : "midi-hidden"} ${midiButtons ? "" : "no-midi-buttons"} ${audioButtons ? "" : "no-audio-buttons"}`}>
-      {/* The scene length (the cycle): at the very top and always in view, because its timing affects the sources and every effect below. HOLD shows after the value while Hold is on. */}
-      <div className="panel-root-row">
-        {row.with("cycle", { badge: held && (
-          <button
-            className="hold-badge"
-            onClick={onReleaseHold}
-            data-tip="Hold is on: this scene stays while you edit it, and the music plays on. Click, save, or pick a tab to go on to the next scenes."
-          >
-            <span className="hold-badge-label">Hold</span>
-          </button>
-        ) })}
-      </div>
+    <aside
+      className={`side-panel control-panel ${midiButtons || audioButtons ? "" : "midi-hidden"} ${midiButtons ? "" : "no-midi-buttons"} ${audioButtons ? "" : "no-audio-buttons"}`}
+      /* Any press here is work on the scene (a slider, a menu, an effect's header, a random image), but Play, Pause, Stop and the scrub bar are not. */
+      onPointerDownCapture={(event) => { if (!(event.target as Element).closest(".scene-transport")) onWork(); }}
+    >
+      {/* The scene's card (see SourcePanel): its name, its sources, its Length and its play controls. */}
       {source}
       {/* The FX card: its title bar (Random all, Nudge, Clear all, then New), then the effect groups, which scroll. */}
       <section className="panel-card fx-card" {...help("fx")}>
@@ -436,6 +430,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
           )}
         </div>
       </section>
+      {transport}
     </aside>
   );
 }

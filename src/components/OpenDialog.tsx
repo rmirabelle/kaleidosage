@@ -13,7 +13,8 @@ import { formatPlayTime } from "../lib/tracks";
 import { ColorFolder } from "./ColorFolder";
 
 /** The kind of file the dialog opens: an image (or a video), a scene (.ksage), or an audio file for the tracks. */
-export type OpenKind = "image" | "scene" | "audio" | "playlist";
+/** What the dialog opens; "scene" also lists playlists, which it previews and opens too. */
+export type OpenKind = "image" | "scene" | "audio";
 
 interface Props {
   kind: OpenKind;
@@ -29,9 +30,9 @@ interface Props {
   onOpenMany?: (paths: string[]) => void;
 }
 
-type EntryKind = "folder" | OpenKind;
+type EntryKind = "folder" | OpenKind | "playlist";
 type PlaceKind = "home" | "desktop" | "documents" | "pictures" | "downloads" | "drive";
-type SortKey = "name" | "modified" | "size";
+type SortKey = "name" | "type" | "modified" | "size";
 type SortDirection = "asc" | "desc";
 
 interface SortState {
@@ -152,9 +153,8 @@ const IMAGE_TYPES: Record<string, string> = {
 
 const TEXT: Record<OpenKind, { hint: string; empty: string; startPlace: PlaceKind }> = {
   image: { hint: "Choose a PNG, JPEG, WebP, GIF, BMP or AVIF image, or an MP4, M4V, WebM, MOV or AVI video.", empty: "This folder has no images or videos.", startPlace: "pictures" },
-  scene: { hint: "Choose a Kaleido Sage scene (.ksage).", empty: "This folder has no scenes.", startPlace: "documents" },
-  audio: { hint: "Choose MP3, WAV, FLAC, OGG, Opus, M4A or AAC audio files for the Files list.", empty: "This folder has no audio files.", startPlace: "home" },
-  playlist: { hint: "Choose a Kaleido Sage playlist (.ksplaylist): its scenes, audio files and audio settings open together.", empty: "This folder has no playlists.", startPlace: "documents" }
+  scene: { hint: "Choose a Kaleido Sage scene (.ksage) or playlist (.ksplaylist). A playlist opens its scenes, audio files and audio settings together.", empty: "This folder has no scenes or playlists.", startPlace: "documents" },
+  audio: { hint: "Choose MP3, WAV, FLAC, OGG, Opus, M4A or AAC audio files for the Files list.", empty: "This folder has no audio files.", startPlace: "home" }
 };
 
 interface DialogFrame {
@@ -197,17 +197,27 @@ interface StoredState {
 const isSort = (value: unknown): value is SortState => {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
-  return (record.key === "name" || record.key === "modified" || record.key === "size")
+  return (record.key === "name" || record.key === "type" || record.key === "modified" || record.key === "size")
     && (record.direction === "asc" || record.direction === "desc");
 };
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
-/** Folders always come first; within each group the chosen column decides the order. */
+/** A file's type in a word, for the Type column: Scene, Playlist, Audio, or an image's or video's extension (JPG, MP4). */
+const shortType = (entry: BrowseEntry) => {
+  if (entry.kind === "folder") return "Folder";
+  if (entry.kind === "scene") return "Scene";
+  if (entry.kind === "playlist") return "Playlist";
+  if (entry.kind === "audio") return "Audio";
+  return (entry.name.split(".").pop() ?? "").toUpperCase();
+};
+
+/** Folders always come first; within each group the chosen column decides the order, then the name. */
 const compareEntries = (a: BrowseEntry, b: BrowseEntry, sort: SortState) => {
   if ((a.kind === "folder") !== (b.kind === "folder")) return a.kind === "folder" ? -1 : 1;
   let result = 0;
-  if (sort.key === "modified") result = (a.modifiedMs ?? 0) - (b.modifiedMs ?? 0);
+  if (sort.key === "type") result = collator.compare(shortType(a), shortType(b));
+  else if (sort.key === "modified") result = (a.modifiedMs ?? 0) - (b.modifiedMs ?? 0);
   else if (sort.key === "size") result = a.size - b.size;
   if (result === 0) result = collator.compare(a.name, b.name);
   return sort.direction === "asc" ? result : -result;
@@ -863,7 +873,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen, onOpenMany }: Props)
     const needle = search.trim().toLowerCase();
     return listing.entries
       .filter((entry) =>
-        (entry.kind === "folder" || entry.kind === kind)
+        (entry.kind === "folder" || entry.kind === kind || (kind === "scene" && entry.kind === "playlist"))
         && (needle === "" || entry.name.toLowerCase().includes(needle)))
       .sort((a, b) => compareEntries(a, b, sort));
   }, [kind, listing, search, sort]);
@@ -1222,6 +1232,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen, onOpenMany }: Props)
 
             <div className="open-list-header">
               {sortHeader("name", "Name")}
+              {sortHeader("type", "Type")}
               {sortHeader("modified", "Modified")}
               {sortHeader("size", "Size")}
             </div>
@@ -1278,6 +1289,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen, onOpenMany }: Props)
                         <span>{entry.name}</span>
                       )}
                     </span>
+                    <span className="open-entry-meta" data-tip={typeLabel(entry)}>{shortType(entry)}</span>
                     <span className="open-entry-meta">{formatDate(entry.modifiedMs)}</span>
                     <span className="open-entry-meta">{entry.kind === "folder" ? "" : formatSize(entry.size)}</span>
                   </div>

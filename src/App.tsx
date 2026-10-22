@@ -15,7 +15,7 @@ import { MidiIcon } from "./components/MidiIcon";
 import { MidiPanel } from "./components/MidiPanel";
 import { AudioPanel } from "./components/AudioPanel";
 import { BottomPanelTabs, type BottomTab } from "./components/BottomPanelTabs";
-import { SourcePanel } from "./components/SourcePanel";
+import { SceneTransport, SourcePanel } from "./components/SourcePanel";
 import { StartScreen } from "./components/StartScreen";
 import { LoadingOverlay, type Loading } from "./components/LoadingOverlay";
 import { SceneList } from "./components/SceneList";
@@ -50,7 +50,7 @@ import { isPlaylistCopy } from "./lib/playlistFile";
 import { tracks } from "./lib/tracks";
 import { songFollow } from "./lib/songFollow";
 import { helpSettings } from "./lib/helpSettings";
-import { PLAYLIST_EXTENSION, openPlaylistFile, playlistFingerprint, readManifest, savePlaylistFile, type PlaylistAudio } from "./lib/playlistFile";
+import { PLAYLIST_EXTENSION, isPlaylistFile, openPlaylistFile, playlistFingerprint, readManifest, savePlaylistFile, type PlaylistAudio } from "./lib/playlistFile";
 import { revealMainWindow } from "./lib/splash";
 import { isVideoPath, isVideoType, loadVideoBlob, loadVideoFile, stageVideoBlob, type VideoFile } from "./lib/videos";
 import { checkForUpdate, getAppVersion, type UpdateInfo } from "./lib/updater";
@@ -907,7 +907,7 @@ export default function App() {
     }
   }, [engine, fingerprint, holdScene, setActivePath, showError, showStatus]);
 
-  /* A scene opens in a new tab, so the scenes that are open stay as they are. */
+  /* Open Scene and Open Playlist share one dialog, which lists scenes and playlists. A scene opens in a new tab, so the scenes that are open stay as they are. */
   const openScene = useCallback(() => {
     if (!engine || !isTauri()) return;
     setOpenRequest({ kind: "scene", slot: 0 });
@@ -1151,12 +1151,13 @@ export default function App() {
    * A change that the user makes to the shown scene with the mouse or the
    * keys (a slider, a menu, Random, Undo) turns Hold on, so the scene stays
    * while the user edits it. A change counts when the scene's settings
-   * change within a second of a click, a drag, a key or the mouse wheel.
+   * change within 10 seconds of a click, a drag, a key or the mouse wheel.
    * MIDI knobs and audio links do not turn it on, so a live show with
    * knobs goes on.
    */
   useEffect(() => {
-    if (!engine || !tracksActive) {
+    /* Hold keeps one scene from the next: with one scene there is no next scene, so it goes off. */
+    if (!engine || docs.length < 2) {
       holdScene(false);
       return;
     }
@@ -1170,7 +1171,8 @@ export default function App() {
     const timer = window.setInterval(() => {
       const now = { id: activeIdRef.current, print: fingerprint() };
       /* A tab switch changes the settings too: only a change of the same scene counts. */
-      const edited = now.id === last.id && now.print !== last.print && performance.now() - lastInput < 1000 && !midi.turning;
+      /* Ten seconds: a change can come a while after its click or key (a random photo downloads first). */
+      const edited = now.id === last.id && now.print !== last.print && performance.now() - lastInput < 10_000 && !midi.turning;
       last = now;
       if (!edited || sceneHeldRef.current) return;
       holdScene(true);
@@ -1180,7 +1182,23 @@ export default function App() {
       window.clearInterval(timer);
       for (const name of events) window.removeEventListener(name, input, true);
     };
-  }, [engine, fingerprint, holdScene, showStatus, tracksActive]);
+  }, [docs.length, engine, fingerprint, holdScene, playlistPath, showStatus, tracksActive]);
+
+  /**
+   * Opening or closing an effect, or any press in the Source and FX column
+   * (but its play toolbar), counts as working on the scene too: in a show
+   * (see the watch above) it turns Hold on, so the scene does not change
+   * while the user looks into it or waits for a random image.
+   */
+  const holdForWork = useCallback(() => {
+    if (sceneHeldRef.current || docsRef.current.length < 2) return;
+    holdScene(true);
+    showStatus("Hold: this scene stays while you edit it. Click Hold, save, or pick a tab to go on.", 4000);
+  }, [holdScene, showStatus, tracksActive]);
+  const openEffectGroup = useCallback((group: string | null) => {
+    setOpenGroup(group);
+    holdForWork();
+  }, [holdForWork]);
 
   /* Stop and Play or Pause run the scene only; the music has its own controls (see FilesCard). */
   const stop = useCallback(() => {
@@ -1379,12 +1397,11 @@ export default function App() {
     else setSaveQuestion({ title, reason, answer: resolve, name: fileNameOf(path), save: () => savePlaylist() });
   });
 
-  /* Opening a playlist closes the open scenes, so their changes, and the playlist's, are saved or given up first. */
+  /* Open Playlist opens the one Open dialog, which lists scenes and playlists (see openScene). */
   const openPlaylist = useCallback(async () => {
     if (!engine || !isTauri()) return;
-    if (!(await askToSaveAll("Save changes before opening a playlist?", "Opening a playlist closes the open scenes."))) return;
-    setOpenRequest({ kind: "playlist", slot: 0 });
-  }, [askToSaveAll, engine]);
+    setOpenRequest({ kind: "scene", slot: 0 });
+  }, [engine]);
 
   /**
    * Close Playlist: asks "Save changes?" for the playlist when it has
@@ -1449,9 +1466,6 @@ export default function App() {
       if (target) switchToDoc(target.id);
       else setStartScreen(true);
       markPlaylistClean(path);
-      /* The Audio panel shows the playlist's tracks and audio settings. */
-      setBottomTab("audio");
-      setMidiPanelOpen(true);
       showStatus(`Opened ${name}`);
     } catch (error) {
       showError(`Could not open the playlist. ${error instanceof Error ? error.message : String(error)}`);
@@ -1459,6 +1473,12 @@ export default function App() {
       setLoading(null);
     }
   }, [blankScene, engine, markPlaylistClean, openScenePath, selectDocId, showError, showStatus, switchToDoc, writeDocs]);
+
+  /* A playlist picked in the Open dialog closes the open scenes, so their changes, and the playlist's, are saved or given up first. */
+  const openPickedPlaylist = useCallback(async (path: string) => {
+    if (!(await askToSaveAll("Save changes before opening a playlist?", "Opening a playlist closes the open scenes."))) return;
+    await openPlaylistPath(path);
+  }, [askToSaveAll, openPlaylistPath]);
 
   /** Puts the tabs in a new order (a drag in the tab bar). The scenes play in tab order, and a playlist keeps it. */
   const reorderDocs = useCallback((ids: number[]) => {
@@ -1864,7 +1884,7 @@ export default function App() {
       )}
       <div className="workspace">
         {loading && <LoadingOverlay loading={loading} />}
-        {startScreen && <StartScreen version={appVersion} onNewScene={newScene} onOpenScene={openScene} onOpenPlaylist={() => void openPlaylist()} />}
+        {startScreen && <StartScreen version={appVersion} onNewScene={newScene} onOpen={openScene} />}
         {/**
           * The left side. With a playlist open, or Files as the input, it is
           * one panel of columns: the audio files (Files only), the scenes (a
@@ -1882,7 +1902,8 @@ export default function App() {
               key={`controls-${revision}`}
               engine={engine}
               openGroup={openGroup}
-              onOpenGroup={setOpenGroup}
+              onOpenGroup={openEffectGroup}
+              onWork={holdForWork}
               onRandomize={randomize}
               onNudge={nudge}
               onReset={() => setResetAsked(true)}
@@ -1890,11 +1911,11 @@ export default function App() {
               driverVideoName={driverVideoName}
               onPickDriverVideo={() => setOpenRequest({ kind: "image", slot: 0, target: "driver" })}
               onNeedAudioInput={askForAudioInput}
-              held={tracksActive && sceneHeld}
-              onReleaseHold={() => holdScene(false)}
+              transport={<SceneTransport engine={engine} paused={paused} onTogglePause={togglePause} onStop={stop} show={docs.length > 1} autoNext={tracksActive && docs.length > 1} held={docs.length > 1 && sceneHeld} onToggleHold={() => holdScene(!sceneHeldRef.current)} />}
               source={(
                 <SourcePanel
                   engine={engine}
+                  sceneName={sceneFileName.replace(/\.ksage$/i, "")}
                   images={images}
                   randomLoading={randomLoading}
                   onOpenImage={(slot) => void openImage(slot)}
@@ -1916,12 +1937,7 @@ export default function App() {
             <canvas ref={canvasRef} onDoubleClick={() => void toggleFullscreen()} />
             {engine && statsOpen && <StatsOverlay engine={engine} />}
             {engine && !startScreen && !fullscreen && (
-              <StageControls
-                paused={paused}
-                onTogglePause={togglePause}
-                onStop={stop}
-                onFullscreen={() => void toggleFullscreen()}
-              />
+              <StageControls onFullscreen={() => void toggleFullscreen()} />
             )}
             {fullscreen && (
               /* In full screen the title bar and toolbar are gone; these buttons show while the mouse moves. */
@@ -1994,11 +2010,12 @@ export default function App() {
       {openRequest && (
         <OpenDialog
           kind={openRequest.kind}
-          title={openRequest.target === "driver" ? "Open Video for the Driver" : openRequest.kind === "scene" ? "Open Scene" : openRequest.kind === "playlist" ? "Open Playlist" : openRequest.kind === "audio" ? "Add Audio Files" : openRequest.slot === 1 ? "Open Image or Video for Source B" : "Open Image or Video"}
+          title={openRequest.target === "driver" ? "Open Video for the Driver" : openRequest.kind === "scene" ? "Open Scene or Playlist" : openRequest.kind === "audio" ? "Add Audio Files" : openRequest.slot === 1 ? "Open Image or Video for Source B" : "Open Image or Video"}
           onCancel={() => setOpenRequest(null)}
           onOpen={(path) => {
             setOpenRequest(null);
             if (openRequest.target === "driver") void openDriverVideo(path);
+            else if (openRequest.kind === "scene" && isPlaylistFile(path)) void openPickedPlaylist(path);
             else if (openRequest.kind === "scene") {
               quietOutsidePlaylist();
               /* One scene opens behind the loader too: its media can take a moment. */
@@ -2012,12 +2029,16 @@ export default function App() {
               })();
             }
             else if (openRequest.kind === "audio") addTracks([path]);
-            else if (openRequest.kind === "playlist") void openPlaylistPath(path);
             else void openImagePath(path, openRequest.slot);
           }}
-          /* Several scenes open one after the other, each in its own tab; the last one shows. Several audio files go to the tracks. */
+          /* Several scenes open one after the other, each in its own tab; the last one shows. A playlist among them opens alone, in place of the scenes. Several audio files go to the tracks. */
           onOpenMany={openRequest.kind === "scene" ? (paths) => {
             setOpenRequest(null);
+            const playlist = paths.find(isPlaylistFile);
+            if (playlist) {
+              void openPickedPlaylist(playlist);
+              return;
+            }
             quietOutsidePlaylist();
             void (async () => {
               /* Several scenes open behind the overlay, so they do not flash by one after the other. */
