@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowCounterClockwise, ArrowsInLineHorizontal, CaretLeft, CaretRight, Lightning, PushPin, Scissors, Trash, X } from "@phosphor-icons/react";
-import { changeSlice, deleteSlice, mergeWithNext, moveDivider, splitSlice } from "../engine/songMapEdits";
+import { changeSlice, deleteSlice, mergeWithNext, moveDivider, splitAt } from "../engine/songMapEdits";
 import { TIER_NAMES, mapOf, planSong, type MapSlice, type Tier } from "../engine/songPlan";
 import type { ScheduledSlice } from "../engine/showSchedule";
 import { songFollow } from "../lib/songFollow";
@@ -36,7 +36,8 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * song that plays again; a right-click stops the
  * song where it is; a drag of the divider between
  * two slices moves it from bar to bar. A toolbar across the top holds the
- * selected slice's level, the Slice buttons (Keep Scene, Hit, Split,
+ * selected slice's level, the Slice buttons (Keep Scene, Hit, Split at
+ * the playhead,
  * Merge with next, and Delete: the slice before it grows into its place),
  * the picked scene (a click goes back to the show's order),
  * and Reset Map (the analysis's own map); the Playlist card's controls
@@ -218,7 +219,17 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
                     Scene {slice.scene + 1} <X size={12} weight="bold" />
                   </button>
                 )}
-                <button className="panel-button" onClick={() => apply(splitSlice(slices, index, analysis.downbeats, duration))} data-tip="Split this slice in two at the bar nearest its middle">
+                <button
+                  className="panel-button"
+                  disabled={tracks.current?.path !== path}
+                  onClick={() => {
+                    const next = splitAt(slices, analysis.downbeats, tracks.position);
+                    if (next.length === slices.length) return;
+                    apply(next);
+                    setSelected(next.filter((candidate) => candidate.start <= tracks.position + 0.01).length - 1);
+                  }}
+                  data-tip={tracks.current?.path !== path ? "Play this song to split at the playhead" : "Split the slice at the playhead, at the bar nearest it. Nothing happens at a bar where a slice starts already"}
+                >
                   <Scissors size={15} /> Split
                 </button>
                 <button className="panel-button" disabled={index >= slices.length - 1} onClick={() => apply(mergeWithNext(slices, index))} data-tip="Join this slice with the next one; it keeps this slice's name and level">

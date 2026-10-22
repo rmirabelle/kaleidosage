@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { changeSlice, deleteSlice, mergeWithNext, moveDivider, moveScenes, splitSlice } from "./songMapEdits";
+import { changeSlice, deleteSlice, mergeWithNext, moveDivider, moveScenes, splitAt } from "./songMapEdits";
 import { mapOf, planSong, type MapSlice } from "./songPlan";
 import type { SongAnalysis } from "./songScript";
 
@@ -56,12 +56,17 @@ describe("song map edits", () => {
     expect(moveDivider(slices, 0, downbeats, 30, 5)).toEqual(slices);
   });
 
-  it("splits a slice at the bar start nearest the place, or the middle", () => {
-    expect(splitSlice(slices, 1, downbeats, 30).map((slice) => slice.start)).toEqual([0, 10, 14, 20]);
-    expect(splitSlice(slices, 2, downbeats, 30, 27.3).map((slice) => slice.start)).toEqual([0, 10, 20, 28]);
-    expect(splitSlice(slices, 2, downbeats, 30, 27.3)[3]).toEqual({ start: 28, label: "chorus", tier: 3, drop: false });
-    /* A slice of one bar has no bar start inside it. */
-    expect(splitSlice([{ ...slices[0] }, { ...slices[1], start: 2 }], 0, downbeats, 30)).toHaveLength(2);
+  it("splits the slice at the playhead, at the bar start nearest it", () => {
+    expect(splitAt(slices, downbeats, 13.1).map((slice) => slice.start)).toEqual([0, 10, 14, 20]);
+    expect(splitAt(slices, downbeats, 27.3).map((slice) => slice.start)).toEqual([0, 10, 20, 28]);
+    expect(splitAt(slices, downbeats, 27.3)[3]).toEqual({ start: 28, label: "chorus", tier: 3, drop: false });
+  });
+
+  it("does not split again at the same place, or at a slice start", () => {
+    const once = splitAt(slices, downbeats, 13.1);
+    expect(splitAt(once, downbeats, 13.1)).toEqual(once);
+    expect(splitAt(slices, downbeats, 10.4)).toEqual(slices);
+    expect(splitAt(slices, downbeats, 0.3)).toEqual(slices);
   });
 });
 

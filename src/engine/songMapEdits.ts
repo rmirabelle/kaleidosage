@@ -59,20 +59,20 @@ export function mergeWithNext(slices: readonly MapSlice[], index: number): MapSl
 }
 
 /**
- * Splits a slice in two at the bar start nearest "at" (or nearest its
- * middle, with no "at"), leaving at least one bar on each side. Both
- * halves keep the slice's name and level; the second has no drop. With no
- * bar start to split at, nothing changes.
+ * Splits the slice that plays at "at" (the playhead) in two, at the bar
+ * start nearest "at". Both halves keep the slice's name, level and scene
+ * choice; the second has no drop. When that bar start is a slice start
+ * already (a second press at the same place, or the song's start), or
+ * with no bar starts, nothing changes: so a slice is never shorter than
+ * one bar, and two slices never start at the same place.
  */
-export function splitSlice(slices: readonly MapSlice[], index: number, downbeats: readonly number[], duration: number, at?: number): MapSlice[] {
-  const slice = slices[index];
-  if (!slice) return [...slices];
-  const end = slices[index + 1]?.start ?? duration;
-  const target = at ?? (slice.start + end) / 2;
-  const inside = downbeats.filter((time) => time > slice.start + 0.01 && time < end - 0.01);
-  if (inside.length === 0) return [...slices];
-  const split = inside.reduce((best, time) => (Math.abs(time - target) < Math.abs(best - target) ? time : best));
-  return [...slices.slice(0, index + 1), { ...slice, start: split, drop: false }, ...slices.slice(index + 1)];
+export function splitAt(slices: readonly MapSlice[], downbeats: readonly number[], at: number): MapSlice[] {
+  if (downbeats.length === 0) return [...slices];
+  const split = downbeats.reduce((best, time) => (Math.abs(time - at) < Math.abs(best - at) ? time : best));
+  if (split < 0.01 || slices.some((slice) => Math.abs(slice.start - split) < 0.01)) return [...slices];
+  const index = slices.filter((slice) => slice.start < split).length - 1;
+  if (index < 0) return [...slices];
+  return [...slices.slice(0, index + 1), { ...slices[index], start: split, drop: false }, ...slices.slice(index + 1)];
 }
 
 /**
