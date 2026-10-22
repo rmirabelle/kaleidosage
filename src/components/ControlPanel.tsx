@@ -332,8 +332,8 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
   return (
     <aside
       className={`side-panel control-panel ${midiButtons || audioButtons ? "" : "midi-hidden"} ${midiButtons ? "" : "no-midi-buttons"} ${audioButtons ? "" : "no-audio-buttons"}`}
-      /* Any press here is work on the scene (a slider, a menu, an effect's header, a random image), but Play, Pause, Stop and the scrub bar are not. */
-      onPointerDownCapture={(event) => { if (!(event.target as Element).closest(".scene-transport")) onWork(); }}
+      /* Any press here is work on the scene (a slider, a menu, a random image), but the play toolbar is not, and an effect's header counts only when it opens the effect (see openEffectGroup in App). */
+      onPointerDownCapture={(event) => { if (!(event.target as Element).closest(".scene-transport, .panel-group-header")) onWork(); }}
     >
       {/* The scene's card (see SourcePanel): its name, its sources, its Length and its play controls. */}
       {source}

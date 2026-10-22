@@ -1194,8 +1194,9 @@ export default function App() {
   }, [engine, fingerprint, holdScene, holdUseful, playlistPath, showStatus, tracksActive]);
 
   /**
-   * Opening or closing an effect, or any press in the Source and FX column
-   * (but its play toolbar), counts as working on the scene too: in a show
+   * Opening an effect, or any press in the Source and FX column (but its
+   * play toolbar, and an effect header that collapses its effect), counts
+   * as working on the scene too: in a show
    * (see the watch above) it turns Hold on, so the scene does not change
    * while the user looks into it or waits for a random image.
    */
@@ -1213,9 +1214,10 @@ export default function App() {
       playing = tracks.playing;
     });
   }, [holdScene]);
+  /* Opening an effect is work on the scene; collapsing one is not. */
   const openEffectGroup = useCallback((group: string | null) => {
     setOpenGroup(group);
-    holdForWork();
+    if (group !== null) holdForWork();
   }, [holdForWork]);
 
   /* Stop and Play or Pause run the scene only; the music has its own controls (see FilesCard). */
