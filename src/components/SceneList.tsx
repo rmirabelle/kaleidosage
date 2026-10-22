@@ -37,7 +37,8 @@ interface Props {
  * right-click opens a menu: Rename (the name turns into a text box: Enter
  * keeps the new name, Esc does not) and Delete (in a playlist, the scene
  * goes out of the playlist; else the scene closes). While a slice of the
- * Song Map is selected, Ctrl+click picks a scene for it: as long as Ctrl
+ * Song Map is selected, Ctrl+click picks a scene for it and shows that
+ * scene, as a plain click does: as long as Ctrl
  * is held, the list shows a pick cursor, and the scene under the pointer
  * lights up in the same color as the selected slice. Its card has a title
  * bar like the Source card's.
@@ -78,7 +79,9 @@ export function SceneList({ tabs, activeId, onSelect, onClose, onReorder, onRena
                 onPointerDown={(event) => {
                   if (event.button !== 0) return;
                   if (event.ctrlKey && canPick) {
+                    /* The pick, then the scene shows, as a plain click shows it; no drag starts. */
                     onPick(tab.id);
+                    onSelect(tab.id);
                     return;
                   }
                   onSelect(tab.id);
