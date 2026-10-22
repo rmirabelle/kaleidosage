@@ -114,6 +114,7 @@ class TrackList {
   onSamples: ((samples: Float32Array) => void) | null = null;
   private readonly listeners = new Set<() => void>();
   private readonly trackListeners = new Set<(index: number, why: TrackChange) => void>();
+  private readonly stopListeners = new Set<() => void>();
   private context: AudioContext | null = null;
   private audio: HTMLAudioElement | null = null;
   private ready: Promise<void> | null = null;
@@ -215,6 +216,12 @@ class TrackList {
     return () => { this.trackListeners.delete(listener); };
   }
 
+  /** Calls the listener when the user stops the music (see stop): the show then goes back to its first scene. Returns a function that removes it. */
+  onStop(listener: () => void) {
+    this.stopListeners.add(listener);
+    return () => { this.stopListeners.delete(listener); };
+  }
+
   private changed() {
     this.version++;
     for (const listener of this.listeners) listener();
@@ -293,11 +300,12 @@ class TrackList {
     void (this.playing ? this.pause() : this.play());
   }
 
-  /** Stop: pauses and goes back to the start of the track. */
+  /** Stop: pauses and goes back to the start of the track; the listeners hear of it (see onStop). */
   stop() {
     this.pause();
     if (this.audio) this.audio.currentTime = 0;
     this.changed();
+    for (const listener of this.stopListeners) listener();
   }
 
   seek(seconds: number) {

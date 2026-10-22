@@ -839,6 +839,21 @@ export default function App() {
     if (picked) addTracks(Array.isArray(picked) ? picked : [picked]);
   }, [addTracks]);
 
+  /**
+   * Starts the show from its beginning: the first scene, from its start,
+   * set to play (it waits for the music, see the music gate), with Hold
+   * off. For a playlist that opens, and for Stop in the playlist.
+   */
+  const startShow = useCallback(() => {
+    const first = docsRef.current[0];
+    if (!engine || !first) return;
+    if (first.id !== activeIdRef.current) switchToDoc(first.id);
+    engine.rewind();
+    engine.state.paused = false;
+    setPaused(false);
+    holdScene(false);
+  }, [engine, holdScene, switchToDoc]);
+
   /** Selects the next tab (step 1) or the one before it (step -1); the last tab goes round to the first. "fade": the crossfade's seconds (0 cuts). */
   const switchByStep = useCallback((step: 1 | -1, auto = false, fade = CROSSFADE_SECONDS) => {
     const list = docsRef.current;
@@ -1487,13 +1502,8 @@ export default function App() {
        * start, and waits for the music (see the music gate below); the music waits for Play.
        */
       const target = docsRef.current[0];
-      if (target) {
-        switchToDoc(target.id);
-        engine.rewind();
-        engine.state.paused = false;
-        setPaused(false);
-        holdScene(false);
-      } else setStartScreen(true);
+      if (target) startShow();
+      else setStartScreen(true);
       markPlaylistClean(path);
       showStatus(`Opened ${name}`);
     } catch (error) {
@@ -1501,7 +1511,7 @@ export default function App() {
     } finally {
       setLoading(null);
     }
-  }, [blankScene, engine, holdScene, markPlaylistClean, openScenePath, selectDocId, showError, showStatus, switchToDoc, writeDocs]);
+  }, [blankScene, engine, markPlaylistClean, openScenePath, selectDocId, showError, showStatus, startShow, writeDocs]);
 
   /* A playlist picked in the Open dialog closes the open scenes, so their changes, and the playlist's, are saved or given up first. */
   const openPickedPlaylist = useCallback(async (path: string) => {
@@ -1604,6 +1614,11 @@ export default function App() {
     follow();
     return audioInput.subscribe(follow);
   }, [engine]);
+
+  /** Stop in the playlist starts the show again: the first scene, ready to play (see startShow). */
+  useEffect(() => tracks.onStop(() => {
+    if (audioInput.settings.kind === "tracks" && docsRef.current.length > 0) startShow();
+  }), [startShow]);
 
   /**
    * The music gate: with the tracks as the input and Hold off, the playlist
