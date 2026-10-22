@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { CaretDoubleLeft, CaretDoubleRight, Plus, SpeakerHigh, Trash, Waveform, X } from "@phosphor-icons/react";
+import { CaretDoubleLeft, CaretDoubleRight, MapTrifold, Plus, SpeakerHigh, Trash, Waveform, X } from "@phosphor-icons/react";
 import { MediaIcon } from "./MediaIcon";
 import { placeSeek } from "./Slider";
 import { FLOOR_DB } from "../engine/audio";
@@ -15,6 +15,7 @@ import { help } from "../help/topics";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
 import { SongMap } from "./SongMap";
+import { SongMapDialog } from "./SongMapDialog";
 import { HelpButton } from "./HelpButton";
 import { useDragReorder } from "./useDragReorder";
 
@@ -167,6 +168,32 @@ function FollowButton() {
   );
 }
 
+/**
+ * Opens the song map editor (see SongMapDialog) for the song that plays.
+ * It works once the song has its analysis, while Follow the song is on.
+ */
+function MapButton() {
+  useSyncExternalStore(subscribeFollow, followVersion);
+  const [open, setOpen] = useState(false);
+  const path = songFollow.enabled ? songFollow.currentPath : null;
+  const ready = path !== null && songFollow.analysisFor(path) !== undefined;
+  const name = tracks.list.find((track) => track.path === path)?.name ?? "";
+  return (
+    <>
+      <button
+        className={`panel-button icon ${open ? "active" : ""}`}
+        disabled={!ready}
+        onClick={() => setOpen(true)}
+        data-tip={ready ? "Edit the song map: the song's slices, their levels, names and drops" : "Song map: turn on Follow the song and play a song first"}
+        aria-label="Edit the song map"
+      >
+        <MapTrifold size={16} />
+      </button>
+      {open && path && createPortal(<SongMapDialog path={path} name={name} onClose={() => setOpen(false)} />, document.body)}
+    </>
+  );
+}
+
 /** A time in the file as "1:05". */
 const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
 
@@ -226,6 +253,7 @@ function PlaylistTransport({ count, engine }: { count: number; engine: Engine | 
             {tracks.playing ? <MediaIcon kind="pause" size={16} /> : <MediaIcon kind="play" size={16} />}
           </button>
           <FollowButton />
+          <MapButton />
         </div>
         <div
           className={`slider playlist-seek ${song ? "song-map" : ""}`}

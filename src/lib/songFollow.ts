@@ -1,3 +1,4 @@
+import type { MapSlice } from "../engine/songPlan";
 import { compileScript, type SongAnalysis, type SongScript } from "../engine/songScript";
 import { ANALYSIS_VERSION, analyzeSong } from "./songAnalysis";
 import { SongClock } from "./songClock";
@@ -30,6 +31,8 @@ class SongFollow {
   script: SongScript | null = null;
   /** Goes up with each change, for useSyncExternalStore. */
   version = 0;
+  /** Goes up with each edit of a song map (see editMap): a playlist with an edit has a change to save. */
+  edits = 0;
   readonly clock = new SongClock(() => ({ position: tracks.position, playing: tracks.playing, latency: tracks.latency }));
   private readonly listeners = new Set<() => void>();
   /** Each track's script, by path, made once. */
@@ -78,6 +81,37 @@ class SongFollow {
   /** How many of these tracks have an analysis: for the status line, and for a playlist's unsaved mark (see App's playlistNow). */
   analyzedCount(paths: readonly string[]) {
     return paths.filter((path) => this.analyses.has(path)).length;
+  }
+
+  /** The track that plays (or plays next), while Follow is on: the one whose map the song map editor edits. */
+  get currentPath() {
+    return this.path;
+  }
+
+  /** A track's analysis, or undefined when it has none yet. */
+  analysisFor(path: string) {
+    return this.analyses.get(path);
+  }
+
+  /**
+   * Sets a track's edited song map (see songMapEdits.ts), or with null goes
+   * back to the automatic map. The track's script is made again at once,
+   * so the picture follows the new map; the analysis keeps the edit, so a
+   * saved playlist keeps it too.
+   */
+  editMap(path: string, slices: MapSlice[] | null) {
+    const analysis = this.analyses.get(path);
+    if (!analysis) return;
+    if (slices) analysis.mapEdits = slices.map((slice) => ({ ...slice }));
+    else delete analysis.mapEdits;
+    const script = compileScript(analysis);
+    this.scripts.set(path, Promise.resolve(script));
+    if (this.path === path) {
+      this.script = script;
+      if (this.status.state === "ready") this.status = { ...this.status, tempo: script.tempo };
+    }
+    this.edits++;
+    this.changed();
   }
 
   /** A track's analysis as JSON, for a playlist file, or null when it has none. */

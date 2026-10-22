@@ -333,10 +333,10 @@ export default function App() {
     const { kind, device, gainDb, thresholdDb } = audioInput.settings;
     return { kind, device, gainDb, thresholdDb };
   }, []);
-  /* A new song analysis is a change too: Save Playlist keeps it (see songFollow.ts). */
+  /* A new song analysis, or an edit of a song map, is a change too: Save Playlist keeps it (see songFollow.ts). */
   const playlistNow = useCallback(() => {
     const paths = tracks.list.map((track) => track.path);
-    return `${playlistFingerprint(playlistScenes(), paths, playlistAudio(), panelLayout.filesWidth)} ${songFollow.analyzedCount(paths)}`;
+    return `${playlistFingerprint(playlistScenes(), paths, playlistAudio(), panelLayout.filesWidth)} ${songFollow.analyzedCount(paths)} ${songFollow.edits}`;
   }, [playlistAudio, playlistScenes]);
   const playlistChanged = useCallback(() => playlistPathRef.current !== null && playlistNow() !== playlistSavedRef.current, [playlistNow]);
   /** The playlist as it is now counts as saved. */

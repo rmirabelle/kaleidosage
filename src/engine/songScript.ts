@@ -1,5 +1,5 @@
 import type { ParamKey } from "./params";
-import { planSong, type SongPlan, type Tier } from "./songPlan";
+import { planSong, type MapSlice, type SongPlan, type Tier } from "./songPlan";
 
 /**
  * The song script (see reports/Intelligent music driven animation.md,
@@ -56,6 +56,8 @@ export interface SongAnalysis {
   hits: { kick: Hit[]; snare: Hit[]; hats: Hit[] };
   /** The song's parts, in time order (see song_sections.rs). */
   sections: { start: number; end: number; label: string }[];
+  /** The song map as the user edited it (see songMapEdits.ts), or missing for the automatic map. Not from the analyzer: the app adds it. */
+  mapEdits?: MapSlice[];
 }
 
 export type Family = "glow" | "scale" | "complexity" | "sparkle" | "beat";
