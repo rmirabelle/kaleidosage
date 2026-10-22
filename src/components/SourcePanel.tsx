@@ -12,7 +12,6 @@ import { HelpButton } from "./HelpButton";
 import { MediaIcon } from "./MediaIcon";
 import { placeSeek } from "./Slider";
 import { scenePosition } from "../engine/loop";
-import { TIER_NAMES } from "../engine/songPlan";
 import type { SongScript } from "../engine/songScript";
 import { tracks } from "../lib/tracks";
 import { songFollow } from "../lib/songFollow";
@@ -178,10 +177,9 @@ export function SceneTransport({ engine, paused, onTogglePause, onStop, show, au
     /* The place on the bar, the time, and the countdown's time left and span: in the song, or in the scene's Length. */
     let position: number, text: string, left: number, span: number, idle: boolean;
     if (following && now) {
-      /* The bar is off; the time shows the level of the song's part. */
+      /* The bar is off, and no time shows after it. */
       position = 0;
-      const part = following.plan.parts.filter((candidate) => candidate.start <= now.time).pop();
-      text = part ? `${TIER_NAMES[part.tier][0].toUpperCase()}${TIER_NAMES[part.tier].slice(1)} part` : "";
+      text = "";
       const next = following.plan.cues.find((cue) => cue.time > now.time);
       const before = following.plan.cues.filter((cue) => cue.time <= now.time).pop()?.time ?? 0;
       left = next ? next.time - now.time : following.duration - now.time;
