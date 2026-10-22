@@ -7,13 +7,38 @@ import type { MapSlice } from "./songPlan";
  * start (the analysis's downbeats).
  */
 
-/** Changes one slice's name, level, drop or keep scene. The first slice has neither a drop nor a scene to keep: nothing comes before it. */
-export function changeSlice(slices: readonly MapSlice[], index: number, change: Partial<Pick<MapSlice, "label" | "tier" | "drop" | "keepScene">>): MapSlice[] {
+/**
+ * Changes one slice's name, level, drop, keep scene or picked scene. The
+ * first slice has neither a drop nor a scene to keep: nothing comes before
+ * it. Keep Scene and a picked scene leave each other out: the one this
+ * change sets wins.
+ */
+export function changeSlice(slices: readonly MapSlice[], index: number, change: Partial<Pick<MapSlice, "label" | "tier" | "drop" | "keepScene" | "scene">>): MapSlice[] {
   return slices.map((slice, i) => {
     if (i !== index) return slice;
-    const { keepScene, ...next } = { ...slice, ...change, drop: i === 0 ? false : change.drop ?? slice.drop };
+    const { keepScene, scene, ...next } = { ...slice, ...change, drop: i === 0 ? false : change.drop ?? slice.drop };
+    if (scene !== undefined && !change.keepScene) return { ...next, scene };
     return keepScene && i > 0 ? { ...next, keepScene: true } : next;
   });
+}
+
+/**
+ * The slices after a change of the scene order: "place" gives each old
+ * tab index its new one, or null for a scene that is gone (its slices go
+ * back to the show's order). Returns the same list when nothing changes.
+ */
+export function moveScenes(slices: readonly MapSlice[], place: (index: number) => number | null): readonly MapSlice[] {
+  let moved = false;
+  const next = slices.map((slice) => {
+    if (slice.scene === undefined) return slice;
+    const scene = place(slice.scene);
+    if (scene === slice.scene) return slice;
+    moved = true;
+    const rest = { ...slice };
+    delete rest.scene;
+    return scene === null ? rest : { ...rest, scene };
+  });
+  return moved ? next : slices;
 }
 
 /**

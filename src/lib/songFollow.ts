@@ -1,5 +1,6 @@
 import { scheduleShow, type ScheduledSlice } from "../engine/showSchedule";
-import type { MapSlice } from "../engine/songPlan";
+import { changeSlice, moveScenes } from "../engine/songMapEdits";
+import { mapOf, planSong, type MapSlice } from "../engine/songPlan";
 import { compileScript, type SongAnalysis, type SongScript } from "../engine/songScript";
 import { ANALYSIS_VERSION, analyzeSong } from "./songAnalysis";
 import { SongClock } from "./songClock";
@@ -34,6 +35,8 @@ class SongFollow {
   version = 0;
   /** Goes up with each edit of a song map (see editMap): a playlist with an edit has a change to save. */
   edits = 0;
+  /** The slice selected on the Song Map page while it shows (see SongMapPanel): a Ctrl+click in the scene list picks its scene (see pickScene). */
+  selection: { path: string; index: number } | null = null;
   readonly clock = new SongClock(() => ({ position: tracks.position, playing: tracks.playing, latency: tracks.latency }));
   private readonly listeners = new Set<() => void>();
   /** Each track's script, by path, made once. */
@@ -118,6 +121,36 @@ class SongFollow {
     }
     this.edits++;
     this.changed();
+  }
+
+  /** Sets the slice selected on the Song Map page, or null while the page does not show. */
+  selectSlice(selection: { path: string; index: number } | null) {
+    if (selection?.path === this.selection?.path && selection?.index === this.selection?.index) return;
+    this.selection = selection;
+    this.changed();
+  }
+
+  /** Picks this scene (a tab index) for the selected slice: it plays that scene from now on (see showSchedule.ts). */
+  pickScene(scene: number) {
+    const selection = this.selection;
+    const analysis = selection && this.analyses.get(selection.path);
+    if (!selection || !analysis) return;
+    const slices = mapOf(planSong(analysis));
+    if (!slices[selection.index]) return;
+    this.editMap(selection.path, changeSlice(slices, selection.index, { scene }));
+  }
+
+  /**
+   * After a change of the scene order (a drag, or a closed scene): each
+   * picked scene follows its scene to its new tab index, and a slice whose
+   * scene is gone goes back to the show's order (see moveScenes).
+   */
+  moveScenes(place: (index: number) => number | null) {
+    for (const [path, analysis] of this.analyses) {
+      if (!analysis.mapEdits) continue;
+      const moved = moveScenes(analysis.mapEdits, place);
+      if (moved !== analysis.mapEdits) this.editMap(path, [...moved]);
+    }
   }
 
   /**

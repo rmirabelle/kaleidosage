@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { PencilSimple, Trash, X } from "@phosphor-icons/react";
 import { ContextMenu } from "./ContextMenu";
@@ -6,6 +6,12 @@ import { help } from "../help/topics";
 import { HelpButton } from "./HelpButton";
 import type { DocumentTabInfo } from "./DocumentTabs";
 import { useDragReorder } from "./useDragReorder";
+import { useCtrlHeld } from "./useCtrlHeld";
+import { songFollow } from "../lib/songFollow";
+
+const subscribeFollow = (listener: () => void) => songFollow.subscribe(listener);
+/** True while a Song Map slice is selected (see songFollow.selection): a Ctrl+click on a scene then picks it for that slice. */
+const sliceSelected = () => songFollow.enabled && songFollow.selection !== null;
 
 interface Props {
   tabs: DocumentTabInfo[];
@@ -18,6 +24,8 @@ interface Props {
   onRename: (id: number, name: string) => void;
   /** True while a playlist is open: Delete then takes the scene out of the playlist. */
   inPlaylist: boolean;
+  /** A Ctrl+click on a scene while a Song Map slice is selected: the slice plays this scene (see songFollow.pickScene). */
+  onPick: (id: number) => void;
 }
 
 /**
@@ -28,11 +36,16 @@ interface Props {
  * place (see useDragReorder); the X or a middle click closes it. A
  * right-click opens a menu: Rename (the name turns into a text box: Enter
  * keeps the new name, Esc does not) and Delete (in a playlist, the scene
- * goes out of the playlist; else the scene closes). Its card has a title
+ * goes out of the playlist; else the scene closes). While a slice of the
+ * Song Map is selected, Ctrl+click picks a scene for it: as long as Ctrl
+ * is held, the list shows a pick cursor, and the scene under the pointer
+ * lights up in the same color as the selected slice. Its card has a title
  * bar like the Source card's.
  */
-export function SceneList({ tabs, activeId, onSelect, onClose, onReorder, onRename, inPlaylist }: Props) {
+export function SceneList({ tabs, activeId, onSelect, onClose, onReorder, onRename, inPlaylist, onPick }: Props) {
   const drag = useDragReorder(tabs.map((tab) => tab.id), onReorder);
+  const canPick = useSyncExternalStore(subscribeFollow, sliceSelected);
+  const picking = useCtrlHeld() && canPick;
   const [menu, setMenu] = useState<{ id: number; left: number; top: number } | null>(null);
   const [renaming, setRenaming] = useState<{ id: number; value: string } | null>(null);
   const baseName = (tab: Props["tabs"][number]) => tab.fileName.replace(/\.ksage$/i, "");
@@ -51,7 +64,7 @@ export function SceneList({ tabs, activeId, onSelect, onClose, onReorder, onRena
           <h2 className="side-panel-title">Scenes</h2>
           <HelpButton topic="scene.tabs" />
         </div>
-        <ol ref={drag.listRef} className="scene-list-items" role="listbox" aria-label="Scenes">
+        <ol ref={drag.listRef} className={`scene-list-items ${picking ? "picking" : ""}`} role="listbox" aria-label="Scenes">
           {tabs.map((tab, index) => {
             const active = tab.id === activeId;
             return (
@@ -61,9 +74,13 @@ export function SceneList({ tabs, activeId, onSelect, onClose, onReorder, onRena
                 role="option"
                 aria-selected={active}
                 className={`scene-list-item ${active ? "active" : ""} ${drag.dragging === tab.id ? "dragging" : ""}`}
-                data-tip={tab.path ?? undefined}
+                data-tip={picking ? "Click to play this scene on the selected slice" : tab.path ?? undefined}
                 onPointerDown={(event) => {
                   if (event.button !== 0) return;
+                  if (event.ctrlKey && canPick) {
+                    onPick(tab.id);
+                    return;
+                  }
                   onSelect(tab.id);
                   drag.start(tab.id)(event);
                 }}

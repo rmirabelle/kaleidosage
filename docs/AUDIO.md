@@ -279,11 +279,16 @@ the analysis. The playlist then runs the show.
   choice to change the scene every 16 or 32 beats instead.
 - Show schedule (2026-10-22): with Song follow on, the scenes follow a
   fixed schedule across the whole playlist (`showSchedule.ts`) instead of
-  Lengths and new tracks. Each slice of a song map brings in the next
-  scene unless it has Keep Scene; the first slice of each song goes on with
-  the order, and after the last tab the order goes round. In an automatic
-  map, a slice at the same level as the one before it, with no hit, keeps
-  the scene. A jump (a seek, a click on a slice, a new track) brings in
+  Lengths and new tracks. Each slice of a song map has its own place in
+  the order, across all songs, and plays the scene at that place; after
+  the last tab the order goes round. Keep Scene plays the scene of the
+  slice before, and a Ctrl+click on a scene in the scene list picks that
+  scene for the selected Song Map slice; both skip the slice's own scene,
+  so no other slice moves (changed 2026-10-22; before, Keep Scene moved
+  every later slice by one scene). A picked scene follows its scene when
+  the tabs move; a closed scene's picks go back to the order. In an
+  automatic map, a slice at the same level as the one before it, with no
+  hit, joins that slice, so each automatic slice brings in a scene. A jump (a seek, a click on a slice, a new track) brings in
   that slice's scene. A tab click shows its tab until the next slice that
   changes the scene; Hold keeps the scene. While Hold is on, the slice
   that plays loops in the music too; a click on a slice with another scene

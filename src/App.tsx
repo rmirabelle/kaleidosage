@@ -405,8 +405,12 @@ export default function App() {
   }, [engine]);
 
   const writeDocs = useCallback((next: SceneDoc[]) => {
+    const before = docsRef.current;
     docsRef.current = next;
     setDocs(next);
+    /* A scene that moved or closed: the song map slices that picked it follow it, or go back to the show's order (see songFollow.moveScenes). */
+    const place = new Map(next.map((doc, index) => [doc.id, index]));
+    if (before.some((doc, index) => place.get(doc.id) !== index)) songFollow.moveScenes((index) => place.get(before[index]?.id ?? -1) ?? null);
   }, []);
 
   const selectDocId = useCallback((id: number | null) => {
@@ -1172,7 +1176,8 @@ export default function App() {
       last = time;
       const slice = sliceAt(songFollow.schedule(docsRef.current.length)[tracks.index] ?? [], time);
       if (!slice) return;
-      const run = `${tracks.index} ${slice.runStart}`;
+      /* The scene is part of the run, so a scene picked for the slice that plays comes in at once. */
+      const run = `${tracks.index} ${slice.runStart} ${slice.scene}`;
       if (run === shownRun) return;
       shownRun = run;
       const doc = docsRef.current[slice.scene];
@@ -2035,7 +2040,7 @@ export default function App() {
           */}
         <div className={`sidebar ${sceneListShown ? "with-scenes" : ""}`}>
           {sceneListShown && tracksActive && <FilesCard engine={engine} onAddTracks={() => void pickTracks()} onShowSongMap={showSongMap} />}
-          {sceneListShown && <SceneList tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} inPlaylist={playlistPath !== null} />}
+          {sceneListShown && <SceneList tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} inPlaylist={playlistPath !== null} onPick={(id) => songFollow.pickScene(docsRef.current.findIndex((doc) => doc.id === id))} />}
           {/* The left panel: the Source section, then the Designer (the effects). */}
           {engine && !startScreen && panelOpen && (
             <ControlPanel
@@ -2131,7 +2136,7 @@ export default function App() {
           <div className="midi-panel-body">
             <BottomPanelTabs tab={bottomTab} onTab={setBottomTab} onClose={closeBottomPanel} />
             {bottomTab === "midi" ? <MidiPanel engine={engine} open={midiPanelOpen} />
-              : bottomTab === "songmap" ? <SongMapPanel sceneCount={docs.length} onSlicePick={pickSlice} />
+              : bottomTab === "songmap" ? <SongMapPanel sceneCount={docs.length} activeScene={docs.findIndex((doc) => doc.id === activeId)} onSlicePick={pickSlice} />
               : <AudioPanel engine={engine} sceneName={sceneFileName} onAddTracks={() => void pickTracks()} inputTip={inputTip && midiPanelOpen} onInputTipDone={() => setInputTip(false)} />}
           </div>
         </div>

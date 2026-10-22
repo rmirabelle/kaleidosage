@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowCounterClockwise, ArrowsInLineHorizontal, CaretLeft, CaretRight, Lightning, PushPin, Scissors, Trash } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, ArrowsInLineHorizontal, CaretLeft, CaretRight, Lightning, PushPin, Scissors, Trash, X } from "@phosphor-icons/react";
 import { changeSlice, deleteSlice, mergeWithNext, moveDivider, splitSlice } from "../engine/songMapEdits";
 import { TIER_NAMES, mapOf, planSong, type MapSlice, type Tier } from "../engine/songPlan";
 import type { ScheduledSlice } from "../engine/showSchedule";
@@ -7,6 +7,7 @@ import { songFollow } from "../lib/songFollow";
 import { tracks } from "../lib/tracks";
 import { placeSeek } from "./Slider";
 import { EmptyState } from "./EmptyState";
+import { useCtrlHeld } from "./useCtrlHeld";
 
 const subscribeFollow = (listener: () => void) => songFollow.subscribe(listener);
 const followVersion = () => songFollow.version;
@@ -26,13 +27,18 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * playlist, and do nothing else. The slices (the song's parts) are each
  * colored by their level, with a red edge where a hit starts one, and
  * show the number of the scene that the show's schedule gives them (see
- * showSchedule.ts). A click selects a slice and plays its song from the
+ * showSchedule.ts): amber for a scene the user picked, bright for the
+ * scene selected in the scene list. While a slice is selected, a Ctrl+click
+ * on a scene in the scene list picks that scene for it (see
+ * songFollow.pickScene); while Ctrl is held, the selected slice shows the
+ * same amber as the scene under the pointer. A click selects a slice and plays its song from the
  * slice's start, with the slice's scene, and the map then follows the
  * song that plays again; a right-click stops the
  * song where it is; a drag of the divider between
  * two slices moves it from bar to bar. A toolbar across the top holds the
  * selected slice's level, the Slice buttons (Keep Scene, Hit, Split,
  * Merge with next, and Delete: the slice before it grows into its place),
+ * the picked scene (a click goes back to the show's order),
  * and Reset Map (the analysis's own map); the Playlist card's controls
  * play the song. Each change applies at
  * once (see songFollow.editMap) and is kept with the song's analysis, so
@@ -42,8 +48,12 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * the song's time. While the page has the keyboard focus,
  * Delete removes the selected slice and the arrow keys select another.
  */
-/** "sceneCount": the number of scenes (tabs) that the schedule goes round. "onSlicePick": a click on a slice, with its place in the schedule. */
-export function SongMapPanel({ sceneCount, onSlicePick }: { sceneCount: number; onSlicePick: (slice: ScheduledSlice) => void }) {
+/**
+ * "sceneCount": the number of scenes (tabs) that the schedule goes round.
+ * "activeScene": the tab index of the scene selected in the scene list.
+ * "onSlicePick": a click on a slice, with its place in the schedule.
+ */
+export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCount: number; activeScene: number; onSlicePick: (slice: ScheduledSlice) => void }) {
   const version = useSyncExternalStore(subscribeFollow, followVersion);
   useSyncExternalStore(subscribeTracks, tracksVersion);
   const schedule = songFollow.enabled ? songFollow.schedule(sceneCount) : [];
@@ -73,6 +83,12 @@ export function SongMapPanel({ sceneCount, onSlicePick }: { sceneCount: number; 
   const fill = useRef<HTMLDivElement>(null);
   const cap = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
+  const ctrlHeld = useCtrlHeld();
+  /* The selected slice, for a Ctrl+click in the scene list; none while the page does not show. */
+  useEffect(() => {
+    songFollow.selectSlice(analysis && slices.length ? { path, index } : null);
+  }, [analysis, path, index, slices.length]);
+  useEffect(() => () => songFollow.selectSlice(null), []);
 
   /* The frame loop reads the slices through a ref, so it need not start again on each edit. */
   /** The map while a divider is dragged (see the dividers below); it applies when the drag ends. */
@@ -184,7 +200,7 @@ export function SongMapPanel({ sceneCount, onSlicePick }: { sceneCount: number; 
                   aria-pressed={Boolean(slice.keepScene)}
                   disabled={index === 0}
                   onClick={() => apply(changeSlice(slices, index, { keepScene: !slice.keepScene }))}
-                  data-tip={index === 0 ? "The first slice has nothing before it, so there is no scene change to skip" : "Keep the scene as this slice starts: its level and hit still change the motion, but the next scene does not come in"}
+                  data-tip={index === 0 ? "The first slice has nothing before it, so there is no scene to keep" : "Keep the scene of the slice before: its level and hit still change the motion. The scene this slice had is skipped; no other slice changes"}
                 >
                   <PushPin size={15} /> Keep Scene
                 </button>
@@ -197,6 +213,11 @@ export function SongMapPanel({ sceneCount, onSlicePick }: { sceneCount: number; 
                 >
                   <Lightning size={15} /> Hit
                 </button>
+                {slice.scene !== undefined && (
+                  <button className="panel-button picked-scene" onClick={() => apply(changeSlice(slices, index, { scene: undefined }))} data-tip="You picked this scene (Ctrl+click in the scene list). Click to play the scene of the show's order again">
+                    Scene {slice.scene + 1} <X size={12} weight="bold" />
+                  </button>
+                )}
                 <button className="panel-button" onClick={() => apply(splitSlice(slices, index, analysis.downbeats, duration))} data-tip="Split this slice in two at the bar nearest its middle">
                   <Scissors size={15} /> Split
                 </button>
@@ -225,13 +246,13 @@ export function SongMapPanel({ sceneCount, onSlicePick }: { sceneCount: number; 
       </div>
       <div className="song-map-body">
         {title}
-        <div ref={strip} className="song-map-strip" data-tip="Click a slice to select it and play the song from its start; right-click to stop the song where it is">
+        <div ref={strip} className="song-map-strip" data-tip="Click a slice to select it and play the song from its start; right-click to stop the song where it is. Ctrl+click a scene in the scene list to play it on the selected slice">
           {view.map((candidate, i) => {
             const sliceEnd = view[i + 1]?.start ?? duration;
             return (
               <button
                 key={candidate.start}
-                className={`song-map-slice tier-${candidate.tier} ${i === index ? "selected" : ""} ${candidate.drop ? "drop" : ""}`}
+                className={`song-map-slice tier-${candidate.tier} ${i === index ? "selected" : ""} ${i === index && ctrlHeld ? "picking" : ""} ${candidate.drop ? "drop" : ""}`}
                 style={{ left: at(candidate.start), width: at(sliceEnd - candidate.start) }}
                 aria-pressed={i === index}
                 aria-label={`${capital(TIER_NAMES[candidate.tier])}, ${time(candidate.start)} to ${time(sliceEnd)}${candidate.drop ? ", starts with a hit" : ""}`}
@@ -249,7 +270,12 @@ export function SongMapPanel({ sceneCount, onSlicePick }: { sceneCount: number; 
               >
                 {scenes[i] && (
                   <span className="song-map-tags">
-                    <span className="song-map-scene-tag" data-tip={`Scene ${scenes[i].scene + 1}`}>{scenes[i].scene + 1}</span>
+                    <span
+                      className={`song-map-scene-tag ${scenes[i].picked ? "picked" : ""} ${scenes[i].scene === activeScene ? "current" : ""}`}
+                      data-tip={`Scene ${scenes[i].scene + 1}${scenes[i].picked ? ", picked by you" : ""}${scenes[i].scene === activeScene ? ", the scene selected in the scene list" : ""}`}
+                    >
+                      {scenes[i].scene + 1}
+                    </span>
                   </span>
                 )}
                 {(candidate.drop || candidate.keepScene) && (
