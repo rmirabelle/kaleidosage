@@ -1615,9 +1615,9 @@ export default function App() {
     return audioInput.subscribe(follow);
   }, [engine]);
 
-  /** Stop in the playlist starts the show again: the first scene, ready to play (see startShow). */
+  /** Stop in the playlist starts the show again: the first scene, ready to play (see startShow). While Hold is on, the scene and Hold stay. */
   useEffect(() => tracks.onStop(() => {
-    if (audioInput.settings.kind === "tracks" && docsRef.current.length > 0) startShow();
+    if (audioInput.settings.kind === "tracks" && docsRef.current.length > 0 && !sceneHeldRef.current) startShow();
   }), [startShow]);
 
   /**
