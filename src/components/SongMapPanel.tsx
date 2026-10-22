@@ -101,7 +101,7 @@ export function SongMapPanel({ sceneCount }: { sceneCount: number }) {
     return () => cancelAnimationFrame(frame);
   }, [analysis, path]);
 
-  /* The song's file name, in quotes, as the scene card's title shows the scene's name, with an arrow on each side to show the song before or after it. */
+  /* The song's file name, in the style of the scene card's title shows the scene's name, with an arrow on each side to show the song before or after it. */
   const title = (
     <div className="song-map-title-row">
       <button className="panel-button icon song-map-song-step" disabled={trackIndex < 1} onClick={() => showSong(-1)} data-tip="Show the map of the song before this one" aria-label="Previous song's map">
