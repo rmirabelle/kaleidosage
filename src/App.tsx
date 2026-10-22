@@ -50,6 +50,7 @@ import { panelLayout } from "./lib/panelLayout";
 import { isPlaylistCopy } from "./lib/playlistFile";
 import { tracks } from "./lib/tracks";
 import { songFollow } from "./lib/songFollow";
+import { settingButtons } from "./lib/settingButtons";
 import { sliceAt, type ScheduledSlice } from "./engine/showSchedule";
 import { helpSettings } from "./lib/helpSettings";
 import { PLAYLIST_EXTENSION, isPlaylistFile, openPlaylistFile, playlistFingerprint, readManifest, savePlaylistFile, type PlaylistAudio } from "./lib/playlistFile";
@@ -1098,6 +1099,8 @@ export default function App() {
   const tracksActive = useSyncExternalStore((listener) => audioInput.subscribe(listener), () => audioInput.settings.kind === "tracks");
   /** True while Song follow is on with the tracks as the input (see songFollow.ts). */
   const followOn = useSyncExternalStore((listener) => songFollow.subscribe(listener), () => songFollow.enabled) && tracksActive;
+  /* When the picture starts to follow the songs, the FX panel shows the settings' audio buttons, so the user sees which settings follow. */
+  useEffect(() => { if (followOn) settingButtons.set("audio", true); }, [followOn]);
   /** Hold means something with more than one scene (it keeps the scene), or while following a song (it gives the scene its own clock). */
   const holdUseful = docs.length > 1 || followOn;
   const holdUsefulRef = useRef(holdUseful);
