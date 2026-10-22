@@ -333,7 +333,11 @@ export default function App() {
     const { kind, device, gainDb, thresholdDb } = audioInput.settings;
     return { kind, device, gainDb, thresholdDb };
   }, []);
-  const playlistNow = useCallback(() => playlistFingerprint(playlistScenes(), tracks.list.map((track) => track.path), playlistAudio(), panelLayout.filesWidth), [playlistAudio, playlistScenes]);
+  /* A new song analysis is a change too: Save Playlist keeps it (see songFollow.ts). */
+  const playlistNow = useCallback(() => {
+    const paths = tracks.list.map((track) => track.path);
+    return `${playlistFingerprint(playlistScenes(), paths, playlistAudio(), panelLayout.filesWidth)} ${songFollow.analyzedCount(paths)}`;
+  }, [playlistAudio, playlistScenes]);
   const playlistChanged = useCallback(() => playlistPathRef.current !== null && playlistNow() !== playlistSavedRef.current, [playlistNow]);
   /** The playlist as it is now counts as saved. */
   const markPlaylistClean = useCallback((path: string | null) => {
@@ -796,10 +800,14 @@ export default function App() {
       /* While paused (stopped) the new scene shows at once, with no fade. */
       if (!engine.state.paused) await engine.fadeOut(fade);
       if (request !== switchRequestRef.current) return;
-      /* The new scene starts from 0, as Stop puts it (see Engine.rewind), and plays or stays paused as the scene before it did. */
+      /**
+       * The new scene starts from 0, as Stop puts it (see Engine.rewind), and plays or stays paused as the scene before it did.
+       * While the picture follows the song, it starts where the song is instead (see Engine.followAgain).
+       */
       const paused = engine.state.paused;
       switchToDoc(id);
-      engine.rewind();
+      if (engine.script) engine.followAgain();
+      else engine.rewind();
       engine.state.paused = paused;
       setPaused(paused);
     }
@@ -1353,7 +1361,7 @@ export default function App() {
         activeScene,
         filesWidth: panelLayout.filesWidth,
         trackSeconds: tracks.list.map((track) => tracks.lengthOf(track.path))
-      }, scenes, tracks.list.map((track) => track.path));
+      }, scenes, tracks.list.map((track) => track.path), tracks.list.map((track) => songFollow.analysisText(track.path)));
     } catch (error) {
       showError(`Could not save the playlist. ${String(error)}`);
       return false;
@@ -1430,6 +1438,8 @@ export default function App() {
         await openScenePath(scene);
       }
       setLoading({ title, detail: "Audio files and settings…", progress: 1 });
+      /* The song analyses the playlist kept go first, so Follow the song needs none for these tracks. */
+      opened.analyses?.forEach((text, index) => { if (text && opened.tracks[index]) songFollow.preload(opened.tracks[index], text); });
       tracks.replace(opened.tracks);
       /* The lengths the playlist kept, so the Files footer has its play time at once. */
       if (manifest.trackSeconds) tracks.setLengths(manifest.trackSeconds);

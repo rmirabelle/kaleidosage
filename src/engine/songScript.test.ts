@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compileScript, positionAt, pulseAt, speedAt, type SongAnalysis } from "./songScript";
+import { compileScript, positionAt, pulseAt, speedAt, travelAt, type SongAnalysis } from "./songScript";
 
 const RATE = 100;
 
@@ -57,6 +57,15 @@ describe("song script", () => {
   it("has no pulses in soft parts", () => {
     expect(positionAt(script, "glow", 2.005)).toBe(0);
     expect(positionAt(script, "glow", 18.515) - positionAt(script, "glow", 18.95)).toBeGreaterThan(0.15);
+  });
+
+  it("knows how far animation time has run at any time, for a jump in the song", () => {
+    /* A fine sum of the pace, 1 ms at a time, to 12 seconds. */
+    let sum = 0;
+    for (let t = 0; t < 12; t += 0.001) sum += speedAt(script, t + 0.0005) * 0.001;
+    expect(travelAt(script, 12)).toBeCloseTo(sum, 1);
+    expect(travelAt(script, 0)).toBe(0);
+    expect(travelAt(script, 19) - travelAt(script, 18)).toBeCloseTo(1.7, 1);
   });
 
   it("runs animation time slowly in soft parts and fast in loud parts", () => {

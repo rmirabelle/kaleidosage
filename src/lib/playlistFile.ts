@@ -81,9 +81,13 @@ export function playlistFingerprint(scenes: readonly string[], tracks: readonly 
   return JSON.stringify([scenes, tracks, kind, device, gainDb, thresholdDb, filesWidth ?? null]);
 }
 
-/** Writes the playlist file: the manifest, then a copy of each scene and audio file. */
-export const savePlaylistFile = (path: string, manifest: PlaylistManifest, scenes: string[], tracks: string[]) =>
-  invoke("save_playlist", { path, manifest: writeManifest(manifest), scenes, tracks });
+/**
+ * Writes the playlist file: the manifest, then a copy of each scene and
+ * audio file, and each track's song analysis (JSON, or null; see
+ * songFollow.ts), in track order.
+ */
+export const savePlaylistFile = (path: string, manifest: PlaylistManifest, scenes: string[], tracks: string[], analyses: (string | null)[] = []) =>
+  invoke("save_playlist", { path, manifest: writeManifest(manifest), scenes, tracks, analyses });
 
 /** What the Open Playlist dialog shows of a playlist, read without unpacking it (Rust: read_playlist_summary). */
 export interface PlaylistSummary {
@@ -96,6 +100,6 @@ export interface PlaylistSummary {
 
 export const readPlaylistSummary = (path: string) => invoke<PlaylistSummary>("read_playlist_summary", { path });
 
-/** Unpacks a playlist file into a temp folder: its manifest, and the unpacked scene and audio files. */
+/** Unpacks a playlist file into a temp folder: its manifest, the unpacked scene and audio files, and each track's song analysis (JSON, or null). */
 export const openPlaylistFile = (path: string) =>
-  invoke<{ manifest: string; scenes: string[]; tracks: string[] }>("open_playlist", { path });
+  invoke<{ manifest: string; scenes: string[]; tracks: string[]; analyses: (string | null)[] }>("open_playlist", { path });

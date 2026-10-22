@@ -263,7 +263,10 @@ function FollowStatusLine({ engine }: { engine: Engine | null }) {
       const now = engine.songNow;
       const part = now && engine.script?.script.plan.parts.filter((candidate) => candidate.start <= now.time).pop();
       const live = now ? ` At ${time(now.time)}${part ? `, ${part.label} (${TIER_NAMES[part.tier]})` : ""}: intensity ${Math.round(now.intensity * 100)}%, pace ×${now.pace.toFixed(2)}.` : "";
-      const text = `Following the song, ${Math.round(status.tempo)} BPM.${live} ${count === 0
+      const paths = tracks.list.map((track) => track.path);
+      const analyzed = songFollow.analyzedCount(paths);
+      const songs = paths.length > 1 ? ` ${analyzed} of ${paths.length} songs analyzed.` : "";
+      const text = `Following the song, ${Math.round(status.tempo)} BPM.${live}${songs} ${count === 0
         ? "No range follows it: give Zoom, Exposure, Bloom, Segments or another size, light or detail setting a range."
         : `${count === 1 ? "1 range follows" : `${count} ranges follow`} it (lit waveform icons); the other ranges play at its pace.`}`;
       if (line.current && line.current.textContent !== text) line.current.textContent = text;

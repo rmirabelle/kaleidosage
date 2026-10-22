@@ -2,7 +2,7 @@ import { GROUP_PARAMS, NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, createParams, cre
 import { KaleidoRenderer, type FrameValues, type ImageSource } from "./renderer";
 import { followPush, levelAbove, pushRange, pushedValue, type AudioLink, type AudioSignal } from "./audio";
 import { copyVideo, cueVideo, releaseVideo, seekVideo, syncVideo, videoLoopPlan, videoLoopTime } from "./video";
-import { FAMILIES, intensityAt, positionAt, speedAt, type SongScript } from "./songScript";
+import { FAMILIES, intensityAt, positionAt, speedAt, travelAt, type SongScript } from "./songScript";
 import { isShown } from "./submodes";
 
 /** While paused, how long the same frame values must last before the picture counts as still and frames stop (see needsDraw). */
@@ -99,6 +99,22 @@ export function juliaPoint(shape: number, edge: number): [number, number] {
  * tiling, a repeating first image is repeated past its edges, not mirrored.
  */
 export const repeatingImages = new WeakSet<object>();
+
+/**
+ * Following a song (see Engine.songStep): the largest move of the song
+ * between two frames that still counts as playing on. A move back of more
+ * than SONG_BACK is a jump too; a smaller one is the song clock's
+ * smoothing, and the picture waits for it.
+ */
+const SONG_JUMP = 0.5;
+const SONG_BACK = 0.05;
+
+/** What the picture follows (see Engine.script): the song's script, its clock, and whether it plays. */
+export interface SongSource {
+  script: SongScript;
+  time: () => number;
+  playing: () => boolean;
+}
 
 /** The effect group of each setting (see GROUP_PARAMS). */
 const GROUP_OF = new Map((Object.entries(GROUP_PARAMS) as [GroupKey, ParamKey[]][]).flatMap(([group, keys]) => keys.map((key) => [key, group] as const)));
@@ -436,9 +452,43 @@ export class Engine {
    * song's clock, and whether the song plays; or null. The app sets it.
    * A setting with an audio link follows its link, not the script.
    */
-  script: { script: SongScript; time: () => number; playing: () => boolean } | null = null;
+  get script() {
+    return this.following;
+  }
+  set script(next: SongSource | null) {
+    /* Another song: the clocks follow it from its start (see songStep). */
+    if (next?.script !== this.following?.script) this.followed = false;
+    this.following = next;
+  }
+  private following: SongSource | null = null;
   /** The song's time in this frame (see frame): read once, so every value of a frame has the same time. */
   private songTime = 0;
+  /** True once the clocks follow the song's time (see followTo); a new scene or script makes them follow again. */
+  private followed = false;
+
+  /**
+   * Puts the picture at "time" in the song, at once: the clock is the song's
+   * time, and animation time is how far the song's pace has run it by then
+   * (see travelAt), so every range is where playing would have put it. The
+   * flows that add up their own speeds (warp flow, tunnel travel, camera
+   * flight, the driver) start again from 0, as after Stop; a flow has no
+   * place to be in, so this does not show. The scene stays playing or
+   * paused; the trails start again from the picture there.
+   */
+  private followTo(time: number) {
+    const paused = this.state.paused;
+    this.rewind();
+    this.state.paused = paused;
+    this.state.clock = time;
+    this.state.time = this.speed * travelAt(this.script!.script, time);
+    this.songTime = time;
+    this.followed = true;
+  }
+
+  /** For a scene that comes in while the picture follows the song: its clocks catch up with the song in the next frame (see followTo), in place of a start from 0. */
+  followAgain() {
+    this.followed = false;
+  }
 
   /**
    * The family by which the song script moves this setting now (see
@@ -573,6 +623,12 @@ export class Engine {
 
   /** The range's value "later" real seconds from now (nothing moves while paused). */
   private rangeAhead(key: ParamKey, later: number) {
+    /* A range that follows the song is where the song will be then. */
+    const family = this.songFamily(key);
+    if (family && this.script) {
+      const ahead = this.script.playing() ? later : 0;
+      return rangeAt(this.params[key], positionAt(this.script.script, family, this.songTime + ahead));
+    }
     const moving = this.state.paused ? 0 : later;
     return liveValue(this.params[key], { ...this.state, time: this.state.time + moving * this.speed, clock: this.state.clock + moving });
   }
@@ -874,8 +930,8 @@ export class Engine {
    */
   step(elapsed: number) {
     if (!this.state.paused) this.state.clock += elapsed;
-    /* With a song script, animation time runs at the music's speed, and stands while the song does. */
-    const pace = !this.script ? 1 : this.script.playing() ? speedAt(this.script.script, this.songTime) : 0;
+    /* With a song script, "elapsed" is song time (see frame), and animation time runs at the music's speed. */
+    const pace = this.script ? speedAt(this.script.script, this.songTime) : 1;
     const music = Number.isFinite(pace) ? pace : 1;
     const animated = this.state.paused ? 0 : elapsed * this.speed * music;
     this.state.time += animated;
@@ -893,6 +949,23 @@ export class Engine {
     return animated;
   }
 
+  /**
+   * With a song script, the clocks move by the song's time, not the
+   * frame's: a paused song holds the picture, and a jump in the song (a
+   * seek, a new track, a new scene) plays the motion again to the new place
+   * (see followTo). Returns the song time to move the clocks by now.
+   */
+  private songStep() {
+    const time = this.script!.time();
+    const step = time - this.songTime;
+    if (!this.followed || step > SONG_JUMP || step < -SONG_BACK) {
+      this.followTo(time);
+      return 0;
+    }
+    this.songTime = Math.max(this.songTime, time);
+    return Math.max(0, step);
+  }
+
   /** For video export: moves each video copy to its exact place, waits for it, and uploads its frame. */
   async seekVideos() {
     for (const slot of [0, 1] as const) await Promise.all(this.placeVideo(slot, (video, target) => seekVideo(video, target)));
@@ -906,8 +979,7 @@ export class Engine {
     if (interval > 0) this.stats.frameMs += (Math.min(interval, 1000) - this.stats.frameMs) * 0.1;
     const elapsed = Math.min(interval / 1000, 0.1);
     this.lastTime = now;
-    if (this.script) this.songTime = this.script.time();
-    const animated = this.step(elapsed);
+    const animated = this.step(this.script ? this.songStep() : elapsed);
     this.glide(elapsed);
     this.followAudio(elapsed);
 

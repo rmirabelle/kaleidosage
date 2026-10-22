@@ -12,6 +12,9 @@ import type { SongAnalysis } from "../engine/songScript";
 /** The rate the samples are sent at; it must match SAMPLE_RATE in song_analysis.rs. */
 const ANALYSIS_SAMPLE_RATE = 22050;
 
+/** The analysis format that this app reads; it must match FORMAT_VERSION in song_analysis.rs. A saved analysis of another version is made again. */
+export const ANALYSIS_VERSION = 2;
+
 /** Decodes a track to mono at ANALYSIS_SAMPLE_RATE and analyzes it. Takes a few seconds per song. */
 export async function analyzeSong(path: string): Promise<SongAnalysis> {
   /* The whole file: the "video" stream that plays it sends only chunks of 2 MB. */

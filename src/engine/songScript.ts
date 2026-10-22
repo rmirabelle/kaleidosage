@@ -132,6 +132,8 @@ export interface SongScript {
   riser: Float32Array;
   pause: Float32Array;
   hit: Float32Array;
+  /** At "rate": the song's pace (see speedAt) added up from the start, so a jump to any time knows how far animation time has run (see travelAt). */
+  travel: Float32Array;
 }
 
 /**
@@ -217,9 +219,10 @@ export function compileScript(analysis: SongAnalysis): SongScript {
   /* A fast song gets shorter pulses, so one pulse has ended before the next beat. */
   const spacing = analysis.tempo > 0 ? 60 / analysis.tempo : 0.5;
   const plan = planSong(analysis);
-  return {
+  const script: SongScript = {
     plan,
     ...planCurves(plan, curves.intensity.length, rate, analysis.tempo),
+    travel: new Float32Array(0),
     duration: analysis.duration,
     tempo: analysis.tempo,
     rate,
@@ -229,7 +232,17 @@ export function compileScript(analysis: SongAnalysis): SongScript {
     pulses,
     release: Math.min(PULSE_RELEASE, 0.4 * spacing)
   };
+  /* The pace added up point by point (the trapezoid rule), at the curve rate. */
+  const travel = new Float32Array(curves.intensity.length);
+  for (let i = 1; i < travel.length; i++) {
+    travel[i] = travel[i - 1] + (speedAt(script, (i - 1) / rate) + speedAt(script, i / rate)) / (2 * rate);
+  }
+  script.travel = travel;
+  return script;
 }
+
+/** How far animation time has run by "time", at the scene's own speed 1: the song's pace added up from its start. */
+export const travelAt = (script: SongScript, time: number) => sample(script.travel, script.rate, time);
 
 /** A curve's value at "time" seconds, between its points. */
 function sample(curve: Float32Array, rate: number, time: number) {
