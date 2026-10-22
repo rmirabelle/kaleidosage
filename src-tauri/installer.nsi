@@ -647,6 +647,27 @@ Section Install
 
   !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
 
+  /**
+   * Up to 0.10.0 the product name was "KaleidoSage". The name sets the
+   * install folder, the shortcuts and the uninstall entry, so an install
+   * under the old name stays beside this one. Remove it silently before the
+   * new files and shortcuts go in. App data stays: it is kept under the
+   * bundle identifier, and a silent uninstall does not delete it.
+   */
+  ReadRegStr $R0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\KaleidoSage" "InstallLocation"
+  ${If} $R0 != ""
+    ; InstallLocation is stored in quotes
+    StrCpy $R1 $R0 1
+    ${If} $R1 == '"'
+      StrCpy $R0 $R0 -1 1
+    ${EndIf}
+    ${If} ${FileExists} "$R0\uninstall.exe"
+      ExecWait '"$R0\uninstall.exe" /S _?=$R0'
+      Delete "$R0\uninstall.exe"
+      RMDir "$R0"
+    ${EndIf}
+  ${EndIf}
+
   ; Copy main executable
   File "${MAINBINARYSRCPATH}"
 

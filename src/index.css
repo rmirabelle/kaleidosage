@@ -1362,7 +1362,7 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
   background-image: radial-gradient(rgba(75,118,247,.18) 1px, transparent 1px);
   background-size: 22px 22px;
 }
-.start-glow { position: absolute; z-index: -1; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 520px; height: 420px; background: radial-gradient(closest-side, rgba(75,118,247,.16), rgba(75,118,247,.10) 30%, rgba(75,118,247,.04) 60%, rgba(75,118,247,0)); }
+.start-glow { position: absolute; z-index: -1; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 520px; height: 420px; background: radial-gradient(closest-side, rgba(75,118,247,.32), rgba(75,118,247,.20) 30%, rgba(75,118,247,.08) 60%, rgba(75,118,247,0)); }
 /* The app icon stands alone, with no frame around it. */
 .start-icon { position: relative; z-index: 1; width: 128px; height: 128px; display: grid; place-items: center; }
 .start-icon img { width: 128px; height: 128px; object-fit: contain; }

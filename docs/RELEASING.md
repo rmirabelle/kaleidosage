@@ -15,7 +15,10 @@ and the other XSage desktop applications:
   IconSage (`D:/Code/IconSage/src-tauri/installer.nsi`) with one change, the same
   as Image Sage's and DB Sage's: in passive mode (`/P`), `PageLeaveReinstall`
   takes the first choice (uninstall the old version, keep app data) without
-  showing the page.
+  showing the page. KaleidoSage adds a second change of its own: the product
+  name was "KaleidoSage" up to 0.10.0 and is "Kaleido Sage" now, so the
+  install section first silently uninstalls an install found under the old
+  uninstall key (app data is kept).
 - `src-tauri/icons/icon.ico` must be both the bundle icon and a bundled resource.
 - The installer copies the icon to `C:\Users\Public\${PRODUCTNAME}\icon.ico`, then
   assigns that explicit path and the AppUserModelId to Start Menu and optional
