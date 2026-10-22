@@ -2187,4 +2187,5 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .song-map-field { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
 .song-map-field .panel-buttons { border-radius: 5px; }
 .song-map-field.song-map-slice-tools { margin-left: auto; }
+.song-map-toolbar .panel-buttons.song-map-checks { border-radius: 5px; }
 .song-map-field-note { color: #c3c7d0; }

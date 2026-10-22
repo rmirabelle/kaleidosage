@@ -175,14 +175,27 @@ export function SongMapPanel({ sceneCount }: { sceneCount: number }) {
               </div>
             </div>
             <span className="song-map-toolbar-divider" />
-            <label className="song-map-field" data-tip={index === 0 ? "The first slice has nothing before it, so there is no scene change to skip" : "Keep the scene as this slice starts: its level and hit still change the motion, but the next scene does not come in"}>
-              <input type="checkbox" checked={Boolean(slice.keepScene)} disabled={index === 0} onChange={(event) => apply(changeSlice(slices, index, { keepScene: event.target.checked }))} />
-              <span className="song-map-field-note">Keep Scene</span>
-            </label>
-            <label className="song-map-field" data-tip={index === 0 ? "The first slice has nothing before it, so it cannot start with a hit" : "Hit: the picture rises before this slice, and changes hard as it starts; then the slice moves at its level"}>
-              <input type="checkbox" checked={slice.drop} disabled={index === 0} onChange={(event) => apply(changeSlice(slices, index, { drop: event.target.checked }))} />
-              <span className="song-map-field-note">Hit</span>
-            </label>
+            {/* Keep Scene and Hit: buttons that stay pressed while they are on. */}
+            <div className="panel-buttons song-map-checks">
+              <button
+                className={`panel-button text-only ${slice.keepScene ? "active" : ""}`}
+                aria-pressed={Boolean(slice.keepScene)}
+                disabled={index === 0}
+                onClick={() => apply(changeSlice(slices, index, { keepScene: !slice.keepScene }))}
+                data-tip={index === 0 ? "The first slice has nothing before it, so there is no scene change to skip" : "Keep the scene as this slice starts: its level and hit still change the motion, but the next scene does not come in"}
+              >
+                Keep Scene
+              </button>
+              <button
+                className={`panel-button text-only ${slice.drop ? "active" : ""}`}
+                aria-pressed={slice.drop}
+                disabled={index === 0}
+                onClick={() => apply(changeSlice(slices, index, { drop: !slice.drop }))}
+                data-tip={index === 0 ? "The first slice has nothing before it, so it cannot start with a hit" : "Hit: the picture rises before this slice, and changes hard as it starts; then the slice moves at its level"}
+              >
+                Hit
+              </button>
+            </div>
             <span className="song-map-toolbar-divider" />
           </>
         )}
