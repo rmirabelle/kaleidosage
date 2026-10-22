@@ -2179,11 +2179,12 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .song-map-toolbar-divider { align-self: stretch; width: 1px; margin: -8px 0; background: #30343f; }
 /* The status bar above the footer: the selected slice, where it is, and its length. */
 .song-map-status { flex: none; margin-top: auto; display: flex; justify-content: space-between; gap: 12px; min-height: 18px; padding: 6px 20px; border-top: 1px solid #30343f; color: #9ca1af; background: #1d2029; font-size: 11px; font-variant-numeric: tabular-nums; }
-.panel-button.song-map-reset { margin-left: auto; border: 1px solid #474c5e; border-radius: 5px; background: #30343f; }
+.panel-button.song-map-reset { border: 1px solid #474c5e; border-radius: 5px; background: #30343f; }
 /* The scrub bar under the map: the map's full width. */
 .slider.playlist-seek.song-map-scrub { flex: none; width: 100%; margin-top: 12px; }
 /* Its own handle is unseen, as on the Playlist bar: the fader cap shows the place (see placeSeek). */
 .slider.song-map-scrub input[type=range]::-webkit-slider-thumb { width: 10px; height: 18px; margin-top: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
 .song-map-field { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
 .song-map-field .panel-buttons { border-radius: 5px; }
+.song-map-field.song-map-slice-tools { margin-left: auto; }
 .song-map-field-note { color: #c3c7d0; }

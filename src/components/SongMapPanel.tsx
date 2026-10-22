@@ -30,9 +30,10 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * song that plays again; a right-click stops the
  * song where it is; a drag of the divider between
  * two slices moves it from bar to bar. A toolbar across the top holds the
- * selected slice's level, Hit and Keep Scene, Split, Merge with next and
- * Delete (the slice before it grows into its place), then Reset (the
- * analysis's own map); the Playlist card's controls play the song. Each change applies at
+ * selected slice's level, Keep Scene and Hit, Reset Map (the analysis's
+ * own map), and on the right the Slice buttons: Split, Merge with next and
+ * Delete (the slice before it grows into its place); the Playlist card's
+ * controls play the song. Each change applies at
  * once (see songFollow.editMap) and is kept with the song's analysis, so
  * Save Playlist keeps it. Under the map, a bar the width of the map moves
  * in the song; the song's file name is above the map, and a status bar at
@@ -183,6 +184,14 @@ export function SongMapPanel({ sceneCount }: { sceneCount: number }) {
               <span className="song-map-field-note">Hit</span>
             </label>
             <span className="song-map-toolbar-divider" />
+          </>
+        )}
+        <button className="panel-button song-map-reset" disabled={!analysis.mapEdits} onClick={() => songFollow.editMap(path, null)} data-tip="Give back the map that the analysis found">
+          <ArrowCounterClockwise size={14} /> Reset Map
+        </button>
+        {slice && (
+          <div className="song-map-field song-map-slice-tools">
+            <span>Slice</span>
             <div className="panel-buttons">
               <button className="panel-button" onClick={() => apply(splitSlice(slices, index, analysis.downbeats, duration))} data-tip="Split this slice in two at the bar nearest its middle">
                 <Scissors size={15} /> Split
@@ -202,11 +211,8 @@ export function SongMapPanel({ sceneCount }: { sceneCount: number }) {
                 <Trash size={15} /> Delete
               </button>
             </div>
-          </>
+          </div>
         )}
-        <button className="panel-button song-map-reset" disabled={!analysis.mapEdits} onClick={() => songFollow.editMap(path, null)} data-tip="Give back the map that the analysis found">
-          <ArrowCounterClockwise size={14} /> Reset
-        </button>
       </div>
       <div className="song-map-body">
         {title}
