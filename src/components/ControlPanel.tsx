@@ -18,6 +18,7 @@ import { Dropdown } from "./Dropdown";
 import { MidiIcon } from "./MidiIcon";
 import { RedDice } from "./RedDice";
 import { useMidi } from "./useMidi";
+import { useSceneHoldOnly } from "./SourcePanel";
 import { useParamRows } from "./useParamRows";
 import { help } from "../help/topics";
 import { HelpButton } from "./HelpButton";
@@ -74,6 +75,7 @@ const CAMERA_REPEATS = [[0, "Mirror"], [1, "Tile"], [2, "None"]] as const;
 /** The left panel: the Source section, then the Designer: its toolbar, the scene length, and the effect groups. */
 
 export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, transport, onWork, driverVideoName, onPickDriverVideo, onNeedAudioInput }: Props) {
+  const holdOnly = useSceneHoldOnly();
   const row = useParamRows(engine);
   /** True while MIDI holds any range: the Effects header then shows a play button that plays them all again. */
   const [anyHeld, setAnyHeld] = useState(engine.anyHeld);
@@ -429,8 +431,10 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
             </div>
           )}
         </div>
+        {/* In Follow mode the scene's controls are one Scene Hold button, at the bottom of this card, under the list (see SceneTransport). */}
+        {holdOnly && transport}
       </section>
-      {transport}
+      {!holdOnly && transport}
     </aside>
   );
 }

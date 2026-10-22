@@ -143,10 +143,17 @@ const SCRUB_STEPS = 1000;
  *
  * While Song follow is on with music in the Playlist, the Playlist card's
  * controls and the Song Map run the show, so in place of this card the
- * left panel ends in one full-width Scene Hold button, under a divider,
- * below the FX card (whose list scrolls on its own). A paused scene plays again as that starts, as
+ * FX card ends in one full-width Scene Hold button, under a divider, below
+ * its list (which scrolls on its own). A paused scene plays again as that starts, as
  * no Play button is left to start it.
  */
+/** True while Song follow is on with music in the Playlist: the scene's controls are then one Scene Hold button, at the bottom of the FX card (see ControlPanel). */
+export function useSceneHoldOnly() {
+  const enabled = useSyncExternalStore((listener) => songFollow.subscribe(listener), () => songFollow.enabled);
+  const count = useSyncExternalStore((listener) => tracks.subscribe(listener), () => tracks.list.length);
+  return enabled && count > 0;
+}
+
 export function SceneTransport({ engine, paused, onTogglePause, onStop, show, autoNext, held, onToggleHold }: {
   engine: Engine;
   paused: boolean;
@@ -173,7 +180,7 @@ export function SceneTransport({ engine, paused, onTogglePause, onStop, show, au
   heldRef.current = held;
   /** The song the picture follows, or null; only a change renders again (React skips a set to the same value). */
   const [song, setSong] = useState<SongScript | null>(null);
-  const spaceRunsSong = useSyncExternalStore((listener) => songFollow.subscribe(listener), () => songFollow.enabled) && tracks.list.length > 0;
+  const spaceRunsSong = useSceneHoldOnly();
   const songRef = useRef(song);
   songRef.current = song;
   /* Only as Song follow starts: a later Pause is the user's own. */
