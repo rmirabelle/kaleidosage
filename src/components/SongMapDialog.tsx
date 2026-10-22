@@ -31,10 +31,10 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * at once (see songFollow.editMap) and is kept with the song's analysis,
  * so Save Playlist keeps it. Reset to automatic gives back the analysis's
  * own map. A toolbar across the top holds every control: Stop, Play or
- * Pause and Play slice (from the selected slice's start) with the song's
- * time, then the selected slice's controls, then Reset. Under the map, a
- * bar the width of the map moves in the song. A status bar above the
- * footer shows which slice is selected, where it is, and how long it is. Delete removes the selected
+ * Pause and Play slice (from the selected slice's start), then the
+ * selected slice's controls, then Reset. Under the map, a bar the width of
+ * the map moves in the song. A status bar above the footer shows which
+ * slice is selected, where it is and how long it is, and the song's time. Delete removes the selected
  * slice, the arrow keys select another, Space plays or pauses, and Esc
  * closes.
  */
@@ -151,7 +151,6 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
               <Play size={14} weight="fill" /> Play slice
             </button>
           </div>
-          <span ref={clock} className="playlist-transport-time song-map-clock" />
           <span className="song-map-toolbar-divider" />
           {slice && (
             <>
@@ -249,6 +248,7 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
         </div>
         <div className="song-map-status" aria-live="polite">
           {slice && <span>Slice {index + 1} of {slices.length} · {time(slice.start)} – {time(end)} · {Math.round(end - slice.start)} s</span>}
+          <span ref={clock} className="song-map-clock" />
         </div>
         <footer className="about-dialog-actions song-map-footer">
           <button className="button primary" onClick={onClose}>Done</button>
