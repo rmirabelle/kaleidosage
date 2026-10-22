@@ -45,3 +45,18 @@ export function splitSlice(slices: readonly MapSlice[], index: number, downbeats
   const split = inside.reduce((best, time) => (Math.abs(time - target) < Math.abs(best - target) ? time : best));
   return [...slices.slice(0, index + 1), { ...slice, start: split, drop: false }, ...slices.slice(index + 1)];
 }
+
+/**
+ * Moves the divider at the start of slice "index" to the bar start nearest
+ * "at": the slice before it and this slice change size, and each keeps at
+ * least one bar. The first slice has no divider at its start.
+ */
+export function moveDivider(slices: readonly MapSlice[], index: number, downbeats: readonly number[], duration: number, at: number): MapSlice[] {
+  if (index < 1 || index >= slices.length) return [...slices];
+  const from = slices[index - 1].start;
+  const to = slices[index + 1]?.start ?? duration;
+  const inside = downbeats.filter((time) => time > from + 0.01 && time < to - 0.01);
+  if (inside.length === 0) return [...slices];
+  const place = inside.reduce((best, time) => (Math.abs(time - at) < Math.abs(best - at) ? time : best));
+  return slices.map((slice, i) => (i === index ? { ...slice, start: place } : slice));
+}

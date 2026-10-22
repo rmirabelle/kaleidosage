@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowCounterClockwise, ArrowsInLineHorizontal, MapTrifold, Play, Scissors, Trash, X } from "@phosphor-icons/react";
-import { changeSlice, deleteSlice, mergeWithNext, splitSlice } from "../engine/songMapEdits";
+import { changeSlice, deleteSlice, mergeWithNext, moveDivider, splitSlice } from "../engine/songMapEdits";
 import { TIER_NAMES, mapOf, planSong, type MapSlice, type Tier } from "../engine/songPlan";
 import { songFollow } from "../lib/songFollow";
 import { tracks } from "../lib/tracks";
@@ -25,7 +25,8 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
 /**
  * The song map editor: a large map of one song's slices (its parts), each
  * colored by its level, with a red edge where a drop starts it. A click
- * selects a slice; a double-click splits it at that bar. For the selected
+ * selects a slice; a double-click splits it at that bar; a drag of the
+ * divider between two slices moves it from bar to bar. For the selected
  * slice: its level, its name and its drop, and Split, Merge with next and
  * Delete (the slice before it grows into its place). Each change applies
  * at once (see songFollow.editMap) and is kept with the song's analysis,
@@ -57,8 +58,11 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
   useEffect(() => { dialog.current?.focus(); }, []);
 
   /* The frame loop reads the slices through a ref, so it need not start again on each edit. */
-  const slicesRef = useRef(slices);
-  slicesRef.current = slices;
+  /** The map while a divider is dragged (see the dividers below); it applies when the drag ends. */
+  const [draft, setDraft] = useState<MapSlice[] | null>(null);
+  const view = draft ?? slices;
+  const slicesRef = useRef(view);
+  slicesRef.current = view;
   /* The playhead follows the song in each animation frame, while this song plays, and the slice it is in gets a subtle highlight. */
   useEffect(() => {
     let frame = 0;
@@ -204,8 +208,8 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
         </div>
         <div className="song-map-body">
           <div ref={strip} className="song-map-strip" data-tip="Click a slice to select it; double-click to split it at that bar">
-            {slices.map((candidate, i) => {
-              const sliceEnd = slices[i + 1]?.start ?? duration;
+            {view.map((candidate, i) => {
+              const sliceEnd = view[i + 1]?.start ?? duration;
               return (
                 <button
                   key={candidate.start}
@@ -226,6 +230,37 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
               );
             })}
             {bars.map((bar) => <i key={bar} className="song-map-bar" style={{ left: at(bar) }} />)}
+            {/* A divider between two slices: a drag moves it from bar to bar, and both slices change size. */}
+            {view.slice(1).map((candidate, k) => (
+              <div
+                key={`divider-${k}`}
+                className="song-map-divider"
+                style={{ left: at(candidate.start) }}
+                data-tip="Drag to move this divider: both slices change size"
+                onPointerDown={(event) => {
+                  if (event.button !== 0) return;
+                  event.preventDefault();
+                  const handle = event.currentTarget;
+                  handle.setPointerCapture(event.pointerId);
+                  const base = slices;
+                  let latest = base;
+                  const move = (moveEvent: PointerEvent) => {
+                    latest = moveDivider(base, k + 1, analysis.downbeats, duration, timeAt(moveEvent));
+                    setDraft(latest);
+                  };
+                  const end = () => {
+                    handle.removeEventListener("pointermove", move);
+                    handle.removeEventListener("pointerup", end);
+                    handle.removeEventListener("lostpointercapture", end);
+                    setDraft(null);
+                    if (latest !== base && latest[k + 1].start !== base[k + 1].start) apply(latest);
+                  };
+                  handle.addEventListener("pointermove", move);
+                  handle.addEventListener("pointerup", end);
+                  handle.addEventListener("lostpointercapture", end);
+                }}
+              />
+            ))}
             <div ref={playhead} className="song-map-playhead" />
           </div>
           <div className="slider playlist-seek song-map-scrub" data-tip="Drag to move in the song">

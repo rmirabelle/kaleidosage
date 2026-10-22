@@ -2159,6 +2159,10 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .song-map-slice-name { font-size: 12px; font-weight: 700; white-space: nowrap; }
 .song-map-slice-level { font-size: 10px; opacity: .8; white-space: nowrap; }
 .song-map-bar { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.1); pointer-events: none; }
+/* A slice divider's grab zone: 10px wide, centered on the divider; it lights while hovered or dragged. */
+.song-map-divider { position: absolute; z-index: 3; top: 0; bottom: 0; width: 10px; margin-left: -5px; cursor: col-resize; touch-action: none; }
+.song-map-divider::after { content: ""; position: absolute; top: 0; bottom: 0; left: 4px; width: 2px; background: transparent; }
+.song-map-divider:hover::after, .song-map-divider:active::after { background: rgba(255,255,255,.75); }
 .song-map-playhead { position: absolute; z-index: 2; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 6px rgba(255,255,255,.7); pointer-events: none; }
 .song-map-ruler { position: relative; height: 16px; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 .song-map-ruler span { position: absolute; transform: translateX(-50%); }

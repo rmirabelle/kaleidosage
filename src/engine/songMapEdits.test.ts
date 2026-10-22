@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { changeSlice, deleteSlice, mergeWithNext, splitSlice } from "./songMapEdits";
+import { changeSlice, deleteSlice, mergeWithNext, moveDivider, splitSlice } from "./songMapEdits";
 import { mapOf, planSong, type MapSlice } from "./songPlan";
 import type { SongAnalysis } from "./songScript";
 
@@ -27,6 +27,15 @@ describe("song map edits", () => {
   it("joins a slice with the next one", () => {
     expect(mergeWithNext(slices, 1)).toEqual([slices[0], slices[1]]);
     expect(mergeWithNext(slices, 2)).toEqual(slices);
+  });
+
+  it("moves a divider to the nearest bar start, and keeps a bar on each side", () => {
+    expect(moveDivider(slices, 1, downbeats, 30, 13.1).map((slice) => slice.start)).toEqual([0, 14, 20]);
+    /* Past the next divider: it stops a bar before it. */
+    expect(moveDivider(slices, 1, downbeats, 30, 25).map((slice) => slice.start)).toEqual([0, 18, 20]);
+    /* Before the slice before it: it stops a bar after its start. */
+    expect(moveDivider(slices, 1, downbeats, 30, -5).map((slice) => slice.start)).toEqual([0, 2, 20]);
+    expect(moveDivider(slices, 0, downbeats, 30, 5)).toEqual(slices);
   });
 
   it("splits a slice at the bar start nearest the place, or the middle", () => {
