@@ -472,6 +472,10 @@ export class Engine {
   private get gated() {
     return this.musicGate !== null && !this.musicGate();
   }
+  /** True while the picture stands still: the scene is paused, or the music gate holds it (a stopped playlist). */
+  get still() {
+    return this.state.paused || this.gated;
+  }
   /** True once the clocks follow the song's time (see followTo); a new scene or script makes them follow again. */
   private followed = false;
 

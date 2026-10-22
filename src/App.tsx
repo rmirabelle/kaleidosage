@@ -800,8 +800,8 @@ export default function App() {
     if (!auto) holdScene(false);
     /* A click on the shown scene's own tab keeps it, as a pick of the user. */
     if (id !== activeIdRef.current) {
-      /* While paused (stopped) the new scene shows at once, with no fade. */
-      if (!engine.state.paused) await engine.fadeOut(fade);
+      /* While the picture stands still (paused, or waiting for stopped music) the new scene shows at once, with no fade. */
+      if (!engine.still) await engine.fadeOut(fade);
       if (request !== switchRequestRef.current) return;
       /**
        * The new scene starts from 0, as Stop puts it (see Engine.rewind), and plays or stays paused as the scene before it did.
