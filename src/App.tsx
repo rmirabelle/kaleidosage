@@ -1187,14 +1187,18 @@ export default function App() {
   }, [engine, tracksActive]);
 
   /**
-   * A click on a slice of the Song Map (see SongMapPanel): while Hold is on
-   * and the slice's scene is not the one shown, Hold goes off and the
-   * slice's scene comes in, as the schedule brings it in.
+   * A click on a slice of the Song Map (see SongMapPanel): when the slice's
+   * scene is not the one shown, it comes in with its effect groups closed;
+   * while Hold is on, Hold goes off and the scene comes in here, as the
+   * schedule brings it in (else the show's frame loop brings it in).
    */
   const pickSlice = useCallback((slice: ScheduledSlice) => {
-    if (!sceneHeldRef.current) return;
     const doc = docsRef.current[slice.scene];
     if (!doc || doc.id === activeIdRef.current) return;
+    /* The slice's scene comes in with its effect groups closed. */
+    const stored = storedRef.current.get(doc.id);
+    if (stored) stored.openGroup = null;
+    if (!sceneHeldRef.current) return;
     holdScene(false);
     const tempo = songFollow.script?.tempo ?? 0;
     const cut = slice.runStart === slice.start && slice.drop;
