@@ -2038,7 +2038,7 @@ export default function App() {
           * its own (see .sidebar), and the left panel stands alone.
           */}
         <div className={`sidebar ${sceneListShown ? "with-scenes" : ""}`}>
-          {sceneListShown && tracksActive && <FilesCard engine={engine} onAddTracks={() => void pickTracks()} />}
+          {sceneListShown && tracksActive && <FilesCard onAddTracks={() => void pickTracks()} />}
           <div className="sidebar-stack">
             <div className="sidebar-columns">
               {sceneListShown && <SceneList tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} inPlaylist={playlistPath !== null} onPick={(id) => songFollow.pickScene(docsRef.current.findIndex((doc) => doc.id === id))} />}

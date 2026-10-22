@@ -4,7 +4,6 @@ import { CaretDoubleLeft, CaretDoubleRight, Plus, SpeakerHigh, Trash, Waveform, 
 import { MediaIcon } from "./MediaIcon";
 import { placeSeek } from "./Slider";
 import { FLOOR_DB } from "../engine/audio";
-import type { Engine } from "../engine/engine";
 import { THRESHOLD_DB, audioInput } from "../lib/audioInput";
 import { panelLayout } from "../lib/panelLayout";
 import { formatPlayTime, tracks } from "../lib/tracks";
@@ -44,7 +43,7 @@ function followTip(enabled: boolean, status: FollowStatus) {
  * toolbar at the bottom runs the music on its own (see PlaylistTransport);
  * the controls on the picture run the scene.
  */
-export function FilesCard({ engine, onAddTracks }: { engine: Engine | null; onAddTracks: () => void }) {
+export function FilesCard({ onAddTracks }: { onAddTracks: () => void }) {
   useSyncExternalStore(subscribeTracks, tracksVersion);
   useSyncExternalStore(subscribeFollow, followVersion);
   const width = useSyncExternalStore(panelLayout.subscribe, () => panelLayout.filesWidth);
@@ -126,7 +125,7 @@ export function FilesCard({ engine, onAddTracks }: { engine: Engine | null; onAd
             )}
           </div>
           {count > 0 && <FilesFooter count={count} />}
-          <PlaylistTransport count={count} engine={engine} />
+          <PlaylistTransport count={count} />
         </section>
       </aside>
       <FilesSplitter />
@@ -178,7 +177,7 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * through React state; a drag on the bar seeks. While the picture follows
  * the song, Space and Shift+Space run these controls (see App).
  */
-function PlaylistTransport({ count, engine }: { count: number; engine: Engine | null }) {
+function PlaylistTransport({ count }: { count: number }) {
   const bar = useRef<HTMLInputElement>(null);
   const fill = useRef<HTMLDivElement>(null);
   const cap = useRef<HTMLDivElement>(null);
@@ -244,35 +243,17 @@ function PlaylistTransport({ count, engine }: { count: number; engine: Engine | 
         </div>
         <span ref={clock} className="playlist-transport-time" />
       </div>
-      <FollowStatusLine engine={engine} />
+      <FollowStatusLine />
     </div>
   );
 }
 
-/**
- * Under the play toolbar while Song follow is on: "Analyzing" while the
- * song's analysis runs, and a note while Hold keeps the scene. While the
- * picture follows the song, it is empty (and hidden). The note is drawn in
- * each frame, as Hold can change at any time.
- */
-function FollowStatusLine({ engine }: { engine: Engine | null }) {
+/** Under the play toolbar while Song follow is on: "Analyzing" while the song's analysis runs, else nothing. */
+function FollowStatusLine() {
   useSyncExternalStore(subscribeFollow, followVersion);
-  const line = useRef<HTMLParagraphElement>(null);
   const { enabled, status } = songFollow;
-  useEffect(() => {
-    if (!engine || status.state !== "ready") return;
-    let frame = 0;
-    const draw = () => {
-      /* Hold gives the scene its own clock (see holdScene in App): the song does not lead. */
-      const text = engine.script ? "" : "Hold is on: the scene plays on its own. Play the music, or click Hold, to follow the song again.";
-      if (line.current && line.current.textContent !== text) line.current.textContent = text;
-      frame = requestAnimationFrame(draw);
-    };
-    frame = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(frame);
-  }, [engine, status]);
-  if (!enabled || status.state === "off" || status.state === "error") return null;
-  return <p ref={line} className="follow-status">{status.state === "analyzing" ? `Analyzing ${status.name}…` : ""}</p>;
+  if (!enabled || status.state !== "analyzing") return null;
+  return <p className="follow-status">Analyzing {status.name}…</p>;
 }
 
 /** The place of a loudness on the meter, from FLOOR_DB (0) to 0 dBFS (1). */
