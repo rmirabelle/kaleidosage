@@ -183,7 +183,7 @@ function MapButton() {
         className={`panel-button icon ${open ? "active" : ""}`}
         disabled={!ready}
         onClick={() => setOpen(true)}
-        data-tip={ready ? "Edit the song map: the song's slices, their levels, names and drops" : "Song map: turn on Song follow and play a song first"}
+        data-tip={ready ? "Edit the song map: the song's slices, their levels and hits" : "Song map: turn on Song follow and play a song first"}
         aria-label="Edit the song map"
       >
         <MapTrifold size={16} />

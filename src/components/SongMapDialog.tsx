@@ -20,10 +20,10 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
 
 /**
  * The song map editor: a large map of one song's slices (its parts), each
- * colored by its level, with a red edge where a drop starts it. A click
+ * colored by its level, with a red edge where a hit (a drop) starts it. A click
  * selects a slice; a double-click splits it at that bar; a drag of the
  * divider between two slices moves it from bar to bar. For the selected
- * slice: its level, its drop, and Keep scene (the slice starts with no
+ * slice: its level, its hit, and Keep scene (the slice starts with no
  * change of scene), and Split, Merge with next and
  * Delete (the slice before it grows into its place). Each change applies
  * at once (see songFollow.editMap) and is kept with the song's analysis,
@@ -170,11 +170,11 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
                   ))}
                 </div>
               </div>
-              <label className="song-map-field" data-tip={index === 0 ? "The first slice has nothing before it, so it cannot start with a drop" : "On a drop the picture rises before it, and changes hard on it"}>
+              <label className="song-map-field" data-tip={index === 0 ? "The first slice has nothing before it, so it cannot start with a hit" : "Hit: the picture rises before this slice, and changes hard as it starts; then the slice moves at its level"}>
                 <input type="checkbox" checked={slice.drop} disabled={index === 0} onChange={(event) => apply(changeSlice(slices, index, { drop: event.target.checked }))} />
-                <span className="song-map-field-note">Drop</span>
+                <span className="song-map-field-note">Hit</span>
               </label>
-              <label className="song-map-field" data-tip={index === 0 ? "The first slice has nothing before it, so there is no scene change to skip" : "Keep the scene as this slice starts: its level and drop still change the motion, but the next scene does not come in"}>
+              <label className="song-map-field" data-tip={index === 0 ? "The first slice has nothing before it, so there is no scene change to skip" : "Keep the scene as this slice starts: its level and hit still change the motion, but the next scene does not come in"}>
                 <input type="checkbox" checked={Boolean(slice.keepScene)} disabled={index === 0} onChange={(event) => apply(changeSlice(slices, index, { keepScene: event.target.checked }))} />
                 <span className="song-map-field-note">Keep scene</span>
               </label>
@@ -213,7 +213,7 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
                   className={`song-map-slice tier-${candidate.tier} ${i === index ? "selected" : ""} ${candidate.drop ? "drop" : ""}`}
                   style={{ left: at(candidate.start), width: at(sliceEnd - candidate.start) }}
                   aria-pressed={i === index}
-                  aria-label={`${capital(TIER_NAMES[candidate.tier])}, ${time(candidate.start)} to ${time(sliceEnd)}${candidate.drop ? ", starts with a drop" : ""}`}
+                  aria-label={`${capital(TIER_NAMES[candidate.tier])}, ${time(candidate.start)} to ${time(sliceEnd)}${candidate.drop ? ", starts with a hit" : ""}`}
                   onClick={() => setSelected(i)}
                   onDoubleClick={(event) => {
                     apply(splitSlice(slices, i, analysis.downbeats, duration, timeAt(event)));
@@ -222,7 +222,7 @@ export function SongMapDialog({ path, name, onClose }: { path: string; name: str
                 >
                   {(candidate.drop || candidate.keepScene) && (
                     <span className="song-map-tags">
-                      {candidate.drop && <span className="song-map-drop-tag">Drop</span>}
+                      {candidate.drop && <span className="song-map-drop-tag">Hit</span>}
                       {candidate.keepScene && <span className="song-map-keep-tag">Same scene</span>}
                     </span>
                   )}

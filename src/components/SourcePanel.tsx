@@ -210,7 +210,7 @@ export function SceneTransport({ engine, paused, onTogglePause, onStop, show, au
       {show && (
         <div className="scene-countdown-row">
           <span className="audio-meter-well scene-countdown" data-tip={song
-            ? "The time to the next scene: the song's next drop or change of level. Yellow: 10 seconds left; red: 5."
+            ? "The time to the next scene: the song's next hit or change of level. Yellow: 10 seconds left; red: 5."
             : "The time to the next scene: the end of the Length, or a new track when that comes first. Yellow: 10 seconds left; red: 5."}>
             <i ref={countdown} />
           </span>
