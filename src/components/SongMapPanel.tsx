@@ -175,7 +175,7 @@ export function SongMapPanel({ sceneCount }: { sceneCount: number }) {
               </div>
             </div>
             {/* The selected slice: Keep Scene and Hit stay pressed while they are on; Split, Merge and Delete change the slices. */}
-            <div className="song-map-field">
+            <div className="song-map-field song-map-slice-tools">
               <span>Slice</span>
               <div className="panel-buttons">
                 <button
