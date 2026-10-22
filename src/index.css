@@ -1227,10 +1227,11 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .panel-button:disabled > svg { opacity: .45; filter: grayscale(1); }
 .panel-button svg { color: var(--secondary); }
 
+/* The short messages (see showStatus in App): at the top left of the picture. */
 .status-toast {
   position: absolute;
   left: 14px;
-  bottom: 14px;
+  top: 14px;
   display: flex;
   align-items: center;
   gap: 10px;
