@@ -59,11 +59,11 @@ describe("song plan", () => {
     expect(plan.cues).toEqual([{ time: 8, drop: false }, { time: 16, drop: true }, { time: 32, drop: false }]);
   });
 
-  it("joins a part with the same level as the part before it, so each part brings in a scene", () => {
+  it("joins a part with the same level as the part before it", () => {
     const analysis = song();
     analysis.sections.splice(2, 1, { start: 15.8, end: 24.1, label: "chorus" }, { start: 24.1, end: 32.1, label: "chorus" });
     const split = planSong(analysis);
-    expect(split.parts.map((part) => [part.start, part.end, part.tier, Boolean(part.keepScene)])).toEqual([[0, 8, 0, false], [8, 16, 1, false], [16, 32, 3, false], [32, 40, 0, false]]);
+    expect(split.parts.map((part) => [part.start, part.end, part.tier])).toEqual([[0, 8, 0], [8, 16, 1], [16, 32, 3], [32, 40, 0]]);
     expect(split.cues).toEqual([{ time: 8, drop: false }, { time: 16, drop: true }, { time: 32, drop: false }]);
   });
 

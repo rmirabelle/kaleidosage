@@ -8,17 +8,33 @@ import type { MapSlice } from "./songPlan";
  */
 
 /**
- * Changes one slice's name, level, drop, keep scene or picked scene. The
- * first slice has neither a drop nor a scene to keep: nothing comes before
- * it. Keep Scene and a picked scene leave each other out: the one this
- * change sets wins.
+ * Changes one slice's name, level, drop or picked scene ("scene":
+ * undefined clears the pick). The first slice has no drop: nothing comes
+ * before it. A Keep Scene mark from older maps is left out.
  */
-export function changeSlice(slices: readonly MapSlice[], index: number, change: Partial<Pick<MapSlice, "label" | "tier" | "drop" | "keepScene" | "scene">>): MapSlice[] {
+export function changeSlice(slices: readonly MapSlice[], index: number, change: Partial<Pick<MapSlice, "label" | "tier" | "drop" | "scene">>): MapSlice[] {
   return slices.map((slice, i) => {
     if (i !== index) return slice;
-    const { keepScene, scene, ...next } = { ...slice, ...change, drop: i === 0 ? false : change.drop ?? slice.drop };
-    if (scene !== undefined && !change.keepScene) return { ...next, scene };
-    return keepScene && i > 0 ? { ...next, keepScene: true } : next;
+    const { start, label, tier, scene } = { ...slice, ...change };
+    const drop = i === 0 ? false : change.drop ?? slice.drop;
+    return scene !== undefined ? { start, label, tier, drop, scene } : { start, label, tier, drop };
+  });
+}
+
+/**
+ * Fill (the Song Map toolbar): picks a scene for each slice that has none,
+ * so the song plays a new scene at each slice: the scene after the one of
+ * the slice before it, in tab order ("first": the scene of the first slice
+ * when it has no pick). The slices with a pick keep it, and the order goes
+ * on from them.
+ */
+export function fillScenes(slices: readonly MapSlice[], first: number, sceneCount: number): MapSlice[] {
+  const count = Math.max(1, sceneCount);
+  let before = first - 1;
+  return slices.map((slice) => {
+    const scene = slice.scene ?? (before + 1) % count;
+    before = scene;
+    return slice.scene === undefined ? { ...slice, scene } : slice;
   });
 }
 

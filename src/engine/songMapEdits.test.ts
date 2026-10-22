@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { changeSlice, deleteSlice, mergeWithNext, moveDivider, moveScenes, splitAt } from "./songMapEdits";
+import { changeSlice, deleteSlice, fillScenes, mergeWithNext, moveDivider, moveScenes, splitAt } from "./songMapEdits";
 import { mapOf, planSong, type MapSlice } from "./songPlan";
 import type { SongAnalysis } from "./songScript";
 
@@ -15,17 +15,19 @@ describe("song map edits", () => {
   it("changes a slice's name, level and drop, but never a drop on the first slice", () => {
     expect(changeSlice(slices, 1, { tier: 2, label: "bridge", drop: true })[1]).toEqual({ start: 10, label: "bridge", tier: 2, drop: true });
     expect(changeSlice(slices, 0, { drop: true })[0].drop).toBe(false);
-    expect(changeSlice(slices, 2, { keepScene: true })[2]).toEqual({ ...slices[2], keepScene: true });
-    expect(changeSlice(changeSlice(slices, 2, { keepScene: true }), 2, { keepScene: false })[2]).toEqual(slices[2]);
-    expect(changeSlice(slices, 0, { keepScene: true })[0]).toEqual(slices[0]);
+    /* A Keep Scene mark from an older map is left out. */
+    expect(changeSlice([{ ...slices[1], keepScene: true } as MapSlice], 0, { tier: 3 })[0]).toEqual({ start: 10, label: "verse", tier: 3, drop: false });
   });
 
-  it("picks a scene for a slice, even the first; a pick and Keep Scene leave each other out", () => {
+  it("picks a scene for a slice, even the first, and clears it", () => {
     expect(changeSlice(slices, 0, { scene: 4 })[0]).toEqual({ ...slices[0], scene: 4 });
-    expect(changeSlice(changeSlice(slices, 1, { keepScene: true }), 1, { scene: 2 })[1]).toEqual({ ...slices[1], scene: 2 });
-    expect(changeSlice(changeSlice(slices, 1, { scene: 2 }), 1, { keepScene: true })[1]).toEqual({ ...slices[1], keepScene: true });
     expect(changeSlice(changeSlice(slices, 1, { scene: 2 }), 1, { scene: undefined })[1]).toEqual(slices[1]);
     expect(changeSlice(changeSlice(slices, 1, { scene: 2 }), 1, { tier: 3 })[1]).toEqual({ ...slices[1], tier: 3, scene: 2 });
+  });
+
+  it("fills the slices with no pick with the next scenes, and keeps the picks", () => {
+    expect(fillScenes(changeSlice(slices, 1, { scene: 7 }), 2, 9).map((slice) => slice.scene)).toEqual([2, 7, 8]);
+    expect(fillScenes(slices, 8, 9).map((slice) => slice.scene)).toEqual([8, 0, 1]);
   });
 
   it("moves picked scenes with the scene order, and drops a pick whose scene is gone", () => {
@@ -91,10 +93,10 @@ describe("an edited song map", () => {
     expect(mapOf(plan)).toEqual(slices);
   });
 
-  it("gives no cue for a slice that keeps the scene, but keeps its drop", () => {
-    const plan = planSong({ ...analysis, mapEdits: changeSlice(slices, 2, { keepScene: true }) });
-    expect(plan.cues).toEqual([{ time: 10, drop: false }]);
+  it("keeps a picked scene with its slice", () => {
+    const plan = planSong({ ...analysis, mapEdits: changeSlice(slices, 2, { scene: 4 }) });
+    expect(plan.parts[2].scene).toBe(4);
     expect(plan.drops.map((drop) => drop.time)).toEqual([20]);
-    expect(mapOf(plan)[2].keepScene).toBe(true);
+    expect(mapOf(plan)[2].scene).toBe(4);
   });
 });

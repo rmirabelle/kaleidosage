@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowCounterClockwise, ArrowUUpLeft, ArrowsInLineHorizontal, CaretLeft, CaretRight, Lightning, PushPin, Scissors, Trash } from "@phosphor-icons/react";
-import { changeSlice, deleteSlice, mergeWithNext, moveDivider, splitAt } from "../engine/songMapEdits";
+import { ArrowCounterClockwise, ArrowUUpLeft, ArrowsInLineHorizontal, CaretLeft, CaretRight, Lightning, ListNumbers, Scissors, Trash } from "@phosphor-icons/react";
+import { changeSlice, deleteSlice, fillScenes, mergeWithNext, moveDivider, splitAt } from "../engine/songMapEdits";
 import { TIER_NAMES, mapOf, planSong, type MapSlice, type Tier } from "../engine/songPlan";
 import type { ScheduledSlice } from "../engine/showSchedule";
 import { songFollow } from "../lib/songFollow";
@@ -37,11 +37,11 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * song where it is; a drag of the divider between
  * two slices moves it from bar to bar. It is a card: a title bar with
  * the song's name and the arrows, then a dark toolbar that holds the
- * selected slice's level, the Slice buttons (Keep Scene, Hit, Split at
- * the playhead,
- * Merge with next, and Delete: the slice before it grows into its place),
- * the picked scene (a click goes back to the show's order),
- * and Reset Map (the analysis's own map); the Playlist card's controls
+ * selected slice's level, the Slice buttons (the picked scene, where a
+ * click undoes the pick; Hit; Split at the playhead; Merge with next; and
+ * Delete: the slice before it grows into its place), then Fill (a picked
+ * scene for each slice with none, in scene list order) and Reset Map (the
+ * analysis's own map); the Playlist card's controls
  * play the song. Each change applies at
  * once (see songFollow.editMap) and is kept with the song's analysis, so
  * Save Playlist keeps it. Under the map, a bar the width of the map moves
@@ -199,24 +199,15 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick }: { s
                 ))}
               </div>
             </div>
-            {/* The selected slice: first its picked scene, if any (a click undoes the pick); Keep Scene and Hit stay pressed while they are on; Split, Merge and Delete change the slices. */}
+            {/* The selected slice: first its picked scene, if any (a click undoes the pick); Hit stays pressed while it is on; Split, Merge and Delete change the slices. */}
             <div className="song-map-field song-map-slice-tools">
               <span>Slice</span>
               <div className="panel-buttons">
                 {slice.scene !== undefined && (
-                  <button className="panel-button picked-scene" onClick={() => apply(changeSlice(slices, index, { scene: undefined }))} data-tip="You picked this scene (Ctrl+click in the scene list). Click to undo the pick: the slice plays the scene of the show's order again">
+                  <button className="panel-button picked-scene" onClick={() => apply(changeSlice(slices, index, { scene: undefined }))} data-tip="You picked this scene (Ctrl+click in the scene list, or Fill). Click to undo the pick: the slice keeps the scene of the slice before it again">
                     Scene {slice.scene + 1} <ArrowUUpLeft size={13} weight="bold" />
                   </button>
                 )}
-                <button
-                  className={`panel-button ${slice.keepScene ? "active" : ""}`}
-                  aria-pressed={Boolean(slice.keepScene)}
-                  disabled={index === 0}
-                  onClick={() => apply(changeSlice(slices, index, { keepScene: !slice.keepScene }))}
-                  data-tip={index === 0 ? "The first slice has nothing before it, so there is no scene to keep" : "Keep the scene of the slice before: its level and hit still change the motion. The scene this slice had is skipped; no other slice changes"}
-                >
-                  <PushPin size={15} /> Keep Scene
-                </button>
                 <button
                   className={`panel-button ${slice.drop ? "active" : ""}`}
                   aria-pressed={slice.drop}
@@ -258,9 +249,19 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick }: { s
             </div>
           </>
         )}
-        <button className="panel-button song-map-reset" disabled={!analysis.mapEdits} onClick={() => songFollow.editMap(path, null)} data-tip="Give back the map that the analysis found">
-          <ArrowCounterClockwise size={14} /> Reset Map
-        </button>
+        <div className="song-map-song-tools">
+          <button
+            className="panel-button song-map-fill"
+            disabled={slices.every((candidate) => candidate.scene !== undefined)}
+            onClick={() => apply(fillScenes(slices, scenes[0]?.scene ?? 0, sceneCount))}
+            data-tip="Fill: pick a scene for each slice of this song that has none, so each slice plays the next scene in the scene list. Your own picks stay"
+          >
+            <ListNumbers size={15} /> Fill
+          </button>
+          <button className="panel-button song-map-reset" disabled={!analysis.mapEdits} onClick={() => songFollow.editMap(path, null)} data-tip="Give back the map that the analysis found: its slices, levels and hits, with no picked scenes">
+            <ArrowCounterClockwise size={14} /> Reset Map
+          </button>
+        </div>
       </div>
       <div className="song-map-body">
         <div ref={strip} className="song-map-strip" data-tip="Click a slice to select it and play the song from its start; right-click to stop the song where it is. Ctrl+click a scene in the scene list to play it on the selected slice">
@@ -289,9 +290,9 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick }: { s
                   <span className="song-map-tags">
                     <span
                       className={`song-map-scene-tag ${scenes[i].picked ? "picked" : ""} ${scenes[i].scene === activeScene ? "current" : ""}`}
-                      data-tip={`${candidate.keepScene ? "Keeps scene" : "Scene"} ${scenes[i].scene + 1}${scenes[i].picked ? ", picked by you" : ""}${scenes[i].scene === activeScene ? ", the scene selected in the scene list" : ""}`}
+                      data-tip={`Scene ${scenes[i].scene + 1}${scenes[i].picked ? ", picked by you" : i > 0 ? ", kept from the slice before" : ", the next one after the song before"}${scenes[i].scene === activeScene ? "; the scene selected in the scene list" : ""}`}
                     >
-                      {candidate.keepScene ? "Keep" : scenes[i].scene + 1}
+                      {scenes[i].scene + 1}
                     </span>
                   </span>
                 )}

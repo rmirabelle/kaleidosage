@@ -1,15 +1,14 @@
 import type { SongPlan, Tier } from "./songPlan";
 
 /**
- * The show's scene schedule: while the picture follows the songs, the
- * scenes come in one after the other, in tab order, across the whole
- * playlist. Each slice of a song (a part of its plan) has its own place in
- * that order, across all songs, and plays the scene at its place. A slice
- * that keeps the scene plays the scene of the slice before it, and a slice
- * with a scene the user picked plays that scene (see songPlan.ts); both
- * still use up their place, so the scene at it is skipped, and no other
- * slice changes. After the last scene the order goes round to the first.
- * A song with no plan yet counts as one slice.
+ * The show's scene schedule: while the picture follows the songs, a slice
+ * of a song (a part of its plan) with a scene the user picked plays that
+ * scene (see songPlan.ts). Any other slice plays the scene of the slice
+ * before it; the first slice of a song with no pick plays the scene after
+ * the last one of the song before it, in tab order (after the last scene,
+ * the first), so each song brings in a scene of its own. A pick never
+ * moves when the scenes or the songs change order. A song with no plan yet
+ * counts as one slice.
  */
 
 export interface ScheduledSlice {
@@ -31,16 +30,14 @@ export interface ScheduledSlice {
 /** Each song's slices with their scenes, for the songs in playlist order (null: no plan yet). */
 export function scheduleShow(plans: readonly (SongPlan | null)[], sceneCount: number): ScheduledSlice[][] {
   const count = Math.max(1, sceneCount);
-  let step = -1;
+  let before = -1;
   return plans.map((plan) => {
-    const parts: readonly { start: number; tier: Tier | null; keepScene?: boolean; scene?: number }[] = plan?.parts ?? [{ start: 0, tier: null }];
+    const parts: readonly { start: number; tier: Tier | null; scene?: number }[] = plan?.parts ?? [{ start: 0, tier: null }];
     const drops = new Set(plan?.drops.map((drop) => drop.time) ?? []);
     let runStart = 0;
-    let before = -1;
     return parts.map((part, index) => {
-      step++;
       const picked = part.scene !== undefined && part.scene >= 0 && part.scene < count;
-      const scene = picked ? part.scene! : index > 0 && part.keepScene ? before : step % count;
+      const scene = picked ? part.scene! : index > 0 ? before : (before + 1) % count;
       const change = index === 0 || scene !== before;
       if (change) runStart = part.start;
       before = scene;

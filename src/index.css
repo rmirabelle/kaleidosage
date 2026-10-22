@@ -2219,7 +2219,9 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .song-map-toolbar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 4px 8px; border-bottom: 1px solid #30343f; background: #14161c; }
 .song-map-toolbar .panel-buttons { border-radius: 5px; }
 /* The dividers around the switches run the toolbar's full height, through its padding. */
-.panel-button.song-map-reset { margin-left: auto; border: 1px solid #474c5e; border-radius: 5px; background: #30343f; }
+/* The song's own buttons, Fill and Reset Map, at the right end of the toolbar. */
+.song-map-song-tools { display: flex; gap: 8px; margin-left: auto; }
+.panel-button.song-map-reset, .panel-button.song-map-fill { border: 1px solid #474c5e; border-radius: 5px; background: #30343f; }
 /* The scrub bar under the map: the map's full width. */
 .slider.playlist-seek.song-map-scrub { flex: none; width: 100%; margin-top: 12px; }
 /* Its own handle is unseen, as on the Playlist bar: the fader cap shows the place (see placeSeek). */

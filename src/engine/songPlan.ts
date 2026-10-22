@@ -25,8 +25,6 @@ export interface Part {
   tier: Tier;
   /** The part's mean intensity (0 to 1, see SongAnalysis.curves.intensity). */
   intensity: number;
-  /** True when the user set that the scene stays as this part starts (see MapSlice.keepScene). */
-  keepScene?: boolean;
   /** The scene the user picked for this part (see MapSlice.scene). */
   scene?: number;
 }
@@ -51,17 +49,15 @@ export interface MapSlice {
   label: string;
   tier: Tier;
   drop: boolean;
-  /** True: the scene stays as this slice starts; its level and drop still change the motion. Missing means false. */
-  keepScene?: boolean;
   /**
    * The tab index of the scene the user picked for this slice (a Ctrl+click
-   * in the scene list). Missing: the slice plays the scene that the show's
-   * order gives it (see showSchedule.ts). Never set together with keepScene.
+   * in the scene list, or Fill). Missing: the slice keeps the scene of the
+   * slice before it (see showSchedule.ts).
    */
   scene?: number;
 }
 
-/** A place where the scene changes (see showSchedule.ts): the start of each part that does not keep the scene, with a cut on a drop. */
+/** A place where a new slice starts: the start of each part after the first, with a cut on a drop. Which scene each slice plays is the show schedule's (see showSchedule.ts). */
 export interface Cue {
   time: number;
   drop: boolean;
@@ -114,7 +110,7 @@ export function planSong(analysis: SongAnalysis): SongPlan {
       label: slice.label,
       tier: slice.tier,
       intensity: 0,
-      ...(slice.scene !== undefined ? { scene: slice.scene } : slice.keepScene && index > 0 ? { keepScene: true } : {})
+      ...(slice.scene !== undefined ? { scene: slice.scene } : {})
     }));
     for (const part of parts) part.intensity = mean(curves.intensity, rate, part.start, part.end);
     const wanted = new Set(edits.slice(1).filter((slice) => slice.drop).map((slice) => slice.start));
@@ -154,10 +150,9 @@ export function planSong(analysis: SongAnalysis): SongPlan {
  * starts that are drops, from the part and its jump score (how hard the
  * intensity and the bass jump up there). The strongest drop has strength
  * 1; each drop gets its rise and, when the music goes quiet just before
- * it, its pause. Every part but the first changes the scene (a cue)
- * unless it keeps the scene. In an automatic map ("automatic"), a part at
- * the same level as the one before it, with no drop, joins that part, so
- * each part of an automatic map brings in a scene.
+ * it, its pause. Every part but the first is a cue. In an automatic map
+ * ("automatic"), a part at the same level as the one before it, with no
+ * drop, joins that part.
  */
 function finishPlan(analysis: SongAnalysis, allParts: Part[], isDrop: (part: Part, score: number) => boolean, automatic: boolean): SongPlan {
   const { curves, curveRate: rate } = analysis;
@@ -200,8 +195,7 @@ function finishPlan(analysis: SongAnalysis, allParts: Part[], isDrop: (part: Par
     for (const part of joined) part.intensity = mean(curves.intensity, rate, part.start, part.end);
     parts = joined;
   }
-  /* Every part but the first changes the scene, unless it keeps the scene. */
-  const cues = parts.slice(1).flatMap<Cue>((part) => (part.keepScene ? [] : [{ time: part.start, drop: dropTimes.has(part.start) }]));
+  const cues = parts.slice(1).map<Cue>((part) => ({ time: part.start, drop: dropTimes.has(part.start) }));
   return { parts, drops, cues };
 }
 
@@ -210,6 +204,6 @@ export function mapOf(plan: SongPlan): MapSlice[] {
   const drops = new Set(plan.drops.map((drop) => drop.time));
   return plan.parts.map((part) => ({
     start: part.start, label: part.label, tier: part.tier, drop: drops.has(part.start),
-    ...(part.scene !== undefined ? { scene: part.scene } : part.keepScene ? { keepScene: true } : {})
+    ...(part.scene !== undefined ? { scene: part.scene } : {})
   }));
 }
