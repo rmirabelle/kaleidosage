@@ -277,6 +277,17 @@ the analysis. The playlist then runs the show.
   clicked scene away before it has played half its Length
   (changed 2026-10-20; before, track N always went to tab N). Later: a
   choice to change the scene every 16 or 32 beats instead.
+- Show schedule (2026-10-22): with Song follow on, the scenes follow a
+  fixed schedule across the whole playlist (`showSchedule.ts`) instead of
+  Lengths and new tracks. Each slice of a song map brings in the next
+  scene unless it has Keep Scene; the first slice of each song goes on with
+  the order, and after the last tab the order goes round. In an automatic
+  map, a slice at the same level as the one before it, with no hit, keeps
+  the scene. A jump (a seek, a click on a slice, a new track) brings in
+  that slice's scene. A tab click shows its tab until the next slice that
+  changes the scene; Hold keeps the scene. The Song Map page shows every
+  song in a row, each slice with its scene number; a click plays that song
+  from the slice's start.
 - The app does not play music at its start; the user starts it.
 - Order and layout (2026-10-20; the scene list also shows for any open
   playlist): a drag moves a track in the Files list,

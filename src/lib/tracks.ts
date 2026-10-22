@@ -279,10 +279,12 @@ class TrackList {
     return true;
   }
 
-  async play() {
+  /** Plays the current track; "from": from this time (seconds) instead of where it is. */
+  async play(from?: number) {
     try {
       await this.setup();
       if (!(await this.load())) return;
+      if (from !== undefined) this.audio!.currentTime = Math.max(0, from);
       await this.context!.resume();
       await this.audio!.play();
       this.error = null;
@@ -314,13 +316,13 @@ class TrackList {
   }
 
   /** Goes to another track and plays it; the track list goes round at both ends. */
-  private go(index: number, why: TrackChange) {
+  private go(index: number, why: TrackChange, from?: number) {
     if (this.list.length === 0) return;
     this.index = ((index % this.list.length) + this.list.length) % this.list.length;
     /* The same file again (a list of one track) starts at its beginning. */
     this.loaded = null;
     for (const listener of this.trackListeners) listener(this.index, why);
-    void this.play();
+    void this.play(from);
   }
 
   private step(by: 1 | -1, why: TrackChange) {
@@ -329,6 +331,16 @@ class TrackList {
 
   playTrack(index: number) {
     this.go(index, "picked");
+  }
+
+  /** Plays a track from this time (seconds): the track that plays goes there, and another track is picked first. */
+  playAt(index: number, seconds: number) {
+    if (index === this.index && this.loaded !== null && this.loaded === this.current?.path) {
+      this.seek(seconds);
+      if (!this.playing) void this.play();
+      return;
+    }
+    this.go(index, "picked", seconds);
   }
 
   /** Adds files at the end of the track list; a file that is in it already is not added twice. */

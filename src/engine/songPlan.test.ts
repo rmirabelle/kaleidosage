@@ -59,6 +59,14 @@ describe("song plan", () => {
     expect(plan.cues).toEqual([{ time: 8, drop: false }, { time: 16, drop: true }, { time: 32, drop: false }]);
   });
 
+  it("keeps the scene at a part with the same level as the part before it", () => {
+    const analysis = song();
+    analysis.sections.splice(2, 1, { start: 15.8, end: 24.1, label: "chorus" }, { start: 24.1, end: 32.1, label: "chorus" });
+    const split = planSong(analysis);
+    expect(split.parts.map((part) => [part.start, part.tier, Boolean(part.keepScene)])).toEqual([[0, 0, false], [8, 1, false], [16, 3, false], [24, 3, true], [32, 0, false]]);
+    expect(split.cues).toEqual([{ time: 8, drop: false }, { time: 16, drop: true }, { time: 32, drop: false }]);
+  });
+
   it("joins a part that is too short to the part before it", () => {
     const analysis = song();
     analysis.sections.splice(2, 0, { start: 15.8, end: 16.9, label: "bridge" });

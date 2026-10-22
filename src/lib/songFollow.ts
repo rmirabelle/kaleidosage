@@ -1,3 +1,4 @@
+import { scheduleShow, type ScheduledSlice } from "../engine/showSchedule";
 import type { MapSlice } from "../engine/songPlan";
 import { compileScript, type SongAnalysis, type SongScript } from "../engine/songScript";
 import { ANALYSIS_VERSION, analyzeSong } from "./songAnalysis";
@@ -39,6 +40,10 @@ class SongFollow {
   private readonly scripts = new Map<string, Promise<SongScript>>();
   /** Each track's analysis, by path, once it is made or loaded: what a playlist saves (see analysisText). */
   private readonly analyses = new Map<string, SongAnalysis>();
+  /** Each track's script once it is made, by path: for the show's scene schedule (see schedule). */
+  private readonly made = new Map<string, SongScript>();
+  /** The last schedule and what it was made from (see schedule). */
+  private scheduled = { key: "", slices: [] as ScheduledSlice[][] };
   /** Tracks whose analysis failed: the background pass leaves them; playing one tries again. */
   private readonly failed = new Set<string>();
   /** The track the script is for, or is being made for. */
@@ -106,12 +111,27 @@ class SongFollow {
     else delete analysis.mapEdits;
     const script = compileScript(analysis);
     this.scripts.set(path, Promise.resolve(script));
+    this.made.set(path, script);
     if (this.path === path) {
       this.script = script;
       if (this.status.state === "ready") this.status = { ...this.status, tempo: script.tempo };
     }
     this.edits++;
     this.changed();
+  }
+
+  /**
+   * The show's scene schedule (see showSchedule.ts) for the tracks in list
+   * order and this many scenes: each track's slices with their scenes. A
+   * track with no script yet counts as one slice. Made again only when a
+   * script, the track list or the number of scenes changes.
+   */
+  schedule(sceneCount: number) {
+    const key = `${this.version} ${tracks.version} ${sceneCount}`;
+    if (this.scheduled.key !== key) {
+      this.scheduled = { key, slices: scheduleShow(tracks.list.map((track) => this.made.get(track.path)?.plan ?? null), sceneCount) };
+    }
+    return this.scheduled.slices;
   }
 
   /** A track's analysis as JSON, for a playlist file, or null when it has none. */
@@ -130,7 +150,12 @@ class SongFollow {
       const analysis = JSON.parse(text) as SongAnalysis;
       if (analysis?.version !== ANALYSIS_VERSION || !Array.isArray(analysis.beats) || !Array.isArray(analysis.sections)) return;
       this.analyses.set(path, analysis);
-      this.scripts.set(path, Promise.resolve().then(() => compileScript(analysis)));
+      this.scripts.set(path, Promise.resolve().then(() => {
+        const script = compileScript(analysis);
+        this.made.set(path, script);
+        this.changed();
+        return script;
+      }));
       this.changed();
     } catch { /* The track is analyzed again when needed. */ }
   }
@@ -142,8 +167,10 @@ class SongFollow {
       made = analyzeSong(path).then((analysis) => {
         this.analyses.set(path, analysis);
         this.failed.delete(path);
+        const script = compileScript(analysis);
+        this.made.set(path, script);
         this.changed();
-        return compileScript(analysis);
+        return script;
       });
       this.scripts.set(path, made);
       made.catch(() => {

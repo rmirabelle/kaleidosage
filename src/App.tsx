@@ -50,6 +50,7 @@ import { panelLayout } from "./lib/panelLayout";
 import { isPlaylistCopy } from "./lib/playlistFile";
 import { tracks } from "./lib/tracks";
 import { songFollow } from "./lib/songFollow";
+import { sliceAt } from "./engine/showSchedule";
 import { helpSettings } from "./lib/helpSettings";
 import { PLAYLIST_EXTENSION, isPlaylistFile, openPlaylistFile, playlistFingerprint, readManifest, savePlaylistFile, type PlaylistAudio } from "./lib/playlistFile";
 import { revealMainWindow } from "./lib/splash";
@@ -231,17 +232,6 @@ export default function App() {
   const toggleMidiPanel = useCallback(() => showBottomTab("midi"), [showBottomTab]);
   const toggleAudioPanel = useCallback(() => showBottomTab("audio"), [showBottomTab]);
   const closeBottomPanel = useCallback(() => setMidiPanelOpen(false), []);
-  /**
-   * A click on a slice of the Song Map while the song plays: the next scene
-   * comes in, as at a cue (a cut on a hit, else a short crossfade), unless
-   * Hold keeps the scene or there is only one scene.
-   */
-  const jumpToNextScene = useCallback((hit: boolean) => {
-    if (docsRef.current.length < 2 || sceneHeldRef.current) return;
-    const tempo = engine?.script?.script.tempo ?? 0;
-    switchByStepRef.current(1, true, hit ? 0 : Math.min(CROSSFADE_SECONDS, 2 * (tempo > 0 ? 60 / tempo : 0.5)));
-  }, [engine]);
-
   /** The Playlist card's map button: shows the Song Map page (it does not close it). */
   const showSongMap = useCallback(() => {
     setBottomTab("songmap");
@@ -859,10 +849,13 @@ export default function App() {
   /**
    * Starts the show from its beginning: the first scene, from its start,
    * set to play (it waits for the music, see the music gate), with Hold
-   * off. For a playlist that opens, and for Stop in the playlist.
+   * off. For a playlist that opens, and for Stop in the playlist. With Song
+   * follow on, the first scene is the one that the show's schedule gives
+   * the start of the track (see showSchedule.ts).
    */
   const startShow = useCallback(() => {
-    const first = docsRef.current[0];
+    const scheduled = songFollow.enabled ? songFollow.schedule(docsRef.current.length)[tracks.index]?.[0]?.scene ?? 0 : 0;
+    const first = docsRef.current[scheduled] ?? docsRef.current[0];
     if (!engine || !first) return;
     if (first.id !== activeIdRef.current) switchToDoc(first.id);
     engine.rewind();
@@ -1112,6 +1105,8 @@ export default function App() {
   holdUsefulRef.current = holdUseful;
   const switchByStepRef = useRef(switchByStep);
   switchByStepRef.current = switchByStep;
+  const crossfadeToDocRef = useRef(crossfadeToDoc);
+  crossfadeToDocRef.current = crossfadeToDoc;
   /**
    * At the end of the scene's Length (see scenePosition, which the Length
    * slider shows), the next tab crossfades in; the last tab goes round to
@@ -1149,30 +1144,42 @@ export default function App() {
   }, [activeId, engine, tracksActive]);
 
   /**
-   * While the picture follows the song (see songFollow.ts), the next tab
-   * comes in at the song plan's cues (see songPlan.ts): with a cut on a
-   * drop, and with a crossfade of up to two beats at another change of
-   * level. A cue is taken a frame early, so the cut lands on its beat. A
-   * jump in the song (a seek) passes its cues; Hold keeps the scene.
+   * While the picture follows the song (see songFollow.ts), the show's
+   * schedule picks the scene (see showSchedule.ts): as the song comes to a
+   * slice that brings in a scene, or jumps into another one (a seek, a
+   * click on a slice, a new track), that slice's scene comes in, with a cut
+   * on a drop and with a crossfade of up to two beats otherwise. A slice is
+   * taken a frame early, so the cut lands on its beat. Between these
+   * changes the scene stays, so a tab click shows its tab until the next
+   * one; Hold keeps the scene.
    */
   useEffect(() => {
     if (!engine || !tracksActive) return;
     let last = -1;
+    /** The slice that brought in the scene the schedule last asked for (track and start). */
+    let shownRun = "";
     return engine.onFrame(() => {
       const following = engine.script;
       const now = engine.songNow;
-      if (!following || !now || !tracks.playing) {
+      if (!following || !now || !tracks.playing || tracks.current?.path !== songFollow.currentPath) {
         last = -1;
         return;
       }
       const early = now.time + 1 / 60;
-      const jumped = last < 0 || early < last || early - last > 0.5;
-      const cue = jumped ? undefined : following.script.plan.cues.find((candidate) => candidate.time > last && candidate.time <= early);
-      /* After a jump (a play, a seek, a click on a slice), the watch starts at the playing place: the song clock sits a little before it (the output latency), and a cue there must not fire. */
-      last = jumped ? Math.max(early, tracks.position) : early;
-      if (!cue || docsRef.current.length < 2 || sceneHeldRef.current) return;
+      /* After a jump (a play, a seek, a click on a slice), the playing place counts: the song clock sits a little before it (the output latency), and the slice before it must not come in. */
+      const jumped = last < 0 || early < last - 0.25 || early > last + 0.5;
+      const time = jumped ? Math.max(early, tracks.position) : Math.max(early, last);
+      last = time;
+      const slice = sliceAt(songFollow.schedule(docsRef.current.length)[tracks.index] ?? [], time);
+      if (!slice) return;
+      const run = `${tracks.index} ${slice.runStart}`;
+      if (run === shownRun) return;
+      shownRun = run;
+      const doc = docsRef.current[slice.scene];
+      if (!doc || doc.id === activeIdRef.current || sceneHeldRef.current) return;
       const beat = following.script.tempo > 0 ? 60 / following.script.tempo : 0.5;
-      switchByStepRef.current(1, true, cue.drop ? 0 : Math.min(CROSSFADE_SECONDS, 2 * beat));
+      const cut = slice.runStart === slice.start && slice.drop;
+      void crossfadeToDocRef.current(doc.id, true, cut ? 0 : Math.min(CROSSFADE_SECONDS, 2 * beat));
     });
   }, [engine, tracksActive]);
 
@@ -1180,10 +1187,11 @@ export default function App() {
    * Each new track (the end of a track, or a pick in the list) also
    * crossfades to the next tab. A scene that the user picked
    * stays for at least half its Length of play time: the user's pick takes
-   * precedence.
+   * precedence. With Song follow on, the show's schedule picks the scene
+   * instead (see above).
    */
   useEffect(() => tracks.onTrackChange(() => {
-    if (!engine || audioInput.settings.kind !== "tracks" || docsRef.current.length < 2 || sceneHeldRef.current) return;
+    if (!engine || audioInput.settings.kind !== "tracks" || songFollow.enabled || docsRef.current.length < 2 || sceneHeldRef.current) return;
     const shown = sceneShownRef.current;
     if (shown.id === activeIdRef.current && shown.byUser && engine.state.clock - shown.clock < engine.params.cycle.value / 2) return;
     switchByStepRef.current(1, true);
@@ -2070,7 +2078,7 @@ export default function App() {
           <div className="midi-panel-body">
             <BottomPanelTabs tab={bottomTab} onTab={setBottomTab} onClose={closeBottomPanel} />
             {bottomTab === "midi" ? <MidiPanel engine={engine} open={midiPanelOpen} />
-              : bottomTab === "songmap" ? <SongMapPanel onSceneJump={jumpToNextScene} />
+              : bottomTab === "songmap" ? <SongMapPanel sceneCount={docs.length} />
               : <AudioPanel engine={engine} sceneName={sceneFileName} onAddTracks={() => void pickTracks()} inputTip={inputTip && midiPanelOpen} onInputTipDone={() => setInputTip(false)} />}
           </div>
         </div>

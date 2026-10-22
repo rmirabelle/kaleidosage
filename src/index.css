@@ -2138,10 +2138,10 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .song-map-body { display: flex; flex-direction: column; gap: 4px; padding: 16px 20px 10px; }
 .song-map-strip { position: relative; height: 120px; overflow: hidden; border: 1px solid #2b2f3a; border-radius: 6px; background: #14161c; }
 .song-map-slice { position: absolute; top: 0; bottom: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; min-width: 0; padding: 6px 8px; overflow: hidden; border: 0; border-right: 2px solid #14161c; color: #fff; font: inherit; text-align: left; cursor: pointer; }
-.song-map-slice.tier-0 { background: #253049; }
-.song-map-slice.tier-1 { background: #2f4f8f; }
-.song-map-slice.tier-2 { background: #3a72d6; }
-.song-map-slice.tier-3 { background: #5fa8ff; color: #0d1b33; }
+.song-map-slice.tier-0, .song-map-row-slice.tier-0 { background: #253049; }
+.song-map-slice.tier-1, .song-map-row-slice.tier-1 { background: #2f4f8f; }
+.song-map-slice.tier-2, .song-map-row-slice.tier-2 { background: #3a72d6; }
+.song-map-slice.tier-3, .song-map-row-slice.tier-3 { background: #5fa8ff; color: #0d1b33; }
 .song-map-slice:hover { filter: brightness(1.15); }
 /* The slice the playhead is in: a red outline and a red glow; selected too, it keeps the white outline inside the red. */
 .song-map-slice.playing { box-shadow: inset 0 0 0 2px #e53935, inset 0 0 18px rgba(229,57,53,.45); }
@@ -2151,6 +2151,15 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 /* The tags at a slice's top left: Hit (red) and Keep Scene (gray). */
 .song-map-tags { position: absolute; top: 6px; left: 6px; display: flex; gap: 4px; }
 .song-map-keep-tag { padding: 1px 5px; border-radius: 3px; color: #fff; background: rgba(20,22,28,.7); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.song-map-scene-tag { padding: 1px 5px; border-radius: 3px; color: #fff; background: rgba(20,22,28,.7); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+/* The playlist row: every song in a row, each slice with the number of its scene (see SongMapPanel). */
+.song-map-row { position: relative; flex: none; height: 30px; margin-bottom: 12px; overflow: hidden; border: 1px solid #2b2f3a; border-radius: 6px; background: #14161c; }
+.song-map-row-song { position: absolute; top: 0; bottom: 0; border-right: 3px solid #0b0c10; opacity: .7; }
+.song-map-row-song.current { opacity: 1; }
+.song-map-row-slice { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; min-width: 0; padding: 0; overflow: hidden; border: 0; border-right: 1px solid #14161c; color: #fff; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
+.song-map-row-slice.unknown { background: #2a2d36; }
+.song-map-row-slice:hover { filter: brightness(1.2); }
+.song-map-wait { margin: 0; color: var(--muted); font-size: 12px; }
 .song-map-drop-tag { padding: 1px 5px; border-radius: 3px; color: #fff; background: #e53935; font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .song-map-slice-name { font-size: 12px; font-weight: 700; white-space: nowrap; }
 .song-map-bar { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.1); pointer-events: none; }

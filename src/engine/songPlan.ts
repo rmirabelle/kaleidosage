@@ -53,7 +53,7 @@ export interface MapSlice {
   keepScene?: boolean;
 }
 
-/** A place where the picture changes its look (see App's scene changes): a drop, or a part with another level. */
+/** A place where the scene changes (see showSchedule.ts): the start of each part that does not keep the scene, with a cut on a drop. */
 export interface Cue {
   time: number;
   drop: boolean;
@@ -110,7 +110,7 @@ export function planSong(analysis: SongAnalysis): SongPlan {
     }));
     for (const part of parts) part.intensity = mean(curves.intensity, rate, part.start, part.end);
     const wanted = new Set(edits.slice(1).filter((slice) => slice.drop).map((slice) => slice.start));
-    return finishPlan(analysis, parts, (part) => wanted.has(part.start));
+    return finishPlan(analysis, parts, (part) => wanted.has(part.start), false);
   }
 
   /* Part starts move to the nearest bar start; a part that is too short joins the one before it. */
@@ -138,7 +138,7 @@ export function planSong(analysis: SongAnalysis): SongPlan {
     part.tier = tier;
   }
   /* A drop: a part start of a rising or peak part where the intensity and the bass jump up (see dropScore). */
-  return finishPlan(analysis, parts, (part, score) => part.tier >= 2 && score >= DROP_SCORE);
+  return finishPlan(analysis, parts, (part, score) => part.tier >= 2 && score >= DROP_SCORE, true);
 }
 
 /**
@@ -146,9 +146,11 @@ export function planSong(analysis: SongAnalysis): SongPlan {
  * starts that are drops, from the part and its jump score (how hard the
  * intensity and the bass jump up there). The strongest drop has strength
  * 1; each drop gets its rise and, when the music goes quiet just before
- * it, its pause.
+ * it, its pause. Every part but the first changes the scene (a cue)
+ * unless it keeps the scene; in an automatic map ("automatic"), a part at
+ * the same level as the one before it, with no drop, keeps the scene.
  */
-function finishPlan(analysis: SongAnalysis, parts: Part[], isDrop: (part: Part, score: number) => boolean): SongPlan {
+function finishPlan(analysis: SongAnalysis, parts: Part[], isDrop: (part: Part, score: number) => boolean, automatic: boolean): SongPlan {
   const { curves, curveRate: rate } = analysis;
   const downbeats = analysis.downbeats.length ? analysis.downbeats : analysis.beats;
   const bar = analysis.tempo > 0 ? 240 / analysis.tempo : 2;
@@ -177,12 +179,14 @@ function finishPlan(analysis: SongAnalysis, parts: Part[], isDrop: (part: Part, 
   });
 
   const dropTimes = new Set(drops.map((drop) => drop.time));
-  /* A part that keeps the scene gives no cue: the scene stays. */
-  const cues = parts.slice(1).flatMap<Cue>((part, index) =>
-    part.keepScene ? []
-      : dropTimes.has(part.start) ? [{ time: part.start, drop: true }]
-      : part.tier !== parts[index].tier ? [{ time: part.start, drop: false }]
-      : []);
+  /* In an automatic map, a part at the same level as the one before it, with no drop, keeps the scene; an edited map says so itself. */
+  if (automatic) {
+    parts.forEach((part, index) => {
+      if (index > 0 && part.tier === parts[index - 1].tier && !dropTimes.has(part.start)) part.keepScene = true;
+    });
+  }
+  /* Every part but the first changes the scene, unless it keeps the scene. */
+  const cues = parts.slice(1).flatMap<Cue>((part) => (part.keepScene ? [] : [{ time: part.start, drop: dropTimes.has(part.start) }]));
   return { parts, drops, cues };
 }
 
