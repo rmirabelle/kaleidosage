@@ -126,7 +126,8 @@ const SCRUB_STEPS = 1000;
  * countdown bar to the next scene (see nextSceneIn), yellow in its last 10
  * seconds and red in its last 5, with HOLD after it (gray while off, red
  * and blinking while on; a click turns it on or off). That row shows only
- * with more than one scene: with one scene there is no next scene. Then
+ * when Hold means something: with more than one scene, or while the picture
+ * follows a song. Then
  * Stop (back to the
  * start, `Shift+Space`), Play or Pause (`Space`), a bar to scrub in the
  * scene's Length (see Engine.seekTo), and the time in it. It runs the scene
@@ -148,7 +149,7 @@ export function SceneTransport({ engine, paused, onTogglePause, onStop, show, au
   onStop: () => void;
   /** True when the show goes on to the next scene by itself (Files, with more than one scene). */
   autoNext: boolean;
-  /** True with more than one scene: the countdown and HOLD show. With one scene there is no next scene. */
+  /** True when Hold means something (more than one scene, or a song to follow): the countdown and HOLD show. */
   show: boolean;
   /** True while Hold keeps the scene (see holdScene in App). */
   held: boolean;
@@ -218,8 +219,8 @@ export function SceneTransport({ engine, paused, onTogglePause, onStop, show, au
             aria-pressed={held}
             onClick={onToggleHold}
             data-tip={held
-              ? "Hold is on: this scene stays, and the music plays on. Click, save, or pick a scene to go on."
-              : "Hold: keep this scene. A change you make to the scene turns Hold on by itself."}
+              ? "Hold is on: this scene stays and plays on its own, and the music plays on. Click Hold, or play the music, to go on."
+              : "Hold: keep this scene, and let it play on its own. A change you make to the scene turns Hold on by itself."}
           >
             <span className="hold-badge-label">Hold</span>
           </button>

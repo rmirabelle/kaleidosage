@@ -668,7 +668,10 @@ export default function App() {
    * Hold (Files only, see the watch of the user's changes below): while it
    * is on, a Length end or a new track does not take the shown scene away.
    * A click on Hold, a save, or a tab click turns it off; the scene
-   * then plays to the end of its Length.
+   * then plays to the end of its Length. While the picture follows a song,
+   * Hold also gives the scene its own clock again: it loops on its own and
+   * its own controls run it, so it can be edited while the music plays on;
+   * Play in the playlist turns Hold off, and the song leads again.
    */
   const [sceneHeld, setSceneHeld] = useState(false);
   const sceneHeldRef = useRef(false);
@@ -1069,6 +1072,12 @@ export default function App() {
    * runs the music, and the controls on the picture run the scene.
    */
   const tracksActive = useSyncExternalStore((listener) => audioInput.subscribe(listener), () => audioInput.settings.kind === "tracks");
+  /** True while Follow the song is on with the tracks as the input (see songFollow.ts). */
+  const followOn = useSyncExternalStore((listener) => songFollow.subscribe(listener), () => songFollow.enabled) && tracksActive;
+  /** Hold means something with more than one scene (it keeps the scene), or while following a song (it gives the scene its own clock). */
+  const holdUseful = docs.length > 1 || followOn;
+  const holdUsefulRef = useRef(holdUseful);
+  holdUsefulRef.current = holdUseful;
   const switchByStepRef = useRef(switchByStep);
   switchByStepRef.current = switchByStep;
   /**
@@ -1156,8 +1165,8 @@ export default function App() {
    * knobs goes on.
    */
   useEffect(() => {
-    /* Hold keeps one scene from the next: with one scene there is no next scene, so it goes off. */
-    if (!engine || docs.length < 2) {
+    /* Hold keeps one scene from the next, and while following a song gives the scene its own clock: with one scene and no song it means nothing, so it goes off. */
+    if (!engine || !holdUseful) {
       holdScene(false);
       return;
     }
@@ -1176,13 +1185,13 @@ export default function App() {
       last = now;
       if (!edited || sceneHeldRef.current) return;
       holdScene(true);
-      showStatus("Hold: this scene stays while you edit it. Click Hold, save, or pick a tab to go on.", 4000);
+      showStatus("Hold: this scene stays and plays on its own while you edit it. Click Hold, or play the music, to go on.", 4000);
     }, 250);
     return () => {
       window.clearInterval(timer);
       for (const name of events) window.removeEventListener(name, input, true);
     };
-  }, [docs.length, engine, fingerprint, holdScene, playlistPath, showStatus, tracksActive]);
+  }, [engine, fingerprint, holdScene, holdUseful, playlistPath, showStatus, tracksActive]);
 
   /**
    * Opening or closing an effect, or any press in the Source and FX column
@@ -1191,10 +1200,19 @@ export default function App() {
    * while the user looks into it or waits for a random image.
    */
   const holdForWork = useCallback(() => {
-    if (sceneHeldRef.current || docsRef.current.length < 2) return;
+    if (sceneHeldRef.current || !holdUsefulRef.current) return;
     holdScene(true);
-    showStatus("Hold: this scene stays while you edit it. Click Hold, save, or pick a tab to go on.", 4000);
-  }, [holdScene, showStatus, tracksActive]);
+    showStatus("Hold: this scene stays and plays on its own while you edit it. Click Hold, or play the music, to go on.", 4000);
+  }, [holdScene, showStatus]);
+
+  /** Play in the playlist hands the picture back to the song (or the show): Hold goes off. */
+  useEffect(() => {
+    let playing = tracks.playing;
+    return tracks.subscribe(() => {
+      if (tracks.playing && !playing && sceneHeldRef.current) holdScene(false);
+      playing = tracks.playing;
+    });
+  }, [holdScene]);
   const openEffectGroup = useCallback((group: string | null) => {
     setOpenGroup(group);
     holdForWork();
@@ -1576,16 +1594,20 @@ export default function App() {
     return audioInput.subscribe(follow);
   }, [engine]);
 
-  /** With Follow the song on and the tracks as the input, the picture follows the track's script (see songFollow.ts) once it is analyzed. */
+  /**
+   * With Follow the song on and the tracks as the input, the picture follows
+   * the track's script (see songFollow.ts) once it is analyzed, unless Hold
+   * gives the scene its own clock (see holdScene).
+   */
   useEffect(() => {
     if (!engine) return;
     const apply = () => {
-      const script = tracksActive ? songFollow.script : null;
+      const script = tracksActive && !sceneHeld ? songFollow.script : null;
       engine.script = script && { script, time: () => songFollow.clock.time(), playing: () => tracks.playing };
     };
     apply();
     return songFollow.subscribe(apply);
-  }, [engine, tracksActive]);
+  }, [engine, sceneHeld, tracksActive]);
 
   /** Once the engine runs (or failed to start), the main window replaces the splash. */
   useEffect(() => {
@@ -1912,7 +1934,7 @@ export default function App() {
               driverVideoName={driverVideoName}
               onPickDriverVideo={() => setOpenRequest({ kind: "image", slot: 0, target: "driver" })}
               onNeedAudioInput={askForAudioInput}
-              transport={<SceneTransport engine={engine} paused={paused} onTogglePause={togglePause} onStop={stop} show={docs.length > 1} autoNext={tracksActive && docs.length > 1} held={docs.length > 1 && sceneHeld} onToggleHold={() => holdScene(!sceneHeldRef.current)} />}
+              transport={<SceneTransport engine={engine} paused={paused} onTogglePause={togglePause} onStop={stop} show={holdUseful} autoNext={tracksActive && docs.length > 1} held={holdUseful && sceneHeld} onToggleHold={() => holdScene(!sceneHeldRef.current)} />}
               source={(
                 <SourcePanel
                   engine={engine}

@@ -291,6 +291,13 @@ function FollowStatusLine({ engine }: { engine: Engine | null }) {
     if (!engine || status.state !== "ready") return;
     let frame = 0;
     const draw = () => {
+      /* Hold gives the scene its own clock (see holdScene in App): the song does not lead. */
+      if (!engine.script) {
+        const text = "Hold is on: the scene plays on its own. Play the music, or click Hold, to follow the song again.";
+        if (line.current && line.current.textContent !== text) line.current.textContent = text;
+        frame = requestAnimationFrame(draw);
+        return;
+      }
       const count = PARAM_KEYS.filter((key) => engine.soundFamily(key) && engine.isShown(key)).length;
       const now = engine.songNow;
       const part = now && engine.script?.script.plan.parts.filter((candidate) => candidate.start <= now.time).pop();
