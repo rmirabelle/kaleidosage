@@ -30,10 +30,10 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * song that plays again; a right-click stops the
  * song where it is; a drag of the divider between
  * two slices moves it from bar to bar. A toolbar across the top holds the
- * selected slice's level, Keep Scene and Hit, Reset Map (the analysis's
- * own map), and on the right the Slice buttons: Split, Merge with next and
- * Delete (the slice before it grows into its place); the Playlist card's
- * controls play the song. Each change applies at
+ * selected slice's level, the Slice buttons (Keep Scene, Hit, Split,
+ * Merge with next, and Delete: the slice before it grows into its place),
+ * and Reset Map (the analysis's own map); the Playlist card's controls
+ * play the song. Each change applies at
  * once (see songFollow.editMap) and is kept with the song's analysis, so
  * Save Playlist keeps it. Under the map, a bar the width of the map moves
  * in the song; the song's file name is above the map, and a status bar at
@@ -175,26 +175,46 @@ export function SongMapPanel({ sceneCount }: { sceneCount: number }) {
               </div>
             </div>
             <span className="song-map-toolbar-divider" />
-            {/* Keep Scene and Hit: buttons that stay pressed while they are on. */}
-            <div className="panel-buttons song-map-checks">
-              <button
-                className={`panel-button text-only ${slice.keepScene ? "active" : ""}`}
-                aria-pressed={Boolean(slice.keepScene)}
-                disabled={index === 0}
-                onClick={() => apply(changeSlice(slices, index, { keepScene: !slice.keepScene }))}
-                data-tip={index === 0 ? "The first slice has nothing before it, so there is no scene change to skip" : "Keep the scene as this slice starts: its level and hit still change the motion, but the next scene does not come in"}
-              >
-                Keep Scene
-              </button>
-              <button
-                className={`panel-button text-only ${slice.drop ? "active" : ""}`}
-                aria-pressed={slice.drop}
-                disabled={index === 0}
-                onClick={() => apply(changeSlice(slices, index, { drop: !slice.drop }))}
-                data-tip={index === 0 ? "The first slice has nothing before it, so it cannot start with a hit" : "Hit: the picture rises before this slice, and changes hard as it starts; then the slice moves at its level"}
-              >
-                Hit
-              </button>
+            {/* The selected slice: Keep Scene and Hit stay pressed while they are on; Split, Merge and Delete change the slices. */}
+            <div className="song-map-field">
+              <span>Slice</span>
+              <div className="panel-buttons">
+                <button
+                  className={`panel-button text-only ${slice.keepScene ? "active" : ""}`}
+                  aria-pressed={Boolean(slice.keepScene)}
+                  disabled={index === 0}
+                  onClick={() => apply(changeSlice(slices, index, { keepScene: !slice.keepScene }))}
+                  data-tip={index === 0 ? "The first slice has nothing before it, so there is no scene change to skip" : "Keep the scene as this slice starts: its level and hit still change the motion, but the next scene does not come in"}
+                >
+                  Keep Scene
+                </button>
+                <button
+                  className={`panel-button text-only ${slice.drop ? "active" : ""}`}
+                  aria-pressed={slice.drop}
+                  disabled={index === 0}
+                  onClick={() => apply(changeSlice(slices, index, { drop: !slice.drop }))}
+                  data-tip={index === 0 ? "The first slice has nothing before it, so it cannot start with a hit" : "Hit: the picture rises before this slice, and changes hard as it starts; then the slice moves at its level"}
+                >
+                  Hit
+                </button>
+                <button className="panel-button" onClick={() => apply(splitSlice(slices, index, analysis.downbeats, duration))} data-tip="Split this slice in two at the bar nearest its middle">
+                  <Scissors size={15} /> Split
+                </button>
+                <button className="panel-button" disabled={index >= slices.length - 1} onClick={() => apply(mergeWithNext(slices, index))} data-tip="Join this slice with the next one; it keeps this slice's name and level">
+                  <ArrowsInLineHorizontal size={15} /> Merge
+                </button>
+                <button
+                  className="panel-button"
+                  disabled={slices.length < 2}
+                  onClick={() => {
+                    apply(deleteSlice(slices, index));
+                    setSelected(Math.max(0, index - 1));
+                  }}
+                  data-tip="Delete this slice: the slice before it grows into its place `Delete`"
+                >
+                  <Trash size={15} /> Delete
+                </button>
+              </div>
             </div>
             <span className="song-map-toolbar-divider" />
           </>
@@ -202,30 +222,6 @@ export function SongMapPanel({ sceneCount }: { sceneCount: number }) {
         <button className="panel-button song-map-reset" disabled={!analysis.mapEdits} onClick={() => songFollow.editMap(path, null)} data-tip="Give back the map that the analysis found">
           <ArrowCounterClockwise size={14} /> Reset Map
         </button>
-        {slice && (
-          <div className="song-map-field song-map-slice-tools">
-            <span>Slice</span>
-            <div className="panel-buttons">
-              <button className="panel-button" onClick={() => apply(splitSlice(slices, index, analysis.downbeats, duration))} data-tip="Split this slice in two at the bar nearest its middle">
-                <Scissors size={15} /> Split
-              </button>
-              <button className="panel-button" disabled={index >= slices.length - 1} onClick={() => apply(mergeWithNext(slices, index))} data-tip="Join this slice with the next one; it keeps this slice's name and level">
-                <ArrowsInLineHorizontal size={15} /> Merge
-              </button>
-              <button
-                className="panel-button"
-                disabled={slices.length < 2}
-                onClick={() => {
-                  apply(deleteSlice(slices, index));
-                  setSelected(Math.max(0, index - 1));
-                }}
-                data-tip="Delete this slice: the slice before it grows into its place `Delete`"
-              >
-                <Trash size={15} /> Delete
-              </button>
-            </div>
-          </div>
-        )}
       </div>
       <div className="song-map-body">
         {title}
