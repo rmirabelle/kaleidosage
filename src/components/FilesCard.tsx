@@ -5,8 +5,6 @@ import { MediaIcon } from "./MediaIcon";
 import { placeSeek } from "./Slider";
 import { FLOOR_DB } from "../engine/audio";
 import type { Engine } from "../engine/engine";
-import { PARAM_KEYS } from "../engine/params";
-import { TIER_NAMES } from "../engine/songPlan";
 import { THRESHOLD_DB, audioInput } from "../lib/audioInput";
 import { panelLayout } from "../lib/panelLayout";
 import { formatPlayTime, tracks } from "../lib/tracks";
@@ -252,10 +250,10 @@ function PlaylistTransport({ count, engine }: { count: number; engine: Engine | 
 }
 
 /**
- * Under the play toolbar while Song follow is on: where the analysis
- * stands and, once the picture follows the song, its tempo and how many
- * settings follow it (see Engine.soundFamily). The count is drawn in each
- * frame, as the scene can change at any time.
+ * Under the play toolbar while Song follow is on: "Analyzing" while the
+ * song's analysis runs, and a note while Hold keeps the scene. While the
+ * picture follows the song, it is empty (and hidden). The note is drawn in
+ * each frame, as Hold can change at any time.
  */
 function FollowStatusLine({ engine }: { engine: Engine | null }) {
   useSyncExternalStore(subscribeFollow, followVersion);
@@ -266,22 +264,7 @@ function FollowStatusLine({ engine }: { engine: Engine | null }) {
     let frame = 0;
     const draw = () => {
       /* Hold gives the scene its own clock (see holdScene in App): the song does not lead. */
-      if (!engine.script) {
-        const text = "Hold is on: the scene plays on its own. Play the music, or click Hold, to follow the song again.";
-        if (line.current && line.current.textContent !== text) line.current.textContent = text;
-        frame = requestAnimationFrame(draw);
-        return;
-      }
-      const count = PARAM_KEYS.filter((key) => engine.soundFamily(key) && engine.isShown(key)).length;
-      const now = engine.songNow;
-      const part = now && engine.script?.script.plan.parts.filter((candidate) => candidate.start <= now.time).pop();
-      const live = now ? ` At ${time(now.time)}${part ? `, ${TIER_NAMES[part.tier]} part` : ""}: intensity ${Math.round(now.intensity * 100)}%, pace ×${now.pace.toFixed(2)}.` : "";
-      const paths = tracks.list.map((track) => track.path);
-      const analyzed = songFollow.analyzedCount(paths);
-      const songs = paths.length > 1 ? ` ${analyzed} of ${paths.length} songs analyzed.` : "";
-      const text = `Following the song, ${Math.round(status.tempo)} BPM.${live}${songs} ${count === 0
-        ? "No setting follows it: click the speaker beside a setting, or use Enable All in the Audio panel."
-        : `${count === 1 ? "1 setting follows" : `${count} settings follow`} it (lit waveform icons); the other ranges play at its pace.`}`;
+      const text = engine.script ? "" : "Hold is on: the scene plays on its own. Play the music, or click Hold, to follow the song again.";
       if (line.current && line.current.textContent !== text) line.current.textContent = text;
       frame = requestAnimationFrame(draw);
     };
