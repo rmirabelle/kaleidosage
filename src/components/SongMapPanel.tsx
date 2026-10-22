@@ -97,9 +97,15 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
   const view = draft ?? slices;
   const slicesRef = useRef(view);
   slicesRef.current = view;
-  /* The playhead follows the song in each animation frame, while this song plays, and the slice it is in gets a subtle highlight. */
+  /**
+   * The playhead follows the song in each animation frame, while this song
+   * plays, and the slice it is in gets a subtle highlight. Each time
+   * another slice starts to play (or the playhead jumps into it), that
+   * slice is selected too.
+   */
   useEffect(() => {
     let frame = 0;
+    let lastPlaying = -1;
     const draw = () => {
       const line = playhead.current;
       if (line && analysis) {
@@ -113,6 +119,8 @@ export function SongMapPanel({ sceneCount, activeScene, onSlicePick }: { sceneCo
         if (clock.current && clock.current.textContent !== text) clock.current.textContent = text;
         const current = shown ? slicesRef.current.filter((slice) => slice.start <= now).length - 1 : -1;
         strip.current?.querySelectorAll(".song-map-slice").forEach((element, i) => element.classList.toggle("playing", i === current));
+        if (current >= 0 && current !== lastPlaying) setSelected(current);
+        lastPlaying = current;
       }
       frame = requestAnimationFrame(draw);
     };
