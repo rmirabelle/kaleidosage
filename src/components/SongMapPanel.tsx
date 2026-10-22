@@ -174,7 +174,6 @@ export function SongMapPanel({ sceneCount }: { sceneCount: number }) {
                 ))}
               </div>
             </div>
-            <span className="song-map-toolbar-divider" />
             {/* The selected slice: Keep Scene and Hit stay pressed while they are on; Split, Merge and Delete change the slices. */}
             <div className="song-map-field">
               <span>Slice</span>
@@ -216,7 +215,6 @@ export function SongMapPanel({ sceneCount }: { sceneCount: number }) {
                 </button>
               </div>
             </div>
-            <span className="song-map-toolbar-divider" />
           </>
         )}
         <button className="panel-button song-map-reset" disabled={!analysis.mapEdits} onClick={() => songFollow.editMap(path, null)} data-tip="Give back the map that the analysis found">
