@@ -5,15 +5,16 @@
 .DESCRIPTION
   First the script asks each open Kaleido Sage window to close, the same as a
   click on its close button. A window with unsaved changes then asks
-  "Save changes?", and the script waits for the answer. If the app is still
-  open after that (Cancel, or no answer), the script stops with exit code 1
-  and stops nothing. -Force tree-kills the app without asking: unsaved
+  "Save changes?", and the script waits up to 10 seconds (-WaitSeconds) for
+  the app to close. If the app is still open after that (a question not
+  answered yet, or Cancel), the script stops with exit code 1 and stops
+  nothing. -Force tree-kills the app without asking: unsaved
   changes are lost.
 #>
 [CmdletBinding()]
 param(
   [switch] $Force,
-  [int] $WaitSeconds = 300
+  [int] $WaitSeconds = 10
 )
 $ErrorActionPreference = "Continue"
 
