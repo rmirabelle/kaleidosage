@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { CaretDoubleLeft, CaretDoubleRight, Plus, SpeakerHigh, Trash, Waveform, X } from "@phosphor-icons/react";
 import { MediaIcon } from "./MediaIcon";
@@ -43,7 +43,11 @@ function followTip(enabled: boolean, status: FollowStatus) {
  * toolbar at the bottom runs the music on its own (see PlaylistTransport);
  * the controls on the picture run the scene.
  */
-export function FilesCard({ onAddTracks }: { onAddTracks: () => void }) {
+export function FilesCard({ onAddTracks, input }: {
+  onAddTracks: () => void;
+  /** The audio Input menu (see AudioInputMenu): with Files as the input, it is above the music's play controls. */
+  input: ReactNode;
+}) {
   useSyncExternalStore(subscribeTracks, tracksVersion);
   useSyncExternalStore(subscribeFollow, followVersion);
   const width = useSyncExternalStore(panelLayout.subscribe, () => panelLayout.filesWidth);
@@ -125,7 +129,7 @@ export function FilesCard({ onAddTracks }: { onAddTracks: () => void }) {
             )}
           </div>
           {count > 0 && <FilesFooter count={count} />}
-          <PlaylistTransport count={count} />
+          <PlaylistTransport count={count} input={input} />
         </section>
       </aside>
       <FilesSplitter />
@@ -177,7 +181,7 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * through React state; a drag on the bar seeks. While the picture follows
  * the song, Space and Shift+Space run these controls (see App).
  */
-function PlaylistTransport({ count }: { count: number }) {
+function PlaylistTransport({ count, input }: { count: number; input: ReactNode }) {
   const bar = useRef<HTMLInputElement>(null);
   const fill = useRef<HTMLDivElement>(null);
   const cap = useRef<HTMLDivElement>(null);
@@ -213,6 +217,7 @@ function PlaylistTransport({ count }: { count: number }) {
   const empty = count === 0;
   return (
     <div className="playlist-transport" aria-label="Music controls">
+      {input}
       <ThresholdMeter level={level} threshold={threshold} />
       <div className="playlist-transport-row">
         <div className="panel-buttons">

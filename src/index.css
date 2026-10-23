@@ -338,7 +338,9 @@ button { border: 0; }
 /* The audio Input menu, above the play controls: the name at the left, the menu filling the rest of the row. */
 .scene-input-row { display: flex; align-items: center; gap: 10px; }
 .scene-input-row .dropdown-button { flex: 1; min-width: 0; }
-.scene-hold-bar .scene-input-row { margin-bottom: 8px; }
+/* A full-width line under the menu, across the toolbar's side padding. */
+.playlist-transport > .scene-input-row { margin: 0 -10px; padding: 0 10px 8px; border-bottom: 1px solid #3a3e4d; }
+.scene-hold-bar > .scene-input-row { margin: 0 -8px 8px; padding: 0 8px 8px; border-bottom: 1px solid #3a3e4d; }
 .scene-countdown i { transition: width .1s linear; }
 .audio-meter-well.scene-countdown i.soon { background: #f5c542; }
 .audio-meter-well.scene-countdown i.now { background: #e53935; }

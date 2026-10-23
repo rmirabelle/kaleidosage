@@ -21,6 +21,7 @@ import { StartScreen } from "./components/StartScreen";
 import { LoadingOverlay, type Loading } from "./components/LoadingOverlay";
 import { SceneList } from "./components/SceneList";
 import { FilesCard } from "./components/FilesCard";
+import { AudioInputMenu } from "./components/AudioInputMenu";
 import { MenuBar, type Menu } from "./components/MenuBar";
 import { OpenDialog, type OpenKind } from "./components/OpenDialog";
 import { StatsOverlay } from "./components/StatsOverlay";
@@ -2002,6 +2003,12 @@ export default function App() {
   /* The scenes are a list at the left, not tabs, in a playlist or with Files as the input: a show has many scenes. Hide Panels (H) hides the list with the rest of the left side. */
   const sceneListMode = tracksActive || playlistPath !== null;
   const sceneListShown = !fullscreen && !startScreen && sceneListMode && panelOpen;
+  /**
+   * The audio Input menu: above the Playlist's play controls while Files is
+   * the input and the Playlist shows, else above the scene's play controls.
+   */
+  const inputInPlaylist = sceneListShown && tracksActive && !filesCollapsed;
+  const inputMenu = <AudioInputMenu onAddTracks={() => void pickTracks()} tip={inputTip} onTipDone={() => setInputTip(false)} />;
   const tabs: DocumentTabInfo[] = docs.map((doc) => doc.id === activeId
     ? { id: doc.id, fileName: docFileName(scenePath, doc.untitled), path: scenePath, dirty }
     : { id: doc.id, fileName: docFileName(doc.path, doc.untitled), path: doc.path, dirty: doc.dirty });
@@ -2046,7 +2053,7 @@ export default function App() {
           * its own (see .sidebar), and the left panel stands alone.
           */}
         <div className={`sidebar ${sceneListShown ? "with-scenes" : ""}`}>
-          {sceneListShown && tracksActive && <FilesCard onAddTracks={() => void pickTracks()} />}
+          {sceneListShown && tracksActive && <FilesCard onAddTracks={() => void pickTracks()} input={inputInPlaylist ? inputMenu : null} />}
           <div className="sidebar-stack">
             <div className="sidebar-columns">
               {sceneListShown && <SceneList tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} inPlaylist={playlistPath !== null} onPick={(id) => songFollow.pickScene(docsRef.current.findIndex((doc) => doc.id === id))} />}
@@ -2066,7 +2073,7 @@ export default function App() {
                   driverVideoName={driverVideoName}
                   onPickDriverVideo={() => setOpenRequest({ kind: "image", slot: 0, target: "driver" })}
                   onNeedAudioInput={askForAudioInput}
-                  transport={<SceneTransport engine={engine} paused={paused} onTogglePause={togglePause} onStop={stop} show={holdUseful} autoNext={tracksActive && docs.length > 1} held={holdUseful && sceneHeld} onToggleHold={() => holdScene(!sceneHeldRef.current)} onAddTracks={() => void pickTracks()} inputTip={inputTip} onInputTipDone={() => setInputTip(false)} />}
+                  transport={<SceneTransport engine={engine} paused={paused} onTogglePause={togglePause} onStop={stop} show={holdUseful} autoNext={tracksActive && docs.length > 1} held={holdUseful && sceneHeld} onToggleHold={() => holdScene(!sceneHeldRef.current)} input={inputInPlaylist ? null : inputMenu} />}
                   source={(
                     <SourcePanel
                       engine={engine}
