@@ -401,6 +401,8 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       /* A press on a control here is work on the scene (a slider, a menu, a random image); a press on an empty place is not, nor on the play toolbar, and an effect's header counts only when it opens the effect (see openEffectGroup in App). */
       onPointerDownCapture={(event) => {
         const target = event.target as Element;
+        /* A tip's portal is outside the panel on the page; a press on it is no work. */
+        if (!event.currentTarget.contains(target)) return;
         if (target.closest(WORK_CONTROLS) && !target.closest(".scene-transport, .panel-group-header")) onWork();
       }}
     >
@@ -412,6 +414,8 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
         className="panel-card fx-card"
         {...help("fx")}
         onPointerDownCapture={(event) => {
+          /* A press on a tip (a portal: React passes its events here) is not a press in the card. */
+          if (!event.currentTarget.contains(event.target as Node)) return;
           if (nextTip) onNextTipDone();
           if (linksTip && (event.target as Element).closest("button")) onLinksTipDone();
         }}
