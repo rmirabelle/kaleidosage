@@ -2449,3 +2449,95 @@ void main() {
   vec3 color = v_color.rgb * min(boost, 1.0 / max(peak, 1e-3));
   o = vec4(color * a, a);
 }`;
+
+/**
+ * Light Cycles, step 1: a small copy of the picture for the cycles on the
+ * CPU (see drawCycles). Each pixel of the copy is the mean of 16 points of
+ * the picture under it, so a fine pattern does not flicker in the copy.
+ */
+export const CYCLE_SAMPLE_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+/* One pixel of the copy, as a part of the picture's size. */
+uniform vec2 u_step;
+void main() {
+  vec3 sum = vec3(0.0);
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) sum += texture(u_tex, v_uv + (vec2(i, j) - 1.5) * 0.25 * u_step).rgb;
+  }
+  o = vec4(clamp(sum / 16.0, 0.0, 1.0), 1.0);
+}`;
+
+/**
+ * Light Cycles, step 2: one line segment (or one head) per instance, from
+ * a_ends.xy to a_ends.zw in screen heights (see writeInstances in
+ * cycles.ts). The quad covers the segment and its round ends, with one more
+ * pixel for the smooth edge.
+ */
+export const CYCLE_VERTEX_SHADER = `#version 300 es
+precision highp float;
+layout(location = 0) in vec2 a_pos;
+layout(location = 1) in vec4 a_ends;
+layout(location = 2) in vec4 a_colorA;
+layout(location = 3) in vec4 a_colorB;
+/* The radius in screen heights, and 1 for a soft head dot. */
+layout(location = 4) in vec2 a_shape;
+uniform float u_aspect;
+/* One pixel, in screen heights. */
+uniform float u_pixel;
+out vec2 v_place;
+flat out vec4 v_ends;
+flat out vec4 v_colorA;
+flat out vec4 v_colorB;
+flat out vec2 v_shape;
+void main() {
+  vec2 a = a_ends.xy;
+  vec2 ab = a_ends.zw - a;
+  float span = length(ab);
+  vec2 along = span > 1e-7 ? ab / span : vec2(1.0, 0.0);
+  vec2 across = vec2(-along.y, along.x);
+  float reach = max(a_shape.x, 0.5 * u_pixel) + u_pixel;
+  vec2 place = a + ab * (a_pos.x * 0.5 + 0.5) + along * a_pos.x * reach + across * a_pos.y * reach;
+  v_place = place;
+  v_ends = a_ends;
+  v_colorA = a_colorA;
+  v_colorB = a_colorB;
+  v_shape = a_shape;
+  gl_Position = vec4(place.x / u_aspect * 2.0 - 1.0, place.y * 2.0 - 1.0, 0.0, 1.0);
+}`;
+
+/**
+ * A round-ended line with a smooth edge one pixel wide, or a soft round
+ * head dot, with premultiplied alpha. Its color goes from the start's to
+ * the end's along the segment. A line thinner than a pixel is drawn one
+ * pixel wide but fainter.
+ */
+export const CYCLE_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_place;
+flat in vec4 v_ends;
+flat in vec4 v_colorA;
+flat in vec4 v_colorB;
+flat in vec2 v_shape;
+uniform float u_pixel;
+out vec4 o;
+void main() {
+  vec2 a = v_ends.xy;
+  vec2 ab = v_ends.zw - a;
+  float span2 = dot(ab, ab);
+  float t = span2 > 0.0 ? clamp(dot(v_place - a, ab) / span2, 0.0, 1.0) : 0.0;
+  float d = length(v_place - (a + ab * t));
+  float radius = max(v_shape.x, 0.5 * u_pixel);
+  float cover;
+  if (v_shape.y > 0.5) {
+    float k = clamp(1.0 - d / radius, 0.0, 1.0);
+    cover = k * k;
+  } else {
+    cover = clamp((radius - d) / u_pixel + 0.5, 0.0, 1.0) * min(1.0, 2.0 * v_shape.x / u_pixel);
+  }
+  vec4 color = mix(v_colorA, v_colorB, t);
+  float alpha = color.a * cover;
+  o = vec4(color.rgb * alpha, alpha);
+}`;

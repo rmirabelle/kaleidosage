@@ -18,6 +18,7 @@ const EFFECT_NOTES: Record<FxStep, string> = {
   camera: "Flies a camera over the picture as a landscape.",
   sort: "Sorts pixels by brightness into streaks.",
   particles: "Bright areas send out moving particles.",
+  cycles: "Light cycles race and leave lines in the picture's colors.",
   rays: "Light rays stream out from bright areas.",
   bloom: "Bright areas glow.",
   sharpen: "Makes edges and fine detail crisper.",

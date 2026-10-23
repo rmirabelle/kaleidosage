@@ -138,6 +138,7 @@ const EFFECT_GROUPS: [GroupKey, string][] = [
   ["camera", "Camera"],
   ["sort", "Pixel sort"],
   ["particles", "Particles"],
+  ["cycles", "Light cycles"],
   ["rays", "Light rays"],
   ["bloom", "Bloom"],
   ["sharpen", "Sharpen"],

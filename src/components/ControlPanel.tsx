@@ -9,8 +9,8 @@ import { settingButtons } from "../lib/settingButtons";
 import { GradientEditor } from "./GradientEditor";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
-import { BLUR_KEYS, BLUR_MASKS, FOLD_MODES, KALEIDOSCOPE_KEYS, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
-import type { BlurMask, FoldMode, FxStep, MapMode, ShapeStep, SmearShape, WarpType } from "../engine/renderer";
+import { BLUR_KEYS, BLUR_MASKS, CYCLE_KEYS, CYCLE_MOVES, FOLD_MODES, KALEIDOSCOPE_KEYS, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
+import type { BlurMask, CycleMove, FoldMode, FxStep, MapMode, ShapeStep, SmearShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ContextMenu } from "./ContextMenu";
@@ -66,6 +66,7 @@ const LAYER_BLENDS = [
 ] as const;
 const TRAIL_MODES = [[1, "Mix (smoky)"], [2, "Lighten (glowing)"]] as const;
 const PARTICLE_BLENDS = [[0, "Glow (add)"], [1, "Normal"]] as const;
+const CYCLE_BLENDS = [[0, "Glow (add)"], [1, "Cover"]] as const;
 const SORT_ORDERS = [[0, "Dark to bright"], [1, "Bright to dark"]] as const;
 const DRIVER_SOURCES = [[0, "Caustics"], [1, "Smoke"], [2, "Ink"], [3, "Fire"], [4, "Ripples"], [5, "Video"]] as const;
 const DRIVER_MODES = [[0, "Bend"], [1, "Reveal"], [2, "Light"]] as const;
@@ -222,6 +223,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       camera: () => start("cameraAmount", 1),
       sort: () => start("sortAmount", 1),
       particles: () => start("particleAmount", 1),
+      cycles: () => start("cyclesAmount", 1),
       rays: () => start("raysAmount", 1.5),
       bloom: () => start("bloomAmount", 1)
     };
@@ -305,6 +307,11 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
           row={(key) => key === "particleGradient" ? <Fragment key={key}>{row(key)}<GradientEditor engine={engine} /></Fragment> : row(key)}
           blend={<ModeSelect engine={engine} stateKey="particleBlend" options={PARTICLE_BLENDS} name="Blend" />}
         />
+      </Group>
+    ),
+    cycles: (grip) => (
+      <Group engine={engine} group="cycles" title="Light cycles" grip={grip} {...accordion("cycles")}>
+        <CyclesSection engine={engine} row={row} />
       </Group>
     ),
     rays: (grip) => (
@@ -735,7 +742,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "driverSource" | "driverMode";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "cyclesMove" | "cyclesBlend" | "driverSource" | "driverMode";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange }: {
@@ -811,6 +818,17 @@ function SmearSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =>
     <>
       <ModeSelect engine={engine} stateKey="smearShape" options={SMEAR_SHAPES} onChange={setShape} />
       <SplitRows keys={SMEAR_KEYS[shape]} row={row} />
+    </>
+  );
+}
+
+/** How the light cycles move (Grid or Free), and the sliders for that way. */
+function CyclesSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
+  const [move, setMove] = useState<CycleMove>(engine.state.cyclesMove);
+  return (
+    <>
+      <ModeSelect engine={engine} stateKey="cyclesMove" options={CYCLE_MOVES} name="Move" onChange={setMove} />
+      <SplitRows keys={CYCLE_KEYS[move]} row={row} blend={<ModeSelect engine={engine} stateKey="cyclesBlend" options={CYCLE_BLENDS} name="Blend" />} />
     </>
   );
 }

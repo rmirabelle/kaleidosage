@@ -1,6 +1,7 @@
 import { GpuTimer } from "./gpuTimer";
+import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_SAMPLE_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 
 /** The blur mask: circle with a sharp or a blurred center, gradient, bright areas, dark areas, noise. */
 export type BlurMask = 0 | 1 | 2 | 3 | 4 | 5;
@@ -18,7 +19,7 @@ export type ShapeStep = "warp" | "map" | "kaleidoscope";
 /** The kind of warp: noise, ripple, waves, swirl, bulge and pinch, cells. */
 export type WarpType = 0 | 1 | 2 | 3 | 4 | 5;
 /** The steps that change the drawn picture. The user sets their order. */
-export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "sort" | "particles" | "rays" | "bloom" | "sharpen" | "color" | "levels";
+export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "sort" | "particles" | "cycles" | "rays" | "bloom" | "sharpen" | "color" | "levels";
 /**
  * Any effect step. The user sets one order for all of them. Shape steps
  * that are next to each other run in one pass; a shape step after a
@@ -26,7 +27,7 @@ export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | 
  */
 export type FxStep = ShapeStep | PictureStep;
 export const SHAPE_STEPS: readonly ShapeStep[] = ["warp", "map", "kaleidoscope"];
-export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "camera", "sort", "particles", "rays", "bloom", "sharpen", "color", "levels"];
+export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "camera", "sort", "particles", "cycles", "rays", "bloom", "sharpen", "color", "levels"];
 
 /** Sharpen, Color and Levels, in the order FINISH_SHADER applies them (see drawFinish). */
 type FinishPart = "sharpen" | "color" | "levels";
@@ -49,6 +50,10 @@ export type DriverMode = 0 | 1 | 2;
 export type SortOrder = 0 | 1;
 /** How the particles combine with the picture: 0 glow (they add their light), 1 normal (they cover it). */
 export type ParticleBlend = 0 | 1;
+/** How the light cycles move: 0 on grid lanes with right-angle turns, 1 in free curves. */
+export type CycleMove = 0 | 1;
+/** How the light cycles' lines combine with the picture: 0 glow (they add their light), 1 cover. */
+export type CycleBlend = 0 | 1;
 /** How the two images fade: 0 = crossfade, 1 = dissolve by brightness (light areas change first). */
 export type BlendMode = 0 | 1;
 /**
@@ -285,6 +290,30 @@ export interface FrameValues {
   particleSeconds: number;
   particleTime: number;
   /**
+   * Light Cycles (see cycles.ts): opacity (0 = off), how they move and
+   * blend, the picture's opacity under the lines, how many there are, their
+   * speed (screen heights per second), the line width (pixels at 1080p), the
+   * fade time in seconds (Infinity: no fade), the turns per second, follow,
+   * dodge, how far past the screen they can drive (a part of the screen
+   * size), the lane spacing (screen heights), the head glow, and the
+   * animation seconds since the last frame (0 while paused).
+   */
+  cycles: number;
+  cyclesMove: CycleMove;
+  cyclesBlend: CycleBlend;
+  cyclesBackground: number;
+  cyclesCount: number;
+  cyclesSpeed: number;
+  cyclesWidth: number;
+  cyclesLength: number;
+  cyclesTurns: number;
+  cyclesFollow: number;
+  cyclesDodge: number;
+  cyclesBounds: number;
+  cyclesGrid: number;
+  cyclesHead: number;
+  cyclesSeconds: number;
+  /**
    * Light rays (see RAYS_SHADER): strength (0 = off), the brightness where
    * the light starts, the length (a part of the way to the center), the
    * fade along a ray, and the center (a part of the screen size from the
@@ -395,6 +424,11 @@ interface ParticleState {
   textures: [WebGLTexture, WebGLTexture, WebGLTexture];
 }
 
+/** The most line segments (and heads) Light Cycles draws in one frame. */
+const MAX_CYCLE_INSTANCES = 262144;
+/** The width of the small copy of the picture that the light cycles read. */
+const CYCLE_PICTURE_WIDTH = 256;
+
 /** Frames the time smear keeps, and the most GPU memory they may use (they get smaller on a large canvas). */
 const SMEAR_SLOTS = 32;
 const SMEAR_MEMORY = 320 * 1024 * 1024;
@@ -469,6 +503,24 @@ export class KaleidoRenderer {
   private readonly particleVertices: WebGLVertexArrayObject;
   /** True when the GPU can draw to 32-bit float textures, which the particle state needs. */
   private readonly floatTargets: boolean;
+  /** Light Cycles: the cycles, and whether they were on in the last frame (when not, they start again). */
+  private readonly cycleSim = new CycleSim();
+  private cyclesWereOn = false;
+  private readonly cycleSample: Program;
+  private readonly cycleDraw: Program;
+  private readonly cycleOver: Program;
+  /** The lines of this frame, drawn here first and then over the picture. */
+  private readonly cycleTarget: Target;
+  /** The line instances (see writeInstances), and their GPU buffer and vertex array. Made on first use. */
+  private cycleInstances = new Float32Array(4096 * INSTANCE_FLOATS);
+  private cycleBuffer: { vertices: WebGLVertexArrayObject; instances: WebGLBuffer; capacity: number } | null = null;
+  /**
+   * The small copy of the picture for the cycles: its texture, the buffer the
+   * GPU copies it into, and the fence of a copy that is not done yet. The
+   * cycles read the last copy that is done ("cyclePicture").
+   */
+  private cycleRead: { texture: WebGLTexture; framebuffer: WebGLFramebuffer; buffer: WebGLBuffer; size: [number, number]; fence: WebGLSync | null } | null = null;
+  private cyclePicture: Picture | null = null;
   /** The pixel sort's passes, in order (see drawSort). */
   private readonly sortPrograms: { turn: Program; start: Program; jump: Program; pack: Program; step: Program; show: Program };
   /** Three square pictures for the pixel sort, made on first use, and their side. */
@@ -558,6 +610,9 @@ export class KaleidoRenderer {
     this.particleStep = this.createProgram(PARTICLE_STEP_SHADER);
     this.particleDraw = this.createProgram(PARTICLE_SHADER, PARTICLE_VERTEX_SHADER);
     this.particleVertices = gl.createVertexArray()!;
+    this.cycleSample = this.createProgram(CYCLE_SAMPLE_SHADER);
+    this.cycleDraw = this.createProgram(CYCLE_SHADER, CYCLE_VERTEX_SHADER);
+    this.cycleOver = this.createProgram(OVERLAY_SHADER);
     this.bloomBright = this.createProgram(BLOOM_BRIGHT_SHADER);
     this.bloomDown = this.createProgram(BLOOM_DOWN_SHADER);
     this.rays = this.createProgram(RAYS_SHADER);
@@ -604,6 +659,7 @@ export class KaleidoRenderer {
     this.fieldTargets = [this.createTarget(), this.createTarget()];
     this.heightTarget = this.createTarget();
     this.raysTargets = [this.createTarget(), this.createTarget()];
+    this.cycleTarget = this.createTarget();
     this.maxFramebuffer = gl.createFramebuffer()!;
     this.maxFormat = this.trailFormat.internal === gl.RGBA16F ? gl.R16F : gl.R8;
     this.timer = new GpuTimer(gl);
@@ -791,6 +847,7 @@ export class KaleidoRenderer {
       /* The camera's view always shows while it is on: at opacity 0 it is the flat floor, seen by the camera. */
       camera: v.cameraOn,
       particles: v.particles > 0 && this.floatTargets,
+      cycles: v.cycles > 0,
       /* The sort keeps column numbers in half floats, so it needs float textures. */
       sort: v.sort > 0 && this.floatTargets,
       rays: v.rays > 0,
@@ -901,6 +958,7 @@ export class KaleidoRenderer {
         else if (step === "contours") this.drawContours(v, source, target, width, height);
         else if (step === "smear") this.drawSmear(v, source, target, width, height);
         else if (step === "particles") this.drawParticles(v, source, target, width, height);
+        else if (step === "cycles") this.drawCycles(v, source, target, width, height);
         else if (step === "rays") this.drawRays(v, source, target, width, height);
         else if (step === "sort") this.drawSort(v, source, target, width, height);
         else if (step === "bloom") this.drawBloom(v, source, target, width, height);
@@ -913,6 +971,7 @@ export class KaleidoRenderer {
     this.contoursWereOn = active.contours;
     this.smearWasOn = active.smear;
     this.particlesWereOn = active.particles;
+    this.cyclesWereOn = active.cycles;
   }
 
   /**
@@ -1456,6 +1515,172 @@ export class KaleidoRenderer {
   }
 
   /**
+   * Light Cycles (see cycles.ts). The cycles drive on the CPU, with a small
+   * copy of the picture from a frame or two before (see readCyclePicture).
+   * Their lines are drawn into cycleTarget as instances (CYCLE_SHADER), with
+   * MAX blending, so joins and crossings do not get brighter. Then the
+   * picture is copied, dimmed by the background opacity, and the lines go
+   * over it: added (glow) or over it (cover). While paused, the cycles stand
+   * still.
+   */
+  private drawCycles(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+    const gl = this.gl;
+    const sim = this.cycleSim;
+    const settings: CycleSettings = {
+      move: v.cyclesMove, count: v.cyclesCount, speed: v.cyclesSpeed, width: v.cyclesWidth / 1080, length: v.cyclesLength,
+      turns: v.cyclesTurns, follow: v.cyclesFollow, dodge: v.cyclesDodge, bounds: v.cyclesBounds, grid: v.cyclesGrid
+    };
+    if (!this.cyclesWereOn) sim.reset();
+    this.readCyclePicture();
+    /* A frame that starts the cycles moves them a little, so they show at once, even while paused. */
+    sim.step(this.cyclesWereOn ? v.cyclesSeconds : Math.max(v.cyclesSeconds, 1e-3), settings, width / height, this.cyclePicture);
+    this.startCyclePicture(source, width, height);
+
+    const head = Math.min(1, Math.max(0, v.cyclesHead));
+    let capacity = this.cycleInstances.length / INSTANCE_FLOATS;
+    let count = sim.writeInstances(this.cycleInstances, capacity, settings, head);
+    if (count >= capacity && capacity < MAX_CYCLE_INSTANCES) {
+      capacity = Math.min(MAX_CYCLE_INSTANCES, capacity * 4);
+      this.cycleInstances = new Float32Array(capacity * INSTANCE_FLOATS);
+      count = sim.writeInstances(this.cycleInstances, capacity, settings, head);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.cycleTarget.framebuffer);
+    gl.viewport(0, 0, width, height);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    if (count > 0) {
+      const buffer = this.ensureCycleBuffer(capacity);
+      gl.bindVertexArray(buffer.vertices);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer.instances);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.cycleInstances, 0, count * INSTANCE_FLOATS);
+      const d = this.cycleDraw;
+      gl.useProgram(d.program);
+      gl.uniform1f(d.uniforms.u_aspect, width / height);
+      gl.uniform1f(d.uniforms.u_pixel, 1 / height);
+      gl.enable(gl.BLEND);
+      gl.blendEquation(gl.MAX);
+      gl.blendFunc(gl.ONE, gl.ONE);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, count);
+      gl.blendEquation(gl.FUNC_ADD);
+      gl.disable(gl.BLEND);
+      gl.bindVertexArray(null);
+    }
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(this.copy.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.uniform1i(this.copy.uniforms.u_tex, 0);
+    /* The blend constant scales the copy's color and keeps its alpha at 1. */
+    const background = Math.min(1, Math.max(0, v.cyclesBackground));
+    gl.enable(gl.BLEND);
+    gl.blendColor(background, background, background, 1);
+    gl.blendFunc(gl.CONSTANT_COLOR, gl.ZERO);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    const o = this.cycleOver;
+    gl.useProgram(o.program);
+    gl.bindTexture(gl.TEXTURE_2D, this.cycleTarget.texture);
+    gl.uniform1i(o.uniforms.u_tex, 0);
+    gl.uniform1f(o.uniforms.u_alpha, Math.min(1, Math.max(0, v.cycles)));
+    gl.uniform1i(o.uniforms.u_opaque, 0);
+    gl.blendFunc(gl.ONE, v.cyclesBlend === 0 ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.disable(gl.BLEND);
+  }
+
+  /** The vertex array for the line instances: a quad's four corners, and the instance buffer, made at least "capacity" instances big. */
+  private ensureCycleBuffer(capacity: number) {
+    const gl = this.gl;
+    if (this.cycleBuffer && this.cycleBuffer.capacity >= capacity) return this.cycleBuffer;
+    if (this.cycleBuffer) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.cycleBuffer.instances);
+      gl.bufferData(gl.ARRAY_BUFFER, capacity * INSTANCE_FLOATS * 4, gl.DYNAMIC_DRAW);
+      this.cycleBuffer.capacity = capacity;
+      return this.cycleBuffer;
+    }
+    const vertices = gl.createVertexArray()!;
+    gl.bindVertexArray(vertices);
+    const corners = gl.createBuffer()!;
+    gl.bindBuffer(gl.ARRAY_BUFFER, corners);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    const instances = gl.createBuffer()!;
+    gl.bindBuffer(gl.ARRAY_BUFFER, instances);
+    gl.bufferData(gl.ARRAY_BUFFER, capacity * INSTANCE_FLOATS * 4, gl.DYNAMIC_DRAW);
+    const stride = INSTANCE_FLOATS * 4;
+    ([[1, 4, 0], [2, 4, 16], [3, 4, 32], [4, 2, 48]] as const).forEach(([location, size, offset]) => {
+      gl.enableVertexAttribArray(location);
+      gl.vertexAttribPointer(location, size, gl.FLOAT, false, stride, offset);
+      gl.vertexAttribDivisor(location, 1);
+    });
+    gl.bindVertexArray(null);
+    this.cycleBuffer = { vertices, instances, capacity };
+    return this.cycleBuffer;
+  }
+
+  /**
+   * Starts a copy of the picture into the small texture and on into memory,
+   * without waiting for the GPU (see readCyclePicture). Only one copy is on
+   * its way at a time.
+   */
+  private startCyclePicture(source: WebGLTexture, width: number, height: number) {
+    const gl = this.gl;
+    const size: [number, number] = [CYCLE_PICTURE_WIDTH, Math.max(1, Math.round(CYCLE_PICTURE_WIDTH * height / width))];
+    if (this.cycleRead?.fence) return;
+    if (!this.cycleRead || this.cycleRead.size[0] !== size[0] || this.cycleRead.size[1] !== size[1]) {
+      if (this.cycleRead) {
+        gl.deleteTexture(this.cycleRead.texture);
+        gl.deleteFramebuffer(this.cycleRead.framebuffer);
+        gl.deleteBuffer(this.cycleRead.buffer);
+      }
+      const texture = gl.createTexture()!;
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, size[0], size[1]);
+      const framebuffer = gl.createFramebuffer()!;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+      const buffer = gl.createBuffer()!;
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buffer);
+      gl.bufferData(gl.PIXEL_PACK_BUFFER, size[0] * size[1] * 4, gl.STREAM_READ);
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+      this.cycleRead = { texture, framebuffer, buffer, size, fence: null };
+      this.cyclePicture = null;
+    }
+    const read = this.cycleRead;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, read.framebuffer);
+    gl.viewport(0, 0, size[0], size[1]);
+    const c = this.cycleSample;
+    gl.useProgram(c.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.uniform1i(c.uniforms.u_tex, 0);
+    gl.uniform2f(c.uniforms.u_step, 1 / size[0], 1 / size[1]);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, read.buffer);
+    gl.readPixels(0, 0, size[0], size[1], gl.RGBA, gl.UNSIGNED_BYTE, 0);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+    read.fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+  }
+
+  /** Takes the small copy of the picture into memory when the GPU has finished it (see startCyclePicture). */
+  private readCyclePicture() {
+    const gl = this.gl;
+    const read = this.cycleRead;
+    if (!read?.fence) return;
+    const status = gl.clientWaitSync(read.fence, 0, 0);
+    if (status !== gl.ALREADY_SIGNALED && status !== gl.CONDITION_SATISFIED) return;
+    gl.deleteSync(read.fence);
+    read.fence = null;
+    const [width, height] = read.size;
+    if (!this.cyclePicture || this.cyclePicture.data.length !== width * height * 4) this.cyclePicture = { width, height, data: new Uint8Array(width * height * 4) };
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, read.buffer);
+    gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, this.cyclePicture.data);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+  }
+
+  /**
    * Pixel sort. The picture is turned so the sort lines are the rows of a
    * square buffer (SORT_TURN_SHADER). Its side is the power of two nearest
    * the screen's diagonal, at most 2048, so the bitonic sort works and the
@@ -1872,6 +2097,7 @@ export class KaleidoRenderer {
     this.contoursWereOn = false;
     this.smearWasOn = false;
     this.particlesWereOn = false;
+    this.cyclesWereOn = false;
     this.trailsWereOn = false;
   }
 
@@ -1979,7 +2205,7 @@ export class KaleidoRenderer {
   private ensureTrailTargets(width: number, height: number) {
     if (width === this.trailSize[0] && height === this.trailSize[1]) return;
     this.trailSize = [width, height];
-    for (const target of [this.current, this.scratch, ...this.trailTargets, ...this.fieldTargets, this.heightTarget]) this.allocate(target, width, height);
+    for (const target of [this.current, this.scratch, ...this.trailTargets, ...this.fieldTargets, this.heightTarget, this.cycleTarget]) this.allocate(target, width, height);
     for (const target of this.raysTargets) this.allocate(target, Math.max(1, width >> 1), Math.max(1, height >> 1));
     this.bloomLevels = Math.max(1, Math.floor(Math.log2(Math.min(width, height))) - 3);
     while (this.bloomChain.length < this.bloomLevels) this.bloomChain.push(this.createTarget());

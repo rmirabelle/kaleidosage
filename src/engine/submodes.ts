@@ -1,10 +1,10 @@
 import type { ParamKey, PlayState } from "./params";
-import type { BlurMask, FoldMode, FxStep, MapMode, SmearShape, WarpType } from "./renderer";
+import type { BlurMask, CycleMove, FoldMode, FxStep, MapMode, SmearShape, WarpType } from "./renderer";
 
 /** The effects in the Add effect menu, in menu order, with the names their groups show. */
 export const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
   ["kaleidoscope", "Kaleidoscope"], ["map", "Algorithm"], ["warp", "Warp"], ["blur", "Blur"], ["trails", "Trails"],
-  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["driver", "Driver"], ["camera", "Camera"], ["sort", "Pixel sort"], ["particles", "Particles"], ["rays", "Light rays"], ["bloom", "Bloom"], ["sharpen", "Sharpen"], ["color", "Color"], ["levels", "Levels"]
+  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["driver", "Driver"], ["camera", "Camera"], ["sort", "Pixel sort"], ["particles", "Particles"], ["cycles", "Light cycles"], ["rays", "Light rays"], ["bloom", "Bloom"], ["sharpen", "Sharpen"], ["color", "Color"], ["levels", "Levels"]
 ];
 
 /**
@@ -71,7 +71,18 @@ export const SMEAR_KEYS: Record<SmearShape, ParamKey[]> = {
 };
 export const SMEAR_SHAPES = [[0, "Linear"], [1, "Rings"], [2, "Sweep"], [3, "Brightness"], [4, "Noise"]] as const;
 
-export type SubmodeKey = "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape";
+/**
+ * The sliders of each way the light cycles move; Grid Size is for grid lanes
+ * only. The Blend menu and Opacity (cyclesAmount) come after these, in the
+ * Common part of the group.
+ */
+export const CYCLE_KEYS: Record<CycleMove, ParamKey[]> = {
+  0: ["cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesBounds", "cyclesGrid", "cyclesHead", "cyclesBackground", "cyclesAmount"],
+  1: ["cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesBounds", "cyclesHead", "cyclesBackground", "cyclesAmount"]
+};
+export const CYCLE_MOVES = [[0, "Grid"], [1, "Free"]] as const;
+
+export type SubmodeKey = "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape" | "cyclesMove";
 
 /** One submode menu: the play-state setting it sets, its choices (value and name), and the sliders each choice shows. */
 export interface Submode {
@@ -85,7 +96,8 @@ export const SUBMODES: readonly Submode[] = [
   { stateKey: "warpType", options: WARP_TYPES, keys: WARP_KEYS },
   { stateKey: "mapMode", options: MAP_MODES, keys: MAP_KEYS },
   { stateKey: "blurMask", options: BLUR_MASKS, keys: BLUR_KEYS },
-  { stateKey: "smearShape", options: SMEAR_SHAPES, keys: SMEAR_KEYS }
+  { stateKey: "smearShape", options: SMEAR_SHAPES, keys: SMEAR_KEYS },
+  { stateKey: "cyclesMove", options: CYCLE_MOVES, keys: CYCLE_KEYS }
 ];
 
 /** The submode menu that shows or hides the slider, or undefined for a slider that always shows. */
