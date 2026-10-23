@@ -26,12 +26,12 @@ const tracksVersion = () => tracks.version;
  * scene (see docs/AUDIO.md). Picking Files only shows the Playlist; Add
  * File(s) there asks for the files.
  */
-export function AudioInputMenu({ tip, onTipDone, onLiveInput }: {
+export function AudioInputMenu({ tip, onTipDone, onPick }: {
   /** Shows a tip at the menu (the FX audio button was turned on while the app listens to nothing), until an input is picked or the tip is closed. */
   tip: boolean;
   onTipDone: () => void;
-  /** A pick of a live input: a PC output (loopback), a microphone or a line input. */
-  onLiveInput: () => void;
+  /** A pick in the menu, also of the input that was on: App shows the tips for it. */
+  onPick: (kind: InputKind) => void;
 }) {
   useSyncExternalStore(subscribe, version);
   useSyncExternalStore(subscribeTracks, tracksVersion);
@@ -71,7 +71,7 @@ export function AudioInputMenu({ tip, onTipDone, onLiveInput }: {
           audioInput.setSource(kind, value.slice(split + 1) || null);
           /* Any pick answers the tip, also Nothing. */
           onTipDone();
-          if (kind === "output" || kind === "input") onLiveInput();
+          onPick(kind);
         }}
       />
       {tip && settings.kind === "none" && (

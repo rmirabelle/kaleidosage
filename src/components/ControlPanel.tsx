@@ -46,13 +46,13 @@ interface Props {
   onPickDriverVideo: () => void;
   /** The FX audio button was turned on while the app listens to nothing: the play toolbar shows a tip at its Input menu. */
   onNeedAudioInput: () => void;
-  /** A live input was picked and turned the audio buttons on: a tip at the FX audio button tells what they do, until it is closed. */
+  /** An input with sound was picked and turned the audio buttons on: a tip at the FX audio button tells what they do, until it is closed. */
   linksTip: boolean;
   onLinksTipDone: () => void;
 }
 
 const subscribeInput = (listener: () => void) => audioInput.subscribe(listener);
-const inputIsLive = () => audioInput.settings.kind === "output" || audioInput.settings.kind === "input";
+const inputHasSound = () => audioInput.settings.kind !== "none";
 
 const TRAIL_KEYS: ParamKey[] = ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"];
 const CONTOUR_KEYS: ParamKey[] = ["contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady"];
@@ -130,12 +130,12 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
   /**
    * The audio links tip, at the right of the FX audio button. The buttons it tells about
    * must be in view, so it opens the first effect if all are closed. It goes
-   * when the audio buttons hide, when the input is no longer live, and when
+   * when the audio buttons hide, when the input is Nothing again, and when
    * a setting is linked to the sound (it did what the tip asks).
    */
   const speakerRef = useRef<HTMLButtonElement>(null);
-  const liveInput = useSyncExternalStore(subscribeInput, inputIsLive);
-  const linksTipShown = linksTip && showAudio && liveInput;
+  const soundInput = useSyncExternalStore(subscribeInput, inputHasSound);
+  const linksTipShown = linksTip && showAudio && soundInput;
   useEffect(() => {
     if (linksTipShown) openFirstIfAllClosed();
     else if (linksTip) onLinksTipDone();

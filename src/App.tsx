@@ -46,7 +46,7 @@ import {
 import { chooseExportPath, fileNameOf, openExportFile, writeExport } from "./lib/exports";
 import { PATTERNS, drawPattern, type Pattern } from "./lib/patterns";
 import { midi } from "./lib/midi";
-import { audioInput } from "./lib/audioInput";
+import { audioInput, type InputKind } from "./lib/audioInput";
 import { panelLayout } from "./lib/panelLayout";
 import { isPlaylistCopy } from "./lib/playlistFile";
 import { tracks } from "./lib/tracks";
@@ -237,11 +237,19 @@ export default function App() {
   /** True while the play toolbar shows its tip at the Input menu (see onNeedAudioInput). */
   const [inputTip, setInputTip] = useState(false);
   const askForAudioInput = useCallback(() => setInputTip(true), []);
-  /** A pick of a live input turns the settings' audio buttons on, with a tip at the FX audio button that tells what they do (only when they were off). */
+  /**
+   * A pick of an input with sound (a PC output, a microphone, a line input or
+   * Files) turns the settings' audio buttons on, with a tip at the FX audio
+   * button that tells what they do (only when they were off). Files with an
+   * empty list also shows a tip at the Playlist's Add File(s) button.
+   */
   const [linksTip, setLinksTip] = useState(false);
+  const [filesTip, setFilesTip] = useState(false);
   const endLinksTip = useCallback(() => setLinksTip(false), []);
-  const showAudioLinks = useCallback(() => {
-    if (settingButtons.shown("audio")) return;
+  const endFilesTip = useCallback(() => setFilesTip(false), []);
+  const pickInput = useCallback((kind: InputKind) => {
+    setFilesTip(kind === "tracks" && tracks.list.length === 0);
+    if (kind === "none" || settingButtons.shown("audio")) return;
     settingButtons.set("audio", true);
     setLinksTip(true);
   }, []);
@@ -2023,7 +2031,7 @@ export default function App() {
    * the input and the Playlist shows, else above the scene's play controls.
    */
   const inputInPlaylist = sceneListShown && tracksActive && !filesCollapsed;
-  const inputMenu = <AudioInputMenu tip={inputTip} onTipDone={() => setInputTip(false)} onLiveInput={showAudioLinks} />;
+  const inputMenu = <AudioInputMenu tip={inputTip} onTipDone={() => setInputTip(false)} onPick={pickInput} />;
   const tabs: DocumentTabInfo[] = docs.map((doc) => doc.id === activeId
     ? { id: doc.id, fileName: docFileName(scenePath, doc.untitled), path: scenePath, dirty }
     : { id: doc.id, fileName: docFileName(doc.path, doc.untitled), path: doc.path, dirty: doc.dirty });
@@ -2068,7 +2076,7 @@ export default function App() {
           * its own (see .sidebar), and the left panel stands alone.
           */}
         <div className={`sidebar ${sceneListShown ? "with-scenes" : ""}`}>
-          {sceneListShown && tracksActive && <FilesCard onAddTracks={() => void pickTracks()} input={inputInPlaylist ? inputMenu : null} />}
+          {sceneListShown && tracksActive && <FilesCard onAddTracks={() => void pickTracks()} input={inputInPlaylist ? inputMenu : null} addTip={filesTip} onAddTipDone={endFilesTip} />}
           <div className="sidebar-stack">
             <div className="sidebar-columns">
               {sceneListShown && <SceneList tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} inPlaylist={playlistPath !== null} onPick={(id) => songFollow.pickScene(docsRef.current.findIndex((doc) => doc.id === id))} />}

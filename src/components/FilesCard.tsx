@@ -11,6 +11,7 @@ import { songFollow, type FollowStatus } from "../lib/songFollow";
 import { help } from "../help/topics";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { HelpButton } from "./HelpButton";
+import { PointerTip } from "./PointerTip";
 import { useDragReorder } from "./useDragReorder";
 
 const subscribeTracks = (listener: () => void) => tracks.subscribe(listener);
@@ -42,10 +43,13 @@ function followTip(enabled: boolean, status: FollowStatus) {
  * toolbar at the bottom runs the music on its own (see PlaylistTransport);
  * the controls on the picture run the scene.
  */
-export function FilesCard({ onAddTracks, input }: {
+export function FilesCard({ onAddTracks, input, addTip, onAddTipDone }: {
   onAddTracks: () => void;
   /** The audio Input menu (see AudioInputMenu): with Files as the input, it is above the music's play controls. */
   input: ReactNode;
+  /** Files was picked with an empty list: a tip at Add File(s), until it is closed, Add File(s) is clicked or the list has files. */
+  addTip: boolean;
+  onAddTipDone: () => void;
 }) {
   useSyncExternalStore(subscribeTracks, tracksVersion);
   useSyncExternalStore(subscribeFollow, followVersion);
@@ -54,6 +58,8 @@ export function FilesCard({ onAddTracks, input }: {
   const [clearAsked, setClearAsked] = useState(false);
   const drag = useDragReorder(tracks.list.map((track) => track.path), (order) => tracks.reorder(order));
   const count = tracks.list.length;
+  const addRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => { if (addTip && count > 0) onAddTipDone(); }, [addTip, count, onAddTipDone]);
   if (collapsed) {
     return (
       <aside className="side-panel files-column collapsed" aria-label="Playlist">
@@ -75,9 +81,18 @@ export function FilesCard({ onAddTracks, input }: {
             </button>
             <h2 className="side-panel-title">Playlist</h2>
             <span className="files-card-buttons">
-              <button className="button secondary small" onClick={onAddTracks} data-tip="Add audio files at the end of the list">
+              <button
+                ref={addRef}
+                className="button secondary small"
+                onClick={() => {
+                  onAddTipDone();
+                  onAddTracks();
+                }}
+                data-tip="Add audio files at the end of the list"
+              >
                 <Plus size={13} weight="bold" /> Add File(s)
               </button>
+              {addTip && count === 0 && <PointerTip anchor={addRef} text="Click to add audio files to your playlist." onClose={onAddTipDone} />}
               <button className="button secondary small icon-only" disabled={count === 0} onClick={() => setClearAsked(true)} data-tip="Remove every file from the list" aria-label="Remove every file from the list">
                 <Trash size={14} />
               </button>
