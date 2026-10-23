@@ -1464,10 +1464,10 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 /* A card's close button sits in its corner, outside the card's padding. */
 .help-card-close { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; color: #9aa6c8; background: transparent; cursor: pointer; }
 .help-card-close:hover { color: #fff; background: rgba(255,255,255,.12); }
-/* The tip at the right of the Audio panel's Input menu (see InputTip): help-card colors, with an arrow to the menu. */
-.input-tip { position: fixed; z-index: 150; display: flex; align-items: center; gap: 6px; max-width: 280px; padding: 9px 34px 9px 12px; border: 1px solid #3e4a6c; border-radius: 8px; color: #d4d8e2; background: #253049; box-shadow: 0 10px 30px rgba(0,0,0,.5); font-size: 12px; line-height: 1.4; }
-.input-tip::before { content: ""; position: absolute; top: 50%; left: -6px; width: 10px; height: 10px; border-left: 1px solid #3e4a6c; border-bottom: 1px solid #3e4a6c; background: #253049; transform: translateY(-50%) rotate(45deg); }
-.input-tip .help-card-close { top: 50%; transform: translateY(-50%); }
+/* A context tip at the right of a control (see PointerTip): help-card colors, with an arrow to the control. */
+.pointer-tip { position: fixed; z-index: 150; display: flex; align-items: center; gap: 6px; max-width: 280px; padding: 9px 34px 9px 12px; border: 1px solid #3e4a6c; border-radius: 8px; color: #d4d8e2; background: #253049; box-shadow: 0 10px 30px rgba(0,0,0,.5); font-size: 12px; line-height: 1.4; }
+.pointer-tip::before { content: ""; position: absolute; top: 50%; left: -6px; width: 10px; height: 10px; border-left: 1px solid #3e4a6c; border-bottom: 1px solid #3e4a6c; background: #253049; transform: translateY(-50%) rotate(45deg); }
+.pointer-tip .help-card-close { top: 50%; transform: translateY(-50%); }
 .help-card h3 { padding-right: 18px; }
 .help-card ul { margin: 0 0 4px; padding: 0; list-style: none; }
 .help-card li { display: flex; gap: 8px; margin-top: 8px; white-space: nowrap; }

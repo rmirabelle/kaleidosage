@@ -1,9 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useSyncExternalStore, type RefObject } from "react";
-import { createPortal } from "react-dom";
-import { X } from "@phosphor-icons/react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { audioInput, type DeviceKind, type InputKind } from "../lib/audioInput";
 import { tracks } from "../lib/tracks";
 import { Dropdown } from "./Dropdown";
+import { PointerTip } from "./PointerTip";
 
 /** A source in the Input menu: the kind, a colon, and the device id (nothing after the colon for the kind's default device). */
 const sourceValue = (kind: DeviceKind, device: string | null) => `${kind}:${device ?? ""}`;
@@ -21,48 +20,18 @@ const subscribeTracks = (listener: () => void) => tracks.subscribe(listener);
 const tracksVersion = () => tracks.version;
 
 /**
- * The tip at the right of the Input menu, with an arrow to it: the FX audio
- * button was turned on while the app listens to nothing. It follows the
- * menu while the panels around it change size.
- */
-function InputTip({ anchor, onClose }: { anchor: RefObject<HTMLDivElement | null>; onClose: () => void }) {
-  const tipRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    let frame = 0;
-    const place = () => {
-      const label = anchor.current?.getBoundingClientRect();
-      const tip = tipRef.current;
-      if (label && tip) {
-        tip.style.left = `${label.right + 12}px`;
-        tip.style.top = `${label.top + label.height / 2 - tip.offsetHeight / 2}px`;
-      }
-      frame = requestAnimationFrame(place);
-    };
-    place();
-    return () => cancelAnimationFrame(frame);
-  }, [anchor]);
-  return createPortal(
-    <div ref={tipRef} className="input-tip" role="status">
-      <span>Pick an Input first. Then the settings can move with the sound.</span>
-      <button className="help-card-close" onClick={onClose} aria-label="Close the tip" data-tip="Close">
-        <X size={14} />
-      </button>
-    </div>,
-    document.body
-  );
-}
-
-/**
  * The audio Input menu, in the scene's play toolbar: Nothing, then the PC
  * sound of each output device (in loopback), then each microphone or line
  * input, then the audio files. The input belongs to the app, not to the
  * scene (see docs/AUDIO.md). Picking Files only shows the Playlist; Add
  * File(s) there asks for the files.
  */
-export function AudioInputMenu({ tip, onTipDone }: {
-  /** Shows the tip at the menu, until an input is picked or the tip is closed. */
+export function AudioInputMenu({ tip, onTipDone, onLiveInput }: {
+  /** Shows a tip at the menu (the FX audio button was turned on while the app listens to nothing), until an input is picked or the tip is closed. */
   tip: boolean;
   onTipDone: () => void;
+  /** A pick of a live input: a PC output (loopback), a microphone or a line input. */
+  onLiveInput: () => void;
 }) {
   useSyncExternalStore(subscribe, version);
   useSyncExternalStore(subscribeTracks, tracksVersion);
@@ -98,12 +67,16 @@ export function AudioInputMenu({ tip, onTipDone }: {
         label="Input"
         onChange={(value) => {
           const split = value.indexOf(":");
-          audioInput.setSource(value.slice(0, split) as InputKind, value.slice(split + 1) || null);
+          const kind = value.slice(0, split) as InputKind;
+          audioInput.setSource(kind, value.slice(split + 1) || null);
           /* Any pick answers the tip, also Nothing. */
           onTipDone();
+          if (kind === "output" || kind === "input") onLiveInput();
         }}
       />
-      {tip && settings.kind === "none" && <InputTip anchor={rowRef} onClose={onTipDone} />}
+      {tip && settings.kind === "none" && (
+        <PointerTip anchor={rowRef} text="Pick an Input first. Then the settings can move with the sound." onClose={onTipDone} />
+      )}
     </div>
   );
 }

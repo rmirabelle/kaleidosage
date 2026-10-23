@@ -610,6 +610,9 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - At first start, the app listens to the PC sound of the default output.
 - The app records a microphone only when you pick it.
 - Picking Files only shows the Playlist; it does not open the Open dialog.
+- Picking a PC output, a microphone or a line input turns on the settings' audio buttons.
+- If they were off, a tip at the FX title bar tells what they do.
+- The tip goes when you close it, link a setting, hide the audio buttons, or pick an input that is not live.
 - An empty Playlist has an empty body; Add File(s) is in its header.
 - A saved device that is not connected shows as "A device that is not connected".
 - A default-device choice follows the Windows default, checked each second.

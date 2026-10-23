@@ -237,6 +237,14 @@ export default function App() {
   /** True while the play toolbar shows its tip at the Input menu (see onNeedAudioInput). */
   const [inputTip, setInputTip] = useState(false);
   const askForAudioInput = useCallback(() => setInputTip(true), []);
+  /** A pick of a live input turns the settings' audio buttons on, with a tip at the FX title bar that tells what they do (only when they were off). */
+  const [linksTip, setLinksTip] = useState(false);
+  const endLinksTip = useCallback(() => setLinksTip(false), []);
+  const showAudioLinks = useCallback(() => {
+    if (settingButtons.shown("audio")) return;
+    settingButtons.set("audio", true);
+    setLinksTip(true);
+  }, []);
   /* The PC sound starts again at the app's start if it was on when the app closed. */
   useEffect(() => { audioInput.init(); }, []);
   const [midiPanelHeight, setMidiPanelHeight] = useState(() => {
@@ -2015,7 +2023,7 @@ export default function App() {
    * the input and the Playlist shows, else above the scene's play controls.
    */
   const inputInPlaylist = sceneListShown && tracksActive && !filesCollapsed;
-  const inputMenu = <AudioInputMenu tip={inputTip} onTipDone={() => setInputTip(false)} />;
+  const inputMenu = <AudioInputMenu tip={inputTip} onTipDone={() => setInputTip(false)} onLiveInput={showAudioLinks} />;
   const tabs: DocumentTabInfo[] = docs.map((doc) => doc.id === activeId
     ? { id: doc.id, fileName: docFileName(scenePath, doc.untitled), path: scenePath, dirty }
     : { id: doc.id, fileName: docFileName(doc.path, doc.untitled), path: doc.path, dirty: doc.dirty });
@@ -2080,6 +2088,8 @@ export default function App() {
                   driverVideoName={driverVideoName}
                   onPickDriverVideo={() => setOpenRequest({ kind: "image", slot: 0, target: "driver" })}
                   onNeedAudioInput={askForAudioInput}
+                  linksTip={linksTip}
+                  onLinksTipDone={endLinksTip}
                   transport={<SceneTransport engine={engine} paused={paused} onTogglePause={togglePause} onStop={stop} show={holdUseful} autoNext={tracksActive && docs.length > 1} held={holdUseful && sceneHeld} onToggleHold={() => holdScene(!sceneHeldRef.current)} input={inputInPlaylist ? null : inputMenu} />}
                   source={(
                     <SourcePanel
