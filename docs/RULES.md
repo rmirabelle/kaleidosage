@@ -483,8 +483,11 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 
 ## Random photo
 
-- The dice loads a random photo from Wikimedia Commons.
-- The photo comes from one of 11 themes, such as domes, mosaics and stained glass.
+- The dice loads a random photo from Wikimedia Commons, or a NASA terrain map.
+- The dice picks one of 9 groups, all equally likely: old buildings, nature, minerals, space and night sky, storms and clouds, shapes and patterns, cities and street art, land from above, and NASA terrain maps.
+- In a Commons group, the photo comes from one of the group's themes, such as domes, flowers, nebulae or tessellations.
+- A NASA terrain map shows a striking place (mountains, canyons, dunes, deltas, ice) as shaded relief, elevation colors, relief with the sea floor, or the Blue Marble.
+- A terrain map is 3840 × 2160 px, and its land keeps its true shape.
 - The app uses only JPEG and PNG photos at least 3840 px wide.
 - The app downloads each photo at 3840 px wide.
 - If a theme finds nothing, the app tries again, up to 5 times.
@@ -492,6 +495,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - A download stops after 20 seconds.
 - The app gets the next random photo early, so the next click is fast.
 - The status shows the photo title without "File:", extension or underscores.
+- For a terrain map, the status shows the layer and the place, such as "Shaded relief: the Alps (NASA)".
 - A failed download message has a Retry button.
 
 ## Photo search

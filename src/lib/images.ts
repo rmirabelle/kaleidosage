@@ -60,23 +60,33 @@ const SEARCH_MIMES = new Set(["image/jpeg", "image/png"]);
 const FEATURED = 'incategory:"Featured pictures on Wikimedia Commons"';
 export const QUALITY = 'incategory:"Quality images"';
 /**
- * The dice's themes: Commons searches for the photos that make the best
- * kaleidoscopes. These are detailed architecture with repeating geometric
- * patterns, and abstract pictures with no recognizable subject. Each theme
- * gave tens to hundreds of 4K photos when tested (2026-10-16).
+ * The dice's themes: Commons searches for pictures that make good
+ * kaleidoscopes, in groups. The dice picks a group first, then a theme in
+ * it, so a group with many themes does not show more often. Each theme gave
+ * tens to hundreds of 4K pictures when tested (2026-10-23). A search by
+ * category is more exact than one by title words; title words find noise
+ * (a "butterfly" swim race), so they are kept for words with few other
+ * meanings.
  */
-const THEMES = [
-  `${FEATURED} intitle:ceiling`,
-  `${FEATURED} intitle:dome`,
-  `${FEATURED} intitle:mosque`,
-  `${QUALITY} intitle:ceiling`,
-  `${QUALITY} intitle:mosque interior`,
-  'incategory:"Islamic geometric patterns"',
-  `${QUALITY} intitle:mosaic`,
-  `${QUALITY} intitle:"stained glass"`,
-  `${QUALITY} intitle:pattern`,
-  'incategory:"Fractal art"',
-  `${QUALITY} intitle:texture`
+const THEME_GROUPS: readonly (readonly string[])[] = [
+  /* Old buildings: the dice once showed almost only these. */
+  [`${FEATURED} intitle:ceiling`, `${FEATURED} intitle:dome`, `${QUALITY} intitle:"stained glass"`, `${QUALITY} intitle:mosaic`],
+  /* Nature, close up. */
+  ['incategory:"Featured pictures of flowers"', `${QUALITY} intitle:butterfly -intitle:meeting`, `${QUALITY} intitle:peacock`, `${QUALITY} intitle:feather`,
+    `${QUALITY} intitle:coral`, `${QUALITY} intitle:shell`, `${QUALITY} intitle:autumn leaves`, `${QUALITY} intitle:ice`],
+  /* Minerals and crystals. */
+  ['incategory:"Featured pictures of minerals"', `${QUALITY} intitle:crystal`],
+  /* Space and the sky at night. */
+  ['incategory:"Featured pictures of astronomy"', `${FEATURED} intitle:nebula`, `${QUALITY} intitle:aurora`, 'incategory:"Fireworks"'],
+  /* Storms and clouds. */
+  ['intitle:supercell', 'intitle:"shelf cloud"', 'intitle:mammatus', 'incategory:"Featured pictures of clouds"', `${QUALITY} intitle:waterfall`],
+  /* Shapes and geometric patterns. */
+  ['incategory:"Islamic geometric patterns"', 'intitle:tessellation', 'intitle:mandala', 'intitle:kaleidoscope', 'incategory:"Fractal art"',
+    `${QUALITY} intitle:pattern`, `${QUALITY} intitle:texture`],
+  /* Cities and street art. */
+  [`${QUALITY} intitle:"at night"`, `${QUALITY} intitle:graffiti`],
+  /* The land from above (NASA's terrain maps are a group of their own, see loadTerrain). */
+  ['intitle:"Sentinel-2"', 'intitle:"satellite image"', `${QUALITY} intitle:aerial`, 'intitle:"relief map"', 'intitle:"shaded relief"']
 ];
 /** An empty search (a rare short theme) is tried again with another theme, up to this many times. */
 const MAX_TRIES = 5;
@@ -140,6 +150,58 @@ export async function loadCommonsPhoto(title: string, signal?: AbortSignal): Pro
   return { image: await loadImageBlob(blob), blob, title: labelOf(title) || "Photo" };
 }
 
+/** NASA's Global Imagery Browse Services: map layers of the whole Earth, free, with no key, and open to the app (CORS). */
+const GIBS_WMS = "https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi";
+/**
+ * The terrain map layers: the layer, its name for the status message, how
+ * tall a map of it is in degrees (from, to: the layer's detail sets how
+ * near it can go), and the farthest latitude it covers.
+ */
+const TERRAIN_LAYERS: readonly { layer: string; name: string; span: [number, number]; maxLatitude: number }[] = [
+  { layer: "ASTER_GDEM_Greyscale_Shaded_Relief", name: "Shaded relief", span: [0.3, 1.5], maxLatitude: 82 },
+  { layer: "SRTM_Color_Index", name: "Elevation colors", span: [0.6, 3.5], maxLatitude: 59 },
+  { layer: "BlueMarble_ShadedRelief_Bathymetry", name: "Relief and sea floor", span: [2.5, 12], maxLatitude: 85 },
+  { layer: "BlueMarble_NextGeneration", name: "Blue Marble", span: [2, 9], maxLatitude: 85 }
+];
+/** Places with striking land (mountains, canyons, dunes, deltas, ice): their names, longitudes and latitudes. */
+const TERRAIN_PLACES: readonly [string, number, number][] = [
+  ["the Himalayas", 86.9, 28.0], ["the Karakoram", 76.5, 35.8], ["Tibet", 88.0, 31.5], ["the Tian Shan", 80.0, 42.0],
+  ["the Atacama", -68.2, -23.5], ["the Salar de Uyuni", -67.5, -20.2], ["Patagonia", -73.4, -49.5], ["the Alps", 8.5, 46.5],
+  ["the Grand Canyon", -112.1, 36.2], ["Canyonlands", -110.0, 38.3], ["Death Valley", -117.0, 36.4], ["the Appalachians", -77.5, 40.5],
+  ["the Tibesti", 18.5, 21.0], ["the Namib", 15.2, -24.8], ["the Empty Quarter", 50.0, 20.0], ["the Zagros", 52.0, 29.5],
+  ["Iceland", -19.0, 64.8], ["Greenland", -28.0, 70.0], ["Svalbard", 17.0, 78.5], ["the Lena Delta", 126.5, 72.8],
+  ["the Southern Alps", 170.5, -43.6], ["Hawaii", -155.5, 19.6], ["Kamchatka", 159.0, 56.0], ["the Atlas", -6.0, 31.5],
+  ["the Ethiopian Highlands", 39.0, 12.0], ["Kilimanjaro", 37.3, -3.1], ["the Amazon", -62.0, -3.5], ["the Ganges Delta", 89.5, 22.0],
+  ["the Okavango Delta", 22.7, -19.3], ["the Mississippi Delta", -89.5, 29.3]
+];
+
+/**
+ * A random 4K terrain map from NASA's map service: a random layer over a
+ * random striking place (one the layer covers), moved a little from the
+ * place's center. It is 16:9, and its degrees of longitude are made wider
+ * by the latitude, so the land keeps its true shape.
+ */
+async function loadTerrain(signal: AbortSignal): Promise<RandomImage> {
+  const pick = <T,>(items: readonly T[]) => items[Math.floor(Math.random() * items.length)];
+  const { layer, name, span, maxLatitude } = pick(TERRAIN_LAYERS);
+  const [place, longitude, latitude] = pick(TERRAIN_PLACES.filter(([, , placeLatitude]) => Math.abs(placeLatitude) < maxLatitude - 1));
+  const height = span[0] + Math.random() * (span[1] - span[0]);
+  const north = Math.min(maxLatitude, latitude + height * (Math.random() - 0.5) * 0.6 + height / 2);
+  const south = Math.max(-maxLatitude, north - height);
+  const width = (height * 16) / 9 / Math.max(0.2, Math.cos(((north + south) / 2) * Math.PI / 180));
+  const west = longitude + width * (Math.random() - 0.5) * 0.6 - width / 2;
+  const url = new URL(GIBS_WMS);
+  for (const [key, value] of Object.entries({
+    SERVICE: "WMS", REQUEST: "GetMap", VERSION: "1.1.1", SRS: "EPSG:4326", STYLES: "", FORMAT: "image/jpeg", LAYERS: layer,
+    WIDTH: String(SOURCE_WIDTH), HEIGHT: String(Math.round((SOURCE_WIDTH * 9) / 16)),
+    BBOX: [west, south, west + width, north].map((degrees) => degrees.toFixed(4)).join(",")
+  })) url.searchParams.set(key, value);
+  const download = await fetch(url, { signal });
+  if (!download.ok || !download.headers.get("content-type")?.startsWith("image/")) throw new Error(`The map service returned ${download.status}.`);
+  const blob = await download.blob();
+  return { image: await loadImageBlob(blob), blob, title: `${name}: ${place} (NASA)` };
+}
+
 /** Commons search goes no further than this many results. */
 const MAX_OFFSET = 10000;
 /** How many 4K photos each theme has; the count is looked up once per run. */
@@ -155,13 +217,22 @@ async function themeSize(theme: string, signal: AbortSignal) {
 }
 
 /**
- * One try: a random 4K photo from a random theme, or null when that search
- * found none. It picks a random place in the theme's results. The search's
+ * One try: a random 4K picture from a random theme, or null when that
+ * search found none (or the terrain map could not be read). It picks a random place in the theme's results. The search's
  * own random order does not work here: Commons keeps each answer for an
  * hour, so the same search gives the same photo for that hour.
  */
 async function tryTheme(signal: AbortSignal): Promise<RandomImage | null> {
-  const theme = THEMES[Math.floor(Math.random() * THEMES.length)];
+  /* NASA's terrain maps are one more group, as likely as each group of themes. */
+  const group = Math.floor(Math.random() * (THEME_GROUPS.length + 1));
+  if (group === THEME_GROUPS.length) {
+    return await loadTerrain(signal).catch((error) => {
+      if (signal.aborted) throw error;
+      return null;
+    });
+  }
+  const themes = THEME_GROUPS[group];
+  const theme = themes[Math.floor(Math.random() * themes.length)];
   const size = await themeSize(theme, signal);
   if (size === 0) return null;
   const { photos } = await searchCommons(theme, { limit: 1, offset: Math.floor(Math.random() * size), signal });
@@ -169,7 +240,8 @@ async function tryTheme(signal: AbortSignal): Promise<RandomImage | null> {
 }
 
 /**
- * A random 4K photo from Wikimedia Commons, from one of the dice's themes.
+ * A random 4K picture: a photo from Wikimedia Commons from one of the
+ * dice's themes, or a NASA terrain map.
  * The whole download stops after timeoutMs, so a slow or silent service
  * cannot keep the app waiting.
  */

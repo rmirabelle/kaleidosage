@@ -28,8 +28,8 @@ and the other XSage desktop applications:
   never open a console window.
 - In-app updates exit KaleidoSage, then run setup with `/P /R`: no setup pages,
   and the app starts again when the install finishes.
-- No key or token is embedded in the binary. Random images come from the
-  Wikimedia Commons Picture of the Day, which needs no key.
+- No key or token is embedded in the binary. Random images come from
+  Wikimedia Commons searches and NASA's GIBS map service, which need no key.
 
 `publish.ps1` validates these rules before it creates a tag and validates the
 generated executable and NSIS script again after the release build.
