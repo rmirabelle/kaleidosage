@@ -290,7 +290,9 @@ the analysis. The playlist then runs the show.
   picks the next scenes for a song's slices that have none. A picked scene
   follows its scene when the tabs move; a closed scene's picks go.
   An automatic map keeps one slice per section that the analysis finds,
-  also where the level does not change. Hold keeps the scene. While Hold is on, the slice
+  also where the level does not change. Hold keeps the scene (only with two
+  or more scenes, changed 2026-10-23; with one scene there is no Hold, and
+  the song plays from start to end). While Hold is on, the slice
   that plays loops in the music too; a click on a slice with another scene
   turns Hold off and brings that scene in. The Song Map page shows one
   song's map, with each slice's scene number; arrows beside the song's

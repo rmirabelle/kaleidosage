@@ -1126,8 +1126,8 @@ export default function App() {
   const followOn = useSyncExternalStore((listener) => songFollow.subscribe(listener), () => songFollow.enabled) && tracksActive;
   /* When the picture starts to follow the songs, the FX panel shows the settings' audio buttons, so the user sees which settings follow. */
   useEffect(() => { if (followOn) settingButtons.set("audio", true); }, [followOn]);
-  /** Hold means something with more than one scene (it keeps the scene), or while following a song (it keeps the scene, and loops the slice). */
-  const holdUseful = docs.length > 1 || followOn;
+  /** Hold means something only with more than one scene: it keeps the scene from the next. With one scene, a song plays from start to end, with no loop. */
+  const holdUseful = docs.length > 1;
   const holdUsefulRef = useRef(holdUseful);
   holdUsefulRef.current = holdUseful;
   const switchByStepRef = useRef(switchByStep);
@@ -1252,7 +1252,7 @@ export default function App() {
    * knobs goes on.
    */
   useEffect(() => {
-    /* Hold keeps one scene from the next, and while following a song gives the scene its own clock: with one scene and no song it means nothing, so it goes off. */
+    /* Hold keeps one scene from the next: with one scene it means nothing, so it goes off. */
     if (!engine || !holdUseful) {
       holdScene(false);
       return;

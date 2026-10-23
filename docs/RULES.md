@@ -156,7 +156,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - A press in the Source and FX column turns Hold on, but not in the play toolbar.
 - A message tells you how to go on when Hold comes on.
 - A click on Hold, a save, a playlist save or a tab click turns Hold off.
-- With one scene, Hold is off.
+- With one scene, Hold is off and hidden, also with Song follow on: the song plays from start to end.
 
 ## Full screen and panels
 
