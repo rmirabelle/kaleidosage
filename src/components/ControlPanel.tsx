@@ -417,7 +417,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
         }}
       >
         <div className="side-panel-header panel-header-bar">
-          {linksTipShown && <PointerTip anchor={speakerRef} text="This button shows or hides FX audio links." onClose={onLinksTipDone} />}
+          {linksTipShown && <PointerTip anchor={speakerRef} text="Toggle to show or hide audio links for FX settings." onClose={onLinksTipDone} />}
           {nextTipShown && (
             <PointerTip
               anchor={nextAnchor}
