@@ -240,19 +240,25 @@ export default function App() {
   /**
    * A pick of an input with sound (a PC output, a microphone, a line input or
    * Files) turns the settings' audio buttons on, with a tip at the FX audio
-   * button that tells what they do, while no setting of the scene is linked
-   * to the sound yet. Files with an empty list also shows a tip at the
-   * Playlist's Add File(s) button.
+   * button that tells what it does, and a tip at the next step (see
+   * ControlPanel), while no setting of the scene is linked to the sound yet.
+   * Files with an empty list also shows a tip at the Playlist's Add File(s)
+   * button.
    */
   const [linksTip, setLinksTip] = useState(false);
+  const [nextTip, setNextTip] = useState(false);
   const [filesTip, setFilesTip] = useState(false);
   const endLinksTip = useCallback(() => setLinksTip(false), []);
+  const endNextTip = useCallback(() => setNextTip(false), []);
   const endFilesTip = useCallback(() => setFilesTip(false), []);
   const pickInput = useCallback((kind: InputKind) => {
     setFilesTip(kind === "tracks" && tracks.list.length === 0);
     if (kind === "none") return;
     settingButtons.set("audio", true);
-    if (engine && engine.soundLinks().length === 0) setLinksTip(true);
+    if (engine && engine.soundLinks().length === 0) {
+      setLinksTip(true);
+      setNextTip(true);
+    }
   }, [engine]);
   /* The PC sound starts again at the app's start if it was on when the app closed. */
   useEffect(() => { audioInput.init(); }, []);
@@ -2099,6 +2105,8 @@ export default function App() {
                   onNeedAudioInput={askForAudioInput}
                   linksTip={linksTip}
                   onLinksTipDone={endLinksTip}
+                  nextTip={nextTip}
+                  onNextTipDone={endNextTip}
                   transport={<SceneTransport engine={engine} paused={paused} onTogglePause={togglePause} onStop={stop} show={holdUseful} autoNext={tracksActive && docs.length > 1} held={holdUseful && sceneHeld} onToggleHold={() => holdScene(!sceneHeldRef.current)} input={inputInPlaylist ? null : inputMenu} />}
                   source={(
                     <SourcePanel

@@ -13,9 +13,13 @@ export function PointerTip({ anchor, text, onClose }: { anchor: RefObject<HTMLEl
     const place = () => {
       const target = anchor.current?.getBoundingClientRect();
       const tip = tipRef.current;
-      if (target && tip) {
-        tip.style.left = `${target.right + 12}px`;
-        tip.style.top = `${target.top + target.height / 2 - tip.offsetHeight / 2}px`;
+      if (tip) {
+        /* With no control to point at (not drawn yet), the tip waits out of sight. */
+        tip.style.visibility = target ? "visible" : "hidden";
+        if (target) {
+          tip.style.left = `${target.right + 12}px`;
+          tip.style.top = `${target.top + target.height / 2 - tip.offsetHeight / 2}px`;
+        }
       }
       frame = requestAnimationFrame(place);
     };

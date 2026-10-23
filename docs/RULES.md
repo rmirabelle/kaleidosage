@@ -611,8 +611,10 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - The app records a microphone only when you pick it.
 - Picking Files only shows the Playlist; it does not open the Open dialog.
 - Picking a PC output, a microphone, a line input or Files turns on the settings' audio buttons.
-- While no setting of the scene has an audio link, a tip at the right of the FX audio button tells what the buttons do.
-- The tip goes when you close it, link a setting, hide the audio buttons, or pick Nothing.
+- While no setting of the scene has an audio link, a tip at the right of the FX audio button tells what it does.
+- A second tip shows the next step: "+ New" in an empty FX list, else the speaker of the first setting in view.
+- A click on a button of the FX card closes the first tip; any press in the FX card closes the second.
+- Both tips go when you link a setting, hide the audio buttons, or pick Nothing.
 - Picking Files with an empty list also shows a tip at the Playlist's Add File(s) button.
 - That tip goes when you close it, click Add File(s), add files, or pick another input.
 - An empty Playlist has an empty body; Add File(s) is in its header.

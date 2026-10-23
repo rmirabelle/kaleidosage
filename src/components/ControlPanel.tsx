@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { CaretRight, DiceFive, DotsSixVertical, Eye, EyeSlash, LockSimple, LockSimpleOpen, Play, SpeakerSimpleHigh, Trash, Wind, X } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
@@ -46,9 +46,11 @@ interface Props {
   onPickDriverVideo: () => void;
   /** The FX audio button was turned on while the app listens to nothing: the play toolbar shows a tip at its Input menu. */
   onNeedAudioInput: () => void;
-  /** An input with sound was picked and turned the audio buttons on: a tip at the FX audio button tells what they do, until it is closed. */
+  /** An input with sound was picked and turned the audio buttons on: a tip at the FX audio button tells what it does, and a tip shows the next step. */
   linksTip: boolean;
   onLinksTipDone: () => void;
+  nextTip: boolean;
+  onNextTipDone: () => void;
 }
 
 const subscribeInput = (listener: () => void) => audioInput.subscribe(listener);
@@ -84,7 +86,7 @@ const CAMERA_REPEATS = [[0, "Mirror"], [1, "Tile"], [2, "None"]] as const;
 /** The controls of the left panel whose press is work on the scene (see onWork): buttons, fields, the sliders' parts, the gradient and the effect grips. */
 const WORK_CONTROLS = "button, input, select, textarea, a, label, [role=slider], [role=button], [role=option], [role=menuitem], [contenteditable=true], .range-grab, .range-low, .range-high, .gradient-bar, .gradient-stop, .panel-group-grip";
 
-export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, transport, onWork, driverVideoName, onPickDriverVideo, onNeedAudioInput, linksTip, onLinksTipDone }: Props) {
+export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, transport, onWork, driverVideoName, onPickDriverVideo, onNeedAudioInput, linksTip, onLinksTipDone, nextTip, onNextTipDone }: Props) {
   const holdOnly = useSceneHoldOnly();
   const row = useParamRows(engine);
   /** True while MIDI holds any range: the Effects header then shows a play button that plays them all again. */
@@ -128,27 +130,45 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     if (first && !(fxOrder as readonly string[]).includes(openGroup ?? "")) onOpenGroup(first);
   };
   /**
-   * The audio links tip, at the right of the FX audio button. The buttons it tells about
-   * must be in view, so it opens the first effect if all are closed. It goes
-   * when the audio buttons hide, when the input is Nothing again, and when
-   * a setting is linked to the sound (it did what the tip asks).
+   * The FX tips after a pick of an input with sound: the audio links tip, at
+   * the right of the FX audio button, and the next step's tip. With no
+   * effect yet, the next step is "+ New" in the empty list; else it is the
+   * speaker of the first setting in view, so the tip opens the first effect
+   * if all are closed. A click on a button of the FX card closes the links
+   * tip; any press in the card closes the next step's tip. Both go when the
+   * audio buttons hide, when the input is Nothing again, and when a setting
+   * is linked to the sound (it did what the tips ask).
    */
   const speakerRef = useRef<HTMLButtonElement>(null);
+  const fxCardRef = useRef<HTMLElement>(null);
   const soundInput = useSyncExternalStore(subscribeInput, inputHasSound);
-  const linksTipShown = linksTip && showAudio && soundInput;
+  const tipsAllowed = showAudio && soundInput;
+  const linksTipShown = linksTip && tipsAllowed;
+  const nextTipShown = nextTip && tipsAllowed;
+  const anyTip = linksTipShown || nextTipShown;
+  const endTips = useCallback(() => {
+    onLinksTipDone();
+    onNextTipDone();
+  }, [onLinksTipDone, onNextTipDone]);
+  /* The anchor is looked up in each frame (see PointerTip), as the list's rows change under it. Only one of the two is in the list at a time. */
+  const nextAnchor = useMemo(() => ({
+    get current() {
+      return fxCardRef.current?.querySelector<HTMLElement>(".panel-scroll .empty-state-action button, .panel-scroll .audio-link") ?? null;
+    }
+  }), []);
   useEffect(() => {
-    if (linksTipShown) openFirstIfAllClosed();
-    else if (linksTip) onLinksTipDone();
-  }, [linksTipShown]);
+    if (anyTip) openFirstIfAllClosed();
+    else if (linksTip || nextTip) endTips();
+  }, [anyTip]);
   useEffect(() => {
-    if (!linksTipShown) return;
+    if (!anyTip) return;
     /* Only a new link counts, not a change of a setting that was linked before. */
     const linked = new Set(engine.soundLinks());
     return engine.onParamChange((key) => {
       if (!engine.soundOn(key)) linked.delete(key);
-      else if (!linked.has(key)) onLinksTipDone();
+      else if (!linked.has(key)) endTips();
     });
-  }, [engine, linksTipShown, onLinksTipDone]);
+  }, [engine, anyTip, endTips]);
   /** Opening a group closes the others; clicking the open group closes it. Each group's dice randomizes that group. */
   const accordion = (key: GroupKey) => ({
     open: openGroup === key,
@@ -387,13 +407,24 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       {/* The scene's card (see SourcePanel): its name, its sources, its Length and its play controls. */}
       {source}
       {/* The FX card: its title bar (Random all, Nudge, Clear all, then New), then the effect groups, which scroll. */}
-      <section className="panel-card fx-card" {...help("fx")}>
+      <section
+        ref={fxCardRef}
+        className="panel-card fx-card"
+        {...help("fx")}
+        onPointerDownCapture={(event) => {
+          if (nextTip) onNextTipDone();
+          if (linksTip && (event.target as Element).closest("button")) onLinksTipDone();
+        }}
+      >
         <div className="side-panel-header panel-header-bar">
-          {linksTipShown && (
+          {linksTipShown && <PointerTip anchor={speakerRef} text="This button shows or hides FX audio links." onClose={onLinksTipDone} />}
+          {nextTipShown && (
             <PointerTip
-              anchor={speakerRef}
-              text="Audio links are now visible next to each setting. Click the speaker icon next to a setting to make it react to audio."
-              onClose={onLinksTipDone}
+              anchor={nextAnchor}
+              text={fxOrder.length === 0
+                ? "Start by adding one or more FX to this scene."
+                : "Click this speaker icon next to any setting to enable it to react to the music."}
+              onClose={onNextTipDone}
             />
           )}
           <button
