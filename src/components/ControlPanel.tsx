@@ -74,6 +74,9 @@ const CAMERA_REPEATS = [[0, "Mirror"], [1, "Tile"], [2, "None"]] as const;
 
 /** The left panel: the Source section, then the Designer: its toolbar, the scene length, and the effect groups. */
 
+/** The controls of the left panel whose press is work on the scene (see onWork): buttons, fields, the sliders' parts, the gradient and the effect grips. */
+const WORK_CONTROLS = "button, input, select, textarea, a, label, [role=slider], [role=button], [role=option], [role=menuitem], [contenteditable=true], .range-grab, .range-low, .range-high, .gradient-bar, .gradient-stop, .panel-group-grip";
+
 export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, transport, onWork, driverVideoName, onPickDriverVideo, onNeedAudioInput }: Props) {
   const holdOnly = useSceneHoldOnly();
   const row = useParamRows(engine);
@@ -334,8 +337,11 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
   return (
     <aside
       className={`side-panel control-panel ${midiButtons || audioButtons ? "" : "midi-hidden"} ${midiButtons ? "" : "no-midi-buttons"} ${audioButtons ? "" : "no-audio-buttons"}`}
-      /* Any press here is work on the scene (a slider, a menu, a random image), but the play toolbar is not, and an effect's header counts only when it opens the effect (see openEffectGroup in App). */
-      onPointerDownCapture={(event) => { if (!(event.target as Element).closest(".scene-transport, .panel-group-header")) onWork(); }}
+      /* A press on a control here is work on the scene (a slider, a menu, a random image); a press on an empty place is not, nor on the play toolbar, and an effect's header counts only when it opens the effect (see openEffectGroup in App). */
+      onPointerDownCapture={(event) => {
+        const target = event.target as Element;
+        if (target.closest(WORK_CONTROLS) && !target.closest(".scene-transport, .panel-group-header")) onWork();
+      }}
     >
       {/* The scene's card (see SourcePanel): its name, its sources, its Length and its play controls. */}
       {source}
