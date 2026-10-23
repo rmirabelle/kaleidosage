@@ -30,8 +30,8 @@ export function AudioInputMenu({ tip, onTipDone, onPick }: {
   /** Shows a tip at the menu (the FX audio button was turned on while the app listens to nothing), until an input is picked or the tip is closed. */
   tip: boolean;
   onTipDone: () => void;
-  /** A pick in the menu, also of the input that was on: App shows the tips for it. */
-  onPick: (kind: InputKind) => void;
+  /** A pick in the menu, also of the input that was on ("switched" is false then): App shows the tips for it. */
+  onPick: (kind: InputKind, switched: boolean) => void;
 }) {
   useSyncExternalStore(subscribe, version);
   useSyncExternalStore(subscribeTracks, tracksVersion);
@@ -68,10 +68,11 @@ export function AudioInputMenu({ tip, onTipDone, onPick }: {
         onChange={(value) => {
           const split = value.indexOf(":");
           const kind = value.slice(0, split) as InputKind;
+          const switched = kind !== audioInput.settings.kind;
           audioInput.setSource(kind, value.slice(split + 1) || null);
           /* Any pick answers the tip, also Nothing. */
           onTipDone();
-          onPick(kind);
+          onPick(kind, switched);
         }}
       />
       {tip && settings.kind === "none" && (

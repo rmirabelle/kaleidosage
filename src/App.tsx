@@ -251,8 +251,10 @@ export default function App() {
   const endLinksTip = useCallback(() => setLinksTip(false), []);
   const endNextTip = useCallback(() => setNextTip(false), []);
   const endFilesTip = useCallback(() => setFilesTip(false), []);
-  const pickInput = useCallback((kind: InputKind) => {
+  const pickInput = useCallback((kind: InputKind, switched: boolean) => {
     setFilesTip(kind === "tracks" && tracks.list.length === 0);
+    /* A switch to Files turns Song follow on: the picture follows the songs. */
+    if (kind === "tracks" && switched) songFollow.setEnabled(true);
     /* With Nothing, the audio buttons have no sound to follow, so they hide. */
     settingButtons.set("audio", kind !== "none");
     if (kind === "none") return;

@@ -256,17 +256,8 @@ function PlaylistTransport({ count, input }: { count: number; input: ReactNode }
         </div>
         <span ref={clock} className="playlist-transport-time" />
       </div>
-      <FollowStatusLine />
     </div>
   );
-}
-
-/** Under the play toolbar while Song follow is on: "Analyzing" while the song's analysis runs, else nothing. */
-function FollowStatusLine() {
-  useSyncExternalStore(subscribeFollow, followVersion);
-  const { enabled, status } = songFollow;
-  if (!enabled || status.state !== "analyzing") return null;
-  return <p className="follow-status">Analyzing {status.name}…</p>;
 }
 
 /** The place of a loudness on the meter, from FLOOR_DB (0) to 0 dBFS (1). */

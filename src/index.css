@@ -349,8 +349,6 @@ button { border: 0; }
 /* Song follow while its track is analyzed. */
 .playlist-transport .panel-button.analyzing svg { animation: follow-analyzing 1s ease-in-out infinite alternate; }
 @keyframes follow-analyzing { from { opacity: 1; } to { opacity: .3; } }
-.follow-status { margin: 2px 2px 0; color: var(--muted); font-size: 11px; line-height: 1.35; }
-.follow-status:empty { display: none; }
 .playlist-transport-time { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .files-collapse { display: grid; place-items: center; width: 24px; height: 26px; padding: 0; border-radius: 4px; color: #8a8fa0; background: transparent; cursor: pointer; }
 .files-collapse:hover { color: #fff; background: rgba(255,255,255,.08); }
@@ -2209,6 +2207,10 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .song-map-header .side-panel-title.song-map-title { flex: 0 1 auto; margin: 0; padding: 9px 2px 8px; }
 .panel-button.icon.song-map-song-step { flex: none; width: 24px; height: 24px; border: 1px solid #474c5e; border-radius: 5px; background: #30343f; }
 .song-map-wait { margin: 0; color: var(--muted); font-size: 12px; }
+/* The song's analysis runs: a large white line over a moving bar (see .loading-bar.unknown), in the middle of the song map's place. */
+.song-map-analyzing { width: min(420px, 100%); margin: 18px auto; text-align: center; }
+.song-map-analyzing p { margin: 0; color: #fff; font-size: 15px; font-weight: 600; }
+.song-map-analyzing .loading-bar { height: 6px; margin-top: 12px; }
 /* Scene Hold's mark on the slice it loops: red, with the blinking label of the Scene Hold button. */
 .song-map-hold-tag { padding: 2px 6px; border-radius: 3px; color: #fff; background: #e53935; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .song-map-drop-tag { display: inline-grid; place-items: center; padding: 2px 4px; border-radius: 3px; color: #fff; background: #e53935; }

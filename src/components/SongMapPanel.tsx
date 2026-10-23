@@ -157,11 +157,19 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick }: { s
           <>
             {title}
             <div className="song-map-body">
-              <p className="song-map-wait">This song's map comes when its analysis is done.</p>
+              {/* The analysis runs in one step, with no progress to show, so the bar moves without a measure. A failed analysis shows in the Playlist card. */}
+              {songFollow.status.state === "error" && path === playingPath ? (
+                <p className="song-map-wait">This song could not be analyzed, so it has no map.</p>
+              ) : (
+                <div className="song-map-analyzing" role="status">
+                  <p>Analyzing {name}…</p>
+                  <div className="loading-bar unknown"><div /></div>
+                </div>
+              )}
             </div>
           </>
         ) : (
-          <EmptyState text="No song map yet: turn on Song follow in the Playlist card, and play a song." />
+          <EmptyState text={songFollow.enabled ? "No song map yet: add audio files to the Playlist." : "No song map yet: turn on Song follow in the Playlist card, and play a song."} />
         )}
       </section>
     );
@@ -201,9 +209,10 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick }: { s
       <div className="song-map-toolbar">
         <button
           className="panel-button song-map-fill"
-          disabled={slices.every((candidate) => candidate.scene !== undefined)}
+          /* With one scene, every slice plays it anyway. */
+          disabled={sceneCount <= 1 || slices.every((candidate) => candidate.scene !== undefined)}
           onClick={() => apply(fillScenes(slices, slices[0]?.scene ?? Math.max(0, activeScene), sceneCount))}
-          data-tip="Auto Fill: pick a scene for each slice of this song that has none, so each slice plays the next scene in the scene list (from the selected scene, when the first slice has none). Your own picks stay"
+          data-tip="Click to automatically switch to the next available scene each time a new slice is played. This applies only to slices where a specific scene isn't yet selected."
         >
           <ListNumbers size={15} /> Auto Fill
         </button>
