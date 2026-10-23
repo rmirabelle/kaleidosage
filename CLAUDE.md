@@ -32,11 +32,13 @@ plays it full screen. Tauri 2 + React + WebGL 2.
   directly (a tool call, a Claude Terminal panel tab) stops when Claude quits,
   and the Claude desktop app restarts itself without asking to install
   updates, so the user's dev app (and its unsaved work) goes down with it.
-  Start it only with `start-dev.cmd` (it runs `npm run tauri dev --
-  --no-watch`, Vite on port 14510), opened through Explorer:
-  `Start-Process "$env:WINDIR\explorer.exe" '"D:\Code\KaleidoSage\start-dev.cmd"'`.
-  Explorer, not Claude, then owns the dev window. The user can also run
-  `start-dev.cmd` themselves. Start or restart the dev app only when the
+  Start it only with `start-dev.vbs`, opened through Explorer:
+  `Start-Process "$env:WINDIR\explorer.exe" '"D:\Code\KaleidoSage\start-dev.vbs"'`.
+  Explorer, not Claude, then owns it. It runs `npm run tauri dev --
+  --no-watch` (Vite on port 14510) with no console window, and writes its
+  output to `dev.log` in the project folder: read that file for build errors
+  and for `[client] hot update applied: <file>`. The user can also
+  double-click `start-dev.vbs`. Start or restart the dev app only when the
   user asks or agrees.
 - Without `--no-watch`, every Rust edit restarts the app, and the new window
   takes the focus from the user's other apps (a game exits).
