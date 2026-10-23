@@ -24,7 +24,7 @@ export function PointerTip({ anchor, text, onClose }: { anchor: RefObject<HTMLEl
   }, [anchor]);
   return createPortal(
     <div ref={tipRef} className="pointer-tip" role="status">
-      <span>{text}</span>
+      <span className="selectable">{text}</span>
       <button className="help-card-close" onClick={onClose} aria-label="Close the tip" data-tip="Close">
         <X size={14} />
       </button>
