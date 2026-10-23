@@ -611,7 +611,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - The app records a microphone only when you pick it.
 - Picking Files only shows the Playlist; it does not open the Open dialog.
 - Picking a PC output, a microphone, a line input or Files turns on the settings' audio buttons.
-- Picking Nothing turns them off.
+- Picking Nothing turns them off, and so does New Scene while the input is Nothing.
 - While no setting of the scene has an audio link, a tip at the right of the FX audio button tells what it does.
 - A second tip shows the next step: "+ New" in an empty FX list, else the speaker of the first setting in view.
 - A click on a button of the FX card closes the first tip; any press in the FX card closes the second.

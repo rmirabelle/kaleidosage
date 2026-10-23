@@ -1412,6 +1412,8 @@ export default function App() {
   const newScene = useCallback(() => {
     if (!engine) return;
     quietOutsidePlaylist();
+    /* With no input, the new scene starts with the settings' audio buttons hidden. */
+    if (audioInput.settings.kind === "none") settingButtons.set("audio", false);
     sceneGenerationRef.current++;
     setSceneGeneration(sceneGenerationRef.current);
     stashActive();
