@@ -1,4 +1,4 @@
-import type { BlendMode, BlurMask, CameraRepeat, CycleMove, CyclePaint, DriverMode, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, ParticleBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
+import type { BlendMode, BlurMask, CameraRepeat, CycleMove, CyclePaint, DriverMode, SolidMap, SolidShape, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, ParticleBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
 
 export const PARAM_KEYS = [
   "cycle",
@@ -20,6 +20,7 @@ export const PARAM_KEYS = [
   "particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost",
   "cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead",
   "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY",
+  "solidAmount", "solidBackground", "solidSize", "solidRound", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY",
   "raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY",
   "bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize",
   "sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel"
@@ -252,7 +253,7 @@ export type Params = Record<ParamKey, Param>;
 export type ContourTone = "hue" | "black" | "white";
 export const CONTOUR_TONES: readonly ContourTone[] = ["hue", "black", "white"];
 
-export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "sort" | "particles" | "cycles" | "rays" | "bloom" | "sharpen" | "color" | "levels";
+export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "bloom" | "sharpen" | "color" | "levels";
 
 export interface PlayState {
   /** Which groups are on. A group that is off has no effect, but keeps its settings. */
@@ -334,6 +335,17 @@ export interface PlayState {
   cyclesBlend: LayerBlend;
   cyclesPaint: CyclePaint;
   cyclesStops: GradientStop[];
+  /**
+   * 3D Object (see SOLID_SHADER): the shape preset, how the picture goes onto
+   * it (wrap, project, mirror), how the shape combines with the picture
+   * behind it, and how far it has turned about its own axis and tumbled
+   * over, in turns; these two grow with time times Spin and Tumble.
+   */
+  solidShape: SolidShape;
+  solidMap: SolidMap;
+  solidBlend: LayerBlend;
+  solidSpinTurns: number;
+  solidTumbleTurns: number;
   /** The Driver effect's driver (caustics, smoke, ink, fire, ripples), and what it does to the picture. */
   driverSource: DriverSource;
   driverMode: DriverMode;
@@ -702,6 +714,31 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   cyclesAngle: { label: "Angle", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   cyclesCenterX: { label: "Center X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.25, high: 0.25, on: false },
   cyclesCenterY: { label: "Center Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.25, high: 0.25, on: false },
+  /**
+   * 3D Object (see SOLID_SHADER): opacity, the picture behind the shape (1
+   * whole, 0 black), the shape's size as a part of the screen height, how
+   * round its edges are, its spin about its own axis and its tumble (turns
+   * per minute), how far its axis leans toward the viewer, how strongly it
+   * bends the picture (Project), how many times the picture goes round it
+   * (Wrap), the light's angle around the view, how dark the side away from
+   * the light is, the highlight, the shadow on the picture behind, and the
+   * shape's place (a part of the screen height from the center).
+   */
+  solidAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
+  solidBackground: { label: "Background", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0.2, high: 1, on: false },
+  solidSize: { label: "Size", min: 0.1, max: 1.5, step: 0.01, scale: "log", value: 0.6, drift: "wave", low: 0.45, high: 0.8, on: false },
+  solidRound: { label: "Roundness", min: 0, max: 1, step: 0.01, value: 0.15, drift: "wave", low: 0, high: 0.6, on: false },
+  solidSpin: { label: "Spin", min: -60, max: 60, step: 0.1, value: 6, unit: " rpm", drift: "wave", low: 3, high: 12, on: false },
+  solidTumble: { label: "Tumble", min: -60, max: 60, step: 0.1, value: 0, unit: " rpm", drift: "wave", low: -3, high: 3, on: false },
+  solidTilt: { label: "Tilt", min: -90, max: 90, step: 1, value: 20, unit: "°", drift: "wave", low: -30, high: 30, on: false },
+  solidBend: { label: "Bend", min: 0, max: 1, step: 0.01, value: 0.4, drift: "wave", low: 0.2, high: 0.7, on: false },
+  solidTiles: { label: "Tiles", min: 0.25, max: 8, step: 0.01, scale: "log", value: 1, drift: "wave", low: 1, high: 3, on: false },
+  solidLight: { label: "Light angle", min: 0, max: 360, step: 1, value: 135, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  solidShading: { label: "Shading", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.3, high: 0.9, on: false },
+  solidShine: { label: "Shine", min: 0, max: 1, step: 0.01, value: 0.4, drift: "wave", low: 0.1, high: 0.7, on: false },
+  solidShadow: { label: "Shadow", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.2, high: 0.8, on: false },
+  solidX: { label: "Center X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.25, high: 0.25, on: false },
+  solidY: { label: "Center Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   /** Driver (see DRIVER_SHADER): opacity, how strongly the driver bends, reveals or lights, its size, its speed, and its contrast. */
   driverAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
   driverStrength: { label: "Strength", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.3, high: 0.8, on: false },
@@ -757,6 +794,7 @@ export const NO_EFFECT: Partial<Record<ParamKey, number>> = {
   trailTurn: 0, trailHue: 0, trailFlow: 0,
   particleGravity: 0,
   cyclesCenterX: 0, cyclesCenterY: 0,
+  solidSpin: 0, solidTumble: 0, solidTilt: 0, solidX: 0, solidY: 0,
   raysX: 0, raysY: 0,
   exposure: 0
 };
@@ -771,9 +809,9 @@ export function createParams(): Params {
   return params;
 }
 
-/** The start-up orders: the fold, then the map bends the folded picture, then the warp; and blur, trails, time smear, contours, relief, driver, camera, pixel sort, particles, light cycles, light rays, bloom, final effects. */
+/** The start-up orders: the fold, then the map bends the folded picture, then the warp; and blur, trails, time smear, contours, relief, driver, camera, 3D object, pixel sort, particles, light cycles, light rays, bloom, final effects. */
 export const defaultShapeOrder = (): ShapeStep[] => ["kaleidoscope", "map", "warp"];
-export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "driver", "camera", "sort", "particles", "cycles", "rays", "bloom", "sharpen", "color", "levels"];
+export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "driver", "camera", "solid", "sort", "particles", "cycles", "rays", "bloom", "sharpen", "color", "levels"];
 export const defaultFxOrder = (): FxStep[] => [...defaultShapeOrder(), ...defaultPictureOrder()];
 
 /**
@@ -816,6 +854,7 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
     case "driver": return used("driverAmount");
     case "sort": return used("sortAmount");
     case "particles": return used("particleAmount");
+    case "solid": return used("solidAmount");
     case "cycles": return used("cyclesAmount");
     case "rays": return used("raysAmount");
     case "bloom": return used("bloomAmount");
@@ -829,9 +868,9 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
 export function createPlayState(): PlayState {
   return {
     /* No effect is in the list at start-up, so every effect group is off. */
-    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, sort: false, particles: false, cycles: false, rays: false, bloom: false, sharpen: false, color: false, levels: false },
-    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, sort: false, particles: false, cycles: false, rays: false, bloom: false, sharpen: false, color: false, levels: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, sortOrder: 0, particleBlend: 0, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, bloom: false, sharpen: false, color: false, levels: false },
+    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, bloom: false, sharpen: false, color: false, levels: false },
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, sortOrder: 0, particleBlend: 0, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), solidShape: 1, solidMap: 0, solidBlend: 0, solidSpinTurns: 0, solidTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1134,6 +1173,11 @@ export function resetEffects(params: Params, state: PlayState) {
     state.particleBlend = fresh.particleBlend;
     state.particleStops = fresh.particleStops;
   }
+  if (!state.locks.solid) {
+    state.solidShape = fresh.solidShape;
+    state.solidMap = fresh.solidMap;
+    state.solidBlend = fresh.solidBlend;
+  }
   if (!state.locks.cycles) {
     state.cyclesMove = fresh.cyclesMove;
     state.cyclesBlend = fresh.cyclesBlend;
@@ -1170,6 +1214,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   relief: ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"],
   driver: ["driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast"],
   camera: ["cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth"],
+  solid: ["solidAmount", "solidBackground", "solidSize", "solidRound", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY"],
   sort: ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"],
   particles: ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost"],
   cycles: ["cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead", "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY"],
@@ -1193,6 +1238,7 @@ const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   sort: ["sortOrder"],
   particles: ["particleBlend"],
   cycles: ["cyclesMove", "cyclesBlend", "cyclesPaint"],
+  solid: ["solidShape", "solidMap", "solidBlend"],
   driver: ["driverSource", "driverMode"],
   color: ["overlayColor", "colorBlend"]
 };
@@ -1213,7 +1259,7 @@ export function randomizeGroup(params: Params, state: PlayState, group: GroupKey
 
 /** The chance that Randomize puts each effect in the list. Blur looks the least good, so Randomize leaves it out. */
 const EFFECT_CHANCE: Record<FxStep, number> = {
-  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.25, relief: 0.4, driver: 0.3, camera: 0.3, sort: 0.2, particles: 0.25, cycles: 0.25, rays: 0.25, bloom: 0.3, sharpen: 0.3, color: 0.15, levels: 0.25
+  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.25, relief: 0.4, driver: 0.3, camera: 0.3, solid: 0.2, sort: 0.2, particles: 0.25, cycles: 0.25, rays: 0.25, bloom: 0.3, sharpen: 0.3, color: 0.15, levels: 0.25
 };
 
 function randomizeAll(params: Params, state?: PlayState) {
@@ -1357,6 +1403,9 @@ function randomizeAll(params: Params, state?: PlayState) {
     state.cyclesMove = (Math.random() < 0.6 ? 0 : 1) as CycleMove;
     state.cyclesBlend = (Math.random() < 0.7 ? 7 : Math.floor(Math.random() * 8)) as LayerBlend;
     state.cyclesPaint = Math.floor(Math.random() * 4) as CyclePaint;
+    state.solidShape = Math.floor(Math.random() * 9) as SolidShape;
+    state.solidMap = Math.floor(Math.random() * 3) as SolidMap;
+    state.solidBlend = (Math.random() < 0.7 ? 0 : Math.floor(Math.random() * 8)) as LayerBlend;
     state.driverSource = Math.floor(Math.random() * 5) as DriverSource;
     state.driverMode = Math.floor(Math.random() * 3) as DriverMode;
     state.sortOrder = (Math.random() < 0.5 ? 0 : 1) as SortOrder;
@@ -1413,6 +1462,21 @@ function randomizeAll(params: Params, state?: PlayState) {
   setAngle("cyclesAngle", 0.4);
   set("cyclesCenterX", Math.random() < 0.5 ? 0 : rand(-0.3, 0.3), rand(0.05, 0.2));
   set("cyclesCenterY", Math.random() < 0.5 ? 0 : rand(-0.25, 0.25), rand(0.05, 0.2));
+  set("solidAmount", 1, rand(0, 0.1));
+  set("solidBackground", Math.random() < 0.6 ? 1 : rand(0.1, 0.7), rand(0, 0.2));
+  set("solidSize", rand(0.4, 0.9), rand(0.05, 0.2));
+  set("solidRound", Math.random() < 0.4 ? 0 : rand(0.05, 0.7), rand(0, 0.2));
+  set("solidSpin", (Math.random() < 0.5 ? -1 : 1) * rand(2, 20), rand(0, 5));
+  set("solidTumble", Math.random() < 0.5 ? 0 : rand(-8, 8), rand(0, 3));
+  set("solidTilt", rand(-40, 40), rand(0, 20));
+  set("solidBend", rand(0.2, 0.8), rand(0, 0.2));
+  set("solidTiles", rand(0.75, 3), rand(0, 0.5));
+  setAngle("solidLight", 0.3);
+  set("solidShading", rand(0.3, 0.9), rand(0, 0.2));
+  set("solidShine", rand(0, 0.8), rand(0, 0.2));
+  set("solidShadow", rand(0.2, 0.8), rand(0, 0.2));
+  set("solidX", Math.random() < 0.6 ? 0 : rand(-0.3, 0.3), rand(0.05, 0.2));
+  set("solidY", Math.random() < 0.6 ? 0 : rand(-0.2, 0.2), rand(0.05, 0.15));
   set("driverAmount", rand(0.6, 1), rand(0, 0.2));
   set("driverStrength", rand(0.3, 0.9), rand(0.05, 0.2));
   set("driverScale", rand(0.6, 2), rand(0.1, 0.4));

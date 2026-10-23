@@ -2624,3 +2624,263 @@ void main() {
   vec3 top = lines.a > 0.0 ? lines.rgb / lines.a : vec3(0.0);
   o = vec4(mix(base, blendLayer(base, top, u_blend), lines.a * u_opacity), 1.0);
 }`;
+
+/**
+ * 3D Object (see docs/SOLIDS.md): one shape over the picture. Each pixel
+ * sends a ray from the viewer (EYE screen heights in front of the screen);
+ * rays that miss a sphere around the shape show the background at once.
+ * The others walk the shape's distance function. The shapes are in a unit
+ * frame (about -1 to 1), turned by u_turn and scaled to u_size / 2.
+ *
+ * Roundness: the box, the cylinder and the cone shrink by the round radius
+ * and grow back by it, so their edges get round and their size stays. The
+ * flat-faced shapes are their planes' maximum; Roundness turns that into a
+ * smooth maximum, which rounds the edges and corners.
+ *
+ * Map: Wrap reads the picture at a place on the surface (in the shape's own
+ * frame, so it turns with the shape); Project reads it at the pixel's own
+ * place, moved by the normal (a lens); Mirror reads it in the direction of
+ * the reflected ray (a chrome shape). Every read goes out and back across
+ * the picture (mirrored), so no seam shows.
+ *
+ * Light: a soft shade from the angle to the light, a highlight, and a soft
+ * drop shadow on the picture behind. The outline is smooth: a ray that
+ * passes within a pixel of the shape covers the pixel in part.
+ */
+export const SOLID_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform float u_aspect;
+/* One pixel, in screen heights. */
+uniform float u_pixel;
+uniform int u_shape;
+uniform int u_map;
+uniform int u_blend;
+uniform float u_opacity;
+uniform float u_background;
+uniform float u_size;
+uniform float u_round;
+/* From the shape's own frame to the view. */
+uniform mat3 u_turn;
+uniform vec2 u_center;
+uniform float u_bend;
+uniform float u_tiles;
+/* Toward the light, in the view. */
+uniform vec3 u_light;
+uniform float u_shading;
+uniform float u_shine;
+uniform float u_shadow;
+
+const float PI = 3.14159265359;
+const float EYE = 3.0;
+const int STEPS = 96;
+
+vec3 blendLayer(vec3 base, vec3 top, int mode) {
+  if (mode == 1) return 1.0 - (1.0 - base) * (1.0 - top);
+  if (mode == 2) return base * top;
+  if (mode == 3) return mix(2.0 * base * top, 1.0 - 2.0 * (1.0 - base) * (1.0 - top), step(0.5, base));
+  if (mode == 4) return abs(base - top);
+  if (mode == 5) return max(base, top);
+  if (mode == 6) return min(base, top);
+  if (mode == 7) return min(base + top, 1.0);
+  return top;
+}
+
+/* Out and back across 0 to 1, so a read past the picture's edge is mirrored and has no seam. */
+vec2 fold(vec2 uv) { return 1.0 - abs(1.0 - 2.0 * fract(uv * 0.5)); }
+
+/* The round radius in the unit frame. */
+float radius() { return u_round * 0.6; }
+
+float box(vec3 q) {
+  float r = radius();
+  vec3 d = abs(q) - vec3(0.8 - r);
+  return length(max(d, 0.0)) + min(max(d.x, max(d.y, d.z)), 0.0) - r;
+}
+float cylinder(vec3 q) {
+  float r = min(radius(), 0.65);
+  vec2 d = vec2(length(q.xz), abs(q.y)) - vec2(0.7 - r, 0.9 - r);
+  return min(max(d.x, d.y), 0.0) + length(max(d, 0.0)) - r;
+}
+/* A cone with its tip up (as the usual capped cone, with a top radius of 0). */
+float cone(vec3 q) {
+  float r = min(radius(), 0.4);
+  float h = 0.9 - r;
+  float r1 = max(0.85 - 1.6 * r, 0.02);
+  vec2 p = vec2(length(q.xz), q.y);
+  vec2 k1 = vec2(0.0, h);
+  vec2 k2 = vec2(-r1, 2.0 * h);
+  vec2 ca = vec2(p.x - min(p.x, p.y < 0.0 ? r1 : 0.0), abs(p.y) - h);
+  vec2 cb = p - k1 + k2 * clamp(dot(k1 - p, k2) / dot(k2, k2), 0.0, 1.0);
+  float s = (cb.x < 0.0 && ca.y < 0.0) ? -1.0 : 1.0;
+  return s * sqrt(min(dot(ca, ca), dot(cb, cb))) - r;
+}
+float torus(vec3 q) { return length(vec2(length(q.xz) - 0.65, q.y)) - 0.3; }
+float capsule(vec3 q) {
+  q.y -= clamp(q.y, -0.5, 0.5);
+  return length(q) - 0.45;
+}
+
+/*
+ * A shape with flat faces: the largest of its planes' distances, or with
+ * Roundness a smooth largest (log of a sum of exponentials), which rounds
+ * the edges and corners where planes meet.
+ */
+float faces(float d[20], int count) {
+  float m = d[0];
+  for (int i = 1; i < 20; i++) if (i < count) m = max(m, d[i]);
+  float k = radius() * 0.3;
+  if (k < 1e-3) return m;
+  float sum = 0.0;
+  for (int i = 0; i < 20; i++) if (i < count) sum += exp((d[i] - m) / k);
+  return m + k * log(sum);
+}
+float octahedron(vec3 q) {
+  float d[20];
+  int n = 0;
+  for (int i = 0; i < 8; i++) {
+    vec3 normal = vec3(i & 1, (i >> 1) & 1, (i >> 2) & 1) * 2.0 - 1.0;
+    d[n++] = dot(q, normal) / sqrt(3.0) - 0.62;
+  }
+  return faces(d, 8);
+}
+/* The icosahedron's 20 face directions are a dodecahedron's corners: (±1, ±1, ±1) and the cyclic turns of (0, ±1/g, ±g). */
+float icosahedron(vec3 q) {
+  const float g = 1.61803399;
+  float d[20];
+  int n = 0;
+  for (int i = 0; i < 8; i++) {
+    vec3 normal = vec3(i & 1, (i >> 1) & 1, (i >> 2) & 1) * 2.0 - 1.0;
+    d[n++] = dot(q, normalize(normal)) - 0.82;
+  }
+  for (int i = 0; i < 4; i++) {
+    vec2 s = vec2(i & 1, (i >> 1) & 1) * 2.0 - 1.0;
+    vec2 a = s * vec2(1.0 / g, g);
+    d[n++] = dot(q, normalize(vec3(0.0, a.x, a.y))) - 0.82;
+    d[n++] = dot(q, normalize(vec3(a.x, a.y, 0.0))) - 0.82;
+    d[n++] = dot(q, normalize(vec3(a.y, 0.0, a.x))) - 0.82;
+  }
+  return faces(d, 20);
+}
+/* A square pyramid: its tip at y = 0.9, its base at y = -0.7, 0.95 from the middle to each side. */
+float pyramid(vec3 q) {
+  float d[20];
+  vec2 side = normalize(vec2(1.6, 0.95));
+  d[0] = dot(q, vec3(side.x, side.y, 0.0)) - side.y * 0.9;
+  d[1] = dot(q, vec3(-side.x, side.y, 0.0)) - side.y * 0.9;
+  d[2] = dot(q, vec3(0.0, side.y, side.x)) - side.y * 0.9;
+  d[3] = dot(q, vec3(0.0, side.y, -side.x)) - side.y * 0.9;
+  d[4] = -q.y - 0.7;
+  return faces(d, 5);
+}
+
+/* The distance from a point in the unit frame to the shape, and how much to trust it (the smooth maximum can overstate it). */
+float unitShape(vec3 q) {
+  if (u_shape == 0) return length(q) - 0.95;
+  if (u_shape == 1) return box(q);
+  if (u_shape == 2) return cylinder(q);
+  if (u_shape == 3) return cone(q) * 0.8;
+  if (u_shape == 4) return torus(q);
+  if (u_shape == 5) return capsule(q);
+  if (u_shape == 6) return octahedron(q) * 0.7;
+  if (u_shape == 7) return icosahedron(q) * 0.7;
+  return pyramid(q) * 0.7;
+}
+
+float scale() { return 0.5 * u_size; }
+
+/* A point of the view to the shape's unit frame. */
+vec3 toShape(vec3 p) { return transpose(u_turn) * (p - vec3(u_center, 0.0)) / scale(); }
+
+float scene(vec3 p) { return unitShape(toShape(p)) * scale(); }
+
+vec3 normalAt(vec3 p, float e) {
+  const vec2 k = vec2(1.0, -1.0);
+  return normalize(k.xyy * scene(p + k.xyy * e) + k.yyx * scene(p + k.yyx * e) + k.yxy * scene(p + k.yxy * e) + k.xxx * scene(p + k.xxx * e));
+}
+
+/* Wrap: the place in the picture for a point of the surface, in the shape's frame. */
+vec2 wrapAt(vec3 q, vec3 n) {
+  float around = atan(q.z, q.x) / (2.0 * PI) + 0.5;
+  vec2 uv;
+  if (u_shape == 0) {
+    vec3 d = normalize(q);
+    uv = vec2(around * 2.0, asin(clamp(d.y, -1.0, 1.0)) / PI + 0.5);
+  } else if (u_shape == 4) {
+    uv = vec2(around * 2.0, atan(q.y, length(q.xz) - 0.65) / PI + 1.0);
+  } else if ((u_shape == 2 || u_shape == 3 || u_shape == 5) && abs(n.y) < 0.7) {
+    uv = vec2(around * 2.0, q.y * 0.5 + 0.5);
+  } else {
+    /* A flat face (or a cap): the picture lies flat on it, across the face. */
+    vec3 t1 = normalize(cross(abs(n.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), n));
+    vec3 t2 = cross(n, t1);
+    uv = vec2(dot(q, t1), dot(q, t2)) * 0.6 + 0.5;
+  }
+  return fold(uv * u_tiles);
+}
+
+void main() {
+  vec2 screen = vec2((v_uv.x - 0.5) * u_aspect, v_uv.y - 0.5);
+  vec3 base = texture(u_tex, v_uv).rgb * u_background;
+  vec3 eye = vec3(0.0, 0.0, EYE);
+  vec3 rd = normalize(vec3(screen, 0.0) - eye);
+
+  /* The drop shadow: how near the shape is to this place, moved toward the light (so the shadow falls away from it). */
+  if (u_shadow > 0.0) {
+    vec3 behind = vec3(screen + u_light.xy * scale() * 0.5, 0.0);
+    float d = scene(behind);
+    base *= 1.0 - u_shadow * 0.75 * (1.0 - smoothstep(0.0, 0.5 * scale(), d));
+  }
+
+  /* The sphere around the shape: rays that miss it miss the shape. */
+  vec3 oc = eye - vec3(u_center, 0.0);
+  float b = dot(oc, rd);
+  float bound = 1.45 * scale();
+  float h = b * b - (dot(oc, oc) - bound * bound);
+  float cover = 0.0;
+  vec3 color = vec3(0.0);
+  if (h > 0.0) {
+    float t = max(-b - sqrt(h), 0.0);
+    float end = -b + sqrt(h);
+    /* The nearest the ray comes to the shape, in pixels, and where. */
+    float nearest = 1e9;
+    float nearestT = t;
+    bool hit = false;
+    for (int i = 0; i < STEPS; i++) {
+      float d = scene(eye + rd * t);
+      float footprint = u_pixel * t / EYE;
+      if (d / footprint < nearest) {
+        nearest = d / footprint;
+        nearestT = t;
+      }
+      if (d < footprint * 0.25) {
+        hit = true;
+        break;
+      }
+      t += d;
+      if (t > end) break;
+    }
+    cover = hit ? 1.0 : clamp(1.0 - nearest, 0.0, 1.0);
+    if (cover > 0.0) {
+      float at = hit ? t : nearestT;
+      vec3 p = eye + rd * at;
+      vec3 n = normalAt(p, max(u_pixel * at / EYE * 0.5, 1e-4));
+      vec2 uv;
+      if (u_map == 1) {
+        uv = fold(v_uv + n.xy * u_bend * 0.3 * vec2(1.0 / u_aspect, 1.0));
+      } else if (u_map == 2) {
+        vec3 r = reflect(rd, n);
+        uv = vec2(abs(atan(r.x, -r.z)) / PI, asin(clamp(r.y, -1.0, 1.0)) / PI + 0.5);
+      } else {
+        uv = wrapAt(toShape(p), transpose(u_turn) * n);
+      }
+      color = texture(u_tex, uv).rgb;
+      float lit = mix(1.0, 0.18 + 0.82 * max(dot(n, u_light), 0.0), u_shading);
+      float shine = pow(max(dot(reflect(-u_light, n), -rd), 0.0), 40.0) * u_shine;
+      color = color * lit + shine;
+    }
+  }
+  o = vec4(mix(base, blendLayer(base, color, u_blend), cover * u_opacity), 1.0);
+}`;

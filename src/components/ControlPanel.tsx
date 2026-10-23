@@ -9,8 +9,8 @@ import { settingButtons } from "../lib/settingButtons";
 import { GradientEditor } from "./GradientEditor";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
-import { BLUR_KEYS, BLUR_MASKS, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, KALEIDOSCOPE_KEYS, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
-import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, ShapeStep, SmearShape, WarpType } from "../engine/renderer";
+import { BLUR_KEYS, BLUR_MASKS, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, KALEIDOSCOPE_KEYS, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
+import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ContextMenu } from "./ContextMenu";
@@ -220,6 +220,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       relief: () => start("reliefAmount", 0.6),
       driver: () => start("driverAmount", 1),
       camera: () => start("cameraAmount", 1),
+      solid: () => start("solidAmount", 1),
       sort: () => start("sortAmount", 1),
       particles: () => start("particleAmount", 1),
       cycles: () => start("cyclesAmount", 1),
@@ -290,6 +291,11 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
         <CameraBlend engine={engine} />
         <CameraRepeatRow engine={engine} />
         <SplitRows keys={CAMERA_KEYS} row={row} />
+      </Group>
+    ),
+    solid: (grip) => (
+      <Group engine={engine} group="solid" title="3D object" grip={grip} {...accordion("solid")}>
+        <SolidSection engine={engine} row={row} />
       </Group>
     ),
     sort: (grip) => (
@@ -741,7 +747,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "driverSource" | "driverMode";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange }: {
@@ -874,6 +880,21 @@ function CyclesSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =
           : row(key)}
         blend={<ModeSelect engine={engine} stateKey="cyclesBlend" options={LAYER_BLENDS} name="Blend" />}
       />
+    </>
+  );
+}
+
+/** The 3D Object: its shape and map menus, then the sliders that the shape and the map use, then Blend and Opacity. */
+function SolidSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
+  const [shape, setShape] = useState<SolidShape>(engine.state.solidShape);
+  const [map, setMap] = useState<SolidMap>(engine.state.solidMap);
+  const shown = (key: ParamKey) => key === "solidRound" ? SOLID_SHAPE_KEYS[shape].includes(key)
+    : key === "solidTiles" || key === "solidBend" ? SOLID_MAP_KEYS[map].includes(key) : true;
+  return (
+    <>
+      <ModeSelect engine={engine} stateKey="solidShape" options={SOLID_SHAPES} name="Shape" onChange={setShape} />
+      <ModeSelect engine={engine} stateKey="solidMap" options={SOLID_MAPS} name="Map" onChange={setMap} />
+      <SplitRows keys={SOLID_KEYS.filter(shown)} row={row} blend={<ModeSelect engine={engine} stateKey="solidBlend" options={LAYER_BLENDS} name="Blend" />} />
     </>
   );
 }

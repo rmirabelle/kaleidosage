@@ -1,7 +1,7 @@
 import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 
 /** The blur mask: circle with a sharp or a blurred center, gradient, bright areas, dark areas, noise. */
 export type BlurMask = 0 | 1 | 2 | 3 | 4 | 5;
@@ -19,7 +19,7 @@ export type ShapeStep = "warp" | "map" | "kaleidoscope";
 /** The kind of warp: noise, ripple, waves, swirl, bulge and pinch, cells. */
 export type WarpType = 0 | 1 | 2 | 3 | 4 | 5;
 /** The steps that change the drawn picture. The user sets their order. */
-export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "sort" | "particles" | "cycles" | "rays" | "bloom" | "sharpen" | "color" | "levels";
+export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "bloom" | "sharpen" | "color" | "levels";
 /**
  * Any effect step. The user sets one order for all of them. Shape steps
  * that are next to each other run in one pass; a shape step after a
@@ -27,7 +27,7 @@ export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | 
  */
 export type FxStep = ShapeStep | PictureStep;
 export const SHAPE_STEPS: readonly ShapeStep[] = ["warp", "map", "kaleidoscope"];
-export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "camera", "sort", "particles", "cycles", "rays", "bloom", "sharpen", "color", "levels"];
+export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "camera", "solid", "sort", "particles", "cycles", "rays", "bloom", "sharpen", "color", "levels"];
 
 /** Sharpen, Color and Levels, in the order FINISH_SHADER applies them (see drawFinish). */
 type FinishPart = "sharpen" | "color" | "levels";
@@ -58,6 +58,10 @@ export type CycleMove = 0 | 1;
  * distance from a center.
  */
 export type CyclePaint = 0 | 1 | 2 | 3;
+/** The 3D Object's shape: sphere, cube, cylinder, cone, torus, capsule, octahedron, icosahedron, pyramid (see SOLID_SHADER). */
+export type SolidShape = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+/** How the picture goes onto the 3D Object: 0 wrapped on its surface, 1 bent through it like a lens, 2 reflected in it like chrome. */
+export type SolidMap = 0 | 1 | 2;
 /** How the two images fade: 0 = crossfade, 1 = dissolve by brightness (light areas change first). */
 export type BlendMode = 0 | 1;
 /**
@@ -250,6 +254,31 @@ export interface FrameValues {
   skyColor: [number, number, number];
   cameraShine: number;
   cameraSmooth: number;
+  /**
+   * 3D Object (see SOLID_SHADER): opacity (0 = off), the shape, the map, the
+   * blend, the picture behind it, its size (screen heights), roundness, its
+   * spin and tumble angles and its tilt (radians), bend, tiles, the light's
+   * angle (radians), shading, shine, shadow, and its place (screen heights
+   * from the screen center).
+   */
+  solid: number;
+  solidShape: SolidShape;
+  solidMap: SolidMap;
+  solidBlend: LayerBlend;
+  solidBackground: number;
+  solidSize: number;
+  solidRound: number;
+  solidSpin: number;
+  solidTumble: number;
+  solidTilt: number;
+  solidBend: number;
+  solidTiles: number;
+  solidLight: number;
+  solidShading: number;
+  solidShine: number;
+  solidShadow: number;
+  solidX: number;
+  solidY: number;
   /**
    * Pixel sort (see SORT_STEP_SHADER): opacity (0 = off), the order, the
    * brightness range that is sorted, the angle of the sort lines (radians),
@@ -485,6 +514,7 @@ export class KaleidoRenderer {
   private driverVideoTime = -1;
   private readonly camera: Program;
   private readonly cameraField: Program;
+  private readonly solidProgram: Program;
   private readonly maxPass: Program;
   private readonly contours: Program;
   private readonly contourField: Program;
@@ -622,6 +652,7 @@ export class KaleidoRenderer {
     this.driver = this.createProgram(DRIVER_SHADER);
     this.camera = this.createProgram(CAMERA_SHADER);
     this.cameraField = this.createProgram(CAMERA_FIELD_SHADER);
+    this.solidProgram = this.createProgram(SOLID_SHADER);
     this.maxPass = this.createProgram(MAX_SHADER);
     this.contours = this.createProgram(CONTOUR_SHADER);
     this.contourField = this.createProgram(CONTOUR_FIELD_SHADER);
@@ -867,6 +898,7 @@ export class KaleidoRenderer {
       camera: v.cameraOn,
       particles: v.particles > 0 && this.floatTargets,
       cycles: v.cycles > 0,
+      solid: v.solid > 0,
       /* The sort keeps column numbers in half floats, so it needs float textures. */
       sort: v.sort > 0 && this.floatTargets,
       rays: v.rays > 0,
@@ -974,6 +1006,7 @@ export class KaleidoRenderer {
         else if (step === "relief") this.drawRelief(v, source, target, width, height);
         else if (step === "driver") this.drawDriver(v, source, target, width, height);
         else if (step === "camera") this.drawCamera(v, source, target, width, height);
+        else if (step === "solid") this.drawSolid(v, source, target, width, height);
         else if (step === "contours") this.drawContours(v, source, target, width, height);
         else if (step === "smear") this.drawSmear(v, source, target, width, height);
         else if (step === "particles") this.drawParticles(v, source, target, width, height);
@@ -1531,6 +1564,48 @@ export class KaleidoRenderer {
     gl.drawArrays(gl.POINTS, 0, Math.round(Math.min(PARTICLE_SIDE * PARTICLE_SIDE, Math.max(0, v.particleCount))));
     gl.disable(gl.BLEND);
     gl.bindVertexArray(null);
+  }
+
+  /**
+   * 3D Object: one pass of SOLID_SHADER, which draws the shape over the
+   * picture. The shape's turn is a matrix from its own frame to the view:
+   * first its spin about its own axis (y), then a turn about the screen's x
+   * axis by Tilt plus the tumble.
+   */
+  private drawSolid(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+    const gl = this.gl;
+    const s = this.solidProgram;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(s.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.uniform1i(s.uniforms.u_tex, 0);
+    gl.uniform1f(s.uniforms.u_aspect, width / height);
+    gl.uniform1f(s.uniforms.u_pixel, 1 / height);
+    gl.uniform1i(s.uniforms.u_shape, v.solidShape);
+    gl.uniform1i(s.uniforms.u_map, v.solidMap);
+    gl.uniform1i(s.uniforms.u_blend, v.solidBlend);
+    gl.uniform1f(s.uniforms.u_opacity, Math.min(1, Math.max(0, v.solid)));
+    gl.uniform1f(s.uniforms.u_background, Math.min(1, Math.max(0, v.solidBackground)));
+    gl.uniform1f(s.uniforms.u_size, Math.max(0.01, v.solidSize));
+    gl.uniform1f(s.uniforms.u_round, Math.min(1, Math.max(0, v.solidRound)));
+    const [cs, ss] = [Math.cos(v.solidSpin), Math.sin(v.solidSpin)];
+    const tilt = v.solidTilt + v.solidTumble;
+    const [ct, st] = [Math.cos(tilt), Math.sin(tilt)];
+    /* Rows of (turn about x by tilt) times (spin about y), given by columns for GLSL. */
+    const rows = [[cs, 0, ss], [st * ss, ct, -st * cs], [-ct * ss, st, ct * cs]];
+    gl.uniformMatrix3fv(s.uniforms.u_turn, false, [0, 1, 2].flatMap((column) => rows.map((row) => row[column])));
+    gl.uniform2f(s.uniforms.u_center, v.solidX, v.solidY);
+    gl.uniform1f(s.uniforms.u_bend, Math.max(0, v.solidBend));
+    gl.uniform1f(s.uniforms.u_tiles, Math.max(0.01, v.solidTiles));
+    const light = [Math.cos(v.solidLight), Math.sin(v.solidLight), 1.2];
+    const length = Math.hypot(...light);
+    gl.uniform3f(s.uniforms.u_light, light[0] / length, light[1] / length, light[2] / length);
+    gl.uniform1f(s.uniforms.u_shading, Math.min(1, Math.max(0, v.solidShading)));
+    gl.uniform1f(s.uniforms.u_shine, Math.min(1, Math.max(0, v.solidShine)));
+    gl.uniform1f(s.uniforms.u_shadow, Math.min(1, Math.max(0, v.solidShadow)));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
   /**

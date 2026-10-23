@@ -1,10 +1,10 @@
 import type { ParamKey, PlayState } from "./params";
-import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, SmearShape, WarpType } from "./renderer";
+import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, SmearShape, SolidMap, SolidShape, WarpType } from "./renderer";
 
 /** The effects in the Add effect menu, in menu order, with the names their groups show. */
 export const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
   ["kaleidoscope", "Kaleidoscope"], ["map", "Algorithm"], ["warp", "Warp"], ["blur", "Blur"], ["trails", "Trails"],
-  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["driver", "Driver"], ["camera", "Camera"], ["sort", "Pixel sort"], ["particles", "Particles"], ["cycles", "Light cycles"], ["rays", "Light rays"], ["bloom", "Bloom"], ["sharpen", "Sharpen"], ["color", "Color"], ["levels", "Levels"]
+  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["driver", "Driver"], ["camera", "Camera"], ["solid", "3D object"], ["sort", "Pixel sort"], ["particles", "Particles"], ["cycles", "Light cycles"], ["rays", "Light rays"], ["bloom", "Bloom"], ["sharpen", "Sharpen"], ["color", "Color"], ["levels", "Levels"]
 ];
 
 /**
@@ -95,7 +95,18 @@ export const CYCLE_PAINT_KEYS: Record<CyclePaint, ParamKey[]> = {
 };
 export const CYCLE_PAINTS = [[0, "Cycle"], [1, "Trail"], [2, "Position, linear"], [3, "Position, radial"]] as const;
 
-export type SubmodeKey = "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape" | "cyclesMove" | "cyclesPaint";
+/** The 3D Object's sliders, in panel order. Roundness and the map's own sliders show only where they do something (see SOLID_SHAPE_KEYS and SOLID_MAP_KEYS). */
+export const SOLID_KEYS: readonly ParamKey[] = ["solidSize", "solidRound", "solidSpin", "solidTumble", "solidTilt", "solidTiles", "solidBend", "solidLight", "solidShading", "solidShine", "solidShadow", "solidBackground", "solidX", "solidY", "solidAmount"];
+/** The sphere, the torus and the capsule have no edges or corners to round. */
+export const SOLID_SHAPE_KEYS: Record<SolidShape, ParamKey[]> = {
+  0: [], 1: ["solidRound"], 2: ["solidRound"], 3: ["solidRound"], 4: [], 5: [], 6: ["solidRound"], 7: ["solidRound"], 8: ["solidRound"]
+};
+export const SOLID_SHAPES = [[0, "Sphere"], [1, "Cube"], [2, "Cylinder"], [3, "Cone"], [4, "Torus"], [5, "Capsule"], [6, "Octahedron"], [7, "Icosahedron"], [8, "Pyramid"]] as const;
+/** Tiles is for Wrap; Bend for Project. */
+export const SOLID_MAP_KEYS: Record<SolidMap, ParamKey[]> = { 0: ["solidTiles"], 1: ["solidBend"], 2: [] };
+export const SOLID_MAPS = [[0, "Wrap"], [1, "Project"], [2, "Mirror"]] as const;
+
+export type SubmodeKey = "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape" | "cyclesMove" | "cyclesPaint" | "solidShape" | "solidMap";
 
 /** One submode menu: the play-state setting it sets, its choices (value and name), and the sliders each choice shows. */
 export interface Submode {
@@ -111,7 +122,9 @@ export const SUBMODES: readonly Submode[] = [
   { stateKey: "blurMask", options: BLUR_MASKS, keys: BLUR_KEYS },
   { stateKey: "smearShape", options: SMEAR_SHAPES, keys: SMEAR_KEYS },
   { stateKey: "cyclesMove", options: CYCLE_MOVES, keys: CYCLE_KEYS },
-  { stateKey: "cyclesPaint", options: CYCLE_PAINTS, keys: CYCLE_PAINT_KEYS }
+  { stateKey: "cyclesPaint", options: CYCLE_PAINTS, keys: CYCLE_PAINT_KEYS },
+  { stateKey: "solidShape", options: SOLID_SHAPES, keys: SOLID_SHAPE_KEYS },
+  { stateKey: "solidMap", options: SOLID_MAPS, keys: SOLID_MAP_KEYS }
 ];
 
 /** The submode menu that shows or hides the slider, or undefined for a slider that always shows. */

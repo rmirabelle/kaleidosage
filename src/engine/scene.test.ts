@@ -31,6 +31,14 @@ describe("scene files", () => {
     expect(sceneFingerprint(createParams(), loaded, [])).not.toBe(sceneFingerprint(createParams(), state, []));
   });
 
+  it("keep the 3D object's shape, map, blend and turn", () => {
+    const state = createPlayState();
+    Object.assign(state, { solidShape: 7, solidMap: 2, solidBlend: 3, solidSpinTurns: 0.25, solidTumbleTurns: 0.5 });
+    const loaded = createPlayState();
+    applyScene(serializeScene(createParams(), state, { image: IMAGE }), createParams(), loaded);
+    expect([loaded.solidShape, loaded.solidMap, loaded.solidBlend, loaded.solidSpinTurns, loaded.solidTumbleTurns]).toEqual([7, 2, 3, 0.25, 0.5]);
+  });
+
   it("round-trips embedded video handles for both slots without base64", () => {
     const images = { image: { type: "video/mp4", video: "1" }, image2: { type: "video/webm", video: "2" } };
     const saved = serializeScene(createParams(), createPlayState(), images);
@@ -119,7 +127,7 @@ describe("scene files", () => {
     /* Earlier versions of the app read a full order inside each kind: the list's order first. */
     const savedState = JSON.parse(text).state;
     expect(savedState.shapeStack).toEqual(["warp", "map", "kaleidoscope"]);
-    expect(savedState.pictureOrder).toEqual(["relief", "blur", "trails", "smear", "contours", "driver", "camera", "sort", "particles", "cycles", "rays", "bloom", "sharpen", "color", "levels"]);
+    expect(savedState.pictureOrder).toEqual(["relief", "blur", "trails", "smear", "contours", "driver", "camera", "solid", "sort", "particles", "cycles", "rays", "bloom", "sharpen", "color", "levels"]);
 
     /* Scenes from before the effect list: every effect that is on and changes the picture, in their order. */
     const showing = { warpAmount: { value: 0.3 }, blurAmount: { value: 10 }, trailAmount: { value: 0.5 }, smearAmount: { value: 1 }, contourOpacity: { value: 1 }, reliefAmount: { value: 1 }, sharpen: { value: 1 } };

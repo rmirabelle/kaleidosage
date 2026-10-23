@@ -822,6 +822,8 @@ export class Engine {
     for (const key of PARAM_KEYS) if (this.params[key].drift) startRangeAt(this.params[key], 0);
     this.state.warpTime = 0;
     this.state.driverTime = 0;
+    this.state.solidSpinTurns = 0;
+    this.state.solidTumbleTurns = 0;
     this.state.mapTravel = 0;
     this.state.cameraX = 0;
     this.state.cameraY = 0;
@@ -955,6 +957,9 @@ export class Engine {
     /** Flow is a speed, so its live value is added up over time; a drifting flow speeds up and slows down smoothly. */
     this.state.warpTime += animated * (this.live("warpFlow") + this.warpFlowOffset);
     this.state.driverTime += animated * this.live("driverSpeed");
+    /* The 3D Object's spin and tumble are speeds in turns per minute, added up the same way. */
+    this.state.solidSpinTurns = (this.state.solidSpinTurns + animated * this.live("solidSpin") / 60) % 1;
+    this.state.solidTumbleTurns = (this.state.solidTumbleTurns + animated * this.live("solidTumble") / 60) % 1;
     /* Tunnel speed is a speed too, so the distance flown is added up the same way. */
     const mapSpeed = this.live("mapSpeed");
     this.state.mapTravel += animated * (this.state.mapMode === 8 ? mapSpeed / drosteCopy(this.live("drosteSize")) : mapSpeed);
@@ -1180,6 +1185,24 @@ export class Engine {
       skyColor: hexToRgb(this.state.skyColor),
       cameraShine: this.live("cameraShine"),
       cameraSmooth: this.live("cameraSmooth"),
+      solid: on.solid ? this.live("solidAmount") : 0,
+      solidShape: this.state.solidShape,
+      solidMap: this.state.solidMap,
+      solidBlend: this.state.solidBlend,
+      solidBackground: this.live("solidBackground"),
+      solidSize: this.live("solidSize"),
+      solidRound: this.live("solidRound"),
+      solidSpin: this.state.solidSpinTurns * Math.PI * 2,
+      solidTumble: this.state.solidTumbleTurns * Math.PI * 2,
+      solidTilt: this.live("solidTilt") * DEGREES,
+      solidBend: this.live("solidBend"),
+      solidTiles: this.live("solidTiles"),
+      solidLight: this.live("solidLight") * DEGREES,
+      solidShading: this.live("solidShading"),
+      solidShine: this.live("solidShine"),
+      solidShadow: this.live("solidShadow"),
+      solidX: this.live("solidX"),
+      solidY: this.live("solidY"),
       sort: on.sort ? this.live("sortAmount") : 0,
       sortOrder: this.state.sortOrder,
       sortLow: this.live("sortLow"),

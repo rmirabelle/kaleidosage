@@ -77,7 +77,7 @@ export const FAMILY_LABELS: Record<Family, string> = { glow: "Brightness", scale
 /** The settings that have a match in the sound; every other setting moves on the beats (see familyOf). */
 export const FAMILIES: Partial<Record<ParamKey, Exclude<Family, "beat">>> = {
   exposure: "glow", bloomAmount: "glow", bloomSize: "glow", overlayOpacity: "glow", contourOpacity: "glow", shine: "glow",
-  zoom: "scale", mapScale: "scale", juliaZoom: "scale", mobiusZoom: "scale", trailZoom: "scale", particleSize: "scale", cyclesWidth: "scale",
+  zoom: "scale", mapScale: "scale", juliaZoom: "scale", mobiusZoom: "scale", trailZoom: "scale", particleSize: "scale", cyclesWidth: "scale", solidSize: "scale",
   segments: "complexity", drosteSpirals: "complexity", mapArms: "complexity", twirl: "complexity", warpAmount: "complexity",
   warpMarble: "complexity", blurAmount: "complexity", contourLines: "complexity", mapTwist: "complexity", tunnelTwist: "complexity",
   mapCurl: "complexity", mapPower: "complexity", smearAmount: "complexity",

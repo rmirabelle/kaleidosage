@@ -16,6 +16,7 @@ const EFFECT_NOTES: Record<FxStep, string> = {
   relief: "Gives the picture raised edges and depth.",
   driver: "A moving pattern bends, reveals or lights the picture.",
   camera: "Flies a camera over the picture as a landscape.",
+  solid: "Puts the picture on a turning 3D shape.",
   sort: "Sorts pixels by brightness into streaks.",
   particles: "Bright areas send out moving particles.",
   cycles: "Light cycles race and leave lines in the picture's colors.",
