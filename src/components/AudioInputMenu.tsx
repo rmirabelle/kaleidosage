@@ -99,6 +99,8 @@ export function AudioInputMenu({ tip, onTipDone }: {
         onChange={(value) => {
           const split = value.indexOf(":");
           audioInput.setSource(value.slice(0, split) as InputKind, value.slice(split + 1) || null);
+          /* Any pick answers the tip, also Nothing. */
+          onTipDone();
         }}
       />
       {tip && settings.kind === "none" && <InputTip anchor={rowRef} onClose={onTipDone} />}
