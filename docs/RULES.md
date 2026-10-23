@@ -284,7 +284,6 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - While you drag a range handle, the readout shows that handle.
 - A range slider shows a thin line at the live value.
 - The live line turns blue while sound or the song moves the setting.
-- The Length slider shows a playhead at the current place.
 
 ## Ranges
 

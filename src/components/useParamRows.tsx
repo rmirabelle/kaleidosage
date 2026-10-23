@@ -5,7 +5,6 @@ import { MAX_CUSTOM_SECONDS, NO_EFFECT, SLIDER_STEPS, defaultValue, formatValue,
 import { ColorPicker } from "./ColorPicker";
 import { EaseMenu } from "./EaseMenu";
 import { RangeSlider, Slider, rangePosition, trackPosition } from "./Slider";
-import { scenePosition } from "../engine/loop";
 import { createPortal } from "react-dom";
 import { NOT_MAPPABLE, midi } from "../lib/midi";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
@@ -32,8 +31,6 @@ export function useParamRows(engine: Engine) {
   const singleMarkers = useRef(new Map<ParamKey, HTMLDivElement>());
   /** The value of a drift handle that is being dragged. Its readout shows it instead of the live value. */
   const held = useRef(new Map<ParamKey, number>());
-  /** The playhead line in the Length slider: the place in the scene's Length. */
-  const progress = useRef<HTMLDivElement | null>(null);
 
   /** The readouts and drift lines show the live value each frame, so drifting values can be seen moving. */
   useEffect(() => engine.onFrame(() => {
@@ -56,11 +53,6 @@ export function useParamRows(engine: Engine) {
       const moving = engine.soundFamily(key) !== null;
       element.classList.toggle("idle", !moving);
       if (moving) element.style.left = trackPosition(toSlider(param, engine.live(key)), min, max);
-    }
-    /* From the slider's left edge (0 s) to the Length handle's center, once per Length. */
-    if (progress.current) {
-      const { min, max, value } = engine.params.cycle;
-      progress.current.style.left = `calc(${scenePosition(engine.state)} * ${trackPosition(value, min, max)})`;
     }
   }), [engine]);
 
@@ -85,7 +77,6 @@ export function useParamRows(engine: Engine) {
       readout={register(key)}
       marker={registerMarker(key)}
       singleMarker={registerSingleMarker(key)}
-      progress={key === "cycle" ? (element) => { progress.current = element; } : undefined}
       after={after}
       badge={badge}
       menu={menu}
@@ -130,7 +121,7 @@ const HUE_KEYS: ParamKey[] = ["contourHue"];
  * live value. The readout and the line are written by the frame loop, not by
  * React, because drifting values change every frame.
  */
-function ParamRow({ engine, paramKey, readout, marker, singleMarker, progress, after, badge, menu, onHold }: {
+function ParamRow({ engine, paramKey, readout, marker, singleMarker, after, badge, menu, onHold }: {
   engine: Engine;
   paramKey: ParamKey;
   /** A control after the slider, in the slider's row. */
@@ -143,8 +134,6 @@ function ParamRow({ engine, paramKey, readout, marker, singleMarker, progress, a
   marker: (element: HTMLDivElement | null) => void;
   /** The single-value slider's live line, for a setting with an audio link. */
   singleMarker: (element: HTMLDivElement | null) => void;
-  /** The Length slider's playhead line, for the scene's Length only. */
-  progress?: (element: HTMLDivElement | null) => void;
   onHold: (value: number | null) => void;
 }) {
   const param = engine.params[paramKey];
@@ -356,7 +345,6 @@ function ParamRow({ engine, paramKey, readout, marker, singleMarker, progress, a
             snapToDetent={!NO_DETENT_SNAP_KEYS.includes(paramKey)}
             snaps={snaps}
             markerRef={param.drift ? singleMarker : undefined}
-            progressRef={progress}
             onChange={(position) => {
               const next = fromSlider(param, position);
               param.value = next;
