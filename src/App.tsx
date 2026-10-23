@@ -253,8 +253,9 @@ export default function App() {
   const endFilesTip = useCallback(() => setFilesTip(false), []);
   const pickInput = useCallback((kind: InputKind) => {
     setFilesTip(kind === "tracks" && tracks.list.length === 0);
+    /* With Nothing, the audio buttons have no sound to follow, so they hide. */
+    settingButtons.set("audio", kind !== "none");
     if (kind === "none") return;
-    settingButtons.set("audio", true);
     if (engine && engine.soundLinks().length === 0) {
       setLinksTip(true);
       setNextTip(true);
