@@ -2015,7 +2015,7 @@ export default function App() {
    * the input and the Playlist shows, else above the scene's play controls.
    */
   const inputInPlaylist = sceneListShown && tracksActive && !filesCollapsed;
-  const inputMenu = <AudioInputMenu onAddTracks={() => void pickTracks()} tip={inputTip} onTipDone={() => setInputTip(false)} />;
+  const inputMenu = <AudioInputMenu tip={inputTip} onTipDone={() => setInputTip(false)} />;
   const tabs: DocumentTabInfo[] = docs.map((doc) => doc.id === activeId
     ? { id: doc.id, fileName: docFileName(scenePath, doc.untitled), path: scenePath, dirty }
     : { id: doc.id, fileName: docFileName(doc.path, doc.untitled), path: doc.path, dirty: doc.dirty });

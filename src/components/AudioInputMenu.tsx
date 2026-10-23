@@ -56,10 +56,10 @@ function InputTip({ anchor, onClose }: { anchor: RefObject<HTMLDivElement | null
  * The audio Input menu, in the scene's play toolbar: Nothing, then the PC
  * sound of each output device (in loopback), then each microphone or line
  * input, then the audio files. The input belongs to the app, not to the
- * scene (see docs/AUDIO.md). Picking Files with no files asks for them.
+ * scene (see docs/AUDIO.md). Picking Files only shows the Playlist; Add
+ * File(s) there asks for the files.
  */
-export function AudioInputMenu({ onAddTracks, tip, onTipDone }: {
-  onAddTracks: () => void;
+export function AudioInputMenu({ tip, onTipDone }: {
   /** Shows the tip at the menu, until an input is picked or the tip is closed. */
   tip: boolean;
   onTipDone: () => void;
@@ -99,8 +99,6 @@ export function AudioInputMenu({ onAddTracks, tip, onTipDone }: {
         onChange={(value) => {
           const split = value.indexOf(":");
           audioInput.setSource(value.slice(0, split) as InputKind, value.slice(split + 1) || null);
-          /* An empty track list asks for its files at once. */
-          if (value === TRACKS && tracks.list.length === 0) onAddTracks();
         }}
       />
       {tip && settings.kind === "none" && <InputTip anchor={rowRef} onClose={onTipDone} />}

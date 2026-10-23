@@ -74,7 +74,7 @@ that does it. Rule: an empty list never shows only "No items".
 |---|---|---|
 | FX, no effects | Add an effect to change the picture. | New effect |
 | Audio sensors, no links | Click the speaker beside a setting to make it move with the sound. | Show speakers (only while they are hidden) |
-| Files, no files | Add audio files to play them one after the other. | Add File(s) |
+| Files, no files | (no text) | Add File(s) |
 | MIDI, no mappings | Click Learn, then move a knob or fader. | Learn |
 | MIDI, no controller | Connect a MIDI controller; it shows here at once. | (none) |
 | Input is Nothing (Levels) | Pick an Input to make settings move with the sound. | (none: the Input menu is right above) |

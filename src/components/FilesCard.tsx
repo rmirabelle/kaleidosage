@@ -10,7 +10,6 @@ import { formatPlayTime, tracks } from "../lib/tracks";
 import { songFollow, type FollowStatus } from "../lib/songFollow";
 import { help } from "../help/topics";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { EmptyState } from "./EmptyState";
 import { HelpButton } from "./HelpButton";
 import { useDragReorder } from "./useDragReorder";
 
@@ -89,11 +88,11 @@ export function FilesCard({ onAddTracks, input }: {
             {tracks.error && <p className="audio-error selectable">{tracks.error}</p>}
             {songFollow.enabled && songFollow.status.state === "error" && <p className="audio-error selectable">{songFollow.status.message}</p>}
             {count === 0 ? (
-              <EmptyState text="Add audio files to play them, one after the other.">
+              <div className="files-empty">
                 <button className="button secondary small" onClick={onAddTracks}>
                   <Plus size={13} weight="bold" /> Add File(s)
                 </button>
-              </EmptyState>
+              </div>
             ) : (
               /* The rows look like the scene list's (see SceneList): a number, the name, and an X that shows on hover; the file that plays is bright blue, with a speaker for its number. */
               <ol ref={drag.listRef} className="scene-list-items">
