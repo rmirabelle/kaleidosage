@@ -240,8 +240,9 @@ export default function App() {
   /**
    * A pick of an input with sound (a PC output, a microphone, a line input or
    * Files) turns the settings' audio buttons on, with a tip at the FX audio
-   * button that tells what they do (only when they were off). Files with an
-   * empty list also shows a tip at the Playlist's Add File(s) button.
+   * button that tells what they do, while no setting of the scene is linked
+   * to the sound yet. Files with an empty list also shows a tip at the
+   * Playlist's Add File(s) button.
    */
   const [linksTip, setLinksTip] = useState(false);
   const [filesTip, setFilesTip] = useState(false);
@@ -249,10 +250,10 @@ export default function App() {
   const endFilesTip = useCallback(() => setFilesTip(false), []);
   const pickInput = useCallback((kind: InputKind) => {
     setFilesTip(kind === "tracks" && tracks.list.length === 0);
-    if (kind === "none" || settingButtons.shown("audio")) return;
+    if (kind === "none") return;
     settingButtons.set("audio", true);
-    setLinksTip(true);
-  }, []);
+    if (engine && engine.soundLinks().length === 0) setLinksTip(true);
+  }, [engine]);
   /* The PC sound starts again at the app's start if it was on when the app closed. */
   useEffect(() => { audioInput.init(); }, []);
   const [midiPanelHeight, setMidiPanelHeight] = useState(() => {

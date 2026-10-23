@@ -143,7 +143,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
   useEffect(() => {
     if (!linksTipShown) return;
     /* Only a new link counts, not a change of a setting that was linked before. */
-    const linked = new Set((Object.keys(engine.state.sound) as ParamKey[]).filter((key) => engine.soundOn(key)));
+    const linked = new Set(engine.soundLinks());
     return engine.onParamChange((key) => {
       if (!engine.soundOn(key)) linked.delete(key);
       else if (!linked.has(key)) onLinksTipDone();

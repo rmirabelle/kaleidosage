@@ -524,6 +524,11 @@ export class Engine {
     return Boolean(this.state.sound[key]) && audioLinkable(key, this.params[key]);
   }
 
+  /** The settings whose audio switch is on. */
+  soundLinks() {
+    return (Object.keys(this.state.sound) as ParamKey[]).filter((key) => this.soundOn(key));
+  }
+
   /** Turns the setting's audio switch on or off. The row and the Audio panel hear of it through paramChanged. */
   setSound(key: ParamKey, on: boolean) {
     if (on && audioLinkable(key, this.params[key])) this.state.sound[key] = true;
