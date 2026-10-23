@@ -368,8 +368,6 @@ button { border: 0; }
 .scene-list-item.file-item.active { cursor: pointer; }
 .scene-list-item.file-item .scene-list-number { display: grid; place-items: center end; }
 .files-card-body .audio-error { margin: 4px 6px 8px; }
-/* An empty Playlist: only the Add File(s) button, in line with the footer's text. */
-.files-empty { margin: 10px 12px; }
 /* The footer of the Playlist and Scenes cards: a count at the left, more at the right (the play time, the unsaved scenes). */
 .files-card-foot { flex: 0 0 auto; display: flex; justify-content: space-between; gap: 10px; padding: 7px 12px; border-top: 1px solid #3a3e4d; color: var(--muted); background: #1b1e25; font-size: 11.5px; font-variant-numeric: tabular-nums; }
 /* The line at the Files column's right edge (see FilesSplitter): unseen until the mouse is over it. */

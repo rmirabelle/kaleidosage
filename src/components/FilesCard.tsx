@@ -76,7 +76,7 @@ export function FilesCard({ onAddTracks, input }: {
             <h2 className="side-panel-title">Playlist</h2>
             <span className="files-card-buttons">
               <button className="button secondary small" onClick={onAddTracks} data-tip="Add audio files at the end of the list">
-                <Plus size={13} weight="bold" /> Add
+                <Plus size={13} weight="bold" /> Add File(s)
               </button>
               <button className="button secondary small icon-only" disabled={count === 0} onClick={() => setClearAsked(true)} data-tip="Remove every file from the list" aria-label="Remove every file from the list">
                 <Trash size={14} />
@@ -87,13 +87,7 @@ export function FilesCard({ onAddTracks, input }: {
           <div className="files-card-body">
             {tracks.error && <p className="audio-error selectable">{tracks.error}</p>}
             {songFollow.enabled && songFollow.status.state === "error" && <p className="audio-error selectable">{songFollow.status.message}</p>}
-            {count === 0 ? (
-              <div className="files-empty">
-                <button className="button secondary small" onClick={onAddTracks}>
-                  <Plus size={13} weight="bold" /> Add File(s)
-                </button>
-              </div>
-            ) : (
+            {count > 0 && (
               /* The rows look like the scene list's (see SceneList): a number, the name, and an X that shows on hover; the file that plays is bright blue, with a speaker for its number. */
               <ol ref={drag.listRef} className="scene-list-items">
                 {tracks.list.map((track, index) => {

@@ -610,7 +610,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - At first start, the app listens to the PC sound of the default output.
 - The app records a microphone only when you pick it.
 - Picking Files only shows the Playlist; it does not open the Open dialog.
-- An empty Playlist shows only the Add File(s) button.
+- An empty Playlist has an empty body; Add File(s) is in its header.
 - A saved device that is not connected shows as "A device that is not connected".
 - A default-device choice follows the Windows default, checked each second.
 - A device picked by name stays fixed.
