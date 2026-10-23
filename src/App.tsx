@@ -239,11 +239,11 @@ export default function App() {
   const askForAudioInput = useCallback(() => setInputTip(true), []);
   /**
    * A pick of an input with sound (a PC output, a microphone, a line input or
-   * Files) turns the settings' audio buttons on, with a tip at the FX audio
-   * button that tells what it does, and a tip at the next step (see
-   * ControlPanel), while no setting of the scene is linked to the sound yet.
-   * Files with an empty list also shows a tip at the Playlist's Add File(s)
-   * button.
+   * Files) turns the settings' audio buttons on. A live input also shows a
+   * tip at the FX audio button that tells what it does, and a tip at the
+   * next step (see ControlPanel), while no setting of the scene is linked to
+   * the sound yet. Files shows only one tip, at the Playlist's Add File(s)
+   * button, while the list is empty: the FX tips come later.
    */
   const [linksTip, setLinksTip] = useState(false);
   const [nextTip, setNextTip] = useState(false);
@@ -257,11 +257,9 @@ export default function App() {
     if (kind === "tracks" && switched) songFollow.setEnabled(true);
     /* With Nothing, the audio buttons have no sound to follow, so they hide. */
     settingButtons.set("audio", kind !== "none");
-    if (kind === "none") return;
-    if (engine && engine.soundLinks().length === 0) {
-      setLinksTip(true);
-      setNextTip(true);
-    }
+    const fxTips = kind !== "none" && kind !== "tracks" && Boolean(engine) && engine!.soundLinks().length === 0;
+    setLinksTip(fxTips);
+    setNextTip(fxTips);
   }, [engine]);
   /* The PC sound starts again at the app's start if it was on when the app closed. */
   useEffect(() => { audioInput.init(); }, []);

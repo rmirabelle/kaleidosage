@@ -615,11 +615,11 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - A switch to Files turns Song follow on.
 - While a song has no analysis yet, the Song Map shows "Analyzing" with a moving bar.
 - With one scene, Auto Fill is off.
-- While no setting of the scene has an audio link, a tip at the right of the FX audio button tells what it does.
+- With a live input and no audio link in the scene yet, a tip at the right of the FX audio button tells what it does.
 - A second tip shows the next step: "+ New" in an empty FX list, else the speaker of the first setting in view.
 - A click on a button of the FX card closes the first tip; any press in the FX card closes the second.
 - Both tips go when you link a setting, hide the audio buttons, or pick Nothing.
-- Picking Files with an empty list also shows a tip at the Playlist's Add File(s) button.
+- Picking Files with an empty list shows only one tip, at the Playlist's Add File(s) button.
 - That tip goes when you close it, click Add File(s), add files, or pick another input.
 - An empty Playlist has an empty body; Add File(s) is in its header.
 - A saved device that is not connected shows as "A device that is not connected".
