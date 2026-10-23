@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { ArrowCounterClockwise, ArrowsLeftRight, MagnifyingGlass, Plus, X } from "@phosphor-icons/react";
 import { ColorFolder } from "./ColorFolder";
 import { ColorPattern } from "./ColorPattern";
@@ -25,6 +26,8 @@ export interface SourceImagesProps {
   /** Whether a source video loops seamlessly (PlayState.videoCrossfade): the Loop check box under each video slot. */
   videoLoop: boolean;
   onVideoLoop: (on: boolean) => void;
+  /** A control under the swap button, between the two cards (the Tiling button). */
+  between?: ReactNode;
 }
 
 /**
@@ -32,11 +35,11 @@ export interface SourceImagesProps {
  * B, which the picture can fade to. Each card can load a file, a random
  * photo, a searched photo or a test pattern, and takes a dropped file. B can be removed, and A
  * too when B is there to take its place. With both images, a swap button
- * between them trades their places. A slot with a video has a Loop check
+ * between them trades their places; "between" goes under it. A slot with a video has a Loop check
  * box under it, in a row of its own, so the cards and the swap button stay
  * in line.
  */
-export function SourceImages({ images, randomLoading, onOpenImage, onRandomImage, onSearchImage, onPatternImage, onRemoveImage, onSwapImages, onRestoreImage, videoLoop, onVideoLoop }: SourceImagesProps) {
+export function SourceImages({ images, randomLoading, onOpenImage, onRandomImage, onSearchImage, onPatternImage, onRemoveImage, onSwapImages, onRestoreImage, videoLoop, onVideoLoop, between }: SourceImagesProps) {
   const removable = (slot: ImageSlot) => slot === 1 || Boolean(images[1]);
   const card = (slot: ImageSlot) => (
     <ImageCard
@@ -54,16 +57,19 @@ export function SourceImages({ images, randomLoading, onOpenImage, onRandomImage
   return (
     <div className="source-images">
       {card(0)}
-      {/* With one image there is nothing to swap, so the button is off. */}
-      <button
-        className="source-swap"
-        disabled={!images[0] || !images[1]}
-        onClick={onSwapImages}
-        data-tip={images[0] && images[1] ? "Swap A and B" : "Load both sources to swap them"}
-        aria-label="Swap sources A and B"
-      >
-        <ArrowsLeftRight size={16} weight="bold" />
-      </button>
+      <div className="source-middle">
+        {/* With one image there is nothing to swap, so the button is off. */}
+        <button
+          className="source-swap"
+          disabled={!images[0] || !images[1]}
+          onClick={onSwapImages}
+          data-tip={images[0] && images[1] ? "Swap A and B" : "Load both sources to swap them"}
+          aria-label="Swap sources A and B"
+        >
+          <ArrowsLeftRight size={16} weight="bold" />
+        </button>
+        {between}
+      </div>
       {card(1)}
       {([0, 1] as const).map((slot) => images[slot]?.source instanceof HTMLVideoElement && (
         <label

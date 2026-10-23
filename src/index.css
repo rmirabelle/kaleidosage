@@ -1676,7 +1676,9 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 /* The per-image pattern list: the toolbar's dropdown look, placed on the page body next to its button. */
 .toolbar-dropdown.source-pattern-menu { position: fixed; z-index: 100; max-height: calc(100vh - 16px); overflow-y: auto; }
 /* The swap button: just its icon; the button face shows under the mouse. Its top margin is the file name line's height (13px text + 5px gap), so it centers on the images, not on the cards. */
-.source-swap { justify-self: center; margin-top: 18px; display: grid; place-items: center; width: 34px; height: 30px; border: 1px solid transparent; border-radius: 5px; color: #dfe2e8; background: transparent; cursor: pointer; }
+/* Between A and B: the swap button, and the Tiling button under it. */
+.source-middle { justify-self: center; display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: 18px; }
+.source-swap { display: grid; place-items: center; width: 34px; height: 30px; border: 1px solid transparent; border-radius: 5px; color: #dfe2e8; background: transparent; cursor: pointer; }
 .source-swap:hover:not(:disabled) { border-color: #535a6c; color: #fff; background: #2f3340; }
 .source-swap:disabled { opacity: .35; cursor: default; }
 

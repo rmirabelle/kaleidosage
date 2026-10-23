@@ -37,8 +37,8 @@ const TILINGS: readonly (readonly [Tiling, string, ReactNode])[] = [
  * blend only has an effect with a second image, so it shows only then. How
  * it fades (evenly, or by brightness) is in the slider's right-click menu,
  * to save the room a menu row took. A video slot has a Loop check box
- * under it. The tile button in the title bar sets how the images go on
- * past their edges. It is always open. The scene's play toolbar is at the
+ * under it. The Tiling button between A and B, under the swap button, sets
+ * how the images go on past their edges. It is always open. The scene's play toolbar is at the
  * bottom of the column, under the FX card (see SceneTransport).
  */
 export function SourcePanel({ engine, sceneName, ...sources }: Omit<SourceImagesProps, "videoLoop" | "onVideoLoop"> & {
@@ -57,34 +57,6 @@ export function SourcePanel({ engine, sceneName, ...sources }: Omit<SourceImages
       <div className="panel-header-bar">
         <h2 className="side-panel-title source-title" data-tip={sceneName}><span>{sceneName}</span></h2>
         <HelpButton topic="source" />
-        <button
-          className={`source-tiling ${tilingMenu ? "open" : ""}`}
-          data-tip={`Tiling: ${tilingName}. How the images go on past their edges.`}
-          aria-label={`Tiling: ${tilingName}`}
-          aria-haspopup="menu"
-          onClick={(event) => {
-            const box = event.currentTarget.getBoundingClientRect();
-            setTilingMenu(tilingMenu ? null : { left: box.left, top: box.bottom + 4 });
-          }}
-        >
-          <TilingIcon size={18} />
-        </button>
-        {tilingMenu && createPortal(
-          <ContextMenu
-            position={tilingMenu}
-            onClose={() => setTilingMenu(null)}
-            items={TILINGS.map(([mode, label, icon]) => ({
-              label,
-              icon,
-              selected: mode === tiling,
-              run: () => {
-                engine.state.tiling = mode;
-                setTiling(mode);
-              }
-            }))}
-          />,
-          document.body
-        )}
       </div>
       <div className="panel-root-row source-length">
         {row("cycle")}
@@ -92,6 +64,38 @@ export function SourcePanel({ engine, sceneName, ...sources }: Omit<SourceImages
       <div className="source-well">
         <SourceImages
           {...sources}
+          between={(
+            <>
+              <button
+                className={`source-tiling ${tilingMenu ? "open" : ""}`}
+                data-tip={`Tiling: ${tilingName}. How the images go on past their edges.`}
+                aria-label={`Tiling: ${tilingName}`}
+                aria-haspopup="menu"
+                onClick={(event) => {
+                  const box = event.currentTarget.getBoundingClientRect();
+                  setTilingMenu(tilingMenu ? null : { left: box.left, top: box.bottom + 4 });
+                }}
+              >
+                <TilingIcon size={18} />
+              </button>
+              {tilingMenu && createPortal(
+                <ContextMenu
+                  position={tilingMenu}
+                  onClose={() => setTilingMenu(null)}
+                  items={TILINGS.map(([mode, label, icon]) => ({
+                    label,
+                    icon,
+                    selected: mode === tiling,
+                    run: () => {
+                      engine.state.tiling = mode;
+                      setTiling(mode);
+                    }
+                  }))}
+                />,
+                document.body
+              )}
+            </>
+          )}
           videoLoop={videoLoop}
           onVideoLoop={(on) => {
             engine.state.videoCrossfade = on;
