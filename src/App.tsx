@@ -237,7 +237,7 @@ export default function App() {
   /** True while the play toolbar shows its tip at the Input menu (see onNeedAudioInput). */
   const [inputTip, setInputTip] = useState(false);
   const askForAudioInput = useCallback(() => setInputTip(true), []);
-  /** A pick of a live input turns the settings' audio buttons on, with a tip at the FX title bar that tells what they do (only when they were off). */
+  /** A pick of a live input turns the settings' audio buttons on, with a tip at the FX audio button that tells what they do (only when they were off). */
   const [linksTip, setLinksTip] = useState(false);
   const endLinksTip = useCallback(() => setLinksTip(false), []);
   const showAudioLinks = useCallback(() => {

@@ -46,7 +46,7 @@ interface Props {
   onPickDriverVideo: () => void;
   /** The FX audio button was turned on while the app listens to nothing: the play toolbar shows a tip at its Input menu. */
   onNeedAudioInput: () => void;
-  /** A live input was picked and turned the audio buttons on: a tip at the FX title bar tells what they do, until it is closed. */
+  /** A live input was picked and turned the audio buttons on: a tip at the FX audio button tells what they do, until it is closed. */
   linksTip: boolean;
   onLinksTipDone: () => void;
 }
@@ -128,12 +128,12 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     if (first && !(fxOrder as readonly string[]).includes(openGroup ?? "")) onOpenGroup(first);
   };
   /**
-   * The audio links tip, at the FX title bar. The buttons it tells about
+   * The audio links tip, at the right of the FX audio button. The buttons it tells about
    * must be in view, so it opens the first effect if all are closed. It goes
    * when the audio buttons hide, when the input is no longer live, and when
    * a setting is linked to the sound (it did what the tip asks).
    */
-  const headerRef = useRef<HTMLDivElement>(null);
+  const speakerRef = useRef<HTMLButtonElement>(null);
   const liveInput = useSyncExternalStore(subscribeInput, inputIsLive);
   const linksTipShown = linksTip && showAudio && liveInput;
   useEffect(() => {
@@ -388,15 +388,16 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       {source}
       {/* The FX card: its title bar (Random all, Nudge, Clear all, then New), then the effect groups, which scroll. */}
       <section className="panel-card fx-card" {...help("fx")}>
-        <div ref={headerRef} className="side-panel-header panel-header-bar">
+        <div className="side-panel-header panel-header-bar">
           {linksTipShown && (
             <PointerTip
-              anchor={headerRef}
+              anchor={speakerRef}
               text="Audio links are now visible next to each setting. Click the speaker icon next to a setting to make it react to audio."
               onClose={onLinksTipDone}
             />
           )}
           <button
+            ref={speakerRef}
             className={`panel-title-midi panel-title-audio ${showAudio ? "on" : ""}`}
             data-tip={showAudio ? "Hide the audio buttons of the settings" : "Show the audio buttons of the settings, to make them move with the sound"}
             aria-label="Show audio buttons"
