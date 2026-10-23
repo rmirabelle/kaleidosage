@@ -28,10 +28,14 @@ plays it full screen. Tauri 2 + React + WebGL 2.
 
 ## Development process
 
-- Start the dev app with `npm run tauri dev -- --no-watch` (Vite on port 14510).
-  Without `--no-watch`, every Rust edit restarts the app, and the new window
-  takes the focus from the user's other apps (a game exits). Restart the dev
-  app only when the user agrees.
+- Never start the dev app from Claude: not with a tool, and not in a Claude
+  Terminal panel tab. Everything Claude starts stops when Claude quits, so a
+  Claude crash takes the user's dev app (and its unsaved work) down with it.
+  The user starts it in their own terminal, outside the Claude app, with
+  `npm run tauri dev -- --no-watch` (Vite on port 14510). When a change needs
+  a restart, ask the user to restart it.
+- Without `--no-watch`, every Rust edit restarts the app, and the new window
+  takes the focus from the user's other apps (a game exits).
 - Stop it with `.\kill-dev.ps1`. It first closes the window the gentle way,
   so unsaved changes get the "Save changes?" question, and waits up to 5
   minutes for the user. Exit code 1 means the app is still open: tell the
