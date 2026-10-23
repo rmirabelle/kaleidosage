@@ -43,8 +43,8 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - An image that you drop or paste on it starts a scene in a new tab.
 - It closes when you start or open a scene, an image or a playlist.
 - It shows again when you close the last scene or the playlist.
-- On the start screen, only Ctrl+O, Ctrl+N and "?" work.
-- On the start screen, the save, close, undo, redo, Audio and MIDI items are off.
+- On the start screen, only Ctrl+O, Ctrl+N and "?" work, and Esc and F11 leave full screen.
+- On the start screen, the save, close, undo, redo and View items are off.
 - The start screen hides the panels, the tabs, the bottom panel and the help line.
 - The picture stops under the start screen, the Open dialog and the Export Video dialog.
 

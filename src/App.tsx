@@ -1817,9 +1817,15 @@ export default function App() {
         setShortcutsOpen(true);
         return;
       }
-      /* The start screen takes only Ctrl+O and Ctrl+N; the other keys act on a scene that is not shown yet. */
+      /**
+       * The start screen takes only Ctrl+O and Ctrl+N; the other keys act on
+       * a scene that is not shown yet. Esc and F11 still leave full screen, as
+       * the start screen covers the Exit full screen button.
+       */
       if (startScreen) {
-        const startAction = event.ctrlKey ? { o: openScene, n: newScene }[event.key.toLowerCase()] : undefined;
+        const startAction = event.ctrlKey
+          ? { o: openScene, n: newScene }[event.key.toLowerCase()]
+          : ["escape", "f11"].includes(event.key.toLowerCase()) ? exitFullscreen : undefined;
         if (startAction) {
           event.preventDefault();
           startAction();
@@ -1941,8 +1947,8 @@ export default function App() {
       label: "Playlist",
       items: [
         { label: "Open Playlist…", icon: <FolderOpen size={15} />, run: () => void openPlaylist() },
-        { label: "Save Playlist", icon: <FloppyDisk size={15} />, shortcut: playlistPath ? "Ctrl+S" : undefined, run: () => void savePlaylist() },
-        { label: "Save Playlist As…", icon: <FloppyDisk size={15} />, run: () => void savePlaylist(true) },
+        { label: "Save Playlist", disabled: startScreen, icon: <FloppyDisk size={15} />, shortcut: playlistPath ? "Ctrl+S" : undefined, run: () => void savePlaylist() },
+        { label: "Save Playlist As…", disabled: startScreen, icon: <FloppyDisk size={15} />, run: () => void savePlaylist(true) },
         "separator",
         { label: "Close Playlist", icon: <X size={15} />, disabled: !playlistPath, run: () => void closePlaylist() }
       ]
@@ -1958,7 +1964,7 @@ export default function App() {
           ? [{ label: "Export Scene As…", disabled: startScreen, icon: <FloppyDisk size={15} />, shortcut: "Ctrl+Shift+S", run: () => void saveScene(false, { copy: true }) }]
           : [
             { label: "Save Scene", disabled: startScreen, icon: <FloppyDisk size={15} />, shortcut: "Ctrl+S", run: () => void saveScene() },
-            { label: "Save Scene As…", icon: <FloppyDisk size={15} />, shortcut: "Ctrl+Shift+S", run: () => void saveScene(true) }
+            { label: "Save Scene As…", disabled: startScreen, icon: <FloppyDisk size={15} />, shortcut: "Ctrl+Shift+S", run: () => void saveScene(true) }
           ]),
         "separator",
         { label: "Close Scene", icon: <X size={15} />, shortcut: "Ctrl+W", disabled: startScreen, run: () => void closeScene() }
@@ -1976,13 +1982,14 @@ export default function App() {
       id: "view",
       label: "View",
       items: [
-        { label: panelOpen ? "Hide Panels" : "Show Panels", icon: <SlidersHorizontal size={15} />, shortcut: "H", run: () => setPanelOpen((open) => !open) },
-        { label: filesCollapsed ? "Show Playlist" : "Hide Playlist", icon: <Playlist size={15} />, disabled: !tracksActive || !panelOpen, run: () => panelLayout.setFilesCollapsed(!panelLayout.filesCollapsed) },
-        { label: statsOpen ? "Hide Performance" : "Show Performance", icon: <Gauge size={15} />, shortcut: "P", run: () => setStatsOpen((open) => !open) },
+        /* The start screen has no picture to view: all of the View items are off. */
+        { label: panelOpen ? "Hide Panels" : "Show Panels", icon: <SlidersHorizontal size={15} />, shortcut: "H", disabled: startScreen, run: () => setPanelOpen((open) => !open) },
+        { label: filesCollapsed ? "Show Playlist" : "Hide Playlist", icon: <Playlist size={15} />, disabled: startScreen || !tracksActive || !panelOpen, run: () => panelLayout.setFilesCollapsed(!panelLayout.filesCollapsed) },
+        { label: statsOpen ? "Hide Performance" : "Show Performance", icon: <Gauge size={15} />, shortcut: "P", disabled: startScreen, run: () => setStatsOpen((open) => !open) },
         { label: midiPanelOpen && bottomTab === "audio" ? "Hide Audio Panel" : "Show Audio Panel", icon: <SpeakerSimpleHigh size={16} />, shortcut: "A", disabled: startScreen, run: toggleAudioPanel },
         { label: midiPanelOpen && bottomTab === "midi" ? "Hide MIDI Panel" : "Show MIDI Panel", icon: <MidiIcon size={15} />, shortcut: "M", disabled: startScreen, run: toggleMidiPanel },
         "separator",
-        { label: "Full Screen", icon: <ArrowsOut size={15} />, shortcut: "F", run: () => void toggleFullscreen() }
+        { label: "Full Screen", icon: <ArrowsOut size={15} />, shortcut: "F", disabled: startScreen, run: () => void toggleFullscreen() }
       ]
     },
     {
