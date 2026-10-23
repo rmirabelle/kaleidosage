@@ -230,7 +230,7 @@ export function SceneTransport({ engine, paused, onTogglePause, onStop, show, au
           aria-pressed={held}
           onClick={onToggleHold}
           data-tip={held
-            ? "Scene Hold is on: this scene stays and plays on its own, and the slice that plays loops in the music. Click to follow the song again."
+            ? "Scene Hold is on: this scene stays, and the slice that plays loops in the music. Click to follow the song again."
             : "Scene Hold: keep this scene, and loop the slice that plays. A change you make to the scene turns it on by itself."}
         >
           <span className="hold-badge-label">Scene Hold</span>
