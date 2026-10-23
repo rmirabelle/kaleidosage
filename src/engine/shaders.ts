@@ -2482,8 +2482,8 @@ layout(location = 0) in vec2 a_pos;
 layout(location = 1) in vec4 a_ends;
 layout(location = 2) in vec4 a_colorA;
 layout(location = 3) in vec4 a_colorB;
-/* The radius in screen heights, and 1 for a soft head dot. */
-layout(location = 4) in vec2 a_shape;
+/* The radius in screen heights, 1 for a soft head dot, and the place on the gradient at the start and at the end. */
+layout(location = 4) in vec4 a_shape;
 uniform float u_aspect;
 /* One pixel, in screen heights. */
 uniform float u_pixel;
@@ -2491,7 +2491,7 @@ out vec2 v_place;
 flat out vec4 v_ends;
 flat out vec4 v_colorA;
 flat out vec4 v_colorB;
-flat out vec2 v_shape;
+flat out vec4 v_shape;
 void main() {
   vec2 a = a_ends.xy;
   vec2 ab = a_ends.zw - a;
@@ -2510,9 +2510,17 @@ void main() {
 
 /**
  * A round-ended line with a smooth edge one pixel wide, or a soft round
- * head dot, with premultiplied alpha. Its color goes from the start's to
- * the end's along the segment. A line thinner than a pixel is drawn one
- * pixel wide but fainter.
+ * head dot, with premultiplied alpha. A line thinner than a pixel is drawn
+ * one pixel wide but fainter.
+ *
+ * Its color goes from the start's to the end's along the segment (the
+ * picture's colors), mixed by u_gradient with the gradient's color. The
+ * place on the gradient comes from the instance (one per cycle, or by age
+ * along the trail), or from the place on the screen: along u_direction
+ * from one side of the screen to the other, or by the distance from
+ * u_center (to the farthest corner from the screen center). u_repeat and
+ * u_shift then move it, and it goes out and back along the gradient, so
+ * the colors never jump.
  */
 export const CYCLE_SHADER = `#version 300 es
 precision highp float;
@@ -2520,9 +2528,35 @@ in vec2 v_place;
 flat in vec4 v_ends;
 flat in vec4 v_colorA;
 flat in vec4 v_colorB;
-flat in vec2 v_shape;
+flat in vec4 v_shape;
+uniform float u_aspect;
 uniform float u_pixel;
+/* 0 one color per cycle, 1 along the trail, 2 linear on the screen, 3 radial on the screen (see CyclePaint). */
+uniform int u_paint;
+uniform float u_gradient;
+uniform float u_shift;
+uniform float u_repeat;
+uniform vec2 u_direction;
+uniform vec2 u_center;
+/* The gradient's stops (2 to 8), in order of place: each stop's place from 0 to 1, and its color. */
+uniform int u_stopCount;
+uniform float u_stopAt[8];
+uniform vec3 u_stopColor[8];
 out vec4 o;
+
+/* The gradient's color at t (0 to 1), as gradientColorAt in params.ts. */
+vec3 gradientColor(float t) {
+  if (t <= u_stopAt[0]) return u_stopColor[0];
+  for (int i = 1; i < 8; i++) {
+    if (i >= u_stopCount) break;
+    if (t <= u_stopAt[i]) {
+      float span = u_stopAt[i] - u_stopAt[i - 1];
+      return mix(u_stopColor[i - 1], u_stopColor[i], span > 0.0 ? (t - u_stopAt[i - 1]) / span : 1.0);
+    }
+  }
+  return u_stopColor[clamp(u_stopCount - 1, 0, 7)];
+}
+
 void main() {
   vec2 a = v_ends.xy;
   vec2 ab = v_ends.zw - a;
@@ -2538,6 +2572,55 @@ void main() {
     cover = clamp((radius - d) / u_pixel + 0.5, 0.0, 1.0) * min(1.0, 2.0 * v_shape.x / u_pixel);
   }
   vec4 color = mix(v_colorA, v_colorB, t);
+  if (u_gradient > 0.0) {
+    float g;
+    vec2 middle = vec2(0.5 * u_aspect, 0.5);
+    if (u_paint == 2) {
+      /* Half the screen's extent along the direction, so the gradient spans the screen at any angle. */
+      float half_ = 0.5 * (abs(u_direction.x) * u_aspect + abs(u_direction.y));
+      g = (dot(v_place - middle, u_direction) / half_ * 0.5 + 0.5) * u_repeat;
+    } else if (u_paint == 3) {
+      g = length(v_place - u_center) / length(middle) * u_repeat;
+    } else {
+      g = mix(v_shape.z, v_shape.w, t);
+    }
+    /* Out and back: 0 to 1 on even trips, 1 to 0 on odd ones; a shift of 1 is one whole trip out and back. */
+    float x = g + 2.0 * u_shift;
+    g = 1.0 - abs(1.0 - 2.0 * fract(x * 0.5));
+    color.rgb = mix(color.rgb, gradientColor(g), u_gradient);
+  }
   float alpha = color.a * cover;
   o = vec4(color.rgb * alpha, alpha);
+}`;
+
+/**
+ * Light Cycles, step 3: the lines (premultiplied, see CYCLE_SHADER) over the
+ * picture, which is dimmed by u_background, with the blend mode u_blend
+ * (see blendLayer), at u_opacity.
+ */
+export const CYCLE_MIX_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_picture;
+uniform sampler2D u_lines;
+uniform float u_background;
+uniform float u_opacity;
+uniform int u_blend;
+/* The same layer blends as the shape steps' (see blendLayer in KALEIDO_SHADER). */
+vec3 blendLayer(vec3 base, vec3 top, int mode) {
+  if (mode == 1) return 1.0 - (1.0 - base) * (1.0 - top);
+  if (mode == 2) return base * top;
+  if (mode == 3) return mix(2.0 * base * top, 1.0 - 2.0 * (1.0 - base) * (1.0 - top), step(0.5, base));
+  if (mode == 4) return abs(base - top);
+  if (mode == 5) return max(base, top);
+  if (mode == 6) return min(base, top);
+  if (mode == 7) return min(base + top, 1.0);
+  return top;
+}
+void main() {
+  vec3 base = texture(u_picture, v_uv).rgb * u_background;
+  vec4 lines = texture(u_lines, v_uv);
+  vec3 top = lines.a > 0.0 ? lines.rgb / lines.a : vec3(0.0);
+  o = vec4(mix(base, blendLayer(base, top, u_blend), lines.a * u_opacity), 1.0);
 }`;

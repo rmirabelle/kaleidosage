@@ -1,4 +1,4 @@
-import type { BlendMode, BlurMask, CameraRepeat, CycleBlend, CycleMove, DriverMode, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, ParticleBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
+import type { BlendMode, BlurMask, CameraRepeat, CycleMove, CyclePaint, DriverMode, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, ParticleBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
 
 export const PARAM_KEYS = [
   "cycle",
@@ -19,6 +19,7 @@ export const PARAM_KEYS = [
   "sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness",
   "particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost",
   "cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesBounds", "cyclesGrid", "cyclesHead",
+  "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY",
   "raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY",
   "bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize",
   "sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel"
@@ -323,9 +324,16 @@ export interface PlayState {
    * the old one on each change, so an Undo step keeps its own stops.
    */
   particleStops: GradientStop[];
-  /** Light Cycles: how the cycles move (grid lanes or free curves), and how their lines combine with the picture (glow or cover). */
+  /**
+   * Light Cycles: how the cycles move (grid lanes or free curves), how their
+   * lines combine with the picture under them, where their gradient colors
+   * come from (see CyclePaint), and the gradient's color stops (as
+   * particleStops).
+   */
   cyclesMove: CycleMove;
-  cyclesBlend: CycleBlend;
+  cyclesBlend: LayerBlend;
+  cyclesPaint: CyclePaint;
+  cyclesStops: GradientStop[];
   /** The Driver effect's driver (caustics, smoke, ink, fire, ripples), and what it does to the picture. */
   driverSource: DriverSource;
   driverMode: DriverMode;
@@ -681,6 +689,21 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   cyclesBounds: { label: "Out of Bounds", min: 0, max: 1, step: 0.01, value: 0.25, drift: "wave", low: 0, high: 0.5, on: false },
   cyclesGrid: { label: "Grid Size", min: 0.005, max: 0.2, step: 0.001, scale: "log", value: 0.02, drift: "wave", low: 0.01, high: 0.05, on: false },
   cyclesHead: { label: "Head Glow", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.2, high: 1, on: false },
+  /**
+   * The cycles' gradient (see state.cyclesPaint): how much its color
+   * replaces the picture's (0: all from the picture). Shift moves the colors
+   * along the gradient; at 1 they are back where they started. The colors go
+   * out and back along the gradient, so they never jump. Repeat is how many times the gradient goes out and
+   * back along a trail's Trail Length (or 10 seconds when the trails do not
+   * fade) or across the screen. Angle turns a linear gradient; Center X and
+   * Y move a radial one's center, as a part of the screen size.
+   */
+  cyclesGradient: { label: "Gradient", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 1, on: false },
+  cyclesShift: { label: "Shift", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 1, ease: "linear", on: false },
+  cyclesRepeat: { label: "Repeat", min: 0.25, max: 8, step: 0.01, scale: "log", value: 1, drift: "wave", low: 1, high: 3, on: false },
+  cyclesAngle: { label: "Angle", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  cyclesCenterX: { label: "Center X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.25, high: 0.25, on: false },
+  cyclesCenterY: { label: "Center Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.25, high: 0.25, on: false },
   /** Driver (see DRIVER_SHADER): opacity, how strongly the driver bends, reveals or lights, its size, its speed, and its contrast. */
   driverAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
   driverStrength: { label: "Strength", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.3, high: 0.8, on: false },
@@ -735,6 +758,7 @@ export const NO_EFFECT: Partial<Record<ParamKey, number>> = {
   blurMaskX: 0, blurMaskY: 0,
   trailTurn: 0, trailHue: 0, trailFlow: 0,
   particleGravity: 0,
+  cyclesCenterX: 0, cyclesCenterY: 0,
   raysX: 0, raysY: 0,
   exposure: 0
 };
@@ -809,7 +833,7 @@ export function createPlayState(): PlayState {
     /* No effect is in the list at start-up, so every effect group is off. */
     groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, sort: false, particles: false, cycles: false, rays: false, bloom: false, sharpen: false, color: false, levels: false },
     locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, sort: false, particles: false, cycles: false, rays: false, bloom: false, sharpen: false, color: false, levels: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, sortOrder: 0, particleBlend: 0, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, sortOrder: 0, particleBlend: 0, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -932,6 +956,9 @@ export const MAX_GRADIENT_STOPS = 8;
 
 /** The gradient a new scene starts with: red to blue. */
 export const defaultGradientStops = (): GradientStop[] => [{ at: 0, color: "#ff0000" }, { at: 1, color: "#0000ff" }];
+
+/** The light cycles' gradient in a new scene: cyan to orange, the two colors of the film's cycles. */
+export const defaultCycleStops = (): GradientStop[] => [{ at: 0, color: "#18e0ff" }, { at: 1, color: "#ff7a1a" }];
 
 /**
  * The gradient's color at a place from 0 to 1, as red, green and blue from
@@ -1112,6 +1139,8 @@ export function resetEffects(params: Params, state: PlayState) {
   if (!state.locks.cycles) {
     state.cyclesMove = fresh.cyclesMove;
     state.cyclesBlend = fresh.cyclesBlend;
+    state.cyclesPaint = fresh.cyclesPaint;
+    state.cyclesStops = fresh.cyclesStops;
   }
   if (!state.locks.driver) {
     state.driverSource = fresh.driverSource;
@@ -1145,7 +1174,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   camera: ["cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth"],
   sort: ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"],
   particles: ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost"],
-  cycles: ["cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesBounds", "cyclesGrid", "cyclesHead"],
+  cycles: ["cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesBounds", "cyclesGrid", "cyclesHead", "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY"],
   rays: ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"],
   bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
   sharpen: ["sharpen", "sharpenRadius"],
@@ -1165,7 +1194,7 @@ const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   camera: ["skyColor", "cameraBlend", "cameraRepeat"],
   sort: ["sortOrder"],
   particles: ["particleBlend"],
-  cycles: ["cyclesMove", "cyclesBlend"],
+  cycles: ["cyclesMove", "cyclesBlend", "cyclesPaint"],
   driver: ["driverSource", "driverMode"],
   color: ["overlayColor", "colorBlend"]
 };
@@ -1328,7 +1357,8 @@ function randomizeAll(params: Params, state?: PlayState) {
     state.cameraRepeat = (Math.random() < 0.7 ? 0 : Math.random() < 0.7 ? 1 : 2) as CameraRepeat;
     state.particleBlend = (Math.random() < 0.7 ? 0 : 1) as ParticleBlend;
     state.cyclesMove = (Math.random() < 0.6 ? 0 : 1) as CycleMove;
-    state.cyclesBlend = (Math.random() < 0.7 ? 0 : 1) as CycleBlend;
+    state.cyclesBlend = (Math.random() < 0.7 ? 7 : Math.floor(Math.random() * 8)) as LayerBlend;
+    state.cyclesPaint = Math.floor(Math.random() * 4) as CyclePaint;
     state.driverSource = Math.floor(Math.random() * 5) as DriverSource;
     state.driverMode = Math.floor(Math.random() * 3) as DriverMode;
     state.sortOrder = (Math.random() < 0.5 ? 0 : 1) as SortOrder;
@@ -1380,6 +1410,12 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("cyclesBounds", rand(0, 0.5), rand(0, 0.15));
   set("cyclesGrid", rand(0.008, 0.06), rand(0.002, 0.01));
   set("cyclesHead", rand(0.2, 1), rand(0, 0.2));
+  set("cyclesGradient", Math.random() < 0.4 ? 0 : rand(0.5, 1), rand(0, 0.3));
+  set("cyclesShift", rand(0, 1), rand(0, 0.5));
+  set("cyclesRepeat", rand(0.5, 3), rand(0.1, 0.5));
+  setAngle("cyclesAngle", 0.4);
+  set("cyclesCenterX", Math.random() < 0.5 ? 0 : rand(-0.3, 0.3), rand(0.05, 0.2));
+  set("cyclesCenterY", Math.random() < 0.5 ? 0 : rand(-0.25, 0.25), rand(0.05, 0.2));
   set("driverAmount", rand(0.6, 1), rand(0, 0.2));
   set("driverStrength", rand(0.3, 0.9), rand(0.05, 0.2));
   set("driverScale", rand(0.6, 2), rand(0.1, 0.4));

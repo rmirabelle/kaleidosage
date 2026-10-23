@@ -29,6 +29,10 @@ export interface CycleSettings {
   bounds: number;
   /** Grid mode: the space between the lanes, in screen heights. */
   grid: number;
+  /** Where the gradient's colors come from (see CyclePaint in renderer.ts): 0 per cycle, 1 along the trail, 2 and 3 the place on the screen. */
+  paint: 0 | 1 | 2 | 3;
+  /** How many times the gradient goes out and back along a trail. */
+  repeat: number;
 }
 
 /** A small copy of the picture: RGBA bytes, bottom row first. */
@@ -55,8 +59,14 @@ const POINT_TURN = 0.06;
 const LOOK = 0.04;
 /** One point of a line: x, y, time, red, green, blue (0 to 1). */
 const POINT = 6;
-/** One instance for the renderer: start x, y, end x, y, start color and alpha, end color and alpha, radius, and 1 for a soft head dot. */
-export const INSTANCE_FLOATS = 14;
+/**
+ * One instance for the renderer: start x, y, end x, y, start color and
+ * alpha, end color and alpha, radius, 1 for a soft head dot, and the
+ * place on the gradient at the start and at the end (see CYCLE_SHADER).
+ */
+export const INSTANCE_FLOATS = 16;
+/** Along the trail, with trails that do not fade: the seconds of age for one trip along the gradient. */
+const TRAIL_GRADIENT_SECONDS = 10;
 
 const QUARTER = Math.PI / 2;
 
@@ -69,7 +79,11 @@ class Line {
   firstCell = 0;
   /** The time of the crash, or -1 while the line's cycle still drives. */
   ended = -1;
-  constructor(readonly id: number) {}
+  /** The line's place on the gradient, when each cycle has one color (paint 0). */
+  readonly tone: number;
+  constructor(readonly id: number, random: () => number) {
+    this.tone = random();
+  }
 }
 
 interface Cycle {
@@ -149,7 +163,7 @@ export class CycleSim {
     const radius = this.radiusCells(s);
     const center = this.cellAt(x, y);
     if (center < 0 || !this.discFree(center, radius + 2)) return null;
-    const line = new Line(this.nextId++);
+    const line = new Line(this.nextId++, this.random);
     const cycle: Cycle = { x, y, angle, line, color: this.colorAt(x, y), spin: 0, sincePoint: 0, pointAngle: angle, cell: center, sees: null };
     this.addPoint(cycle);
     this.mark(center, -1, radius, line);
@@ -171,26 +185,29 @@ export class CycleSim {
     let count = 0;
     const radius = s.width / 2;
     /** One instance from the color at a[ia] to the color at b[ib] (red, green, blue). */
-    const write = (ax: number, ay: number, a: ArrayLike<number>, ia: number, aAlpha: number, bx: number, by: number, b: ArrayLike<number>, ib: number, bAlpha: number, r: number, soft: number) => {
+    const write = (ax: number, ay: number, a: ArrayLike<number>, ia: number, aAlpha: number, aTone: number, bx: number, by: number, b: ArrayLike<number>, ib: number, bAlpha: number, bTone: number, r: number, soft: number) => {
       if (count >= max) return;
       const o = count++ * INSTANCE_FLOATS;
       out[o] = ax; out[o + 1] = ay; out[o + 2] = bx; out[o + 3] = by;
       out[o + 4] = a[ia]; out[o + 5] = a[ia + 1]; out[o + 6] = a[ia + 2]; out[o + 7] = aAlpha;
       out[o + 8] = b[ib]; out[o + 9] = b[ib + 1]; out[o + 10] = b[ib + 2]; out[o + 11] = bAlpha;
-      out[o + 12] = r; out[o + 13] = soft;
+      out[o + 12] = r; out[o + 13] = soft; out[o + 14] = aTone; out[o + 15] = bTone;
     };
     const finite = Number.isFinite(s.length);
     const length = Math.max(s.length, 1e-3);
+    /* Along the trail, the place on the gradient grows with age: one trip per Trail Length, times Repeat. */
+    const perSecond = s.repeat / (finite ? length : TRAIL_GRADIENT_SECONDS);
     const drawLine = (line: Line, cycle: Cycle | null) => {
       const clear = line.ended < 0 ? 1 : Math.max(0, 1 - (this.time - line.ended) / CLEAR_SECONDS);
       const alphaAt = (time: number) => clear * (finite ? Math.max(0, 1 - (this.time - time) / length) : 1);
+      const toneAt = (time: number) => (s.paint === 1 ? (this.time - time) * perSecond : line.tone);
       const p = line.points;
       for (let i = line.first; i + POINT < p.length; i += POINT) {
         const j = i + POINT;
-        write(p[i], p[i + 1], p, i + 3, alphaAt(p[i + 2]), p[j], p[j + 1], p, j + 3, alphaAt(p[j + 2]), radius, 0);
+        write(p[i], p[i + 1], p, i + 3, alphaAt(p[i + 2]), toneAt(p[i + 2]), p[j], p[j + 1], p, j + 3, alphaAt(p[j + 2]), toneAt(p[j + 2]), radius, 0);
       }
       const last = p.length - POINT;
-      if (cycle && last >= line.first) write(p[last], p[last + 1], p, last + 3, alphaAt(p[last + 2]), cycle.x, cycle.y, cycle.color, 0, alphaAt(this.time), radius, 0);
+      if (cycle && last >= line.first) write(p[last], p[last + 1], p, last + 3, alphaAt(p[last + 2]), toneAt(p[last + 2]), cycle.x, cycle.y, cycle.color, 0, alphaAt(this.time), toneAt(this.time), radius, 0);
     };
     for (const cycle of this.cycles) drawLine(cycle.line, cycle);
     for (const line of this.ended) drawLine(line, null);
@@ -201,7 +218,8 @@ export class CycleSim {
       const color = [0, 0, 0];
       for (const cycle of this.cycles) {
         for (let k = 0; k < 3; k++) color[k] = bright(cycle.color[k]);
-        write(cycle.x, cycle.y, color, 0, alpha, cycle.x, cycle.y, color, 0, alpha, size, 1);
+        const tone = s.paint === 1 ? 0 : cycle.line.tone;
+        write(cycle.x, cycle.y, color, 0, alpha, tone, cycle.x, cycle.y, color, 0, alpha, tone, size, 1);
       }
     }
     return count;

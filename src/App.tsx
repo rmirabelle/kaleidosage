@@ -233,13 +233,9 @@ export default function App() {
   const toggleMidiPanel = useCallback(() => showBottomTab("midi"), [showBottomTab]);
   const toggleAudioPanel = useCallback(() => showBottomTab("audio"), [showBottomTab]);
   const closeBottomPanel = useCallback(() => setMidiPanelOpen(false), []);
-  /** True while the Audio panel shows its tip at the Input menu (see onNeedAudioInput). */
+  /** True while the play toolbar shows its tip at the Input menu (see onNeedAudioInput). */
   const [inputTip, setInputTip] = useState(false);
-  const askForAudioInput = useCallback(() => {
-    setBottomTab("audio");
-    setMidiPanelOpen(true);
-    setInputTip(true);
-  }, []);
+  const askForAudioInput = useCallback(() => setInputTip(true), []);
   /* The PC sound starts again at the app's start if it was on when the app closed. */
   useEffect(() => { audioInput.init(); }, []);
   const [midiPanelHeight, setMidiPanelHeight] = useState(() => {
@@ -2070,7 +2066,7 @@ export default function App() {
                   driverVideoName={driverVideoName}
                   onPickDriverVideo={() => setOpenRequest({ kind: "image", slot: 0, target: "driver" })}
                   onNeedAudioInput={askForAudioInput}
-                  transport={<SceneTransport engine={engine} paused={paused} onTogglePause={togglePause} onStop={stop} show={holdUseful} autoNext={tracksActive && docs.length > 1} held={holdUseful && sceneHeld} onToggleHold={() => holdScene(!sceneHeldRef.current)} />}
+                  transport={<SceneTransport engine={engine} paused={paused} onTogglePause={togglePause} onStop={stop} show={holdUseful} autoNext={tracksActive && docs.length > 1} held={holdUseful && sceneHeld} onToggleHold={() => holdScene(!sceneHeldRef.current)} onAddTracks={() => void pickTracks()} inputTip={inputTip} onInputTipDone={() => setInputTip(false)} />}
                   source={(
                     <SourcePanel
                       engine={engine}
@@ -2156,7 +2152,7 @@ export default function App() {
           <div className="midi-panel-body">
             <BottomPanelTabs tab={bottomTab} onTab={setBottomTab} onClose={closeBottomPanel} />
             {bottomTab === "midi" ? <MidiPanel engine={engine} open={midiPanelOpen} />
-              : <AudioPanel engine={engine} sceneName={sceneFileName} onAddTracks={() => void pickTracks()} inputTip={inputTip && midiPanelOpen} onInputTipDone={() => setInputTip(false)} />}
+              : <AudioPanel engine={engine} sceneName={sceneFileName} />}
           </div>
         </div>
       )}

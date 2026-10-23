@@ -1,5 +1,5 @@
 import type { ParamKey, PlayState } from "./params";
-import type { BlurMask, CycleMove, FoldMode, FxStep, MapMode, SmearShape, WarpType } from "./renderer";
+import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, SmearShape, WarpType } from "./renderer";
 
 /** The effects in the Add effect menu, in menu order, with the names their groups show. */
 export const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
@@ -82,7 +82,20 @@ export const CYCLE_KEYS: Record<CycleMove, ParamKey[]> = {
 };
 export const CYCLE_MOVES = [[0, "Grid"], [1, "Free"]] as const;
 
-export type SubmodeKey = "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape" | "cyclesMove";
+/**
+ * The gradient sliders of each place the cycles' colors come from: Repeat
+ * is not for one color per cycle, Angle is for a linear gradient on the
+ * screen, and the center for a radial one.
+ */
+export const CYCLE_PAINT_KEYS: Record<CyclePaint, ParamKey[]> = {
+  0: ["cyclesGradient", "cyclesShift"],
+  1: ["cyclesGradient", "cyclesShift", "cyclesRepeat"],
+  2: ["cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle"],
+  3: ["cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesCenterX", "cyclesCenterY"]
+};
+export const CYCLE_PAINTS = [[0, "Cycle"], [1, "Trail"], [2, "Position, linear"], [3, "Position, radial"]] as const;
+
+export type SubmodeKey = "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape" | "cyclesMove" | "cyclesPaint";
 
 /** One submode menu: the play-state setting it sets, its choices (value and name), and the sliders each choice shows. */
 export interface Submode {
@@ -97,7 +110,8 @@ export const SUBMODES: readonly Submode[] = [
   { stateKey: "mapMode", options: MAP_MODES, keys: MAP_KEYS },
   { stateKey: "blurMask", options: BLUR_MASKS, keys: BLUR_KEYS },
   { stateKey: "smearShape", options: SMEAR_SHAPES, keys: SMEAR_KEYS },
-  { stateKey: "cyclesMove", options: CYCLE_MOVES, keys: CYCLE_KEYS }
+  { stateKey: "cyclesMove", options: CYCLE_MOVES, keys: CYCLE_KEYS },
+  { stateKey: "cyclesPaint", options: CYCLE_PAINTS, keys: CYCLE_PAINT_KEYS }
 ];
 
 /** The submode menu that shows or hides the slider, or undefined for a slider that always shows. */

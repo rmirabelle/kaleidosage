@@ -1,7 +1,7 @@
 import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_SAMPLE_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 
 /** The blur mask: circle with a sharp or a blurred center, gradient, bright areas, dark areas, noise. */
 export type BlurMask = 0 | 1 | 2 | 3 | 4 | 5;
@@ -52,8 +52,12 @@ export type SortOrder = 0 | 1;
 export type ParticleBlend = 0 | 1;
 /** How the light cycles move: 0 on grid lanes with right-angle turns, 1 in free curves. */
 export type CycleMove = 0 | 1;
-/** How the light cycles' lines combine with the picture: 0 glow (they add their light), 1 cover. */
-export type CycleBlend = 0 | 1;
+/**
+ * Where the light cycles' gradient colors come from: 0 one color per cycle,
+ * 1 along each trail (by age), 2 the place on the screen along a line, 3 the
+ * distance from a center.
+ */
+export type CyclePaint = 0 | 1 | 2 | 3;
 /** How the two images fade: 0 = crossfade, 1 = dissolve by brightness (light areas change first). */
 export type BlendMode = 0 | 1;
 /**
@@ -300,7 +304,7 @@ export interface FrameValues {
    */
   cycles: number;
   cyclesMove: CycleMove;
-  cyclesBlend: CycleBlend;
+  cyclesBlend: LayerBlend;
   cyclesBackground: number;
   cyclesCount: number;
   cyclesSpeed: number;
@@ -313,6 +317,23 @@ export interface FrameValues {
   cyclesGrid: number;
   cyclesHead: number;
   cyclesSeconds: number;
+  /**
+   * The cycles' gradient (see CYCLE_SHADER): where its colors come from, how
+   * much it replaces the picture's color, its shift (a whole gradient trip
+   * out and back is 1), how many times it repeats, the angle of a linear
+   * gradient (radians), the center of a radial one (a part of the screen
+   * size from the screen center), and its stops, as particleStopAt and
+   * particleStopColor.
+   */
+  cyclesPaint: CyclePaint;
+  cyclesGradient: number;
+  cyclesShift: number;
+  cyclesRepeat: number;
+  cyclesAngle: number;
+  cyclesCenterX: number;
+  cyclesCenterY: number;
+  cyclesStopAt: Float32Array;
+  cyclesStopColor: Float32Array;
   /**
    * Light rays (see RAYS_SHADER): strength (0 = off), the brightness where
    * the light starts, the length (a part of the way to the center), the
@@ -508,7 +529,7 @@ export class KaleidoRenderer {
   private cyclesWereOn = false;
   private readonly cycleSample: Program;
   private readonly cycleDraw: Program;
-  private readonly cycleOver: Program;
+  private readonly cycleMix: Program;
   /** The lines of this frame, drawn here first and then over the picture. */
   private readonly cycleTarget: Target;
   /** The line instances (see writeInstances), and their GPU buffer and vertex array. Made on first use. */
@@ -612,7 +633,7 @@ export class KaleidoRenderer {
     this.particleVertices = gl.createVertexArray()!;
     this.cycleSample = this.createProgram(CYCLE_SAMPLE_SHADER);
     this.cycleDraw = this.createProgram(CYCLE_SHADER, CYCLE_VERTEX_SHADER);
-    this.cycleOver = this.createProgram(OVERLAY_SHADER);
+    this.cycleMix = this.createProgram(CYCLE_MIX_SHADER);
     this.bloomBright = this.createProgram(BLOOM_BRIGHT_SHADER);
     this.bloomDown = this.createProgram(BLOOM_DOWN_SHADER);
     this.rays = this.createProgram(RAYS_SHADER);
@@ -1518,17 +1539,18 @@ export class KaleidoRenderer {
    * Light Cycles (see cycles.ts). The cycles drive on the CPU, with a small
    * copy of the picture from a frame or two before (see readCyclePicture).
    * Their lines are drawn into cycleTarget as instances (CYCLE_SHADER), with
-   * MAX blending, so joins and crossings do not get brighter. Then the
-   * picture is copied, dimmed by the background opacity, and the lines go
-   * over it: added (glow) or over it (cover). While paused, the cycles stand
-   * still.
+   * MAX blending, so joins and crossings do not get brighter. Then
+   * CYCLE_MIX_SHADER puts the lines over the picture (dimmed by the
+   * background opacity) with the cycles' blend mode. While paused, the
+   * cycles stand still.
    */
   private drawCycles(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
     const gl = this.gl;
     const sim = this.cycleSim;
     const settings: CycleSettings = {
       move: v.cyclesMove, count: v.cyclesCount, speed: v.cyclesSpeed, width: v.cyclesWidth / 1080, length: v.cyclesLength,
-      turns: v.cyclesTurns, follow: v.cyclesFollow, dodge: v.cyclesDodge, bounds: v.cyclesBounds, grid: v.cyclesGrid
+      turns: v.cyclesTurns, follow: v.cyclesFollow, dodge: v.cyclesDodge, bounds: v.cyclesBounds, grid: v.cyclesGrid,
+      paint: v.cyclesPaint, repeat: v.cyclesRepeat
     };
     if (!this.cyclesWereOn) sim.reset();
     this.readCyclePicture();
@@ -1557,6 +1579,15 @@ export class KaleidoRenderer {
       gl.useProgram(d.program);
       gl.uniform1f(d.uniforms.u_aspect, width / height);
       gl.uniform1f(d.uniforms.u_pixel, 1 / height);
+      gl.uniform1i(d.uniforms.u_paint, v.cyclesPaint);
+      gl.uniform1f(d.uniforms.u_gradient, Math.min(1, Math.max(0, v.cyclesGradient)));
+      gl.uniform1f(d.uniforms.u_shift, v.cyclesShift);
+      gl.uniform1f(d.uniforms.u_repeat, v.cyclesRepeat);
+      gl.uniform2f(d.uniforms.u_direction, Math.cos(v.cyclesAngle), Math.sin(v.cyclesAngle));
+      gl.uniform2f(d.uniforms.u_center, width / height * (0.5 + v.cyclesCenterX), 0.5 + v.cyclesCenterY);
+      gl.uniform1i(d.uniforms.u_stopCount, v.cyclesStopAt.length);
+      gl.uniform1fv(d.uniforms["u_stopAt[0]"], v.cyclesStopAt);
+      gl.uniform3fv(d.uniforms["u_stopColor[0]"], v.cyclesStopColor);
       gl.enable(gl.BLEND);
       gl.blendEquation(gl.MAX);
       gl.blendFunc(gl.ONE, gl.ONE);
@@ -1568,25 +1599,19 @@ export class KaleidoRenderer {
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
     gl.viewport(0, 0, width, height);
-    gl.useProgram(this.copy.program);
+    const m = this.cycleMix;
+    gl.useProgram(m.program);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, source);
-    gl.uniform1i(this.copy.uniforms.u_tex, 0);
-    /* The blend constant scales the copy's color and keeps its alpha at 1. */
-    const background = Math.min(1, Math.max(0, v.cyclesBackground));
-    gl.enable(gl.BLEND);
-    gl.blendColor(background, background, background, 1);
-    gl.blendFunc(gl.CONSTANT_COLOR, gl.ZERO);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-    const o = this.cycleOver;
-    gl.useProgram(o.program);
+    gl.uniform1i(m.uniforms.u_picture, 0);
+    gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.cycleTarget.texture);
-    gl.uniform1i(o.uniforms.u_tex, 0);
-    gl.uniform1f(o.uniforms.u_alpha, Math.min(1, Math.max(0, v.cycles)));
-    gl.uniform1i(o.uniforms.u_opaque, 0);
-    gl.blendFunc(gl.ONE, v.cyclesBlend === 0 ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA);
+    gl.uniform1i(m.uniforms.u_lines, 1);
+    gl.uniform1f(m.uniforms.u_background, Math.min(1, Math.max(0, v.cyclesBackground)));
+    gl.uniform1f(m.uniforms.u_opacity, Math.min(1, Math.max(0, v.cycles)));
+    gl.uniform1i(m.uniforms.u_blend, v.cyclesBlend);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
-    gl.disable(gl.BLEND);
+    gl.activeTexture(gl.TEXTURE0);
   }
 
   /** The vertex array for the line instances: a quad's four corners, and the instance buffer, made at least "capacity" instances big. */
@@ -1610,7 +1635,7 @@ export class KaleidoRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, instances);
     gl.bufferData(gl.ARRAY_BUFFER, capacity * INSTANCE_FLOATS * 4, gl.DYNAMIC_DRAW);
     const stride = INSTANCE_FLOATS * 4;
-    ([[1, 4, 0], [2, 4, 16], [3, 4, 32], [4, 2, 48]] as const).forEach(([location, size, offset]) => {
+    ([[1, 4, 0], [2, 4, 16], [3, 4, 32], [4, 4, 48]] as const).forEach(([location, size, offset]) => {
       gl.enableVertexAttribArray(location);
       gl.vertexAttribPointer(location, size, gl.FLOAT, false, stride, offset);
       gl.vertexAttribDivisor(location, 1);

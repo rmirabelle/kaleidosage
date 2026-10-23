@@ -21,8 +21,17 @@ folded picture.
 
 - **Movement**: Grid (straight lines, 90° turns, true Tron) or Free (the
   cycles steer at any angle and draw curves). Grid Size shows only in Grid.
-- **Blend**: Glow (the lines add their light) or Cover (the lines cover the
-  picture), as with particles.
+- **Blend**: how the lines combine with the picture under them: the 8
+  layer blends of the other effects (Normal, Screen, Multiply, Overlay,
+  Difference, Lighten, Darken, Add). A new scene uses Add, which makes the
+  lines glow. (Changed 2026-10-23: the first version had Glow and Cover.)
+- **Color** (added 2026-10-23): where the gradient's colors come from, as
+  three buttons. Cycle: each cycle takes one color from a random place on
+  the gradient. Trail: the colors run along each trail by age, from the
+  head back. Position: a gradient over the whole screen, Linear (at Angle)
+  or Radial (from a center); only the cycles take its colors, so the other
+  effects do not change. The gradient has its own color stops, as the
+  particles' gradient has.
 
 ## Settings
 
@@ -40,6 +49,11 @@ folded picture.
 | Out of Bounds | How far past the screen's edges the cycles can drive before they die, as a part of the screen size. At 0, a cycle dies at the edge. |
 | Grid Size | Grid mode only: the space between the lanes that the cycles can turn into. |
 | Head Glow | How much brighter the cycle's head is than its line. |
+| Gradient | How much the gradient's color replaces the picture's color. 0 is the picture's color only. |
+| Shift | Moves the colors along the gradient. At 1 they are back where they started. |
+| Repeat | Trail and Position: how many times the gradient goes out and back, along a Trail Length (10 seconds when the lines do not fade) or across the screen. |
+| Angle | Position, Linear: the direction of the gradient. |
+| Center X, Center Y | Position, Radial: the center of the gradient, as a part of the screen size. |
 
 All of them can drift, take ranges, and link to MIDI and sound, as other
 settings do.

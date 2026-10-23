@@ -15,7 +15,7 @@ function seeded(seed: number) {
 
 const ASPECT = 16 / 9;
 const settings = (changes: Partial<CycleSettings> = {}): CycleSettings => ({
-  move: 0, count: 1, speed: 0.5, width: 0.002, length: Infinity, turns: 0, follow: 0, dodge: 0, bounds: 0, grid: 0.02, ...changes
+  move: 0, count: 1, speed: 0.5, width: 0.002, length: Infinity, turns: 0, follow: 0, dodge: 0, bounds: 0, grid: 0.02, paint: 0, repeat: 1, ...changes
 });
 
 /** A simulation with the given cycles only (place and angle), ready to step. */
@@ -87,6 +87,21 @@ describe("light cycles", () => {
       corners += p.length / 6;
     }
     expect(corners).toBeGreaterThan(20);
+  });
+
+  it("give a trail's points places on the gradient by age, and one place per cycle", () => {
+    const along = settings({ paint: 1, repeat: 2, length: 4 });
+    const { sim } = withCycles(along, [[0.2, 0.5, 0]]);
+    run(sim, along, 1);
+    const out = new Float32Array(100 * INSTANCE_FLOATS);
+    const count = sim.writeInstances(out, 100, along, 0);
+    /* The newest end is at the head (age 0); the oldest point is about 1 second old: 2 trips per 4 seconds. */
+    expect(out[(count - 1) * INSTANCE_FLOATS + 15]).toBeCloseTo(0, 5);
+    expect(out[14]).toBeGreaterThan(0.4);
+    expect(out[14]).toBeLessThan(0.55);
+    const perCycle = settings({ paint: 0 });
+    sim.writeInstances(out, 100, perCycle, 0);
+    expect(out[14]).toBe(out[(count - 1) * INSTANCE_FLOATS + 15]);
   });
 
   it("write one instance per line segment, and one per head", () => {

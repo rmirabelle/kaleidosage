@@ -102,6 +102,7 @@ export const HELP_TOPICS = {
     title: "Audio input",
     text: "The Input is the sound that moves the settings: the sound your PC plays, a microphone or line input, or audio files that the app plays. Master Gain and Master Threshold apply to every scene.",
     tips: [
+      "The Input menu is above the play controls.",
       "PC (loopback) hears any app on the PC.",
       "Windows cannot capture the sound of one app only.",
       "Master Gain makes the input louder or quieter.",

@@ -9,8 +9,8 @@ import { settingButtons } from "../lib/settingButtons";
 import { GradientEditor } from "./GradientEditor";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
-import { BLUR_KEYS, BLUR_MASKS, CYCLE_KEYS, CYCLE_MOVES, FOLD_MODES, KALEIDOSCOPE_KEYS, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
-import type { BlurMask, CycleMove, FoldMode, FxStep, MapMode, ShapeStep, SmearShape, WarpType } from "../engine/renderer";
+import { BLUR_KEYS, BLUR_MASKS, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, KALEIDOSCOPE_KEYS, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
+import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, ShapeStep, SmearShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ContextMenu } from "./ContextMenu";
@@ -43,7 +43,7 @@ interface Props {
   /** The file name of the Driver effect's own video, or null, and the button that picks one. */
   driverVideoName: string | null;
   onPickDriverVideo: () => void;
-  /** The FX audio button was turned on while the app listens to nothing: the app opens the Audio panel at its Input. */
+  /** The FX audio button was turned on while the app listens to nothing: the play toolbar shows a tip at its Input menu. */
   onNeedAudioInput: () => void;
 }
 
@@ -66,7 +66,6 @@ const LAYER_BLENDS = [
 ] as const;
 const TRAIL_MODES = [[1, "Mix (smoky)"], [2, "Lighten (glowing)"]] as const;
 const PARTICLE_BLENDS = [[0, "Glow (add)"], [1, "Normal"]] as const;
-const CYCLE_BLENDS = [[0, "Glow (add)"], [1, "Cover"]] as const;
 const SORT_ORDERS = [[0, "Dark to bright"], [1, "Bright to dark"]] as const;
 const DRIVER_SOURCES = [[0, "Caustics"], [1, "Smoke"], [2, "Ink"], [3, "Fire"], [4, "Ripples"], [5, "Video"]] as const;
 const DRIVER_MODES = [[0, "Bend"], [1, "Reveal"], [2, "Light"]] as const;
@@ -106,8 +105,8 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
   /**
    * The audio button before the FX title shows the settings' audio buttons
    * (see AudioLinkButton), in the same column as the MIDI buttons. It
-   * always shows. Turned on while the app listens to nothing, it also opens
-   * the Audio panel with a tip at its Input menu.
+   * always shows. Turned on while the app listens to nothing, it also shows
+   * a tip at the Input menu, above the play controls.
    */
   const showAudio = useSyncExternalStore(settingButtons.subscribe, () => settingButtons.shown("audio"));
   const setShowAudio = (show: boolean) => settingButtons.set("audio", show);
@@ -742,7 +741,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "cyclesMove" | "cyclesBlend" | "driverSource" | "driverMode";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "driverSource" | "driverMode";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange }: {
@@ -822,13 +821,59 @@ function SmearSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =>
   );
 }
 
-/** How the light cycles move (Grid or Free), and the sliders for that way. */
+/**
+ * The light cycles: how they move (Grid or Free) and the sliders for that
+ * way, then where their gradient colors come from (Cycle, Trail or
+ * Position, and for Position a linear or radial gradient) with the
+ * gradient's sliders and its colors under the Gradient slider, then the
+ * Blend menu and Opacity.
+ */
 function CyclesSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
   const [move, setMove] = useState<CycleMove>(engine.state.cyclesMove);
+  const [paint, setPaint] = useState<CyclePaint>(engine.state.cyclesPaint);
+  const pick = (next: CyclePaint) => {
+    engine.state.cyclesPaint = next;
+    setPaint(next);
+  };
+  const position = paint >= 2;
+  const buttons = (choices: readonly (readonly [CyclePaint, string, string, boolean])[]) => (
+    <div className="panel-buttons">
+      {choices.map(([value, name, tip, on]) => (
+        <button key={name} className={`panel-button text-only ${on ? "active" : ""}`} aria-pressed={on} data-tip={tip} onClick={() => pick(value)}>{name}</button>
+      ))}
+    </div>
+  );
+  const colorRows = (
+    <Fragment key="cycles-color">
+      <div className="panel-select-row panel-select-named cycles-paint-row">
+        <span className="panel-row-name">Color</span>
+        {buttons([
+          [0, "Cycle", "Each cycle takes one color from the gradient", paint === 0],
+          [1, "Trail", "The colors run along each trail, from the head back", paint === 1],
+          [position ? paint : 2, "Position", "The colors come from the place on the screen: a gradient over the whole screen", position]
+        ])}
+      </div>
+      {position && (
+        <div className="panel-select-row panel-select-named cycles-paint-row">
+          <span className="panel-row-name">Shape</span>
+          {buttons([
+            [2, "Linear", "The gradient runs across the screen, at Angle", paint === 2],
+            [3, "Radial", "The gradient runs out from the center", paint === 3]
+          ])}
+        </div>
+      )}
+    </Fragment>
+  );
   return (
     <>
       <ModeSelect engine={engine} stateKey="cyclesMove" options={CYCLE_MOVES} name="Move" onChange={setMove} />
-      <SplitRows keys={CYCLE_KEYS[move]} row={row} blend={<ModeSelect engine={engine} stateKey="cyclesBlend" options={CYCLE_BLENDS} name="Blend" />} />
+      <SplitRows
+        keys={[...CYCLE_KEYS[move], ...CYCLE_PAINT_KEYS[paint]]}
+        row={(key) => key === "cyclesGradient"
+          ? <Fragment key={key}>{colorRows}{row(key)}<GradientEditor engine={engine} stateKey="cyclesStops" /></Fragment>
+          : row(key)}
+        blend={<ModeSelect engine={engine} stateKey="cyclesBlend" options={LAYER_BLENDS} name="Blend" />}
+      />
     </>
   );
 }

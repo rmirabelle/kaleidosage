@@ -10,6 +10,7 @@ import { SourceImages, type SourceImagesProps } from "./SourceImages";
 import { help } from "../help/topics";
 import { HelpButton } from "./HelpButton";
 import { MediaIcon } from "./MediaIcon";
+import { AudioInputMenu } from "./AudioInputMenu";
 import { placeSeek } from "./Slider";
 import { scenePosition } from "../engine/loop";
 import type { SongScript } from "../engine/songScript";
@@ -154,7 +155,7 @@ export function useSceneHoldOnly() {
   return enabled && count > 0;
 }
 
-export function SceneTransport({ engine, paused, onTogglePause, onStop, show, autoNext, held, onToggleHold }: {
+export function SceneTransport({ engine, paused, onTogglePause, onStop, show, autoNext, held, onToggleHold, onAddTracks, inputTip, onInputTipDone }: {
   engine: Engine;
   paused: boolean;
   onTogglePause: () => void;
@@ -167,6 +168,10 @@ export function SceneTransport({ engine, paused, onTogglePause, onStop, show, au
   /** True while Hold keeps the scene (see holdScene in App). */
   held: boolean;
   onToggleHold: () => void;
+  /** The audio Input menu's file picker, and its tip (see AudioInputMenu). */
+  onAddTracks: () => void;
+  inputTip: boolean;
+  onInputTipDone: () => void;
 }) {
   const bar = useRef<HTMLInputElement>(null);
   const fill = useRef<HTMLDivElement>(null);
@@ -222,9 +227,12 @@ export function SceneTransport({ engine, paused, onTogglePause, onStop, show, au
     }
   }), [engine]);
 
+  /* The audio Input menu, above the play controls. */
+  const input = <AudioInputMenu onAddTracks={onAddTracks} tip={inputTip} onTipDone={onInputTipDone} />;
   if (spaceRunsSong) {
     return (
       <div className="scene-transport scene-hold-bar" aria-label="Scene controls" {...help("play")}>
+        {input}
         <button
           className={`hold-toggle wide ${held ? "on" : ""}`}
           aria-pressed={held}
@@ -240,6 +248,7 @@ export function SceneTransport({ engine, paused, onTogglePause, onStop, show, au
   }
   return (
     <div className="panel-card playlist-transport scene-transport" aria-label="Scene controls" {...help("play")}>
+      {input}
       {show && (
         <div className="scene-countdown-row">
           <span className="audio-meter-well scene-countdown" data-tip={song

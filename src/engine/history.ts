@@ -7,7 +7,7 @@ const LIMIT = 200;
 
 type SavedParam = Pick<Param, "value" | "low" | "high" | "on" | "ease" | "custom" | "seconds" | "startTime">;
 type SavedState = Pick<PlayState, "groups" | "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode"
-  | "overlayColor" | "colorBlend" | "trailColor" | "smearShape" | "contourTone" | "contourBlend" | "cameraBlend" | "skyColor" | "cameraRepeat" | "videoCrossfade" | "fxOrder" | "layerBlend" | "sound" | "particleStops" | "cyclesMove" | "cyclesBlend">;
+  | "overlayColor" | "colorBlend" | "trailColor" | "smearShape" | "contourTone" | "contourBlend" | "cameraBlend" | "skyColor" | "cameraRepeat" | "videoCrossfade" | "fxOrder" | "layerBlend" | "sound" | "particleStops" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "cyclesStops">;
 
 /** The settings at one step, and their fingerprint, to tell whether two steps differ. */
 interface Snapshot {
@@ -48,7 +48,9 @@ function take(params: Params, state: PlayState): Snapshot {
       sound: Object.fromEntries(soundList(state.sound).map((key) => [key, true])),
       particleStops: state.particleStops.map((stop) => ({ ...stop })),
       cyclesMove: state.cyclesMove,
-      cyclesBlend: state.cyclesBlend
+      cyclesBlend: state.cyclesBlend,
+      cyclesPaint: state.cyclesPaint,
+      cyclesStops: state.cyclesStops.map((stop) => ({ ...stop }))
     }
   };
 }
@@ -119,8 +121,11 @@ export class SettingsHistory {
 
   private restore(step: Snapshot) {
     for (const key of PARAM_KEYS) Object.assign(this.params[key], step.params[key]);
-    const { groups, layerBlend, fxOrder, sound, particleStops, ...modes } = step.state;
-    Object.assign(this.state, modes, { fxOrder: [...fxOrder], sound: { ...sound }, particleStops: particleStops.map((stop) => ({ ...stop })) });
+    const { groups, layerBlend, fxOrder, sound, particleStops, cyclesStops, ...modes } = step.state;
+    Object.assign(this.state, modes, {
+      fxOrder: [...fxOrder], sound: { ...sound },
+      particleStops: particleStops.map((stop) => ({ ...stop })), cyclesStops: cyclesStops.map((stop) => ({ ...stop }))
+    });
     Object.assign(this.state.groups, groups);
     Object.assign(this.state.layerBlend, layerBlend);
     this.current = step;

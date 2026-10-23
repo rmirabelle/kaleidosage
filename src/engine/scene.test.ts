@@ -17,6 +17,20 @@ describe("scene files", () => {
     expect(loaded.particleStops).toEqual(defaultGradientStops());
   });
 
+  it("keep the light cycles' gradient, its color source and their blend mode", () => {
+    const state = createPlayState();
+    state.cyclesStops = [{ at: 0, color: "#00ff00" }, { at: 1, color: "#ff00ff" }];
+    state.cyclesPaint = 3;
+    state.cyclesBlend = 4;
+    const loaded = createPlayState();
+    const text = serializeScene(createParams(), state, { image: IMAGE });
+    applyScene(text, createParams(), loaded);
+    expect([loaded.cyclesStops, loaded.cyclesPaint, loaded.cyclesBlend]).toEqual([state.cyclesStops, 3, 4]);
+    expect(sceneFingerprint(createParams(), loaded, [])).toBe(sceneFingerprint(createParams(), state, []));
+    loaded.cyclesPaint = 1;
+    expect(sceneFingerprint(createParams(), loaded, [])).not.toBe(sceneFingerprint(createParams(), state, []));
+  });
+
   it("round-trips embedded video handles for both slots without base64", () => {
     const images = { image: { type: "video/mp4", video: "1" }, image2: { type: "video/webm", video: "2" } };
     const saved = serializeScene(createParams(), createPlayState(), images);

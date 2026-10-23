@@ -16,7 +16,8 @@ const cssGradient = (stops: readonly GradientStop[]) =>
   `linear-gradient(to right, ${inOrder(stops).map((stop) => `${stop.color} ${(stop.at * 100).toFixed(1)}%`).join(", ")})`;
 
 /**
- * The particles' life gradient (state.particleStops): a bar that shows the
+ * A gradient of the play state (the particles' life gradient,
+ * state.particleStops, or the light cycles' state.cyclesStops): a bar that shows the
  * gradient, with a handle under it for each color stop. A click on the bar
  * adds a stop there, in the color the gradient has there, and opens its
  * color picker. A handle drags left and right; a click on it opens its
@@ -27,8 +28,8 @@ const cssGradient = (stops: readonly GradientStop[]) =>
  * During a drag the stops keep their list order, so the dragged one keeps
  * its index; the engine always gets them in order of place.
  */
-export function GradientEditor({ engine }: { engine: Engine }) {
-  const [stops, setStops] = useState<GradientStop[]>(() => engine.state.particleStops.map((stop) => ({ ...stop })));
+export function GradientEditor({ engine, stateKey = "particleStops" }: { engine: Engine; stateKey?: "particleStops" | "cyclesStops" }) {
+  const [stops, setStops] = useState<GradientStop[]>(() => engine.state[stateKey].map((stop) => ({ ...stop })));
   /** The stop whose color picker is open. */
   const [picking, setPicking] = useState<number | null>(null);
   /** The stop that a drag down will remove when the mouse button goes up. */
@@ -41,7 +42,7 @@ export function GradientEditor({ engine }: { engine: Engine }) {
 
   const write = (next: GradientStop[]) => {
     setStops(next);
-    engine.state.particleStops = inOrder(next).map((stop) => ({ ...stop }));
+    engine.state[stateKey] = inOrder(next).map((stop) => ({ ...stop }));
   };
   const placeAt = (clientX: number) => {
     const bar = barRef.current!.getBoundingClientRect();

@@ -1,18 +1,15 @@
-import { useEffect, useLayoutEffect, useReducer, useRef, useSyncExternalStore, type RefObject } from "react";
+import { useEffect, useReducer, useRef, useSyncExternalStore } from "react";
 import { Broadcast, Equalizer, Plug, SpeakerSimpleHigh, X } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
 import { AUDIO_BANDS, BAND_RANGES, FLOOR_DB, audioLinkable, soundList, type AudioBand } from "../engine/audio";
 import { PARAM_KEYS } from "../engine/params";
 import { FAMILY_LABELS, FAMILY_NAMES, familyOf } from "../engine/songScript";
-import { GAIN_DB, THRESHOLD_DB, audioInput, type DeviceKind, type InputKind } from "../lib/audioInput";
-import { tracks } from "../lib/tracks";
+import { GAIN_DB, THRESHOLD_DB, audioInput } from "../lib/audioInput";
 import { songFollow } from "../lib/songFollow";
 import { destinationName } from "./DestinationDialog";
-import { Dropdown } from "./Dropdown";
 import { Slider } from "./Slider";
 import { EmptyState } from "./EmptyState";
 import { settingButtons } from "../lib/settingButtons";
-import { createPortal } from "react-dom";
 import { help } from "../help/topics";
 import { HelpButton } from "./HelpButton";
 
@@ -152,122 +149,33 @@ function SoundSettings({ engine }: { engine: Engine }) {
   );
 }
 
-/** A source in the Sound source menu: the kind, a colon, and the device id (nothing after the colon for the kind's default device). */
-const sourceValue = (kind: DeviceKind, device: string | null) => `${kind}:${device ?? ""}`;
-const KIND_HEADINGS: Record<DeviceKind, string> = { output: "PC (loopback)", input: "Microphones and line inputs" };
-const KIND_DEFAULTS: Record<DeviceKind, string> = { output: "Default output", input: "Default input" };
-
-/** The Input menu's first choice: the app does not listen. */
-const NONE = "none:";
-/** The Input menu's last choice: the app plays the tracks and listens to them. */
-const TRACKS = "tracks:";
-
-const subscribeTracks = (listener: () => void) => tracks.subscribe(listener);
-const tracksVersion = () => tracks.version;
-
 /**
- * The Audio tab of the bottom panel, in columns: Source (the input and its
- * settings, then the level meters), then the scene's audio links. While
- * the tracks are the input, their list is in the left side (FilesCard). The app always listens to the picked
- * input (see audioInput), so the tab has no on and off switch. The left
- * column has the Input menu (Nothing, then the PC sound of each output
- * device, in loopback, then each microphone or line input, then the
- * tracks), an error when listening fails, the track list while
- * the tracks are the input, the gain, the threshold and the beat
- * sensitivity. The meters show each band's loudness in dBFS, with a mark at
- * the threshold. The right
- * column has live meters for the four bands and a light that flashes on
- * each beat, then the scene's audio links. The input belongs to the app,
- * and the links to the scene (see docs/AUDIO.md).
+ * The Audio tab of the bottom panel, in columns: Source (the input's
+ * settings, then the level meters), then the scene's audio links. The
+ * Input menu is in the scene's play toolbar (see AudioInputMenu), and while
+ * the tracks are the input, their list is in the left side (FilesCard).
+ * The app always listens to the picked input (see audioInput), so the tab
+ * has no on and off switch. The left column has an error when listening
+ * fails, the gain and the threshold. The meters show each band's loudness
+ * in dBFS, with a mark at the threshold. The right column has live meters
+ * for the four bands and a light that flashes on each beat, then the
+ * scene's audio links. The input belongs to the app, and the links to the
+ * scene (see docs/AUDIO.md).
  */
-/**
- * The tip at the right of the Input menu, with an arrow to it: the FX audio
- * button was turned on while the app listens to nothing. It follows the
- * menu while the panel opens (the panel grows in height).
- */
-function InputTip({ anchor, onClose }: { anchor: RefObject<HTMLLabelElement | null>; onClose: () => void }) {
-  const tipRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    let frame = 0;
-    const place = () => {
-      const label = anchor.current?.getBoundingClientRect();
-      const tip = tipRef.current;
-      if (label && tip) {
-        tip.style.left = `${label.right + 12}px`;
-        tip.style.top = `${label.top + label.height / 2 - tip.offsetHeight / 2}px`;
-      }
-      frame = requestAnimationFrame(place);
-    };
-    place();
-    return () => cancelAnimationFrame(frame);
-  }, [anchor]);
-  return createPortal(
-    <div ref={tipRef} className="input-tip" role="status">
-      <span>Pick an Input first. Then the settings can move with the sound.</span>
-      <button className="help-card-close" onClick={onClose} aria-label="Close the tip" data-tip="Close">
-        <X size={14} />
-      </button>
-    </div>,
-    document.body
-  );
-}
-
-export function AudioPanel({ engine, onAddTracks, sceneName, inputTip, onInputTipDone }: {
+export function AudioPanel({ engine, sceneName }: {
   engine: Engine;
-  onAddTracks: () => void;
   sceneName: string;
-  /** Shows the tip at the Input menu, until an input is picked or the tip is closed. */
-  inputTip: boolean;
-  onInputTipDone: () => void;
 }) {
   useSyncExternalStore(subscribe, version);
-  useSyncExternalStore(subscribeTracks, tracksVersion);
-  const { status, settings, devices } = audioInput;
+  const { status, settings } = audioInput;
   /* While the picture follows a song, Gain and Threshold do not change the motion (see songFollow.ts): they are grayed out. */
   const following = useSyncExternalStore(songFollow.subscribe.bind(songFollow), () => songFollow.enabled) && settings.kind === "tracks";
   const listening = status.state === "on";
-  const inputRef = useRef<HTMLLabelElement>(null);
-  useEffect(() => { void audioInput.refreshDevices(); }, []);
-  /* A picked input does what the tip asks, so the tip goes. */
-  useEffect(() => {
-    if (inputTip && settings.kind !== "none") onInputTipDone();
-  }, [inputTip, settings.kind, onInputTipDone]);
-  const options: [string, string][] = [[NONE, "Nothing (do not listen)"]];
-  const headings = new Map<string, string>();
-  for (const kind of ["output", "input"] as const) {
-    const ofKind = devices.filter((device) => device.kind === kind);
-    const defaultName = ofKind.find((device) => device.default)?.name;
-    headings.set(sourceValue(kind, null), KIND_HEADINGS[kind]);
-    options.push([sourceValue(kind, null), defaultName ? `${KIND_DEFAULTS[kind]} (${defaultName})` : KIND_DEFAULTS[kind]]);
-    for (const device of ofKind) options.push([sourceValue(kind, device.id), device.name]);
-  }
-  headings.set(TRACKS, "Audio files");
-  const count = tracks.list.length;
-  options.push([TRACKS, count === 0 ? "Files" : `Files (${count === 1 ? "1 file" : `${count} files`})`]);
-  const picked = settings.kind === "none" ? NONE : settings.kind === "tracks" ? TRACKS : sourceValue(settings.kind, settings.device);
-  if (!options.some(([value]) => value === picked)) options.push([picked, "A device that is not connected"]);
   return (
     <section className="bottom-panel-page" aria-label="Audio">
       <div className="midi-panel-columns">
         <div className="midi-panel-devices audio-source" {...help("audio.input")}>
           <div className="stage-label"><Plug size={13} weight="bold" /> Source <HelpButton topic="audio.input" inline /></div>
-          <label ref={inputRef} className="audio-setting inline" data-tip="Select an input to listen and react to.">
-            <span>Input</span>
-            <Dropdown
-              value={picked}
-              options={options}
-              headings={headings}
-              noWrap
-              label="Input"
-              onChange={(value) => {
-                const split = value.indexOf(":");
-                audioInput.setSource(value.slice(0, split) as InputKind, value.slice(split + 1) || null);
-                /* An empty track list asks for its files at once. */
-                if (value === TRACKS && tracks.list.length === 0) onAddTracks();
-              }}
-            />
-          </label>
-          {inputTip && settings.kind === "none" && <InputTip anchor={inputRef} onClose={onInputTipDone} />}
           {/* A failure, for example a microphone that Windows blocks. */}
           {status.state === "error" && <p className="audio-error audio-setting selectable">{status.message}</p>}
           <div className={`audio-setting ${following ? "follow-off" : ""}`} aria-disabled={following || undefined} data-tip={following ? "Song follow is on: the song's own analysis moves the picture, so this does not change the motion." : "Gain applied to the audio signal before threshold detection."}>
@@ -281,7 +189,7 @@ export function AudioPanel({ engine, onAddTracks, sceneName, inputTip, onInputTi
           {/* The levels, at the bottom of the Source column, under the settings that shape them. */}
           <div className="stage-label audio-source-levels" {...help("audio.levels")}><Equalizer size={13} weight="bold" /> Levels <HelpButton topic="audio.levels" inline /></div>
           {listening ? <AudioMeters thresholdDb={settings.thresholdDb} />
-            : settings.kind === "none" ? <EmptyState text="Pick an Input to make settings move with the sound." />
+            : settings.kind === "none" ? <EmptyState text="Pick an Input above the play controls to make settings move with the sound." />
             : <p className="midi-panel-empty">Starting…</p>}
         </div>
         {/* With no input, nothing can move the links, so the column is not shown. */}
