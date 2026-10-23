@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CycleSim, INSTANCE_FLOATS, type CycleSettings } from "./cycles";
+import { BOUNDS, CycleSim, INSTANCE_FLOATS, type CycleSettings } from "./cycles";
 
 /** The same random numbers on every run (mulberry32). */
 function seeded(seed: number) {
@@ -15,7 +15,7 @@ function seeded(seed: number) {
 
 const ASPECT = 16 / 9;
 const settings = (changes: Partial<CycleSettings> = {}): CycleSettings => ({
-  move: 0, count: 1, speed: 0.5, width: 0.002, length: Infinity, turns: 0, follow: 0, dodge: 0, bounds: 0, grid: 0.02, paint: 0, repeat: 1, ...changes
+  move: 0, count: 1, speed: 0.5, width: 0.002, length: Infinity, turns: 0, follow: 0, dodge: 0, grid: 0.02, paint: 0, repeat: 1, ...changes
 });
 
 /** A simulation with the given cycles only (place and angle), ready to step. */
@@ -53,17 +53,14 @@ describe("light cycles", () => {
     expect(sim.cycles).not.toContain(cycle);
   });
 
-  it("die at the edge of the Out of Bounds space, and drive past the screen inside it", () => {
-    const edge = settings({ speed: 1, bounds: 0 });
-    const first = withCycles(edge, [[ASPECT - 0.05, 0.5, 0]]);
-    run(first.sim, edge, 0.1);
-    expect(first.sim.cycles).not.toContain(first.cycles[0]);
-
-    const outside = settings({ speed: 1, bounds: 0.5 });
-    const second = withCycles(outside, [[ASPECT - 0.05, 0.5, 0]]);
-    run(second.sim, outside, 0.2);
-    expect(second.sim.cycles).toContain(second.cycles[0]);
-    expect(second.cycles[0].x).toBeGreaterThan(ASPECT);
+  it("drive past the screen, and die at the edge of the space past it", () => {
+    const s = settings({ speed: 1 });
+    const { sim, cycles: [cycle] } = withCycles(s, [[ASPECT - 0.05, 0.5, 0]]);
+    run(sim, s, 0.2);
+    expect(sim.cycles).toContain(cycle);
+    expect(cycle.x).toBeGreaterThan(ASPECT);
+    run(sim, s, ASPECT * BOUNDS);
+    expect(sim.cycles).not.toContain(cycle);
   });
 
   it("free the cells of a line that has faded", () => {

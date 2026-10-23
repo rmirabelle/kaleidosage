@@ -25,8 +25,6 @@ export interface CycleSettings {
   follow: number;
   /** 0 to 1: the chance that a cycle sees a line ahead and turns away from it. */
   dodge: number;
-  /** How far past each screen edge a cycle can drive before it dies, as a part of the screen size (0 to MAX_BOUNDS). */
-  bounds: number;
   /** Grid mode: the space between the lanes, in screen heights. */
   grid: number;
   /** Where the gradient's colors come from (see CyclePaint in renderer.ts): 0 per cycle, 1 along the trail, 2 and 3 the place on the screen. */
@@ -44,8 +42,12 @@ export interface Picture {
 
 /** The most cycles at one time. */
 export const MAX_CYCLES = 2000;
-/** The largest Out of Bounds space; the crash grid always covers it, so a change of Out of Bounds starts nothing again. */
-export const MAX_BOUNDS = 1;
+/**
+ * How far past each screen edge a cycle can drive before it dies, as a part
+ * of the screen size. Its line goes on out of sight, and it can turn and
+ * come back. The crash grid covers this space too.
+ */
+export const BOUNDS = 0.25;
 /** The crash grid's cell, in screen heights (about 2.7 pixels at 1080p), and the most cells the grid may have. */
 const CELL = 1 / 400;
 const MAX_GRID_CELLS = 6_000_000;
@@ -227,13 +229,13 @@ export class CycleSim {
 
   private resize(aspect: number) {
     this.aspect = aspect;
-    const width = aspect * (1 + 2 * MAX_BOUNDS);
-    const height = 1 + 2 * MAX_BOUNDS;
+    const width = aspect * (1 + 2 * BOUNDS);
+    const height = 1 + 2 * BOUNDS;
     this.cell = Math.max(CELL, Math.sqrt(width * height / MAX_GRID_CELLS));
     this.columns = Math.ceil(width / this.cell);
     this.rows = Math.ceil(height / this.cell);
-    this.originX = -aspect * MAX_BOUNDS;
-    this.originY = -MAX_BOUNDS;
+    this.originX = -aspect * BOUNDS;
+    this.originY = -BOUNDS;
     this.owner = new Uint32Array(this.columns * this.rows);
     this.marked = new Float32Array(this.columns * this.rows);
     this.reset();
@@ -266,9 +268,8 @@ export class CycleSim {
     return luma(...this.colorAt(x, y));
   }
 
-  private inBounds(x: number, y: number, bounds: number) {
-    const b = Math.min(MAX_BOUNDS, Math.max(0, bounds));
-    return x >= -b * this.aspect && x <= this.aspect * (1 + b) && y >= -b && y <= 1 + b;
+  private inBounds(x: number, y: number) {
+    return x >= -BOUNDS * this.aspect && x <= this.aspect * (1 + BOUNDS) && y >= -BOUNDS && y <= 1 + BOUNDS;
   }
 
   /** True when no line covers the cells within "radius" cells of the cell. */
@@ -347,7 +348,7 @@ export class CycleSim {
     for (let along = start; along <= start + distance; along += this.cell * 0.5) {
       const x = cycle.x + dx * along;
       const y = cycle.y + dy * along;
-      if (!this.inBounds(x, y, s.bounds) || !this.open(this.cellAt(x, y), cycle.line, grace)) return true;
+      if (!this.inBounds(x, y) || !this.open(this.cellAt(x, y), cycle.line, grace)) return true;
     }
     return false;
   }
@@ -466,7 +467,7 @@ export class CycleSim {
       if (crossing && Math.abs(dx) > 0.5) cycle.x = laneAt;
       else if (crossing) cycle.y = laneAt;
       cycle.sincePoint += ds;
-      if (!this.inBounds(cycle.x, cycle.y, s.bounds)) return false;
+      if (!this.inBounds(cycle.x, cycle.y)) return false;
       const cell = this.cellAt(cycle.x, cycle.y);
       if (cell !== cycle.cell) {
         /* The front edge of the line: "radius" cells ahead of the head. */

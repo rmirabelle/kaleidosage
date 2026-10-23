@@ -18,7 +18,7 @@ export const PARAM_KEYS = [
   "cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth",
   "sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness",
   "particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost",
-  "cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesBounds", "cyclesGrid", "cyclesHead",
+  "cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead",
   "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY",
   "raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY",
   "bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize",
@@ -672,10 +672,9 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * at its top the line stays until its cycle crashes. Turn Rate is the
    * random turns per second, Follow how strongly the cycles turn toward
    * bright areas, and Dodge the chance that a cycle sees a line ahead and
-   * turns away. Out of Bounds is how far past the screen's edges a cycle
-   * can drive, as a part of the screen size. Grid Size is the space between
-   * the lanes in grid mode, in screen heights. Head Glow makes the heads
-   * bigger and brighter than the lines.
+   * turns away. Grid Size is the space between the lanes in grid mode, in
+   * screen heights. Head Glow makes the heads bigger and brighter than the
+   * lines.
    */
   cyclesAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
   cyclesBackground: { label: "Background", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0, high: 1, on: false },
@@ -686,7 +685,6 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   cyclesTurns: { label: "Turn Rate", min: 0, max: 5, step: 0.01, value: 0.5, drift: "wave", low: 0.2, high: 2, on: false },
   cyclesFollow: { label: "Follow", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 1, on: false },
   cyclesDodge: { label: "Dodge", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.2, high: 0.9, on: false },
-  cyclesBounds: { label: "Out of Bounds", min: 0, max: 1, step: 0.01, value: 0.25, drift: "wave", low: 0, high: 0.5, on: false },
   cyclesGrid: { label: "Grid Size", min: 0.005, max: 0.2, step: 0.001, scale: "log", value: 0.02, drift: "wave", low: 0.01, high: 0.05, on: false },
   cyclesHead: { label: "Head Glow", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.2, high: 1, on: false },
   /**
@@ -1174,7 +1172,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   camera: ["cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth"],
   sort: ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"],
   particles: ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost"],
-  cycles: ["cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesBounds", "cyclesGrid", "cyclesHead", "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY"],
+  cycles: ["cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead", "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY"],
   rays: ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"],
   bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
   sharpen: ["sharpen", "sharpenRadius"],
@@ -1407,7 +1405,6 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("cyclesTurns", rand(0.2, 3), rand(0.1, 0.8));
   set("cyclesFollow", Math.random() < 0.5 ? 0 : rand(0.2, 1), rand(0.05, 0.2));
   set("cyclesDodge", rand(0.2, 1), rand(0.05, 0.2));
-  set("cyclesBounds", rand(0, 0.5), rand(0, 0.15));
   set("cyclesGrid", rand(0.008, 0.06), rand(0.002, 0.01));
   set("cyclesHead", rand(0.2, 1), rand(0, 0.2));
   set("cyclesGradient", Math.random() < 0.4 ? 0 : rand(0.5, 1), rand(0, 0.3));

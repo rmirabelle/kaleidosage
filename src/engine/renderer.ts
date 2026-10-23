@@ -298,8 +298,7 @@ export interface FrameValues {
    * blend, the picture's opacity under the lines, how many there are, their
    * speed (screen heights per second), the line width (pixels at 1080p), the
    * fade time in seconds (Infinity: no fade), the turns per second, follow,
-   * dodge, how far past the screen they can drive (a part of the screen
-   * size), the lane spacing (screen heights), the head glow, and the
+   * dodge, the lane spacing (screen heights), the head glow, and the
    * animation seconds since the last frame (0 while paused).
    */
   cycles: number;
@@ -313,7 +312,6 @@ export interface FrameValues {
   cyclesTurns: number;
   cyclesFollow: number;
   cyclesDodge: number;
-  cyclesBounds: number;
   cyclesGrid: number;
   cyclesHead: number;
   cyclesSeconds: number;
@@ -1549,7 +1547,7 @@ export class KaleidoRenderer {
     const sim = this.cycleSim;
     const settings: CycleSettings = {
       move: v.cyclesMove, count: v.cyclesCount, speed: v.cyclesSpeed, width: v.cyclesWidth / 1080, length: v.cyclesLength,
-      turns: v.cyclesTurns, follow: v.cyclesFollow, dodge: v.cyclesDodge, bounds: v.cyclesBounds, grid: v.cyclesGrid,
+      turns: v.cyclesTurns, follow: v.cyclesFollow, dodge: v.cyclesDodge, grid: v.cyclesGrid,
       paint: v.cyclesPaint, repeat: v.cyclesRepeat
     };
     if (!this.cyclesWereOn) sim.reset();

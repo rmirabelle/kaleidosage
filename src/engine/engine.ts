@@ -1219,7 +1219,6 @@ export class Engine {
       cyclesTurns: this.live("cyclesTurns"),
       cyclesFollow: this.live("cyclesFollow"),
       cyclesDodge: this.live("cyclesDodge"),
-      cyclesBounds: this.live("cyclesBounds"),
       cyclesGrid: this.live("cyclesGrid"),
       cyclesHead: this.live("cyclesHead"),
       cyclesSeconds: animated,

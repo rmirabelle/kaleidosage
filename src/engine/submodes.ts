@@ -77,8 +77,8 @@ export const SMEAR_SHAPES = [[0, "Linear"], [1, "Rings"], [2, "Sweep"], [3, "Bri
  * Common part of the group.
  */
 export const CYCLE_KEYS: Record<CycleMove, ParamKey[]> = {
-  0: ["cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesBounds", "cyclesGrid", "cyclesHead", "cyclesBackground", "cyclesAmount"],
-  1: ["cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesBounds", "cyclesHead", "cyclesBackground", "cyclesAmount"]
+  0: ["cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead", "cyclesBackground", "cyclesAmount"],
+  1: ["cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesHead", "cyclesBackground", "cyclesAmount"]
 };
 export const CYCLE_MOVES = [[0, "Grid"], [1, "Free"]] as const;
 
