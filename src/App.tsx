@@ -294,7 +294,12 @@ export default function App() {
    * ends it.
    */
   const [effectTip, setEffectTip] = useState<"effect" | "range" | null>(null);
-  const firstEffect = useCallback(() => setEffectTip("effect"), []);
+  /** True once the ranged slider tip (below) has shown since the last first effect: each first effect lets it show again. */
+  const rangedTipShownRef = useRef(false);
+  const firstEffect = useCallback(() => {
+    rangedTipShownRef.current = false;
+    setEffectTip("effect");
+  }, []);
   const nextEffectTip = useCallback(() => setEffectTip((tip) => (tip === "effect" ? "range" : null)), []);
   const effectHeader = useMemo(() => ({
     get current() {
@@ -312,15 +317,14 @@ export default function App() {
     return () => window.removeEventListener("pointerdown", onPress, true);
   }, [effectTip, firstRangeButton]);
   /**
-   * The first range that the user turns on in a run (a click on a
-   * setting's [] button, see useParamRows) shows the ranged slider tip at
+   * The first range that the user turns on after a first effect (a click
+   * on a setting's [] button, see useParamRows) shows the ranged slider tip at
    * the right of that setting. The setting is found by its range button's
    * name, as the panel is made again often; the tip hides while the range
    * is off or the effect is closed. Its close button, or a press in the FX
    * card outside that setting, ends it.
    */
   const [rangedTip, setRangedTip] = useState<string | null>(null);
-  const rangedTipShownRef = useRef(false);
   useEffect(() => {
     const onRangeOn = (event: Event) => {
       const label = (event.target as Element).getAttribute("aria-label");
