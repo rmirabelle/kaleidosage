@@ -2267,21 +2267,21 @@ export default function App() {
       {panelTips.scene && !startScreen && (
         <PointerTip
           anchor={sceneCard}
-          text="This is the SCENE panel: the pictures that the effects change. SLOT A holds a checkerboard, good for testing FX. Hover over a slot to load a random image, search the web, choose a pattern, or load your own image or video. LENGTH sets how long the scene plays."
+          text="This is the scene SOURCE panel. It shows the scene name and controls the scene loop LENGTH. SLOT A holds a checkerboard pattern - good for testing FX. Hover over a slot to load a random image, search for a specific image, choose a pattern, or load your own image or video."
           onClose={() => setPanelTips((tips) => ({ ...tips, scene: false }))}
         />
       )}
       {panelTips.fx && !startScreen && (
         <PointerTip
           anchor={fxCard}
-          text="This is the FX panel: the effects that change the picture, from top to bottom. Click + New to add an effect, or the red random ALL button to add several at once."
+          text="This is the FX panel. The speaker icon toggles the visibility of audio links. The MIDI icon toggles the visibility of MIDI mappings. Random ALL (dice icon) creates a new random set of multiple FX. Nudge ALL (wind icon) nudges all settings by a small amount. Clear ALL (trashcan icon) deletes all added FX. Click + New to add a new effect."
           onClose={() => setPanelTips((tips) => ({ ...tips, fx: false }))}
         />
       )}
       {panelTips.play && !startScreen && (
         <PointerTip
           anchor={playCard}
-          text="This is the PLAY panel. Play, pause or stop the scene, and drag the bar to move in its LENGTH. Pick an Input to make settings react to sound."
+          text="This is the PLAY panel. INPUT enables audio reactivity. The play controls stop, start and pause the scene. The position slider loops according to Scene LENGTH."
           onClose={() => setPanelTips((tips) => ({ ...tips, play: false }))}
         />
       )}
