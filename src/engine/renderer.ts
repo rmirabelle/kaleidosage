@@ -114,6 +114,8 @@ export interface FrameValues {
   /** The Mandelbrot map (map mode 9): depth in powers of ten, band width, terraces, their softness, light, and the light's angle (radians). */
   mandelDepth: number;
   mandelBands: number;
+  /** Growth: the share of the view that shows; the rest, the points that escape last, turns black (see mandelGrowth). */
+  mandelGrowth: number;
   mandelTerraces: number;
   mandelSoftness: number;
   mandelLight: number;
@@ -1133,6 +1135,7 @@ export class KaleidoRenderer {
     const mandelDepth = (depth: number) => {
       gl.uniform1f(k.uniforms.u_mandelDepth, depth);
       gl.uniform1i(k.uniforms.u_mandelRounds, mandelRounds(depth));
+      gl.uniform1f(k.uniforms.u_mandelGrowth, v.mapMode === 9 ? this.mandelGrowth(v, depth, width / height) : 1e9);
     };
     mandelDepth(v.mandelDepth);
     if (v.mapMode === 9) {
@@ -1724,6 +1727,66 @@ export class KaleidoRenderer {
    * changes.
    */
   private mandel: { texture: WebGLTexture; key: string; length: number } | null = null;
+
+  /**
+   * Growth's escape count: the points that take more rounds than this to
+   * escape turn black, so only the Growth share of the escaping view shows.
+   * It is read at that share of the sorted escape counts of a grid of 32 by
+   * 18 points across the view (worked out here with 64-bit numbers, the
+   * shader's smooth count), between two of them, and averaged over five
+   * depths around the view's, 0.04 apart: points that join or leave the
+   * escaping ones would make a single reading jump. So it is the same share
+   * at any depth, and as the view dives or Growth moves, the black edge
+   * moves smoothly: the branches seem to grow out of it or draw back into
+   * it. 1e9 means none. About 1 ms a frame.
+   */
+  private mandelGrowth(v: FrameValues, depth: number, aspect: number) {
+    if (v.mandelGrowth >= 1) return 1e9;
+    let sum = 0;
+    let readings = 0;
+    for (let k = -2; k <= 2; k++) {
+      const reading = this.mandelGrowthAt(v, depth + 0.04 * k, aspect);
+      if (reading !== null) {
+        sum += reading;
+        readings++;
+      }
+    }
+    return readings > 0 ? sum / readings : 1e9;
+  }
+
+  private mandelGrowthAt(v: FrameValues, depth: number, aspect: number) {
+    const span = 1.5 * Math.pow(10, -Math.min(10, Math.max(0, depth)));
+    const rounds = mandelRounds(depth);
+    const cos = Math.cos(v.mapAngle);
+    const sin = Math.sin(v.mapAngle);
+    const counts: number[] = [];
+    for (let row = 0; row < 18; row++) {
+      for (let column = 0; column < 32; column++) {
+        const px = ((column + 0.5) / 32 - 0.5) * aspect - v.mapPanX;
+        const py = (row + 0.5) / 18 - 0.5 - v.mapPanY;
+        const cx = v.mapPointX + (px * cos + py * sin) * span;
+        const cy = v.mapPointY + (py * cos - px * sin) * span;
+        let x = 0;
+        let y = 0;
+        for (let n = 1; n <= rounds; n++) {
+          const next = x * x - y * y + cx;
+          y = 2 * x * y + cy;
+          x = next;
+          const size = x * x + y * y;
+          if (size > 65536) {
+            counts.push(n - Math.log2(Math.log(Math.sqrt(size))));
+            break;
+          }
+        }
+      }
+    }
+    if (counts.length === 0) return null;
+    counts.sort((a, b) => a - b);
+    const at = Math.max(0, v.mandelGrowth) * (counts.length - 1);
+    const low = counts[Math.floor(at)];
+    const high = counts[Math.ceil(at)];
+    return low + (high - low) * (at - Math.floor(at));
+  }
 
   private mandelPath(cx: number, cy: number, rounds: number) {
     const key = `${cx},${cy},${rounds}`;

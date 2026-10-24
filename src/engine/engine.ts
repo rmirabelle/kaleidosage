@@ -1124,6 +1124,7 @@ export class Engine {
       mandelFade: fadeIn * fadeIn * (3 - 2 * fadeIn),
       mandelFadeDepth: this.live("mandelDepth") + (divePart - 1) * diveLength,
       mandelBands: this.live("mandelBands"),
+      mandelGrowth: this.live("mandelGrowth"),
       mandelTerraces: this.live("mandelTerraces"),
       mandelSoftness: this.live("mandelSoftness"),
       mandelLight: this.live("mandelLight"),

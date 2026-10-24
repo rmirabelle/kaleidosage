@@ -142,3 +142,13 @@ count made them jump during a dive (the lowest of the 8 sample points
 changes from one point to another). The bands count from round 0 again,
 and Band width has a narrow range instead: 2 to 4, in steps of 0.001
 (it was 0.2 to 20). Band flow stays.
+
+Growth (2026-10-24): the share of the escaping view that shows; the points
+that escape last turn black, with a short fade (4% of the count). Its count
+comes from `mandelGrowth` in renderer.ts: the escape counts of a 32 by 18
+grid in 64-bit numbers, read at the Growth share among the points that
+escape, averaged over five depths 0.04 apart. A single reading over all
+points jumped by up to 140 rounds in a dive (points joining or leaving the
+set); this one by under 5 at Seahorse valley. About 1 ms a frame. Start
+depth and End depth are now labeled Start and End (a range on one Depth
+slider would mean "move on its own", as everywhere else in the app).

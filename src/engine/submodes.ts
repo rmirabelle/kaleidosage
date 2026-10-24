@@ -58,7 +58,7 @@ export const MAP_KEYS: Record<MapMode, ParamKey[]> = {
   6: ["mapSpeed", "tunnelTwist", "mapAngle", "mapFog", "mapFogSoftness", "mapScale", "mapPanX", "mapPanY", "mapMix"],
   7: ["mapSpeed", "mapArms", "mapAngle", "mapFog", "mapFogSoftness", "mapScale", "mapPanX", "mapPanY", "mapMix"],
   8: ["mapSpeed", "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drostePictureTurn", "drosteRotation", "mapPanX", "mapPanY", "mapMix"],
-  9: ["mandelDepth", "mandelEnd", "mapSpeed", "mandelFade", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle", "mapAngle", "mapPanX", "mapPanY", "mapMix"]
+  9: ["mandelDepth", "mandelEnd", "mapSpeed", "mandelFade", "mandelGrowth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle", "mapAngle", "mapPanX", "mapPanY", "mapMix"]
 };
 export const MAP_MODES = [[8, "Droste spiral"], [2, "Möbius"], [3, "Julia"], [9, "Mandelbrot"], [4, "Log spiral"], [5, "Sine"], [6, "Tunnel"], [7, "Seamless spiral"], [1, "Power (z^n)"]] as const;
 
