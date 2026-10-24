@@ -20,12 +20,15 @@ picture.
 
 ## Menus
 
-- **Shape** (presets): Sphere, Cube, Cylinder, Cone, Torus, Capsule,
-  Octahedron, Icosahedron, Pyramid.
+- **Shape** (presets): Sphere, Cube, Morph, Blobs, Wobbly ball, Star,
+  Octahedron, Icosahedron, Pyramid. Morph, Blobs, Wobbly ball and Star came
+  on 2026-10-24 in place of the Cylinder, Cone, Torus and Capsule (no scene
+  used them; the new shapes took their numbers, 2 to 5).
 - **Map**: how the picture goes onto the shape.
   - **Wrap**: the picture is painted on the surface and turns with the
-    shape. Round shapes (sphere, cylinder, cone, capsule, torus) wrap it
-    around their axis; flat faces each show the whole picture. The picture
+    shape. Round shapes (sphere, blobs, wobbly ball, star) wrap it around
+    their axis; flat faces (and Morph, as the cube) each show the whole
+    picture. The picture
     is mirrored at its seam, so the seam does not show.
   - **Project**: the picture stays still, facing the viewer, and the shape
     bends it like a glass lens. Bend sets how strongly.
@@ -38,7 +41,11 @@ picture.
 | Setting | What it does |
 |---|---|
 | Size | The shape's size, as a part of the screen height. |
-| Roundness | How round the edges and corners are. 0 is sharp. At the top a cube is almost a sphere and a cylinder is almost a capsule. The Sphere has no edges, so it hides this slider. |
+| Roundness | How round the edges and corners are. 0 is sharp. At the top a cube is almost a sphere. For Blobs, how softly the blobs merge; for Star, how round its spikes are. The Sphere, Morph and Wobbly ball hide this slider. |
+| Squareness | Morph only: from a star with points on the axes (0), through a ball (about 0.38), to a rounded cube (1). A range makes it flow between them. |
+| Blobs | Blobs only: how many balls (2 to 8) drift on slow loops and merge. Between two whole numbers the last blob grows from nothing. |
+| Bumps, Waves | Wobbly ball only: how high the waves over the ball are, and how many. They flow with the animation time. |
+| Spike length | Star only: how long its 12 spikes are. |
 | Spin | How fast the shape turns around its own axis, in turns per minute. Negative turns the other way. |
 | Tumble | How fast the axis itself turns over, in turns per minute. |
 | Tilt | How far the axis leans toward the viewer, in degrees. |
@@ -61,23 +68,26 @@ so a range on them changes the speed, not the angle.
 - One full-screen pass. Each pixel sends a ray from the viewer. The rays
   that miss a sphere around the shape show the background at once, so
   only the shape's pixels cost much.
-- The shapes are distance functions (the usual ones for a box, cylinder,
-  cone, torus, octahedron, and so on). Roundness subtracts a radius from
-  the distance and shrinks the shape by the same radius, so its size stays
-  the same. The ray walks the distance function in up to 96 steps.
+- The shapes are distance functions (the usual ones for a box, octahedron,
+  and so on). Roundness subtracts a radius from the box's distance and
+  shrinks it by the same radius, so its size stays the same. Morph is a
+  superellipsoid (the points at one p-distance, p from 0.75 to 10; below
+  p = 2 its distance is trusted less, and near Squareness 0 the soft
+  shadow can show faint bands). Blobs are balls joined by a smooth minimum.
+  The wobbly ball is a ball moved by three crossed sine waves. The star is a
+  ball and 12 cones toward an icosahedron's corners, joined by a smooth
+  minimum. The ray walks the distance function in up to 96 steps.
 - The normal (for light, Mirror and Project) comes from the distance
   function at four points around the hit.
 - Wrap: the place on the surface, in the shape's own turning frame, gives
   the picture's coordinates: the angle around the axis and the height for
-  round shapes, the angle around and across the tube for the torus, and the
-  face for the flat shapes. A face lays the picture flat along directions
+  round shapes, and the face for the flat shapes. A face lays the picture flat along directions
   set by the face itself, not by the curved normal, so the picture does not
   twist over a round edge (changed 2026-10-24; before, the directions came
   from the normal at each pixel). Where Roundness curves one face into the
   next, the faces' pictures blend: the box by a high power of the normal
   (each axis's face), the octahedron, icosahedron and pyramid by the same
-  weights as the smooth maximum that rounds them, and the cylinder, cone
-  and capsule between their side and their caps.
+  weights as the smooth maximum that rounds them.
 - Project: the picture is read at the pixel's own place, moved by the
   normal's sideways part times Bend.
 - Mirror: the reflected ray's direction gives the place in the picture
@@ -90,13 +100,14 @@ so a range on them changes the speed, not the angle.
   picture is a wall 0.9 shape sizes behind the shape's middle, and a ray
   from each place on it goes toward the light; how near it passes to the
   shape gives the soft edge (the usual soft shadow of a distance
-  function). Only rays that cross the sphere around the shape walk it.
+  function, improved: the closest point between two samples is estimated
+  from both). Only rays that cross the sphere around the shape walk it.
 - A smooth edge, one pixel wide, from the distance at the last step, so
   the outline does not stair-step.
 
 ## Open points
 
-- The torus knot is left out for now; a distance function for it is slow.
+- Next: fractals (a Menger sponge, a Mandelbulb) and a cut gem.
 - Randomize picks 3D Object with a chance of about 0.2.
 
 ## Freeze background

@@ -9,7 +9,7 @@ import { settingButtons } from "../lib/settingButtons";
 import { GradientEditor } from "./GradientEditor";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
-import { BLUR_KEYS, BLUR_MASKS, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, KALEIDOSCOPE_KEYS, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
+import { BLUR_KEYS, BLUR_MASKS, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
 import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -961,7 +961,7 @@ function CyclesSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =
 function SolidSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
   const [shape, setShape] = useState<SolidShape>(engine.state.solidShape);
   const [map, setMap] = useState<SolidMap>(engine.state.solidMap);
-  const shown = (key: ParamKey) => key === "solidRound" ? SOLID_SHAPE_KEYS[shape].includes(key)
+  const shown = (key: ParamKey) => SOLID_SHAPE_ONLY.includes(key) ? SOLID_SHAPE_KEYS[shape].includes(key)
     : key === "solidTiles" || key === "solidBend" ? SOLID_MAP_KEYS[map].includes(key) : true;
   return (
     <>

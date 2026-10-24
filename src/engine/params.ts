@@ -20,7 +20,7 @@ export const PARAM_KEYS = [
   "particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost",
   "cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead",
   "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY",
-  "solidAmount", "solidBackground", "solidSize", "solidRound", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY",
+  "solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY",
   "raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY",
   "bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize",
   "sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel"
@@ -734,6 +734,11 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   solidBackground: { label: "Background", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0.2, high: 1, on: false },
   solidSize: { label: "Size", min: 0.1, max: 1.5, step: 0.01, scale: "log", value: 0.6, drift: "wave", low: 0.45, high: 0.8, on: false },
   solidRound: { label: "Roundness", min: 0, max: 1, step: 0.01, value: 0.15, drift: "wave", low: 0, high: 0.6, on: false },
+  solidMorph: { label: "Squareness", min: 0, max: 1, step: 0.01, value: 0.65, drift: "wave", low: 0.2, high: 0.9, on: false },
+  solidBlobs: { label: "Blobs", min: 2, max: 8, step: 1, value: 5, drift: "wave", low: 3, high: 7, on: false },
+  solidBumps: { label: "Bumps", min: 0, max: 1, step: 0.01, value: 0.75, drift: "wave", low: 0.4, high: 1, on: false },
+  solidWaves: { label: "Waves", min: 1, max: 10, step: 0.1, value: 4, drift: "wave", low: 2, high: 7, on: false },
+  solidSpikes: { label: "Spike length", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.3, high: 0.9, on: false },
   solidSpin: { label: "Spin", min: -60, max: 60, step: 0.1, value: 6, unit: " rpm", drift: "wave", low: 3, high: 12, on: false },
   solidTumble: { label: "Tumble", min: -60, max: 60, step: 0.1, value: 0, unit: " rpm", drift: "wave", low: -3, high: 3, on: false },
   solidTilt: { label: "Tilt", min: -90, max: 90, step: 1, value: 20, unit: "°", drift: "wave", low: -30, high: 30, on: false },
@@ -1236,7 +1241,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   relief: ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"],
   driver: ["driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast"],
   camera: ["cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth"],
-  solid: ["solidAmount", "solidBackground", "solidSize", "solidRound", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY"],
+  solid: ["solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY"],
   sort: ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"],
   particles: ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost"],
   cycles: ["cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead", "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY"],
@@ -1527,4 +1532,10 @@ function randomizeAll(params: Params, state?: PlayState) {
     if (params[key].drift && !userOwned) params[key].on = moving.includes(key);
   }
   params.twirl.on = Math.random() < 0.5;
+  /* Last, so the shapes added later (2026-10-24) do not change the random picks above. */
+  set("solidMorph", rand(0.1, 1), rand(0, 0.3));
+  set("solidBlobs", Math.round(rand(3, 7)), rand(0, 1));
+  set("solidBumps", rand(0.2, 0.9), rand(0, 0.3));
+  set("solidWaves", rand(2, 8), rand(0, 2));
+  set("solidSpikes", rand(0.2, 1), rand(0, 0.3));
 }

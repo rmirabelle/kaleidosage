@@ -2721,10 +2721,11 @@ void main() {
  * The others walk the shape's distance function. The shapes are in a unit
  * frame (about -1 to 1), turned by u_turn and scaled to u_size / 2.
  *
- * Roundness: the box, the cylinder and the cone shrink by the round radius
- * and grow back by it, so their edges get round and their size stays. The
- * flat-faced shapes are their planes' maximum; Roundness turns that into a
- * smooth maximum, which rounds the edges and corners.
+ * Roundness: the box shrinks by the round radius and grows back by it, so
+ * its edges get round and its size stays. The flat-faced shapes are their
+ * planes' maximum; Roundness turns that into a smooth maximum, which rounds
+ * the edges and corners. For the blobs and the star it is how softly their
+ * parts merge.
  *
  * Map: Wrap reads the picture at a place on the surface (in the shape's own
  * frame, so it turns with the shape; flat on each face, blended over the
@@ -2753,6 +2754,13 @@ uniform float u_opacity;
 uniform float u_background;
 uniform float u_size;
 uniform float u_round;
+/* Morph's squareness, the number of blobs, the wobbly ball's bumps and waves, the star's spike length, and the animation time (see the shapes). */
+uniform float u_morph;
+uniform float u_blobs;
+uniform float u_bumps;
+uniform float u_waves;
+uniform float u_spikes;
+uniform float u_time;
 /* From the shape's own frame to the view. */
 uniform mat3 u_turn;
 uniform vec2 u_center;
@@ -2797,28 +2805,77 @@ float box(vec3 q) {
   vec3 d = abs(q) - vec3(0.8 - r);
   return length(max(d, 0.0)) + min(max(d.x, max(d.y, d.z)), 0.0) - r;
 }
-float cylinder(vec3 q) {
-  float r = min(radius(), 0.65);
-  vec2 d = vec2(length(q.xz), abs(q.y)) - vec2(0.7 - r, 0.9 - r);
-  return min(max(d.x, d.y), 0.0) + length(max(d, 0.0)) - r;
+/* A smooth smallest: two distances that blend into each other within k. */
+float smin(float a, float b, float k) {
+  float h = max(k - abs(a - b), 0.0) / k;
+  return min(a, b) - h * h * k * 0.25;
 }
-/* A cone with its tip up (as the usual capped cone, with a top radius of 0). */
-float cone(vec3 q) {
-  float r = min(radius(), 0.4);
-  float h = 0.9 - r;
-  float r1 = max(0.85 - 1.6 * r, 0.02);
-  vec2 p = vec2(length(q.xz), q.y);
-  vec2 k1 = vec2(0.0, h);
-  vec2 k2 = vec2(-r1, 2.0 * h);
-  vec2 ca = vec2(p.x - min(p.x, p.y < 0.0 ? r1 : 0.0), abs(p.y) - h);
-  vec2 cb = p - k1 + k2 * clamp(dot(k1 - p, k2) / dot(k2, k2), 0.0, 1.0);
-  float s = (cb.x < 0.0 && ca.y < 0.0) ? -1.0 : 1.0;
-  return s * sqrt(min(dot(ca, ca), dot(cb, cb))) - r;
+/**
+ * Morph (a superellipsoid): the points at one "p-distance" from the middle.
+ * Squareness sets p: 0.75 at 0 (a star with points on the axes), 2 at
+ * about 0.38 (a ball), 10 at 1 (a rounded cube). Below 2 the formula
+ * overstates the distance, so the walk trusts it less there. Its slope is
+ * no help: near the star's diagonals it is small and the estimate
+ * overshoots. Near Squareness 0 the soft shadow can show faint bands.
+ */
+float morph(vec3 q) {
+  float p = exp2(mix(-0.415, 3.32, clamp(u_morph, 0.0, 1.0)));
+  vec3 a = abs(q) + 1e-5;
+  float l = pow(pow(a.x, p) + pow(a.y, p) + pow(a.z, p), 1.0 / p);
+  return (l - 0.8) * (p < 2.0 ? 0.6 * pow(3.0, 0.5 - 1.0 / p) : 1.0);
 }
-float torus(vec3 q) { return length(vec2(length(q.xz) - 0.65, q.y)) - 0.3; }
-float capsule(vec3 q) {
-  q.y -= clamp(q.y, -0.5, 0.5);
-  return length(q) - 0.45;
+/**
+ * Blobs: up to 8 balls that drift on slow loops with the animation time
+ * and merge smoothly; Roundness sets how softly. A count between two whole
+ * numbers grows the last blob from nothing.
+ */
+float blobs(vec3 q) {
+  float n = clamp(u_blobs, 1.0, 8.0);
+  float k = 0.08 + radius() * 0.6;
+  float t = u_time;
+  float d = 1e9;
+  for (int i = 0; i < 8; i++) {
+    float f = float(i);
+    float size = 0.3 * clamp(n - f, 0.0, 1.0);
+    if (size < 0.005) break;
+    vec3 c = 0.55 * vec3(sin(t * 0.37 + f * 2.1), sin(t * 0.29 + f * 1.3 + 1.0), sin(t * 0.23 + f * 2.9 + 2.0));
+    d = smin(d, length(q - c) - size, k);
+  }
+  return d;
+}
+/** The wobbly ball: waves over a ball that flow with the animation time; Bumps sets their height, Waves how many. */
+float wobbly(vec3 q) {
+  float height = clamp(u_bumps, 0.0, 1.0) * 0.22;
+  float f = u_waves;
+  float t = u_time * 0.8;
+  float w = sin(f * q.x + t) * sin(f * q.y + t * 1.3) * sin(f * q.z + t * 0.7);
+  /* The waves steepen the surface, so the walk trusts the distance less. */
+  return (length(q) - 0.8 - height * w) / (1.0 + height * f * 1.8);
+}
+/** One spike of the star: a cone from the middle along "axis", "tall" long, "wide" across at its foot. */
+float spike(vec3 q, vec3 axis, float tall, float wide) {
+  float y = dot(q, axis);
+  float x = length(q - axis * y);
+  vec2 edge = vec2(-wide, tall);
+  vec2 w = vec2(x - wide, y);
+  float along = clamp(dot(w, edge) / dot(edge, edge), 0.0, 1.0);
+  float side = length(w - edge * along);
+  if (y < 0.0) return length(vec2(max(x - wide, 0.0), y));
+  return edge.x * w.y - edge.y * w.x > 0.0 ? -side : side;
+}
+/** The star: 12 spikes toward an icosahedron's corners around a ball; Spike length sets how long, Roundness how round they are. */
+float star(vec3 q) {
+  const float g = 1.61803399;
+  float tall = 0.6 + 0.55 * clamp(u_spikes, 0.0, 1.0);
+  float k = 0.02 + radius() * 0.5;
+  float d = length(q) - 0.42;
+  for (int i = 0; i < 4; i++) {
+    vec2 s = vec2(i & 1, (i >> 1) & 1) * 2.0 - 1.0;
+    d = smin(d, spike(q, normalize(vec3(0.0, s.x, s.y * g)), tall, 0.26), k);
+    d = smin(d, spike(q, normalize(vec3(s.x, s.y * g, 0.0)), tall, 0.26), k);
+    d = smin(d, spike(q, normalize(vec3(s.y * g, 0.0, s.x)), tall, 0.26), k);
+  }
+  return d * 0.8;
 }
 
 /*
@@ -2890,10 +2947,10 @@ float flatShape(vec3 q) {
 float unitShape(vec3 q) {
   if (u_shape == 0) return length(q) - 0.95;
   if (u_shape == 1) return box(q);
-  if (u_shape == 2) return cylinder(q);
-  if (u_shape == 3) return cone(q) * 0.8;
-  if (u_shape == 4) return torus(q);
-  if (u_shape == 5) return capsule(q);
+  if (u_shape == 2) return morph(q);
+  if (u_shape == 3) return blobs(q);
+  if (u_shape == 4) return wobbly(q);
+  if (u_shape == 5) return star(q);
   return flatShape(q) * 0.7;
 }
 
@@ -2925,18 +2982,17 @@ vec2 onFace(vec3 q, vec3 axis) {
  * directions set by the face itself, so the picture does not turn with the
  * curve of a round edge. Where Roundness curves one face into the next, the
  * faces' pictures blend by how much the surface faces each one: the box by
- * its normal, the shapes with flat faces by the same weights that round
- * their edges (see faces), and the cylinder, cone and capsule between their
- * side and their caps.
+ * its normal (Morph too), and the shapes with flat faces by the same
+ * weights that round their edges (see faces). The ball, the blobs, the
+ * wobbly ball and the star take the ball's map: around and up.
  */
 vec3 wrapAt(vec3 q, vec3 n) {
   float around = atan(q.z, q.x) / (2.0 * PI) + 0.5;
-  if (u_shape == 0) {
+  if (u_shape == 0 || u_shape == 3 || u_shape == 4 || u_shape == 5) {
     vec3 d = normalize(q);
     return readAt(vec2(around * 2.0, asin(clamp(d.y, -1.0, 1.0)) / PI + 0.5));
   }
-  if (u_shape == 4) return readAt(vec2(around * 2.0, atan(q.y, length(q.xz) - 0.65) / PI + 1.0));
-  if (u_shape == 1) {
+  if (u_shape == 1 || u_shape == 2) {
     /* The box: each axis's face, weighted by a high power of the normal, so a flat face reads only itself. */
     vec3 w = pow(abs(n), vec3(8.0));
     w /= w.x + w.y + w.z;
@@ -2945,14 +3001,6 @@ vec3 wrapAt(vec3 q, vec3 n) {
     if (w.y > 0.01) color += w.y * readAt(onFace(q, vec3(0.0, sign(n.y), 0.0)));
     if (w.z > 0.01) color += w.z * readAt(onFace(q, vec3(0.0, 0.0, sign(n.z))));
     return color / max(dot(w, step(0.01, w)), 1e-4);
-  }
-  if (u_shape == 2 || u_shape == 3 || u_shape == 5) {
-    /* The side's picture goes round the shape; the caps' lies flat; between them they blend. */
-    float cap = smoothstep(0.55, 0.85, abs(n.y));
-    vec3 color = vec3(0.0);
-    if (cap < 0.99) color += (1.0 - cap) * readAt(vec2(around * 2.0, q.y * 0.5 + 0.5));
-    if (cap > 0.01) color += cap * readAt(onFace(q, vec3(0.0, sign(n.y), 0.0)));
-    return color;
   }
   /* The shapes with flat faces: each face's picture, weighted as the smooth maximum weights its plane. */
   vec3 normal[20];
@@ -3001,9 +3049,18 @@ float castLight(vec2 screen) {
   if (end <= 0.0) return 1.0;
   float t = max(-b - sqrt(h), 0.02 * scale());
   float light = 1.0;
-  for (int i = 0; i < 48; i++) {
+  float before = 1e9;
+  /**
+   * The closest the ray comes to the shape between two samples is
+   * estimated from both samples' distances (the improved soft shadow), so
+   * the edge does not show bands where the samples happen to land.
+   */
+  for (int i = 0; i < 100; i++) {
     float d = scene(from + u_light * t);
-    light = min(light, SOFT * d / t);
+    float y = d * d / (2.0 * before);
+    float side = sqrt(max(d * d - y * y, 0.0));
+    light = min(light, SOFT * side / max(t - y, 1e-4));
+    before = d;
     if (light < 0.001) return 0.0;
     t += clamp(d, 0.01 * scale(), 0.25 * scale());
     if (t > end) break;

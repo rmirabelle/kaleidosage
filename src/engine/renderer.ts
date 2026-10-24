@@ -270,6 +270,14 @@ export interface FrameValues {
   solidBackground: number;
   solidSize: number;
   solidRound: number;
+  /** Morph's squareness (0 star-like, about 0.38 a ball, 1 a cube), how many blobs, the wobbly ball's bumps and waves, and the star's spike length. */
+  solidMorph: number;
+  solidBlobs: number;
+  solidBumps: number;
+  solidWaves: number;
+  solidSpikes: number;
+  /** Animation seconds: the blobs drift and the bumps flow with it. */
+  solidTime: number;
   solidSpin: number;
   solidTumble: number;
   solidTilt: number;
@@ -1618,6 +1626,12 @@ export class KaleidoRenderer {
     gl.uniform1f(s.uniforms.u_background, Math.min(1, Math.max(0, v.solidBackground)));
     gl.uniform1f(s.uniforms.u_size, Math.max(0.01, v.solidSize));
     gl.uniform1f(s.uniforms.u_round, Math.min(1, Math.max(0, v.solidRound)));
+    gl.uniform1f(s.uniforms.u_morph, v.solidMorph);
+    gl.uniform1f(s.uniforms.u_blobs, v.solidBlobs);
+    gl.uniform1f(s.uniforms.u_bumps, v.solidBumps);
+    gl.uniform1f(s.uniforms.u_waves, Math.max(0, v.solidWaves));
+    gl.uniform1f(s.uniforms.u_spikes, v.solidSpikes);
+    gl.uniform1f(s.uniforms.u_time, v.solidTime);
     const [cs, ss] = [Math.cos(v.solidSpin), Math.sin(v.solidSpin)];
     const tilt = v.solidTilt + v.solidTumble;
     const [ct, st] = [Math.cos(tilt), Math.sin(tilt)];
