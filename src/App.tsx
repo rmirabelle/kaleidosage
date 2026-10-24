@@ -1149,10 +1149,13 @@ export default function App() {
 
   const randomize = useCallback(() => {
     if (!engine) return;
+    /* Random all on an empty list adds the first effects: the effect tips show, as for "+ New". */
+    const wasEmpty = engine.state.fxOrder.length === 0;
     randomizeParams(engine.params, engine.state);
     setRevision((value) => value + 1);
     showStatus("New random settings");
-  }, [engine, showStatus]);
+    if (wasEmpty && engine.state.fxOrder.length > 0) firstEffect();
+  }, [engine, firstEffect, showStatus]);
 
   /** A group's dice: new random settings for that group only. */
   const randomizeOneGroup = useCallback((group: GroupKey) => {
@@ -1163,7 +1166,8 @@ export default function App() {
 
   /** Nudge: every unlocked value moves a little, up or down at random. */
   const nudge = useCallback(() => {
-    if (!engine) return;
+    /* With no effect, there is nothing to nudge (the N key; the button is off). */
+    if (!engine || engine.state.fxOrder.length === 0) return;
     nudgeParams(engine.params, engine.state);
     setRevision((value) => value + 1);
     showStatus("Nudged every unlocked setting");

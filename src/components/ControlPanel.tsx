@@ -473,7 +473,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
               <Play size={12} weight="fill" />
             </button>
           )}
-          {/* "All" Random, Nudge and Clear as icon buttons, at the right of the title. Stop and Play are in the app toolbar. */}
+          {/* "All" Random, Nudge and Clear as icon buttons, at the right of the title; Nudge and Clear are off with no effect. Stop and Play are in the app toolbar. */}
           <span className="panel-title-all">All</span>
           <div className="panel-buttons panel-title-buttons">
             <button className="panel-button icon" onClick={onRandomize} data-tip="Random all `x`: new random settings for every unlocked effect" aria-label="Random all">
@@ -481,6 +481,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
             </button>
             <button
               className="panel-button icon"
+              disabled={fxOrder.length === 0}
               onClick={onNudge}
               data-tip="Nudge all `n`: move every unlocked value a little, up or down at random. Values at 0 stay at 0."
               aria-label="Nudge all"
@@ -489,6 +490,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
             </button>
             <button
               className="panel-button icon"
+              disabled={fxOrder.length === 0}
               onClick={onReset}
               data-tip="Clear all: remove every effect from the list and set its controls back to no effect. Locked groups stay as they are."
               aria-label="Clear all"
