@@ -266,8 +266,10 @@ export default function App() {
   const anyPanelTip = panelTips.scene || panelTips.fx || panelTips.play;
   const sceneCard = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".control-panel .source-section > .panel-header-bar"); } }), []);
   const fxCard = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".control-panel .fx-card > .panel-header-bar"); } }), []);
-  const playCard = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".control-panel .scene-transport"); } }), []);
-  /* The whole cards, for the green line round each (the Scene and FX tips point at the cards' headers). */
+  /* The Play card has no header: its tip points at the card's first row. */
+  const playCard = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".control-panel .scene-transport > :first-child"); } }), []);
+  const playOutline = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".control-panel .scene-transport"); } }), []);
+  /* The whole cards, for the green line round each (the tips point at the cards' headers). */
   const sceneOutline = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".control-panel .source-section"); } }), []);
   const fxOutline = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".control-panel .fx-card"); } }), []);
   useEffect(() => {
@@ -2286,7 +2288,7 @@ export default function App() {
       {panelTips.play && !startScreen && (
         <PointerTip
           anchor={playCard}
-          outline={playCard}
+          outline={playOutline}
           text="This is the PLAY panel. INPUT enables audio reactivity. The play controls stop, start and pause the scene. The position slider loops according to Scene LENGTH."
           onClose={() => setPanelTips((tips) => ({ ...tips, play: false }))}
         />

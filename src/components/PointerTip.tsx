@@ -41,8 +41,8 @@ function placeAll() {
     const target = entry.anchor.current?.getBoundingClientRect();
     /* With no control to point at (not drawn yet), the tip waits out of sight. */
     entry.tip.style.visibility = target ? "visible" : "hidden";
+    const panel = target ? entry.outline?.current?.getBoundingClientRect() : undefined;
     if (entry.ring) {
-      const panel = target ? entry.outline?.current?.getBoundingClientRect() : undefined;
       entry.ring.style.visibility = panel ? "visible" : "hidden";
       if (panel) {
         entry.ring.style.left = `${panel.left}px`;
@@ -55,7 +55,9 @@ function placeAll() {
     const width = entry.tip.offsetWidth;
     const height = entry.tip.offsetHeight;
     if (entry.side === "right") {
-      plans.push({ entry, target, width, height, left: Math.min(target.right + GAP, window.innerWidth - width - EDGE), top: target.top + target.height / 2 - height / 2 });
+      /* A tip about a whole panel starts level with the panel's top; the arrow still points at the control (the panel's header). */
+      const top = panel ? panel.top : target.top + target.height / 2 - height / 2;
+      plans.push({ entry, target, width, height, left: Math.min(target.right + GAP, window.innerWidth - width - EDGE), top });
     } else {
       const left = within(target.left + target.width / 2 - width / 2, EDGE, window.innerWidth - width - EDGE);
       plans.push({ entry, target, width, height, left, top: entry.side === "above" ? target.top - height - GAP : target.bottom + GAP });
@@ -102,8 +104,9 @@ function hide(entry: Shown) {
  * right of the control, or above or below it ("side"). It stays in the
  * window, keeps clear of the other tips (see placeAll), and follows the
  * control while the panels around it change size. With "outline", a green
- * line also goes round that panel while the tip shows. Help, Disable
- * Pointers hides every tip.
+ * line also goes round that panel while the tip shows, and a tip at the
+ * right starts level with the panel's top. Help, Disable Pointers hides
+ * every tip.
  */
 export function PointerTip(props: TipProps) {
   const on = useSyncExternalStore(subscribeHelp, pointersOn);
