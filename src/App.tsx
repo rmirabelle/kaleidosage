@@ -254,20 +254,25 @@ export default function App() {
   const endFilesTip = useCallback(() => setFilesTip(false), []);
   const [songTip, setSongTip] = useState<SongTip>(null);
   /**
-   * The first scene (New Scene with no scene open) shows a tip at Slot A,
-   * until it is closed or the user presses in the slot. The slot is looked
-   * up in each frame (see PointerTip): the Source card is made again often.
+   * The first scene (New Scene with no scene open) shows a tip at Slot A
+   * and one at the FX card's "+ New", until they are closed or the user
+   * presses in a slot or in the FX card. The controls are looked up in each
+   * frame (see PointerTip): the panel is made again often.
    */
   const [slotTip, setSlotTip] = useState(false);
+  const [newFxTip, setNewFxTip] = useState(false);
   const slotA = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>("[data-image-slot='0']"); } }), []);
+  const newFxButton = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".fx-card .panel-header-bar .add-effect button"); } }), []);
   useEffect(() => {
-    if (!slotTip) return;
+    if (!slotTip && !newFxTip) return;
     const onPress = (event: PointerEvent) => {
-      if ((event.target as Element).closest?.("[data-image-slot='0']")) setSlotTip(false);
+      if (!(event.target as Element).closest?.("[data-image-slot], .fx-card")) return;
+      setSlotTip(false);
+      setNewFxTip(false);
     };
     window.addEventListener("pointerdown", onPress, true);
     return () => window.removeEventListener("pointerdown", onPress, true);
-  }, [slotTip]);
+  }, [slotTip, newFxTip]);
   const pickInput = useCallback((kind: InputKind, switched: boolean) => {
     setFilesTip(kind === "tracks" && tracks.list.length === 0);
     if (kind !== "tracks") setSongTip(null);
@@ -1432,7 +1437,10 @@ export default function App() {
   /** Starts a new, untitled scene in a new tab. The scene that was shown stays in its own tab. The app stops listening outside a playlist (see quietOutsidePlaylist). */
   const newScene = useCallback(() => {
     if (!engine) return;
-    if (docsRef.current.length === 0) setSlotTip(true);
+    if (docsRef.current.length === 0) {
+      setSlotTip(true);
+      setNewFxTip(true);
+    }
     quietOutsidePlaylist();
     /* With no input, the new scene starts with the settings' audio buttons hidden. */
     if (audioInput.settings.kind === "none") settingButtons.set("audio", false);
@@ -2228,10 +2236,11 @@ export default function App() {
       {slotTip && !startScreen && (
         <PointerTip
           anchor={slotA}
-          text="SLOT A contains a checkerboard pattern for testing. Hover over it to load a random image, search the web for an image, choose a pattern, or load your own image or video into the slot."
+          text="SLOT A contains a checkerboard pattern - good for testing FX. Use it, or hover over the slot to load a random image, search the web for an image, choose a pattern, or load your own image or video."
           onClose={() => setSlotTip(false)}
         />
       )}
+      {newFxTip && !startScreen && <PointerTip anchor={newFxButton} text="Click to add a new effect." onClose={() => setNewFxTip(false)} />}
       {resetAsked && (
         <ConfirmDialog
           title="Clear all effects?"
