@@ -58,7 +58,7 @@ export const MAP_KEYS: Record<MapMode, ParamKey[]> = {
   6: ["mapSpeed", "tunnelTwist", "mapAngle", "mapFog", "mapFogSoftness", "mapScale", "mapPanX", "mapPanY", "mapMix"],
   7: ["mapSpeed", "mapArms", "mapAngle", "mapFog", "mapFogSoftness", "mapScale", "mapPanX", "mapPanY", "mapMix"],
   8: ["mapSpeed", "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drostePictureTurn", "drosteRotation", "mapPanX", "mapPanY", "mapMix"],
-  9: ["mandelDepth", "mandelBands", "mandelTerraces", "mandelLight", "mandelLightAngle", "mapAngle", "mapPanX", "mapPanY", "mapMix"]
+  9: ["mandelDepth", "mandelBands", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle", "mapAngle", "mapPanX", "mapPanY", "mapMix"]
 };
 export const MAP_MODES = [[8, "Droste spiral"], [2, "Möbius"], [3, "Julia"], [9, "Mandelbrot"], [4, "Log spiral"], [5, "Sine"], [6, "Tunnel"], [7, "Seamless spiral"], [1, "Power (z^n)"]] as const;
 
@@ -74,7 +74,7 @@ export const MANDEL_CENTERS: Record<MandelPlace, [number, number]> = {
   1: [-0.10109636384562, 0.95628651080914],
   2: [0, 1],
   3: [-1.75, 0],
-  4: [0.25, 0]
+  4: [0.2892573747165706, 0.013391178939759867]
 };
 
 /** The sliders each time smear pattern uses; Angle only turns the Linear and Sweep patterns. */

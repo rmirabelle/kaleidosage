@@ -31,7 +31,11 @@ Map mode 9 of the Algorithm effect (see `complexMap` in shaders.ts).
 Places: Seahorse valley (-0.7436438870371587, 0.1318259042053120), Spiral
 (-0.10109636384562, 0.95628651080914, a Misiurewicz point: spirals at every
 depth), Dendrite (i), Mini copy (the cusp of the copy at -1.75), Elephant
-valley (the main cusp, 0.25).
+valley (0.2892573747165706, 0.013391178939759867, a Misiurewicz point among
+the elephants; the main cusp at 0.25 showed only a thin line).
+
+Softness (added 2026-10-24) turns each terrace's sharp edge into a slope; at
+1 the bands rise and fall evenly.
 
 ## Step 2 (built 2026-10-24): deep zoom
 

@@ -1096,6 +1096,7 @@ export class Engine {
       mandelDepth: this.live("mandelDepth"),
       mandelBands: this.live("mandelBands"),
       mandelTerraces: this.live("mandelTerraces"),
+      mandelSoftness: this.live("mandelSoftness"),
       mandelLight: this.live("mandelLight"),
       mandelLightAngle: this.live("mandelLightAngle") * DEGREES,
       /* Möbius and Julia have their own zoom settings, which take the place of the map zoom. */

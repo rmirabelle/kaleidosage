@@ -468,6 +468,7 @@ uniform int u_mandelRounds;
 vec2 mandelAt(int n) { return texelFetch(u_mandelPath, ivec2(n & 1023, n >> 10), 0).xy; }
 uniform float u_mandelBands;
 uniform float u_mandelTerraces;
+uniform float u_mandelSoftness;
 uniform float u_mandelLight;
 uniform vec2 u_mandelLightDir;
 
@@ -600,7 +601,8 @@ vec2 complexMap(vec2 p) {
      * escaped at, so the picture shows inside each band. The light comes
      * from the formula's own slope (z over its derivative, the usual normal
      * map of a Mandelbrot), and Terraces darkens each band toward one edge,
-     * which looks like stacked steps. Points that never escape are in the
+     * which looks like stacked steps. Softness turns each step's sharp edge
+     * into a slope (at 1, the bands rise and fall evenly, with no edge). Points that never escape are in the
      * set: black. Deeper views need more rounds (u_mandelRounds).
      */
     float span = 1.5 * pow(10.0, -clamp(u_mandelDepth, 0.0, 13.0));
@@ -638,7 +640,10 @@ vec2 complexMap(vec2 p) {
       w = vec2(band, atan(m.y, m.x) / PI);
       vec2 normal = normalize(cdiv(m, slope));
       float lit = clamp((dot(normal, u_mandelLightDir) + 1.5) / 2.5, 0.0, 1.0);
-      float step_ = 0.45 + 0.55 * fract(band);
+      float edge = 0.5 * clamp(u_mandelSoftness, 0.0, 1.0) + 1e-4;
+      float t = fract(band);
+      float rise = min(t / (1.0 - edge), (1.0 - t) / edge);
+      float step_ = 0.45 + 0.55 * mix(rise, smoothstep(0.0, 1.0, rise), clamp(u_mandelSoftness, 0.0, 1.0));
       mandelShade = mix(1.0, lit, u_mandelLight) * mix(1.0, step_, u_mandelTerraces);
       /* The band count's change per screen unit: |dz/d(screen)| / (|z| ln|z|), over the band width. */
       mandelStretch = length(slope) / (r * log(r)) / max(u_mandelBands, 0.01) / max(u_mapScale, 1e-4);

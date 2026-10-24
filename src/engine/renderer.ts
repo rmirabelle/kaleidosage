@@ -111,10 +111,11 @@ export interface FrameValues {
   warpTime: number;
   mapMode: MapMode;
   mapMix: number;
-  /** The Mandelbrot map (map mode 9): depth in powers of ten, band width, terraces, light, and the light's angle (radians). */
+  /** The Mandelbrot map (map mode 9): depth in powers of ten, band width, terraces, their softness, light, and the light's angle (radians). */
   mandelDepth: number;
   mandelBands: number;
   mandelTerraces: number;
+  mandelSoftness: number;
   mandelLight: number;
   mandelLightAngle: number;
   mapScale: number;
@@ -1138,6 +1139,7 @@ export class KaleidoRenderer {
     }
     gl.uniform1f(k.uniforms.u_mandelBands, v.mandelBands);
     gl.uniform1f(k.uniforms.u_mandelTerraces, v.mandelTerraces);
+    gl.uniform1f(k.uniforms.u_mandelSoftness, v.mandelSoftness);
     gl.uniform1f(k.uniforms.u_mandelLight, v.mandelLight);
     gl.uniform2f(k.uniforms.u_mandelLightDir, Math.cos(v.mandelLightAngle), Math.sin(v.mandelLightAngle));
     gl.uniform1f(k.uniforms.u_mapArms, v.mapArms);
