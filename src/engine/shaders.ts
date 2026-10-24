@@ -454,8 +454,8 @@ float depthDistance;
  * breaking into noise.
  */
 float mandelShade = 1.0;
-/* Growth's mask: 0 where the point escapes too late and turns black (see u_mandelGrowth). */
-float mandelGrown = 1.0;
+/* Edge light's mask: 1 at the set's edge, falling to 0 in the open areas (see u_mandelEdge). */
+float mandelEdgeLight = 1.0;
 float mandelStretch = 1.0;
 /**
  * The Mandelbrot map's second picture point near the rings where the escape
@@ -477,8 +477,12 @@ vec2 mandelAt(int n) { return texelFetch(u_mandelPath, ivec2(n & 1023, n >> 10),
 uniform float u_mandelBands;
 uniform float u_mandelTerraces;
 uniform float u_mandelSoftness;
-/* Growth's escape count (see mandelGrowth in renderer.ts): later points turn black, over a short fade. */
-uniform float u_mandelGrowth;
+/**
+ * Edge light: how much the areas away from the set's edge fade to black,
+ * and the distance from the edge (in screen heights) where they are black.
+ */
+uniform float u_mandelEdge;
+uniform float u_mandelEdgeWidth;
 /* The bands moved by Band flow. */
 uniform float u_mandelFlow;
 uniform float u_mandelLight;
@@ -666,13 +670,21 @@ vec2 complexMap(vec2 p) {
     if (escaped < 0.0) {
       mandelShade = 0.0;
       mandelStretch = 1.0;
-      mandelGrown = 1.0;
+      mandelEdgeLight = 1.0;
       w = vec2(0.0);
     } else {
       float r = length(m);
       float count = escaped + 1.0 - log2(log(r));
       float band = count / max(u_mandelBands, 0.01) + mod(u_mandelFlow, 2.0);
-      mandelGrown = 1.0 - smoothstep(u_mandelGrowth - max(1.0, 0.04 * u_mandelGrowth), u_mandelGrowth, count);
+      /**
+       * The distance to the set's edge, in screen heights: the usual
+       * distance estimate, |z| ln|z| / |dz/dc|, with the slope already per
+       * screen unit. It needs nothing but this pixel, so the light moves
+       * smoothly as the view dives or Edge width moves.
+       */
+      float edgeDistance = 0.5 * r * log(r) / max(length(slope), 1e-30);
+      float fall = edgeDistance / u_mandelEdgeWidth;
+      mandelEdgeLight = mix(1.0, exp(-fall * fall), clamp(u_mandelEdge, 0.0, 1.0));
       w = vec2(band, atan(m.y, m.x) / PI);
       /**
        * Across a ring where the escape count changes, the angle doubles: a
@@ -1073,7 +1085,7 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
    */
   if (mapped && u_mapMode == 9) {
     float busy = mandelShade > 0.0 ? smoothstep(0.3, 1.2, mapDetail) : 0.0;
-    color.rgb *= mix(1.0, mix(mandelShade, 0.62, busy) * mandelGrown, u_mapMix);
+    color.rgb *= mix(1.0, mix(mandelShade, 0.62, busy) * mandelEdgeLight, u_mapMix);
   }
   return color;
 }

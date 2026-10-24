@@ -152,3 +152,12 @@ points jumped by up to 140 rounds in a dive (points joining or leaving the
 set); this one by under 5 at Seahorse valley. About 1 ms a frame. Start
 depth and End depth are now labeled Start and End (a range on one Depth
 slider would mean "move on its own", as everywhere else in the app).
+
+Growth removed the same day: its one reading for the whole view still
+jumped, and it hid the busiest parts. Edge light takes its place: each
+pixel's distance to the set's edge (the usual estimate, |z| ln|z| / |dz/dc|,
+in screen heights, as the slope is per screen unit) sets a light that is
+full at the edge and falls as exp(-(distance / Edge width)^2), so the open
+areas go black and the busy edges stay. It needs only the pixel, so it
+moves smoothly. Edge light (0 to 1) mixes it in; Edge width is 0.002 to
+0.3 screen heights.
