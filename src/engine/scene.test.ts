@@ -39,6 +39,21 @@ describe("scene files", () => {
     expect([loaded.solidShape, loaded.solidMap, loaded.solidBlend, loaded.solidSpinTurns, loaded.solidTumbleTurns]).toEqual([7, 2, 3, 0.25, 0.5]);
   });
 
+  it("keep the 3D object's Keep background, which is off in a scene from before it", () => {
+    const state = createPlayState();
+    state.solidKeep = true;
+    const loaded = createPlayState();
+    applyScene(serializeScene(createParams(), state, { image: IMAGE }), createParams(), loaded);
+    expect(loaded.solidKeep).toBe(true);
+    expect(sceneFingerprint(createParams(), loaded, [])).not.toBe(sceneFingerprint(createParams(), createPlayState(), []));
+    const old = JSON.parse(serializeScene(createParams(), createPlayState(), { image: IMAGE }));
+    delete old.state.solidKeep;
+    const fromOld = createPlayState();
+    fromOld.solidKeep = true;
+    applyScene(JSON.stringify(old), createParams(), fromOld);
+    expect(fromOld.solidKeep).toBe(false);
+  });
+
   it("round-trips embedded video handles for both slots without base64", () => {
     const images = { image: { type: "video/mp4", video: "1" }, image2: { type: "video/webm", video: "2" } };
     const saved = serializeScene(createParams(), createPlayState(), images);

@@ -85,7 +85,13 @@ puts the top picture over black (today it is opaque anyway).
    pixels (`tools/test-layers.mjs`).
 2. Keep background: the 3D Object's switch starts a second layer. Each
    effect is still once per scene: the layers share the one FX list, split
-   at the 3D Object. The scene file saves the switch.
+   at the 3D Object. The scene file saves the switch. Built 2026-10-24:
+   `PlayState.solidKeep`; the renderer's 3D Object step draws the picture
+   behind the shape into `keptTarget` and the shape alone on a clear
+   picture, the steps after it change that picture, and `drawLayers`
+   (LAYER_SHADER) puts it over the kept picture with the 3D Object's blend
+   and opacity. Phase 1 was built the same day, checked by
+   tools/test-layers.mjs (97 scenes, every pixel the same).
 3. Effect copies: the data model, keys, migration, MIDI, audio links, song
    scripts, Randomize, and "+ New" that allows a second copy.
 4. The layers interface: a list of layers, each with its own FX list,

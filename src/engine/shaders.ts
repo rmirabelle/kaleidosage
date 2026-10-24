@@ -2762,6 +2762,13 @@ uniform vec3 u_light;
 uniform float u_shading;
 uniform float u_shine;
 uniform float u_shadow;
+/**
+ * Keep background (see LAYER_SHADER): 0 draws the shape over the picture,
+ * 1 the shape alone on a clear picture (its cover in alpha, with no
+ * opacity or blend: the last pass applies them), 2 the picture behind it
+ * alone (with Background and the shadow).
+ */
+uniform int u_layer;
 
 const float PI = 3.14159265359;
 const float EYE = 3.0;
@@ -2986,6 +2993,10 @@ void main() {
     float d = scene(behind);
     base *= 1.0 - u_shadow * 0.75 * (1.0 - smoothstep(0.0, 0.5 * scale(), d));
   }
+  if (u_layer == 2) {
+    o = covered(base, picture.a);
+    return;
+  }
 
   /* The sphere around the shape: rays that miss it miss the shape. */
   vec3 oc = eye - vec3(u_center, 0.0);
@@ -3033,6 +3044,44 @@ void main() {
       color = color * lit + shine;
     }
   }
+  if (u_layer == 1) {
+    o = covered(color, cover);
+    return;
+  }
   float shown = cover * u_opacity;
   o = covered(mix(base, blendLayer(base, color, u_blend), shown), mix(picture.a, 1.0, shown));
+}`;
+
+/**
+ * Keep background's last pass (see docs/LAYERS.md): the 3D Object's layer
+ * (u_over: the shape, changed by the steps after it, with its cover in
+ * alpha) over the picture kept at the 3D Object (u_under), with the 3D
+ * Object's blend and opacity.
+ */
+export const LAYER_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_under;
+uniform sampler2D u_over;
+uniform int u_blend;
+uniform float u_opacity;
+
+vec3 blendLayer(vec3 base, vec3 top, int mode) {
+  if (mode == 1) return 1.0 - (1.0 - base) * (1.0 - top);
+  if (mode == 2) return base * top;
+  if (mode == 3) return mix(2.0 * base * top, 1.0 - 2.0 * (1.0 - base) * (1.0 - top), step(0.5, base));
+  if (mode == 4) return abs(base - top);
+  if (mode == 5) return max(base, top);
+  if (mode == 6) return min(base, top);
+  if (mode == 7) return min(base + top, 1.0);
+  return top;
+}
+${COVER_GLSL}
+void main() {
+  vec4 under = texture(u_under, v_uv);
+  vec4 over = texture(u_over, v_uv);
+  vec3 base = straight(under);
+  float shown = clamp(over.a, 0.0, 1.0) * u_opacity;
+  o = covered(mix(base, blendLayer(base, straight(over), u_blend), shown), mix(under.a, 1.0, shown));
 }`;

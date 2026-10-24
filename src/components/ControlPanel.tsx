@@ -967,8 +967,30 @@ function SolidSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =>
     <>
       <ModeSelect engine={engine} stateKey="solidShape" options={SOLID_SHAPES} name="Shape" onChange={setShape} />
       <ModeSelect engine={engine} stateKey="solidMap" options={SOLID_MAPS} name="Map" onChange={setMap} />
+      <KeepBackground engine={engine} />
       <SplitRows keys={SOLID_KEYS.filter(shown)} row={row} blend={<ModeSelect engine={engine} stateKey="solidBlend" options={LAYER_BLENDS} name="Blend" />} />
     </>
+  );
+}
+
+/** The 3D Object's Keep background switch (see docs/LAYERS.md): the effects after it change only the object. */
+function KeepBackground({ engine }: { engine: Engine }) {
+  const [keep, setKeep] = useState(engine.state.solidKeep);
+  return (
+    <label
+      className="panel-check-inline panel-keep-background"
+      data-tip="Keep background: the effects after the 3D Object in the FX list change only the object. The picture behind it stays as it is here."
+    >
+      <input
+        type="checkbox"
+        checked={keep}
+        onChange={(event) => {
+          engine.state.solidKeep = event.target.checked;
+          setKeep(event.target.checked);
+        }}
+      />
+      Keep background
+    </label>
   );
 }
 

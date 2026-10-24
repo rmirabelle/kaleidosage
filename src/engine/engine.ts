@@ -1193,6 +1193,7 @@ export class Engine {
       solid: on.solid ? this.live("solidAmount") : 0,
       solidShape: this.state.solidShape,
       solidMap: this.state.solidMap,
+      solidKeep: this.state.solidKeep,
       solidBlend: this.state.solidBlend,
       solidBackground: this.live("solidBackground"),
       solidSize: this.live("solidSize"),

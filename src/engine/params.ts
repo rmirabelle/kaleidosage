@@ -344,6 +344,12 @@ export interface PlayState {
   solidShape: SolidShape;
   solidMap: SolidMap;
   solidBlend: LayerBlend;
+  /**
+   * Keep background: the 3D Object starts a layer of its own (see
+   * docs/LAYERS.md). The steps after it in the FX list change only the
+   * object, and the picture behind it stays as it was at the 3D Object.
+   */
+  solidKeep: boolean;
   solidSpinTurns: number;
   solidTumbleTurns: number;
   /** The Driver effect's driver (caustics, smoke, ink, fire, ripples), and what it does to the picture. */
@@ -870,7 +876,7 @@ export function createPlayState(): PlayState {
     /* No effect is in the list at start-up, so every effect group is off. */
     groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, bloom: false, sharpen: false, color: false, levels: false },
     locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, bloom: false, sharpen: false, color: false, levels: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, sortOrder: 0, particleBlend: 0, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), solidShape: 1, solidMap: 0, solidBlend: 0, solidSpinTurns: 0, solidTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, sortOrder: 0, particleBlend: 0, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1192,6 +1198,7 @@ export function resetEffects(params: Params, state: PlayState) {
     state.solidShape = fresh.solidShape;
     state.solidMap = fresh.solidMap;
     state.solidBlend = fresh.solidBlend;
+    state.solidKeep = fresh.solidKeep;
   }
   if (!state.locks.cycles) {
     state.cyclesMove = fresh.cyclesMove;

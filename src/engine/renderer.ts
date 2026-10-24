@@ -1,7 +1,7 @@
 import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, LAYER_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 
 /** The blur mask: circle with a sharp or a blurred center, gradient, bright areas, dark areas, noise. */
 export type BlurMask = 0 | 1 | 2 | 3 | 4 | 5;
@@ -264,6 +264,8 @@ export interface FrameValues {
   solid: number;
   solidShape: SolidShape;
   solidMap: SolidMap;
+  /** Keep background: the 3D Object starts a layer, which the steps after it change alone (see drawLayers). */
+  solidKeep: boolean;
   solidBlend: LayerBlend;
   solidBackground: number;
   solidSize: number;
@@ -929,6 +931,16 @@ export class KaleidoRenderer {
       else passes.push([step]);
     }
     const first = Array.isArray(passes[0]) ? passes.shift() as ShapeStep[] : [];
+    /**
+     * Keep background (docs/LAYERS.md, phase 2): with a step after the 3D
+     * Object, the 3D Object starts a layer. It keeps the picture behind it
+     * in keptTarget and passes on the shape alone, on a clear picture; the
+     * steps after it change only that. The last step then draws into a
+     * picture too, not onto the screen, and drawLayers puts the shape's
+     * layer over the kept picture.
+     */
+    const solidAt = passes.indexOf("solid");
+    const layered = v.solidKeep && solidAt >= 0 && solidAt < passes.length - 1;
 
     const shapeSteps = v.fxOrder.filter((step): step is ShapeStep => isShapeStep(step) && active[step]);
     this.info.shapeVersions = 1 + shapeSteps.filter((step) => opacity(step) < 1 || v.layerBlend[step] !== 0).length;
@@ -974,7 +986,7 @@ export class KaleidoRenderer {
     Object.assign(this.info, { width, height, textureWidth, textureHeight, blurSamples: v.blur > 0 ? BLUR_TAPS : 0 });
 
     passes.forEach((step, index) => {
-      const last = index === passes.length - 1;
+      const last = index === passes.length - 1 && !layered;
       if (typeof step === "object" && !Array.isArray(step)) {
         const target = last ? null : scratchFor(source);
         this.timer.begin(step.finish[0]);
@@ -1006,7 +1018,10 @@ export class KaleidoRenderer {
         else if (step === "relief") this.drawRelief(v, source, target, width, height);
         else if (step === "driver") this.drawDriver(v, source, target, width, height);
         else if (step === "camera") this.drawCamera(v, source, target, width, height);
-        else if (step === "solid") this.drawSolid(v, source, target, width, height);
+        else if (step === "solid" && layered) {
+          this.drawSolid(v, source, this.keptTarget(width, height), width, height, 2);
+          this.drawSolid(v, source, target, width, height, 1);
+        } else if (step === "solid") this.drawSolid(v, source, target, width, height, 0);
         else if (step === "contours") this.drawContours(v, source, target, width, height);
         else if (step === "smear") this.drawSmear(v, source, target, width, height);
         else if (step === "particles") this.drawParticles(v, source, target, width, height);
@@ -1019,6 +1034,7 @@ export class KaleidoRenderer {
       }
       this.timer.end();
     });
+    if (layered) this.drawLayers(v, this.keptTarget(width, height).texture, source, width, height);
     this.trailsWereOn = active.trails;
     this.contoursWereOn = active.contours;
     this.smearWasOn = active.smear;
@@ -1573,7 +1589,12 @@ export class KaleidoRenderer {
    * first its spin about its own axis (y), then a turn about the screen's x
    * axis by Tilt plus the tumble.
    */
-  private drawSolid(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+  /**
+   * The 3D Object. "layer" is for Keep background (see render): 0 draws the
+   * shape over the picture, 1 the shape alone on a clear picture, 2 the
+   * picture behind it alone.
+   */
+  private drawSolid(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number, layer: 0 | 1 | 2) {
     const gl = this.gl;
     const s = this.solidProgram;
     gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
@@ -1606,7 +1627,40 @@ export class KaleidoRenderer {
     gl.uniform1f(s.uniforms.u_shading, Math.min(1, Math.max(0, v.solidShading)));
     gl.uniform1f(s.uniforms.u_shine, Math.min(1, Math.max(0, v.solidShine)));
     gl.uniform1f(s.uniforms.u_shadow, Math.min(1, Math.max(0, v.solidShadow)));
+    gl.uniform1i(s.uniforms.u_layer, layer);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /** Keep background's picture behind the 3D Object (see render), made at the screen's size when first needed. */
+  private kept: { target: Target; size: [number, number] } | null = null;
+  private keptTarget(width: number, height: number) {
+    this.kept ??= { target: this.createTarget(), size: [0, 0] };
+    if (this.kept.size[0] !== width || this.kept.size[1] !== height) {
+      this.allocate(this.kept.target, width, height);
+      this.kept.size = [width, height];
+    }
+    return this.kept.target;
+  }
+
+  /** Keep background's last pass: the 3D Object's layer over the kept picture, onto the screen (LAYER_SHADER). */
+  private layerProgram: Program | null = null;
+  private drawLayers(v: FrameValues, under: WebGLTexture, over: WebGLTexture, width: number, height: number) {
+    const gl = this.gl;
+    this.layerProgram ??= this.createProgram(LAYER_SHADER);
+    const l = this.layerProgram;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(l.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, under);
+    gl.uniform1i(l.uniforms.u_under, 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, over);
+    gl.uniform1i(l.uniforms.u_over, 1);
+    gl.uniform1i(l.uniforms.u_blend, v.solidBlend);
+    gl.uniform1f(l.uniforms.u_opacity, Math.min(1, Math.max(0, v.solid)));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.activeTexture(gl.TEXTURE0);
   }
 
   /**
