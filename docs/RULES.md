@@ -625,7 +625,9 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - New Scene with no scene open shows a tip at Slot A and one at the FX card's "+ New".
 - Both go when you press in a slot or in the FX card; each also has its own close button.
 - Each first effect that "+ New" adds to an empty list shows a tip at the right of its header.
-- A press in the FX card or the close button then shows a tip at the first range button, and the next press or close ends it.
+- That tip stays until its close button, also while the effect is closed.
+- Then a tip shows at the first range button of the open effect; with no effect open, it waits until one opens.
+- Its close button, or a press in the FX card while it shows, ends it.
 - Help, Disable Pointers hides every pointer tip, and Help, Enable Pointers shows them again; the choice stays.
 - With a live input and no audio link in the scene yet, a tip at the right of the FX audio button tells what it does.
 - A second tip shows the next step: "+ New" in an empty FX list, else the speaker of the first setting in view.

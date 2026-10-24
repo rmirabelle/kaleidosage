@@ -275,23 +275,31 @@ export default function App() {
   }, [slotTip, newFxTip]);
   /**
    * Each first effect that "+ New" adds to an empty list shows the effect
-   * tip at the right of its header, then the range tip at the first range
-   * button (until Help, Disable Pointers). A press in the FX card or the
-   * close button moves from one to the next.
+   * tip at the right of its header (until Help, Disable Pointers). It stays
+   * until its close button, also while the effect is closed. Then the range
+   * tip shows at the first range button of the open effect: while no effect
+   * is open, it waits out of sight (see PointerTip), and shows when one
+   * opens. Its close button, or a press in the FX card while it shows,
+   * ends it.
    */
   const [effectTip, setEffectTip] = useState<"effect" | "range" | null>(null);
   const firstEffect = useCallback(() => setEffectTip("effect"), []);
   const nextEffectTip = useCallback(() => setEffectTip((tip) => (tip === "effect" ? "range" : null)), []);
-  const openEffectHeader = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".fx-card .panel-group.open .panel-group-header"); } }), []);
-  const firstRangeButton = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".fx-card .panel-drift"); } }), []);
+  const effectHeader = useMemo(() => ({
+    get current() {
+      return document.querySelector<HTMLElement>(".fx-card .panel-group.open .panel-group-header")
+        ?? document.querySelector<HTMLElement>(".fx-card .panel-group .panel-group-header");
+    }
+  }), []);
+  const firstRangeButton = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".fx-card .panel-group.open .panel-drift"); } }), []);
   useEffect(() => {
-    if (!effectTip) return;
+    if (effectTip !== "range") return;
     const onPress = (event: PointerEvent) => {
-      if ((event.target as Element).closest?.(".fx-card")) nextEffectTip();
+      if (firstRangeButton.current && (event.target as Element).closest?.(".fx-card")) setEffectTip(null);
     };
     window.addEventListener("pointerdown", onPress, true);
     return () => window.removeEventListener("pointerdown", onPress, true);
-  }, [effectTip, nextEffectTip]);
+  }, [effectTip, firstRangeButton]);
   const pickInput = useCallback((kind: InputKind, switched: boolean) => {
     setFilesTip(kind === "tracks" && tracks.list.length === 0);
     if (kind !== "tracks") setSongTip(null);
@@ -2263,7 +2271,7 @@ export default function App() {
       {newFxTip && !startScreen && <PointerTip anchor={newFxButton} text="Click to add a new effect." onClose={() => setNewFxTip(false)} />}
       {effectTip === "effect" && !startScreen && (
         <PointerTip
-          anchor={openEffectHeader}
+          anchor={effectHeader}
           text="Edit this effect. Click the panel header to toggle the panel open or closed. Click the gray random button on an effect to randomize its settings. Click the red random ALL button to randomly add multiple effects."
           onClose={nextEffectTip}
         />
