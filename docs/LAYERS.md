@@ -24,19 +24,27 @@ picture, so each step must give exactly today's result for alpha 1. The
 rules per kind of step:
 
 - Steps that move pixels (Warp, Map, Kaleidoscope, Smear, the Driver's
-  bend, Sort, the Camera's land): alpha moves with the color it is read
-  with.
+  bend): alpha moves with the color it is read with. Sort moves the colors
+  only: its packed picture keeps its runs in alpha, so the cover stays.
 - Steps that filter (Blur, Bloom's blur, Relief, Contours, Sharpen): they
   filter alpha with the color, so a soft edge stays soft.
-- Steps that change colors (Color, Levels, the Driver's light): they work
-  on the color without the cover (color divided by alpha) and keep alpha.
+- Steps that change colors (Color with its overlay, Levels, the Driver's
+  reveal and light, Relief's light): they work on the color without the
+  cover (color divided by alpha) and keep alpha.
 - Steps that add light or marks (Particles, Light cycles, Rays, Bloom's
-  glow, Color overlay): what they add adds cover too (alpha grows by the
-  added cover), so it shows over what is under the layer.
+  glow, Contours' lines, the 3D Object's shape): what they add adds cover
+  too, so it shows over what is under the layer. Added light adds the
+  cover of its brightest channel (`addLight` in shaders.ts); Particles add
+  theirs by blending, at most up to full cover.
+- The Camera shows a whole world with a sky, so its picture is opaque,
+  also on a layer.
 - Steps with a memory of earlier frames (Trails, Smear's history): the
   memory keeps alpha, so a trail fades its cover with its color.
-- A step that blends with the picture under it (a shape step's Blend, the
-  3D Object's Blend) blends the colors and adds the covers as "over".
+- A shape step's opacity and Blend (`blendCover`): the colors blend as
+  plain colors, and the covers mix by the opacity.
+- The source images are opaque, also a PNG with clear parts, as they
+  always were; a layer gets its clear parts from its source (the 3D
+  Object), not from a picture file.
 
 The screen and a video export always get an opaque picture: the last pass
 puts the top picture over black (today it is opaque anyway).

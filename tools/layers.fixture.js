@@ -56,8 +56,24 @@ export function runCases(Engine, P) {
   /* Three random settings for each effect alone, as some settings turn an effect's look off. */
   for (const step of steps) for (let k = 0; k < 3; k++) scenes.push({ name: `alone-${step}-${k}`, step });
   for (let i = 0; i < RANDOM_SCENES; i++) scenes.push({ name: `random-${i}`, seed: i + 1 });
+  /**
+   * With a list of scene names (LAYERS_SCENES, see test-layers.mjs), only
+   * those scenes run, each also once with each of its effects left out
+   * (named "<scene> without <effect>"), to find the effect that changes it.
+   */
+  const only = typeof __LAYERS_SCENES__ === 'string' && __LAYERS_SCENES__ ? __LAYERS_SCENES__.split(',') : null;
+  if (only) {
+    const picked = [];
+    scenes.forEach((scene, index) => {
+      if (!only.includes(scene.name)) return;
+      picked.push({ ...scene, index });
+      for (const drop of steps) picked.push({ ...scene, index, name: `${scene.name} without ${drop}`, drop });
+    });
+    scenes.splice(0, scenes.length, ...picked);
+  }
   const results = [];
-  scenes.forEach((scene, index) => {
+  scenes.forEach((scene, place) => {
+    const index = scene.index ?? place;
     Math.random = seeded(1000 + index);
     try {
       const canvas = document.createElement('canvas');
@@ -73,6 +89,10 @@ export function runCases(Engine, P) {
       } else {
         P.randomizeParams(params, state);
       }
+      if (scene.drop) {
+        if (!state.fxOrder.includes(scene.drop)) throw new Error('skip');
+        state.fxOrder = state.fxOrder.filter((step) => step !== scene.drop);
+      }
       Object.assign(engine.params, params);
       Object.assign(engine.state, state);
       engine.setImage(pattern(20 + index * 37), 0);
@@ -85,6 +105,7 @@ export function runCases(Engine, P) {
       engine.dispose();
       gl.getExtension('WEBGL_lose_context')?.loseContext();
     } catch (error) {
+      if (error && error.message === 'skip') return;
       results.push({ name: scene.name, error: String(error && error.stack || error) });
     } finally {
       Math.random = random;

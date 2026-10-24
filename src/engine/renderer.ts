@@ -1538,7 +1538,7 @@ export class KaleidoRenderer {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, source);
     gl.uniform1i(this.copy.uniforms.u_tex, 0);
-    /* The blend constant scales the copy's color and keeps its alpha at 1. */
+    /* The blend constant scales the copy's color and keeps its alpha (the picture's cover, see COVER_GLSL). */
     const background = Math.min(1, Math.max(0, v.particleBackground));
     gl.enable(gl.BLEND);
     gl.blendColor(background, background, background, 1);
@@ -1560,7 +1560,8 @@ export class KaleidoRenderer {
     gl.uniform3fv(d.uniforms["u_stopColor[0]"], v.particleStopColor);
     gl.bindVertexArray(this.particleVertices);
     gl.enable(gl.BLEND);
-    gl.blendFunc(gl.ONE, v.particleBlend === 0 ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA);
+    /* Glow adds the particles' light; either way their cover goes over the picture's, so it stays at most 1 (see COVER_GLSL). */
+    gl.blendFuncSeparate(gl.ONE, v.particleBlend === 0 ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.drawArrays(gl.POINTS, 0, Math.round(Math.min(PARTICLE_SIDE * PARTICLE_SIDE, Math.max(0, v.particleCount))));
     gl.disable(gl.BLEND);
     gl.bindVertexArray(null);

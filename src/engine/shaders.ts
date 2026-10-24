@@ -4,6 +4,42 @@ out vec2 v_uv;
 void main() { v_uv = a_pos * 0.5 + 0.5; gl_Position = vec4(a_pos, 0.0, 1.0); }`;
 
 /**
+ * GLSL for pictures that carry their cover (docs/LAYERS.md, rule 1): every
+ * picture between two steps is premultiplied, its color times its cover,
+ * and its cover in alpha. A picture with alpha 1 everywhere is a plain
+ * opaque picture, and each step must give the same result for it as with
+ * no cover at all. BLEND_COVER_GLSL needs the shader's blendLayer, so it
+ * goes after it.
+ */
+const COVER_GLSL = `
+/**
+ * The color of a premultiplied pixel without its cover; no cover is black.
+ * A full cover returns the color as it is: a division by 1 can round on
+ * some GPUs, and a contour line moves with the smallest change.
+ */
+vec3 straight(vec4 c) { return c.a >= 1.0 ? c.rgb : c.a > 1e-5 ? c.rgb / c.a : vec3(0.0); }
+/* A color with this cover, premultiplied. */
+vec4 covered(vec3 color, float cover) { return vec4(color * cover, cover); }
+/* Light added to a picture: its brightest part adds cover, so it shows over what is under the picture. */
+vec4 addLight(vec4 picture, vec3 light) {
+  float strength = clamp(max(light.r, max(light.g, light.b)), 0.0, 1.0);
+  return vec4(picture.rgb + light, picture.a + (1.0 - picture.a) * strength);
+}
+`;
+const BLEND_COVER_GLSL = `
+/**
+ * A step's picture mixed into the picture without it, by blend mode and
+ * opacity: the colors blend as plain colors, the covers mix. For opaque
+ * pictures it is mix(base, blendLayer(base, top, mode), opacity).
+ */
+vec4 blendCover(vec4 base, vec4 top, int mode, float opacity) {
+  vec3 under = straight(base);
+  float cover = mix(base.a, top.a, opacity);
+  return covered(mix(under, blendLayer(under, straight(top), mode), opacity), cover);
+}
+`;
+
+/**
  * Pass 1: kaleidoscope. Folds the screen angle into mirrored wedges, then
  * samples the source image with mirror-repeat. Twirl turns the angle more
  * with distance from the center, before the fold, which makes spirals.
@@ -595,7 +631,7 @@ vec2 hexLocal(vec2 p) {
  * takes about one screen pixel: edges stay sharp at any size. Where the
  * image is not enlarged, the read point does not move.
  */
-vec3 sampleImage(sampler2D image, vec2 size, vec2 q, float g) {
+vec4 sampleImage(sampler2D image, vec2 size, vec2 q, float g) {
   float aspect = size.x / size.y;
   vec2 uv = q * vec2(1.0 / aspect, 1.0) + 0.5 + u_offset;
   if (u_picture == 1) uv += u_center;
@@ -608,7 +644,9 @@ vec3 sampleImage(sampler2D image, vec2 size, vec2 q, float g) {
     vec2 f = clamp((texel - cell - 0.5) / max(texels, 1e-4) + 0.5, 0.0, 1.0);
     uv = (cell + f + 0.5) / size;
   }
-  return textureGrad(image, uv, vec2(g / aspect, 0.0), vec2(0.0, g)).rgb;
+  vec4 c = textureGrad(image, uv, vec2(g / aspect, 0.0), vec2(0.0, g));
+  /* The source images are opaque, also a PNG with clear parts (as it always was); the picture made so far brings its cover. */
+  return u_picture == 1 ? c : vec4(c.rgb, 1.0);
 }
 
 /**
@@ -670,12 +708,12 @@ vec2 fold(vec2 p) {
 }
 
 /** Both source images at a point, faded into each other by the image blend. An image that the blend does not show is not read. */
-vec3 sourceColor(vec2 q, float g) {
+vec4 sourceColor(vec2 q, float g) {
   if (u_picture == 1) return sampleImage(u_img, u_imgRes, q, g);
-  vec3 color = vec3(0.0);
+  vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
   if (u_blend < 1.0) color = sampleImage(u_img, u_imgRes, q, g);
   if (u_blend > 0.0) {
-    vec3 second = sampleImage(u_img2, u_imgRes2, q, g);
+    vec4 second = sampleImage(u_img2, u_imgRes2, q, g);
     float amount = u_blend;
     if (u_blendMode == 1) {
       /**
@@ -685,7 +723,7 @@ vec3 sourceColor(vec2 q, float g) {
        */
       const float SOFT = 0.12;
       float level = 1.0 - u_blend * (1.0 + SOFT);
-      amount = smoothstep(level, level + SOFT, dot(second, vec3(0.2126, 0.7152, 0.0722)));
+      amount = smoothstep(level, level + SOFT, dot(second.rgb, vec3(0.2126, 0.7152, 0.0722)));
     }
     color = mix(color, second, amount);
   }
@@ -706,6 +744,8 @@ vec3 blendLayer(vec3 base, vec3 top, int mode) {
   if (mode == 7) return min(base + top, 1.0);
   return top;
 }
+${COVER_GLSL}
+${BLEND_COVER_GLSL}
 
 /**
  * The picture with the shape steps in the order the user set, leaving out
@@ -713,7 +753,7 @@ vec3 blendLayer(vec3 base, vec3 top, int mode) {
  * fold breaks the symmetry; a warp after it bends the image inside each
  * wedge, so the symmetry stays. A map after the fold bends the folded picture.
  */
-vec3 shapeColor(vec2 screen, int skip, float g0) {
+vec4 shapeColor(vec2 screen, int skip, float g0) {
   vec2 p = screen;
   vec2 beforeFold = screen;
   bool folded = false;
@@ -820,14 +860,14 @@ vec3 shapeColor(vec2 screen, int skip, float g0) {
   vec2 measured = folded ? beforeFold : (spiralLast ? beforeSpiral : p);
   float detail = min(max(length(dFdx(measured)), length(dFdy(measured))), g0 * 4.0);
   float g = max(detail * stretch, mapDetail) / (folded ? u_zoom : 1.0);
-  vec3 color = sourceColor(p, g);
+  vec4 color = sourceColor(p, g);
   if (fading) color = mix(color, sourceColor(p2, g), fade);
   /* The copy one size smaller has its detail smaller by the copy size too. */
   float copySize = clamp(u_drosteSize, 0.05, 0.95);
   if (drosteWeight > 0.0) color = mix(color, sourceColor(drosteP, g * copySize), drosteWeight);
   if (spiralLast && spiralFade > 1e-3) {
     float g2 = max(detail * spiralStretch, mapDetail) / (folded ? u_zoom : 1.0);
-    vec3 higher = sourceColor(spiralP, g2);
+    vec4 higher = sourceColor(spiralP, g2);
     if (spiralAltWeight > 0.0) higher = mix(higher, sourceColor(spiralAlt, g2 * copySize), spiralAltWeight);
     color = mix(color, higher, spiralFade);
   }
@@ -845,7 +885,7 @@ vec3 shapeColor(vec2 screen, int skip, float g0) {
    */
   if (mapped && u_mapMode >= 2 && u_mapMode != 5 && u_mapFog > 0.0) {
     float power = 1.0 / max(u_mapFogSoftness * u_mapFogSoftness, 1e-3);
-    color *= mix(1.0, exp(-0.0513 * pow(u_mapFog / max(farDistance, 1e-4), power)), u_mapMix);
+    color.rgb *= mix(1.0, exp(-0.0513 * pow(u_mapFog / max(farDistance, 1e-4), power)), u_mapMix);
   }
   return color;
 }
@@ -861,7 +901,7 @@ void main() {
    * all left out. Each step that is not full and normal costs one more
    * picture, so at most 4.
    */
-  vec3 color = shapeColor(screen, 0, g0);
+  vec4 color = shapeColor(screen, 0, g0);
   int skipped = 0;
   for (int i = 0; i < 3; i++) {
     if (i >= u_shapeCount) break;
@@ -870,11 +910,11 @@ void main() {
     int mode = u_shapeBlend[shapeStep];
     if (opacity >= 1.0 && mode == 0) continue;
     int without = skipped | (1 << shapeStep);
-    vec3 base = shapeColor(screen, without, g0);
-    color = mix(base, blendLayer(base, color, mode), opacity);
+    vec4 base = shapeColor(screen, without, g0);
+    color = blendCover(base, color, mode, opacity);
     if (opacity <= 0.0) skipped = without;
   }
-  o = vec4(color, 1.0);
+  o = color;
 }`;
 
 /**
@@ -920,6 +960,7 @@ float gnoise(vec2 p) {
 
 /** A point of the screen (0 to 1) in the picture texture, which may have a border around the screen. */
 vec2 texUv(vec2 screen) { return (screen * u_res + u_pad) / u_texSize; }
+${COVER_GLSL}
 
 /**
  * Where the blur acts, from 0 (sharp) to 1 (full blur), at a screen point.
@@ -945,7 +986,7 @@ float blurMask(vec2 screen) {
     return smoothstep(-0.5 * width, 0.5 * width, dot(p, u_maskDir));
   }
   if (u_maskMode <= 4) {
-    float light = dot(textureLod(u_tex, texUv(screen), 5.0).rgb, vec3(0.2126, 0.7152, 0.0722));
+    float light = dot(straight(textureLod(u_tex, texUv(screen), 5.0)), vec3(0.2126, 0.7152, 0.0722));
     float m = smoothstep(u_maskLevel - 0.02 - soft * 0.3, u_maskLevel + 0.02 + soft * 0.3, light);
     return u_maskMode == 3 ? m : 1.0 - m;
   }
@@ -962,23 +1003,24 @@ float blurMask(vec2 screen) {
  */
 void main() {
   vec2 uv = texUv(v_uv);
+  /* Color and cover blur together (premultiplied), so a soft edge stays soft. */
   if (u_radius <= 0.0) {
-    o = vec4(textureLod(u_tex, uv, 0.0).rgb, 1.0);
+    o = textureLod(u_tex, uv, 0.0);
     return;
   }
   float radius = u_radius * blurMask(v_uv) * u_res.y;
   if (radius < 0.5) {
-    o = vec4(textureLod(u_tex, uv, 0.0).rgb, 1.0);
+    o = textureLod(u_tex, uv, 0.0);
     return;
   }
   float lod = log2(max(1.0, radius * 0.5));
-  vec3 sum = textureLod(u_tex, uv, lod).rgb;
+  vec4 sum = textureLod(u_tex, uv, lod);
   float turn = ign(gl_FragCoord.xy) * TAU / 8.0;
   for (int i = 0; i < 8; i++) {
     float a = turn + float(i) * TAU / 8.0;
-    sum += textureLod(u_tex, uv + vec2(cos(a), sin(a)) * radius * 0.6 / u_texSize, lod).rgb;
+    sum += textureLod(u_tex, uv + vec2(cos(a), sin(a)) * radius * 0.6 / u_texSize, lod);
   }
-  o = vec4(sum / 9.0, 1.0);
+  o = sum / 9.0;
 }`;
 
 /**
@@ -1009,7 +1051,7 @@ uniform float u_tint;
 uniform vec3 u_tintColor;
 
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
-
+${COVER_GLSL}
 vec3 hueShift(vec3 c, float h) {
   const vec3 k = vec3(0.57735);
   float ca = cos(h);
@@ -1044,20 +1086,20 @@ void main() {
     if (size > reach * 2.0) push *= reach * 2.0 / size;
     uv -= push * u_texel;
   }
-  vec3 current = texture(u_current, v_uv).rgb;
+  /* Both frames carry their cover (premultiplied): a trail fades its cover with its color. */
+  vec4 current = texture(u_current, v_uv);
   /* Level 0: the old frame has blurred mip levels while the flow runs (see drawTrails). */
-  vec3 previous = textureLod(u_previous, uv, 0.0).rgb;
-  if (u_hue != 0.0) previous = clamp(hueShift(previous, u_hue), 0.0, 1.0);
+  vec4 previous = textureLod(u_previous, uv, 0.0);
+  if (u_hue != 0.0) previous = covered(clamp(hueShift(straight(previous), u_hue), 0.0, 1.0), previous.a);
   /**
    * Trail tint: the old frame is multiplied a little toward the tint color
    * each frame, so the older a trail is, the more it takes that color and
    * the darker it gets. The new frame keeps its own colors.
    */
-  if (u_tint > 0.0) previous = mix(previous, previous * u_tintColor, u_tint);
+  if (u_tint > 0.0) previous.rgb = mix(previous.rgb, previous.rgb * u_tintColor, u_tint);
   vec2 inside = step(vec2(0.0), uv) * step(uv, vec2(1.0));
   previous = mix(current, previous, inside.x * inside.y);
-  vec3 color = u_mode == 2 ? max(current, previous * u_amount) : mix(current, previous, u_amount);
-  o = vec4(color, 1.0);
+  o = u_mode == 2 ? max(current, previous * u_amount) : mix(current, previous, u_amount);
 }`;
 
 /** Copies a texture to the screen. */
@@ -1066,7 +1108,8 @@ precision highp float;
 in vec2 v_uv;
 out vec4 o;
 uniform sampler2D u_tex;
-void main() { o = vec4(texture(u_tex, v_uv).rgb, 1.0); }`;
+/* The picture with its cover (premultiplied, see COVER_GLSL). */
+void main() { o = texture(u_tex, v_uv); }`;
 
 /**
  * Video export: draws a picture over the canvas at u_alpha (with
@@ -1241,25 +1284,26 @@ float driverAt(vec2 p) {
 }
 
 void main() {
-  vec3 picture = texture(u_tex, v_uv).rgb;
+  /* The picture carries its cover (premultiplied): the bend moves it, the reveal and the light change only the color. */
+  vec4 picture = texture(u_tex, v_uv);
   float aspect = u_res.x / u_res.y;
   vec2 p = (v_uv - 0.5) * vec2(aspect, 1.0) * 3.0 / u_scale;
   float here = driverAt(p);
-  vec3 color;
+  vec4 color;
   if (u_mode == 0) {
     /* The slope is measured across a wide step (0.12 driver units, on both sides), so fine detail does not tear the picture. */
     float step = 0.12;
     vec2 slope = vec2(driverAt(p + vec2(step, 0.0)) - driverAt(p - vec2(step, 0.0)), driverAt(p + vec2(0.0, step)) - driverAt(p - vec2(0.0, step))) / (2.0 * step);
     /* Steep and gentle drivers both bend by a useful amount: the push grows with the slope, but never past 1. */
     vec2 push = slope / (1.0 + length(slope)) * u_strength * 0.05;
-    color = texture(u_tex, v_uv + push * vec2(1.0 / aspect, 1.0)).rgb;
+    color = texture(u_tex, v_uv + push * vec2(1.0 / aspect, 1.0));
   } else if (u_mode == 1) {
-    color = picture * smoothstep(0.35, 0.65, here);
+    color = vec4(picture.rgb * smoothstep(0.35, 0.65, here), picture.a);
   } else {
     float light = mix(1.0, 0.25 + 1.25 * here, u_strength);
-    color = picture * light + vec3(pow(here, 8.0) * u_strength * 0.3);
+    color = vec4(picture.rgb * light + vec3(pow(here, 8.0) * u_strength * 0.3) * picture.a, picture.a);
   }
-  o = vec4(mix(picture, color, u_amount), 1.0);
+  o = mix(picture, color, u_amount);
 }`;
 
 /**
@@ -1283,7 +1327,8 @@ uniform float u_shine;
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 
 void main() {
-  vec3 color = texture(u_tex, v_uv).rgb;
+  /* The picture carries its cover (premultiplied); the relief changes only the color. */
+  vec4 color = texture(u_tex, v_uv);
   vec2 d = u_texel * u_reliefSize;
   float left = luma(texture(u_tex, v_uv - vec2(d.x, 0.0)).rgb);
   float right = luma(texture(u_tex, v_uv + vec2(d.x, 0.0)).rgb);
@@ -1295,8 +1340,8 @@ void main() {
   /* The highlight of a flat area is taken off, so only slopes shine. */
   vec3 halfway = normalize(light + vec3(0.0, 0.0, 1.0));
   float gloss = max(pow(max(dot(normal, halfway), 0.0), 40.0) - pow(halfway.z, 40.0), 0.0);
-  vec3 lit = color * diffuse + u_shine * gloss;
-  o = vec4(clamp(mix(color, lit, u_relief), 0.0, 1.0), 1.0);
+  vec3 lit = color.rgb * diffuse + u_shine * gloss * color.a;
+  o = vec4(clamp(mix(color.rgb, lit, u_relief), 0.0, color.a), color.a);
 }`;
 
 /** Cubic B-spline sampling of one mip level of u_tex, from four filtered reads: smooth curves between its pixels. */
@@ -1620,6 +1665,7 @@ void main() {
     float gloss = pow(max(dot(normal, halfway), 0.0), 40.0) * lit;
     color = mix(ground * light + u_shine * gloss, fog, 1.0 - exp(-t * u_fog * 0.5));
   }
+  /* The camera shows a whole world with a sky, so its picture is opaque (see COVER_GLSL). */
   o = vec4(clamp(mix(floor_, blendLayer(floor_, clamp(color, 0.0, 1.0), u_blend), u_amount), 0.0, 1.0), 1.0);
 }`;
 
@@ -1741,11 +1787,14 @@ vec3 blendLayer(vec3 base, vec3 top, int mode) {
   if (mode == 7) return min(base + top, 1.0);
   return top;
 }
+${COVER_GLSL}
 
 float levelAt(vec2 uv) { return texture(u_field, uv).r * u_lines; }
 
 void main() {
-  vec3 color = texture(u_tex, v_uv).rgb;
+  /* The picture carries its cover (premultiplied); a line is a mark, so it adds cover where it is drawn. */
+  vec4 picture = texture(u_tex, v_uv);
+  vec3 color = straight(picture);
   float level = levelAt(v_uv);
   vec2 slope = vec2(
     levelAt(v_uv + vec2(u_texel.x, 0.0)) - levelAt(v_uv - vec2(u_texel.x, 0.0)),
@@ -1754,7 +1803,8 @@ void main() {
   float pixels = abs(fract(level + 0.5) - 0.5) / max(change, 1e-5);
   /* A flat area has no contour, even when its brightness sits exactly on a level (pure black or white). */
   float line = (1.0 - smoothstep(u_width * 0.5 - 0.5, u_width * 0.5 + 0.5, pixels)) * smoothstep(0.0, 0.004, change);
-  o = vec4(mix(color, blendLayer(color, u_color, u_blend), line * u_amount), 1.0);
+  float mark = line * u_amount;
+  o = covered(mix(color, blendLayer(color, u_color, u_blend), mark), mix(picture.a, 1.0, mark));
 }`;
 
 /**
@@ -1818,15 +1868,16 @@ float pattern(vec2 uv, vec3 now) {
   return 1.0 - abs(fract(x * 0.5) * 2.0 - 1.0);
 }
 
-vec3 slot(int age) {
+/* The kept frames carry their cover (premultiplied), so the smear moves it with the color. */
+vec4 slot(int age) {
   int layer = (u_head - age + u_slots) % u_slots;
-  return texture(u_history, vec3(v_uv, float(layer))).rgb;
+  return texture(u_history, vec3(v_uv, float(layer)));
 }
 
 void main() {
-  vec3 now = texture(u_tex, v_uv).rgb;
-  float age = pattern(v_uv, now) * u_delay;
-  vec3 past;
+  vec4 now = texture(u_tex, v_uv);
+  float age = pattern(v_uv, now.rgb) * u_delay;
+  vec4 past;
   if (u_filled == 0) {
     past = now;
   } else if (age <= u_since) {
@@ -1838,7 +1889,7 @@ void main() {
     int second = min(first + 1, u_filled - 1);
     past = mix(slot(first), slot(second), k - float(first));
   }
-  o = vec4(mix(now, past, u_amount), 1.0);
+  o = mix(now, past, u_amount);
 }`;
 
 export const FINISH_SHADER = `#version 300 es
@@ -1867,23 +1918,51 @@ vec3 blendLayer(vec3 base, vec3 top, int mode) {
   if (mode == 7) return min(base + top, 1.0);
   return top;
 }
+${COVER_GLSL}
 
 void main() {
-  vec3 color = texture(u_tex, v_uv).rgb;
+  /**
+   * The picture carries its cover (premultiplied). An opaque pixel takes
+   * the same math as before covers, word for word, so it gives the same
+   * pixels. With a cover, Sharpen filters color and cover together, and
+   * Color and Levels change the color only (without the cover) and keep
+   * the cover.
+   */
+  vec4 picture = texture(u_tex, v_uv);
+  if (picture.a >= 1.0) {
+    vec3 color = picture.rgb;
+    if (u_sharpen > 0.0) {
+      vec2 d = u_texel * u_radius;
+      vec3 cross = texture(u_tex, v_uv + vec2(d.x, 0.0)).rgb + texture(u_tex, v_uv - vec2(d.x, 0.0)).rgb
+        + texture(u_tex, v_uv + vec2(0.0, d.y)).rgb + texture(u_tex, v_uv - vec2(0.0, d.y)).rgb;
+      vec3 corners = texture(u_tex, v_uv + d).rgb + texture(u_tex, v_uv - d).rgb
+        + texture(u_tex, v_uv + vec2(d.x, -d.y)).rgb + texture(u_tex, v_uv + vec2(-d.x, d.y)).rgb;
+      vec3 around = (cross + 0.5 * corners) / 6.0;
+      color += u_sharpen * (color - around);
+    }
+    color = clamp(color, 0.0, 1.0);
+    color = mix(color, blendLayer(color, u_overlay, u_overlayBlend), u_overlayOpacity);
+    color *= exp2(u_exposure);
+    color = max(color - u_black, 0.0) / (1.0 - u_black);
+    o = vec4(clamp(color, 0.0, 1.0), 1.0);
+    return;
+  }
   if (u_sharpen > 0.0) {
     vec2 d = u_texel * u_radius;
-    vec3 cross = texture(u_tex, v_uv + vec2(d.x, 0.0)).rgb + texture(u_tex, v_uv - vec2(d.x, 0.0)).rgb
-      + texture(u_tex, v_uv + vec2(0.0, d.y)).rgb + texture(u_tex, v_uv - vec2(0.0, d.y)).rgb;
-    vec3 corners = texture(u_tex, v_uv + d).rgb + texture(u_tex, v_uv - d).rgb
-      + texture(u_tex, v_uv + vec2(d.x, -d.y)).rgb + texture(u_tex, v_uv + vec2(-d.x, d.y)).rgb;
-    vec3 around = (cross + 0.5 * corners) / 6.0;
-    color += u_sharpen * (color - around);
+    vec4 cross = texture(u_tex, v_uv + vec2(d.x, 0.0)) + texture(u_tex, v_uv - vec2(d.x, 0.0))
+      + texture(u_tex, v_uv + vec2(0.0, d.y)) + texture(u_tex, v_uv - vec2(0.0, d.y));
+    vec4 corners = texture(u_tex, v_uv + d) + texture(u_tex, v_uv - d)
+      + texture(u_tex, v_uv + vec2(d.x, -d.y)) + texture(u_tex, v_uv + vec2(-d.x, d.y));
+    vec4 around = (cross + 0.5 * corners) / 6.0;
+    picture += u_sharpen * (picture - around);
+    picture.a = clamp(picture.a, 0.0, 1.0);
   }
-  color = clamp(color, 0.0, 1.0);
+  float cover = picture.a;
+  vec3 color = straight(vec4(clamp(picture.rgb, 0.0, cover), cover));
   color = mix(color, blendLayer(color, u_overlay, u_overlayBlend), u_overlayOpacity);
   color *= exp2(u_exposure);
   color = max(color - u_black, 0.0) / (1.0 - u_black);
-  o = vec4(clamp(color, 0.0, 1.0), 1.0);
+  o = covered(clamp(color, 0.0, 1.0), cover);
 }`;
 
 /**
@@ -2053,17 +2132,20 @@ uniform float u_band;
 uniform float u_low;
 uniform float u_high;
 ${SORT_GLSL}
+${COVER_GLSL}
 void main() {
-  vec3 color = texture(u_picture, v_uv).rgb;
+  /* The picture carries its cover (premultiplied). The sorted colors move; the cover stays (the packed picture's alpha holds the runs). */
+  vec4 picture = texture(u_picture, v_uv);
+  vec3 color = picture.rgb;
   vec2 screen = (v_uv - 0.5) * u_res;
   vec2 along = vec2(screen.x * u_dir.x + screen.y * u_dir.y, -screen.x * u_dir.y + screen.y * u_dir.x);
   vec2 place = along / u_diag + 0.5;
   float row = clamp(floor(place.y * u_rows), 0.0, u_rows - 1.0);
   vec3 sorted = texture(u_sorted, vec2(place.x, (row + 0.5) / u_side)).rgb;
   float inRun = texelFetch(u_links, ivec2(clamp(place.x * u_side, 0.0, u_side - 1.0), row), 0).g;
-  float l = luma(color);
+  float l = luma(straight(picture));
   inRun *= mix(l >= u_low && l <= u_high ? 1.0 : 0.0, 1.0, clamp(u_band - 1.5, 0.0, 1.0));
-  o = vec4(mix(color, sorted, u_amount * inRun), 1.0);
+  o = vec4(min(mix(color, sorted, u_amount * inRun), vec3(picture.a)), picture.a);
 }`;
 
 /**
@@ -2102,8 +2184,10 @@ out vec4 o;
 uniform sampler2D u_tex;
 uniform sampler2D u_picture;
 uniform float u_amount;
+${COVER_GLSL}
+/* The rays are added light (see addLight). */
 void main() {
-  o = vec4(texture(u_picture, v_uv).rgb + u_amount * texture(u_tex, v_uv).rgb, 1.0);
+  o = addLight(texture(u_picture, v_uv), u_amount * texture(u_tex, v_uv).rgb);
 }`;
 
 /**
@@ -2177,9 +2261,10 @@ uniform vec2 u_texel;
 uniform sampler2D u_picture;
 uniform float u_amount;
 ${BLOOM_TENT_GLSL}
+${COVER_GLSL}
+/* The glow is added light (see addLight). */
 void main() {
-  vec3 color = texture(u_picture, v_uv).rgb;
-  o = vec4(color + u_amount * tent(u_tex, v_uv, u_texel), 1.0);
+  o = addLight(texture(u_picture, v_uv), u_amount * tent(u_tex, v_uv, u_texel));
 }`;
 
 /**
@@ -2618,11 +2703,15 @@ vec3 blendLayer(vec3 base, vec3 top, int mode) {
   if (mode == 7) return min(base + top, 1.0);
   return top;
 }
+${COVER_GLSL}
 void main() {
-  vec3 base = texture(u_picture, v_uv).rgb * u_background;
+  /* The picture carries its cover (premultiplied); Background dims its color; the lines are marks, so they add cover. */
+  vec4 picture = texture(u_picture, v_uv);
+  vec3 base = straight(picture) * u_background;
   vec4 lines = texture(u_lines, v_uv);
   vec3 top = lines.a > 0.0 ? lines.rgb / lines.a : vec3(0.0);
-  o = vec4(mix(base, blendLayer(base, top, u_blend), lines.a * u_opacity), 1.0);
+  float mark = lines.a * u_opacity;
+  o = covered(mix(base, blendLayer(base, top, u_blend), mark), mix(picture.a, 1.0, mark));
 }`;
 
 /**
@@ -2688,6 +2777,7 @@ vec3 blendLayer(vec3 base, vec3 top, int mode) {
   if (mode == 7) return min(base + top, 1.0);
   return top;
 }
+${COVER_GLSL}
 
 /* Out and back across 0 to 1, so a read past the picture's edge is mirrored and has no seam. */
 vec2 fold(vec2 uv) { return 1.0 - abs(1.0 - 2.0 * fract(uv * 0.5)); }
@@ -2813,7 +2903,7 @@ vec3 normalAt(vec3 p, float e) {
 }
 
 /* A read of the picture at a place of the surface, with Tiles and the mirrored fold. */
-vec3 readAt(vec2 uv) { return texture(u_tex, fold(uv * u_tiles)).rgb; }
+vec3 readAt(vec2 uv) { return straight(texture(u_tex, fold(uv * u_tiles))); }
 
 /* The picture lying flat on a face with this outward direction, across the face. */
 vec2 onFace(vec3 q, vec3 axis) {
@@ -2884,7 +2974,9 @@ vec3 wrapAt(vec3 q, vec3 n) {
 
 void main() {
   vec2 screen = vec2((v_uv.x - 0.5) * u_aspect, v_uv.y - 0.5);
-  vec3 base = texture(u_tex, v_uv).rgb * u_background;
+  /* The picture carries its cover (premultiplied): Background and the shadow dim its color; the shape covers it. */
+  vec4 picture = texture(u_tex, v_uv);
+  vec3 base = straight(picture) * u_background;
   vec3 eye = vec3(0.0, 0.0, EYE);
   vec3 rd = normalize(vec3(screen, 0.0) - eye);
 
@@ -2929,10 +3021,10 @@ void main() {
       vec3 p = eye + rd * at;
       vec3 n = normalAt(p, max(u_pixel * at / EYE * 0.5, 1e-4));
       if (u_map == 1) {
-        color = texture(u_tex, fold(v_uv + n.xy * u_bend * 0.3 * vec2(1.0 / u_aspect, 1.0))).rgb;
+        color = straight(texture(u_tex, fold(v_uv + n.xy * u_bend * 0.3 * vec2(1.0 / u_aspect, 1.0))));
       } else if (u_map == 2) {
         vec3 r = reflect(rd, n);
-        color = texture(u_tex, vec2(abs(atan(r.x, -r.z)) / PI, asin(clamp(r.y, -1.0, 1.0)) / PI + 0.5)).rgb;
+        color = straight(texture(u_tex, vec2(abs(atan(r.x, -r.z)) / PI, asin(clamp(r.y, -1.0, 1.0)) / PI + 0.5)));
       } else {
         color = wrapAt(toShape(p), transpose(u_turn) * n);
       }
@@ -2941,5 +3033,6 @@ void main() {
       color = color * lit + shine;
     }
   }
-  o = vec4(mix(base, blendLayer(base, color, u_blend), cover * u_opacity), 1.0);
+  float shown = cover * u_opacity;
+  o = covered(mix(base, blendLayer(base, color, u_blend), shown), mix(picture.a, 1.0, shown));
 }`;

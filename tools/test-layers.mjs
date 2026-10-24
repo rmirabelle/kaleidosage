@@ -7,7 +7,8 @@
  * same from one run to the next shows as "unstable", not as a change.
  *
  * Usage: node tools/test-layers.mjs [base commit, default HEAD]
- * CHROME_PATH overrides browser discovery.
+ * CHROME_PATH overrides browser discovery. LAYERS_SCENES=random-3,random-7
+ * runs only those scenes, each also with each of its effects left out.
  */
 import { build } from 'esbuild';
 import { spawn, spawnSync } from 'node:child_process';
@@ -45,8 +46,29 @@ try {
   const tar = spawnSync('tar', ['-xf', 'before.tar', '-C', 'before'], { cwd: temp });
   if (tar.status !== 0) throw new Error(`tar failed: ${tar.stderr}`);
 
+  const slash = (path) => path.replaceAll('\\', '/');
+  /**
+   * LAYERS_OLD=FINISH_SHADER,CONTOUR_SHADER: the working tree's bundles use
+   * these shaders from the base commit, to find the shader that changes a
+   * scene.
+   */
+  const oldShaders = (process.env.LAYERS_OLD || '').split(',').filter(Boolean);
+  const mixShaders = {
+    name: 'old-shaders',
+    setup(plugin) {
+      plugin.onResolve({ filter: /^\.\/shaders$/ }, (args) => {
+        if (!oldShaders.length || !slash(args.importer).startsWith(slash(join(root, 'src')))) return undefined;
+        return { path: 'mixed-shaders', namespace: 'old-shaders' };
+      });
+      plugin.onLoad({ filter: /.*/, namespace: 'old-shaders' }, () => ({
+        contents: `export * from ${JSON.stringify(slash(join(root, 'src/engine/shaders.ts')))};\n`
+          + `export { ${oldShaders.join(', ')} } from ${JSON.stringify(slash(join(before, 'src/engine/shaders.ts')))};\n`,
+        resolveDir: root,
+        loader: 'ts',
+      }));
+    },
+  };
   const bundle = async (dir, label) => {
-    const slash = (path) => path.replaceAll('\\', '/');
     const { outputFiles } = await build({
       stdin: {
         contents: `
@@ -59,8 +81,9 @@ try {
         loader: 'js',
       },
       bundle: true, write: false, format: 'iife',
+      plugins: dir === before ? [] : [mixShaders],
       nodePaths: [join(root, 'node_modules')],
-      define: { 'import.meta.hot': 'undefined', 'import.meta.env.DEV': 'false' },
+      define: { 'import.meta.hot': 'undefined', 'import.meta.env.DEV': 'false', __LAYERS_SCENES__: JSON.stringify(process.env.LAYERS_SCENES || '') },
       logLevel: 'error',
     });
     return outputFiles[0].text;
