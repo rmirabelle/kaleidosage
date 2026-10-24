@@ -273,6 +273,30 @@ export default function App() {
     window.addEventListener("pointerdown", onPress, true);
     return () => window.removeEventListener("pointerdown", onPress, true);
   }, [slotTip, newFxTip]);
+  /**
+   * The first effect that "+ New" adds (once in each run of the app) shows
+   * the effect tip at the right of its header, then the range tip at the
+   * first range button. A press in the FX card or the close button moves
+   * from one to the next.
+   */
+  const [effectTip, setEffectTip] = useState<"effect" | "range" | null>(null);
+  const effectTipShownRef = useRef(false);
+  const firstEffect = useCallback(() => {
+    if (effectTipShownRef.current) return;
+    effectTipShownRef.current = true;
+    setEffectTip("effect");
+  }, []);
+  const nextEffectTip = useCallback(() => setEffectTip((tip) => (tip === "effect" ? "range" : null)), []);
+  const openEffectHeader = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".fx-card .panel-group.open .panel-group-header"); } }), []);
+  const firstRangeButton = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".fx-card .panel-drift"); } }), []);
+  useEffect(() => {
+    if (!effectTip) return;
+    const onPress = (event: PointerEvent) => {
+      if ((event.target as Element).closest?.(".fx-card")) nextEffectTip();
+    };
+    window.addEventListener("pointerdown", onPress, true);
+    return () => window.removeEventListener("pointerdown", onPress, true);
+  }, [effectTip, nextEffectTip]);
   const pickInput = useCallback((kind: InputKind, switched: boolean) => {
     setFilesTip(kind === "tracks" && tracks.list.length === 0);
     if (kind !== "tracks") setSongTip(null);
@@ -2137,6 +2161,7 @@ export default function App() {
                   driverVideoName={driverVideoName}
                   onPickDriverVideo={() => setOpenRequest({ kind: "image", slot: 0, target: "driver" })}
                   onNeedAudioInput={askForAudioInput}
+                  onFirstEffect={firstEffect}
                   linksTip={linksTip}
                   onLinksTipDone={endLinksTip}
                   nextTip={nextTip}
@@ -2241,6 +2266,20 @@ export default function App() {
         />
       )}
       {newFxTip && !startScreen && <PointerTip anchor={newFxButton} text="Click to add a new effect." onClose={() => setNewFxTip(false)} />}
+      {effectTip === "effect" && !startScreen && (
+        <PointerTip
+          anchor={openEffectHeader}
+          text="Edit this effect. Click the panel header to toggle the panel open or closed. Click the gray random button on an effect to randomize its settings. Click the red random ALL button to randomly add multiple effects."
+          onClose={nextEffectTip}
+        />
+      )}
+      {effectTip === "range" && !startScreen && (
+        <PointerTip
+          anchor={firstRangeButton}
+          text="Click to toggle between static and ranged values. Ranged values animate according to the scene LENGTH or to an audio slice. Click the stopwatch icon next to a ranged setting to set an independent loop length."
+          onClose={nextEffectTip}
+        />
+      )}
       {resetAsked && (
         <ConfirmDialog
           title="Clear all effects?"

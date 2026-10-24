@@ -51,6 +51,8 @@ interface Props {
   onLinksTipDone: () => void;
   nextTip: boolean;
   onNextTipDone: () => void;
+  /** "+ New" added an effect to an empty list: App shows the effect tips. */
+  onFirstEffect: () => void;
 }
 
 const subscribeInput = (listener: () => void) => audioInput.subscribe(listener);
@@ -86,7 +88,7 @@ const CAMERA_REPEATS = [[0, "Mirror"], [1, "Tile"], [2, "None"]] as const;
 /** The controls of the left panel whose press is work on the scene (see onWork): buttons, fields, the sliders' parts, the gradient and the effect grips. */
 const WORK_CONTROLS = "button, input, select, textarea, a, label, [role=slider], [role=button], [role=option], [role=menuitem], [contenteditable=true], .range-grab, .range-low, .range-high, .gradient-bar, .gradient-stop, .panel-group-grip";
 
-export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, transport, onWork, driverVideoName, onPickDriverVideo, onNeedAudioInput, linksTip, onLinksTipDone, nextTip, onNextTipDone }: Props) {
+export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, transport, onWork, driverVideoName, onPickDriverVideo, onNeedAudioInput, linksTip, onLinksTipDone, nextTip, onNextTipDone, onFirstEffect }: Props) {
   const holdOnly = useSceneHoldOnly();
   const row = useParamRows(engine);
   /** True while MIDI holds any range: the Effects header then shows a play button that plays them all again. */
@@ -277,6 +279,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       bloom: () => start("bloomAmount", 1)
     };
     enable[step]?.();
+    if (engine.state.fxOrder.length === 0) onFirstEffect();
     addEffect(engine.state, step);
     setFxOrder(engine.state.fxOrder);
     onOpenGroup(step);
