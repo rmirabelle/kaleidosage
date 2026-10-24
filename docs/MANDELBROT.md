@@ -136,3 +136,9 @@ rounds out. Now they count from the view's lowest escape count
 change moved the picture 4.4 of 255 on average). Band flow moves the bands
 on purpose, in bands per second (state `mandelFlowTime`, saved with the
 scene like warpTime).
+
+Reverted the same day: counting the bands from the view's lowest escape
+count made them jump during a dive (the lowest of the 8 sample points
+changes from one point to another). The bands count from round 0 again,
+and Band width has a narrow range instead: 2 to 4, in steps of 0.001
+(it was 0.2 to 20). Band flow stays.

@@ -475,8 +475,7 @@ vec2 mandelAt(int n) { return texelFetch(u_mandelPath, ivec2(n & 1023, n >> 10),
 uniform float u_mandelBands;
 uniform float u_mandelTerraces;
 uniform float u_mandelSoftness;
-/* The view's lowest escape count, where the bands start (see mandelStart in renderer.ts), and the bands moved by Band flow. */
-uniform float u_mandelStart;
+/* The bands moved by Band flow. */
 uniform float u_mandelFlow;
 uniform float u_mandelLight;
 uniform vec2 u_mandelLightDir;
@@ -667,7 +666,7 @@ vec2 complexMap(vec2 p) {
     } else {
       float r = length(m);
       float count = escaped + 1.0 - log2(log(r));
-      float band = (count - u_mandelStart) / max(u_mandelBands, 0.01) + mod(u_mandelFlow, 2.0);
+      float band = count / max(u_mandelBands, 0.01) + mod(u_mandelFlow, 2.0);
       w = vec2(band, atan(m.y, m.x) / PI);
       /**
        * Across a ring where the escape count changes, the angle doubles: a

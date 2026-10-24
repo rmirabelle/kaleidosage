@@ -1133,7 +1133,6 @@ export class KaleidoRenderer {
     const mandelDepth = (depth: number) => {
       gl.uniform1f(k.uniforms.u_mandelDepth, depth);
       gl.uniform1i(k.uniforms.u_mandelRounds, mandelRounds(depth));
-      gl.uniform1f(k.uniforms.u_mandelStart, v.mapMode === 9 ? this.mandelStart(v, depth, width / height) : 0);
     };
     mandelDepth(v.mandelDepth);
     if (v.mapMode === 9) {
@@ -1726,42 +1725,6 @@ export class KaleidoRenderer {
    */
   private mandel: { texture: WebGLTexture; key: string; length: number } | null = null;
 
-  /**
-   * The lowest escape count in the Mandelbrot view: the shader counts the
-   * bands from it, so Band width changes only how far apart the bands are.
-   * Counted from round 0, a deep view's hundreds of rounds would turn a
-   * small change of Band width into a jump of several bands. The view's
-   * corners and edge middles (where the screen is farthest from the set)
-   * are worked out here with 64-bit numbers, the same smooth count as the
-   * shader's. With a step before the map, this is only near the view's
-   * lowest count, which is all it needs to be.
-   */
-  private mandelStart(v: FrameValues, depth: number, aspect: number) {
-    const span = 1.5 * Math.pow(10, -Math.min(10, Math.max(0, depth)));
-    const rounds = mandelRounds(depth);
-    const cos = Math.cos(v.mapAngle);
-    const sin = Math.sin(v.mapAngle);
-    let lowest = Infinity;
-    for (const [sx, sy] of [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]]) {
-      const px = sx * aspect / 2 - v.mapPanX;
-      const py = sy / 2 - v.mapPanY;
-      const cx = v.mapPointX + (px * cos + py * sin) * span;
-      const cy = v.mapPointY + (py * cos - px * sin) * span;
-      let x = 0;
-      let y = 0;
-      for (let n = 1; n <= rounds; n++) {
-        const next = x * x - y * y + cx;
-        y = 2 * x * y + cy;
-        x = next;
-        const size = x * x + y * y;
-        if (size > 65536) {
-          lowest = Math.min(lowest, n - Math.log2(Math.log(Math.sqrt(size))));
-          break;
-        }
-      }
-    }
-    return Number.isFinite(lowest) ? lowest : 0;
-  }
   private mandelPath(cx: number, cy: number, rounds: number) {
     const key = `${cx},${cy},${rounds}`;
     if (this.mandel?.key === key) return this.mandel;

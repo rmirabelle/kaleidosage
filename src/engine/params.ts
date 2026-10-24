@@ -443,7 +443,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   mandelDepth: { label: "Start depth", min: 0, max: 10, step: 0.01, value: 0.5, drift: "wave", low: 0, high: 3, on: false },
   mandelEnd: { label: "End depth", min: 0.5, max: 10, step: 0.01, value: 4.5, drift: "wave", low: 3, high: 6, on: false },
   mandelFade: { label: "Crossfade", min: 0.05, max: 0.5, step: 0.01, value: 0.25, drift: "wave", low: 0.15, high: 0.4, on: false },
-  mandelBands: { label: "Band width", min: 0.2, max: 20, step: 0.01, scale: "log", value: 3, drift: "wave", low: 1.5, high: 6, on: false },
+  mandelBands: { label: "Band width", min: 2, max: 4, step: 0.001, value: 3, drift: "wave", low: 2.8, high: 3.2, on: false },
   mandelFlow: { label: "Band flow", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -0.5, high: 0.5, on: false },
   mandelTerraces: { label: "Terraces", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.3, high: 0.9, on: false },
   mandelSoftness: { label: "Softness", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.8, on: false },
