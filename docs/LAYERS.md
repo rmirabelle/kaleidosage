@@ -110,3 +110,24 @@ not undo it.
 - Song follow and MIDI pick settings by key; the key form above keeps the
   old keys, but the MIDI panel and the Audio panel must show which copy a
   key belongs to.
+
+## Ideas for later
+
+Talked about 2026-10-24; none of these is planned yet.
+
+- **Picture effect.** A new effect at a place in the FX list that lays a
+  flat image (a PNG with clear parts, or an opaque one) over the picture
+  made so far, with position, size, turn, blend and opacity. The effects
+  above it shape the background; the effects below it change both, or,
+  with Freeze, only the image. Freeze could choose what it keeps: the
+  image's clear parts or its opaque parts. Preferred by the user over
+  clear parts in Slot A or B (which the kaleidoscope would fold into the
+  pattern). A tilting 3D plane was left out: it would do much of what the
+  Camera effect does.
+- **Freeze here.** A marker at any place in the FX list that works as the
+  3D Object's Freeze background does: the picture at the marker is kept
+  from the effects below it. Freeze does not stop time: the effects above
+  the marker keep moving the kept picture; only the effects below it
+  cannot change it.
+- **Masks**, **video export with clear parts**, and **effect copies with a
+  layers panel** (phases 3 and 4) are the other ideas from the same talk.
