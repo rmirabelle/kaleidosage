@@ -263,6 +263,7 @@ export default function App() {
    */
   type PanelTips = { scene: boolean; fx: boolean; play: boolean };
   const NO_PANEL_TIPS: PanelTips = { scene: false, fx: false, play: false };
+  const ALL_PANEL_TIPS: PanelTips = { scene: true, fx: true, play: true };
   const [panelTips, setPanelTips] = useState<PanelTips>(NO_PANEL_TIPS);
   const anyPanelTip = panelTips.scene || panelTips.fx || panelTips.play;
   /** The welcome card in the middle of the picture: with the first scene of a run, it offers to turn the pointers off. */
@@ -1518,12 +1519,11 @@ export default function App() {
   const newScene = useCallback(() => {
     if (!engine) return;
     if (docsRef.current.length === 0) {
-      setPanelTips({ scene: true, fx: true, play: true });
-      /* The first scene of each run, with the pointers on, also shows the welcome card. */
+      /* The first scene of each run, with the pointers on, shows the welcome card first; Show Me Around then shows the panels' tips. */
       if (!welcomeShownRef.current && helpSettings.get().pointers) {
         welcomeShownRef.current = true;
         setWelcome(true);
-      }
+      } else setPanelTips(ALL_PANEL_TIPS);
     }
     quietOutsidePlaylist();
     /* With no input, the new scene starts with the settings' audio buttons hidden. */
@@ -2291,7 +2291,15 @@ export default function App() {
                   >
                     Disable Pointers
                   </button>
-                  <button className="button primary" onClick={() => setWelcome(false)}>Show Me Around</button>
+                  <button
+                    className="button primary"
+                    onClick={() => {
+                      setWelcome(false);
+                      setPanelTips(ALL_PANEL_TIPS);
+                    }}
+                  >
+                    Show Me Around
+                  </button>
                 </div>
               </div>
             )}
