@@ -2638,7 +2638,8 @@ void main() {
  * smooth maximum, which rounds the edges and corners.
  *
  * Map: Wrap reads the picture at a place on the surface (in the shape's own
- * frame, so it turns with the shape); Project reads it at the pixel's own
+ * frame, so it turns with the shape; flat on each face, blended over the
+ * round edges, see wrapAt); Project reads it at the pixel's own
  * place, moved by the normal (a lens); Mirror reads it in the direction of
  * the reflected ray (a chrome shape). Every read goes out and back across
  * the picture (mirrored), so no seam shows.
@@ -2737,43 +2738,55 @@ float faces(float d[20], int count) {
   for (int i = 0; i < 20; i++) if (i < count) sum += exp((d[i] - m) / k);
   return m + k * log(sum);
 }
-float octahedron(vec3 q) {
-  float d[20];
-  int n = 0;
-  for (int i = 0; i < 8; i++) {
-    vec3 normal = vec3(i & 1, (i >> 1) & 1, (i >> 2) & 1) * 2.0 - 1.0;
-    d[n++] = dot(q, normal) / sqrt(3.0) - 0.62;
+/*
+ * The face planes of the shapes with flat faces (u_shape 6 to 8): each
+ * plane's outward direction (of length 1) and its distance from the middle.
+ * The distance to the shape and Wrap both read them.
+ */
+int facePlanes(out vec3 normal[20], out float offset[20]) {
+  if (u_shape == 6) {
+    /* The octahedron: the eight directions (±1, ±1, ±1). */
+    for (int i = 0; i < 8; i++) {
+      normal[i] = normalize(vec3(i & 1, (i >> 1) & 1, (i >> 2) & 1) * 2.0 - 1.0);
+      offset[i] = 0.62;
+    }
+    return 8;
   }
-  return faces(d, 8);
-}
-/* The icosahedron's 20 face directions are a dodecahedron's corners: (±1, ±1, ±1) and the cyclic turns of (0, ±1/g, ±g). */
-float icosahedron(vec3 q) {
-  const float g = 1.61803399;
-  float d[20];
-  int n = 0;
-  for (int i = 0; i < 8; i++) {
-    vec3 normal = vec3(i & 1, (i >> 1) & 1, (i >> 2) & 1) * 2.0 - 1.0;
-    d[n++] = dot(q, normalize(normal)) - 0.82;
+  if (u_shape == 7) {
+    /* The icosahedron's 20 face directions are a dodecahedron's corners: (±1, ±1, ±1) and the cyclic turns of (0, ±1/g, ±g). */
+    const float g = 1.61803399;
+    int n = 0;
+    for (int i = 0; i < 8; i++) normal[n++] = normalize(vec3(i & 1, (i >> 1) & 1, (i >> 2) & 1) * 2.0 - 1.0);
+    for (int i = 0; i < 4; i++) {
+      vec2 s = vec2(i & 1, (i >> 1) & 1) * 2.0 - 1.0;
+      vec2 a = s * vec2(1.0 / g, g);
+      normal[n++] = normalize(vec3(0.0, a.x, a.y));
+      normal[n++] = normalize(vec3(a.x, a.y, 0.0));
+      normal[n++] = normalize(vec3(a.y, 0.0, a.x));
+    }
+    for (int i = 0; i < 20; i++) offset[i] = 0.82;
+    return 20;
   }
-  for (int i = 0; i < 4; i++) {
-    vec2 s = vec2(i & 1, (i >> 1) & 1) * 2.0 - 1.0;
-    vec2 a = s * vec2(1.0 / g, g);
-    d[n++] = dot(q, normalize(vec3(0.0, a.x, a.y))) - 0.82;
-    d[n++] = dot(q, normalize(vec3(a.x, a.y, 0.0))) - 0.82;
-    d[n++] = dot(q, normalize(vec3(a.y, 0.0, a.x))) - 0.82;
-  }
-  return faces(d, 20);
-}
-/* A square pyramid: its tip at y = 0.9, its base at y = -0.7, 0.95 from the middle to each side. */
-float pyramid(vec3 q) {
-  float d[20];
+  /* A square pyramid: its tip at y = 0.9, its base at y = -0.7, 0.95 from the middle to each side. */
   vec2 side = normalize(vec2(1.6, 0.95));
-  d[0] = dot(q, vec3(side.x, side.y, 0.0)) - side.y * 0.9;
-  d[1] = dot(q, vec3(-side.x, side.y, 0.0)) - side.y * 0.9;
-  d[2] = dot(q, vec3(0.0, side.y, side.x)) - side.y * 0.9;
-  d[3] = dot(q, vec3(0.0, side.y, -side.x)) - side.y * 0.9;
-  d[4] = -q.y - 0.7;
-  return faces(d, 5);
+  normal[0] = vec3(side.x, side.y, 0.0);
+  normal[1] = vec3(-side.x, side.y, 0.0);
+  normal[2] = vec3(0.0, side.y, side.x);
+  normal[3] = vec3(0.0, side.y, -side.x);
+  for (int i = 0; i < 4; i++) offset[i] = side.y * 0.9;
+  normal[4] = vec3(0.0, -1.0, 0.0);
+  offset[4] = 0.7;
+  return 5;
+}
+
+/* The distance to a shape with flat faces: the largest of its planes' distances (see faces). */
+float flatShape(vec3 q) {
+  vec3 normal[20];
+  float offset[20];
+  float d[20];
+  int count = facePlanes(normal, offset);
+  for (int i = 0; i < 20; i++) d[i] = i < count ? dot(q, normal[i]) - offset[i] : -1e9;
+  return faces(d, count);
 }
 
 /* The distance from a point in the unit frame to the shape, and how much to trust it (the smooth maximum can overstate it). */
@@ -2784,9 +2797,7 @@ float unitShape(vec3 q) {
   if (u_shape == 3) return cone(q) * 0.8;
   if (u_shape == 4) return torus(q);
   if (u_shape == 5) return capsule(q);
-  if (u_shape == 6) return octahedron(q) * 0.7;
-  if (u_shape == 7) return icosahedron(q) * 0.7;
-  return pyramid(q) * 0.7;
+  return flatShape(q) * 0.7;
 }
 
 float scale() { return 0.5 * u_size; }
@@ -2801,24 +2812,74 @@ vec3 normalAt(vec3 p, float e) {
   return normalize(k.xyy * scene(p + k.xyy * e) + k.yyx * scene(p + k.yyx * e) + k.yxy * scene(p + k.yxy * e) + k.xxx * scene(p + k.xxx * e));
 }
 
-/* Wrap: the place in the picture for a point of the surface, in the shape's frame. */
-vec2 wrapAt(vec3 q, vec3 n) {
+/* A read of the picture at a place of the surface, with Tiles and the mirrored fold. */
+vec3 readAt(vec2 uv) { return texture(u_tex, fold(uv * u_tiles)).rgb; }
+
+/* The picture lying flat on a face with this outward direction, across the face. */
+vec2 onFace(vec3 q, vec3 axis) {
+  vec3 t1 = normalize(cross(abs(axis.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), axis));
+  vec3 t2 = cross(axis, t1);
+  return vec2(dot(q, t1), dot(q, t2)) * 0.6 + 0.5;
+}
+
+/*
+ * Wrap: the picture's color at a point of the surface, in the shape's
+ * frame. A face lays the picture flat on it, across the face, along
+ * directions set by the face itself, so the picture does not turn with the
+ * curve of a round edge. Where Roundness curves one face into the next, the
+ * faces' pictures blend by how much the surface faces each one: the box by
+ * its normal, the shapes with flat faces by the same weights that round
+ * their edges (see faces), and the cylinder, cone and capsule between their
+ * side and their caps.
+ */
+vec3 wrapAt(vec3 q, vec3 n) {
   float around = atan(q.z, q.x) / (2.0 * PI) + 0.5;
-  vec2 uv;
   if (u_shape == 0) {
     vec3 d = normalize(q);
-    uv = vec2(around * 2.0, asin(clamp(d.y, -1.0, 1.0)) / PI + 0.5);
-  } else if (u_shape == 4) {
-    uv = vec2(around * 2.0, atan(q.y, length(q.xz) - 0.65) / PI + 1.0);
-  } else if ((u_shape == 2 || u_shape == 3 || u_shape == 5) && abs(n.y) < 0.7) {
-    uv = vec2(around * 2.0, q.y * 0.5 + 0.5);
-  } else {
-    /* A flat face (or a cap): the picture lies flat on it, across the face. */
-    vec3 t1 = normalize(cross(abs(n.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), n));
-    vec3 t2 = cross(n, t1);
-    uv = vec2(dot(q, t1), dot(q, t2)) * 0.6 + 0.5;
+    return readAt(vec2(around * 2.0, asin(clamp(d.y, -1.0, 1.0)) / PI + 0.5));
   }
-  return fold(uv * u_tiles);
+  if (u_shape == 4) return readAt(vec2(around * 2.0, atan(q.y, length(q.xz) - 0.65) / PI + 1.0));
+  if (u_shape == 1) {
+    /* The box: each axis's face, weighted by a high power of the normal, so a flat face reads only itself. */
+    vec3 w = pow(abs(n), vec3(8.0));
+    w /= w.x + w.y + w.z;
+    vec3 color = vec3(0.0);
+    if (w.x > 0.01) color += w.x * readAt(onFace(q, vec3(sign(n.x), 0.0, 0.0)));
+    if (w.y > 0.01) color += w.y * readAt(onFace(q, vec3(0.0, sign(n.y), 0.0)));
+    if (w.z > 0.01) color += w.z * readAt(onFace(q, vec3(0.0, 0.0, sign(n.z))));
+    return color / max(dot(w, step(0.01, w)), 1e-4);
+  }
+  if (u_shape == 2 || u_shape == 3 || u_shape == 5) {
+    /* The side's picture goes round the shape; the caps' lies flat; between them they blend. */
+    float cap = smoothstep(0.55, 0.85, abs(n.y));
+    vec3 color = vec3(0.0);
+    if (cap < 0.99) color += (1.0 - cap) * readAt(vec2(around * 2.0, q.y * 0.5 + 0.5));
+    if (cap > 0.01) color += cap * readAt(onFace(q, vec3(0.0, sign(n.y), 0.0)));
+    return color;
+  }
+  /* The shapes with flat faces: each face's picture, weighted as the smooth maximum weights its plane. */
+  vec3 normal[20];
+  float offset[20];
+  float d[20];
+  int count = facePlanes(normal, offset);
+  float m = -1e9;
+  int best = 0;
+  for (int i = 0; i < 20; i++) {
+    d[i] = i < count ? dot(q, normal[i]) - offset[i] : -1e9;
+    if (d[i] > m) { m = d[i]; best = i; }
+  }
+  float k = radius() * 0.3;
+  if (k < 1e-3) return readAt(onFace(q, normal[best]));
+  vec3 color = vec3(0.0);
+  float total = 0.0;
+  for (int i = 0; i < 20; i++) {
+    if (i >= count) break;
+    float w = exp((d[i] - m) / k);
+    if (w < 0.01) continue;
+    color += w * readAt(onFace(q, normal[i]));
+    total += w;
+  }
+  return color / total;
 }
 
 void main() {
@@ -2867,16 +2928,14 @@ void main() {
       float at = hit ? t : nearestT;
       vec3 p = eye + rd * at;
       vec3 n = normalAt(p, max(u_pixel * at / EYE * 0.5, 1e-4));
-      vec2 uv;
       if (u_map == 1) {
-        uv = fold(v_uv + n.xy * u_bend * 0.3 * vec2(1.0 / u_aspect, 1.0));
+        color = texture(u_tex, fold(v_uv + n.xy * u_bend * 0.3 * vec2(1.0 / u_aspect, 1.0))).rgb;
       } else if (u_map == 2) {
         vec3 r = reflect(rd, n);
-        uv = vec2(abs(atan(r.x, -r.z)) / PI, asin(clamp(r.y, -1.0, 1.0)) / PI + 0.5);
+        color = texture(u_tex, vec2(abs(atan(r.x, -r.z)) / PI, asin(clamp(r.y, -1.0, 1.0)) / PI + 0.5)).rgb;
       } else {
-        uv = wrapAt(toShape(p), transpose(u_turn) * n);
+        color = wrapAt(toShape(p), transpose(u_turn) * n);
       }
-      color = texture(u_tex, uv).rgb;
       float lit = mix(1.0, 0.18 + 0.82 * max(dot(n, u_light), 0.0), u_shading);
       float shine = pow(max(dot(reflect(-u_light, n), -rd), 0.0), 40.0) * u_shine;
       color = color * lit + shine;

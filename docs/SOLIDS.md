@@ -70,8 +70,14 @@ so a range on them changes the speed, not the angle.
 - Wrap: the place on the surface, in the shape's own turning frame, gives
   the picture's coordinates: the angle around the axis and the height for
   round shapes, the angle around and across the tube for the torus, and the
-  face for the flat shapes (the place is projected along the normal's
-  largest part).
+  face for the flat shapes. A face lays the picture flat along directions
+  set by the face itself, not by the curved normal, so the picture does not
+  twist over a round edge (changed 2026-10-24; before, the directions came
+  from the normal at each pixel). Where Roundness curves one face into the
+  next, the faces' pictures blend: the box by a high power of the normal
+  (each axis's face), the octahedron, icosahedron and pyramid by the same
+  weights as the smooth maximum that rounds them, and the cylinder, cone
+  and capsule between their side and their caps.
 - Project: the picture is read at the pixel's own place, moved by the
   normal's sideways part times Bend.
 - Mirror: the reflected ray's direction gives the place in the picture
