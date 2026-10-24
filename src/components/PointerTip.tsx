@@ -15,7 +15,14 @@ const subscribeHelp = (listener: () => void) => helpSettings.subscribe(listener)
 const pointersOn = () => helpSettings.get().pointers;
 
 type Side = "right" | "above" | "below";
-interface Shown { tip: HTMLDivElement; anchor: RefObject<HTMLElement | null>; side: Side }
+interface Shown {
+  tip: HTMLDivElement;
+  anchor: RefObject<HTMLElement | null>;
+  side: Side;
+  /** A green line around a panel that the tip tells about, and that panel. */
+  ring: HTMLDivElement | null;
+  outline: RefObject<HTMLElement | null> | undefined;
+}
 interface Box { left: number; top: number; right: number; bottom: number }
 
 /**
@@ -34,6 +41,16 @@ function placeAll() {
     const target = entry.anchor.current?.getBoundingClientRect();
     /* With no control to point at (not drawn yet), the tip waits out of sight. */
     entry.tip.style.visibility = target ? "visible" : "hidden";
+    if (entry.ring) {
+      const panel = target ? entry.outline?.current?.getBoundingClientRect() : undefined;
+      entry.ring.style.visibility = panel ? "visible" : "hidden";
+      if (panel) {
+        entry.ring.style.left = `${panel.left}px`;
+        entry.ring.style.top = `${panel.top}px`;
+        entry.ring.style.width = `${panel.width}px`;
+        entry.ring.style.height = `${panel.height}px`;
+      }
+    }
     if (!target) continue;
     const width = entry.tip.offsetWidth;
     const height = entry.tip.offsetHeight;
@@ -84,40 +101,43 @@ function hide(entry: Shown) {
  * A context tip with an arrow to a control, and a close button: at the
  * right of the control, or above or below it ("side"). It stays in the
  * window, keeps clear of the other tips (see placeAll), and follows the
- * control while the panels around it change size. Help, Disable Pointers
- * hides every tip.
+ * control while the panels around it change size. With "outline", a green
+ * line also goes round that panel while the tip shows. Help, Disable
+ * Pointers hides every tip.
  */
-export function PointerTip(props: {
-  anchor: RefObject<HTMLElement | null>;
-  text: string;
-  onClose: () => void;
-  side?: Side;
-}) {
+export function PointerTip(props: TipProps) {
   const on = useSyncExternalStore(subscribeHelp, pointersOn);
   return on ? <PlacedTip {...props} /> : null;
 }
 
-function PlacedTip({ anchor, text, onClose, side = "right" }: {
+interface TipProps {
   anchor: RefObject<HTMLElement | null>;
   text: string;
   onClose: () => void;
   side?: Side;
-}) {
+  outline?: RefObject<HTMLElement | null>;
+}
+
+function PlacedTip({ anchor, text, onClose, side = "right", outline }: TipProps) {
   const tipRef = useRef<HTMLDivElement>(null);
+  const ringRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const tip = tipRef.current;
     if (!tip) return;
-    const entry = { tip, anchor, side };
+    const entry = { tip, anchor, side, ring: ringRef.current, outline };
     show(entry);
     return () => hide(entry);
-  }, [anchor, side]);
+  }, [anchor, side, outline]);
   return createPortal(
-    <div ref={tipRef} className={`pointer-tip ${side}`} role="status">
-      <span className="selectable">{text}</span>
-      <button className="help-card-close" onClick={onClose} aria-label="Close the tip" data-tip="Close">
-        <X size={14} />
-      </button>
-    </div>,
+    <>
+      {outline && <div ref={ringRef} className="pointer-ring" aria-hidden="true" />}
+      <div ref={tipRef} className={`pointer-tip ${side}`} role="status">
+        <span className="selectable">{text}</span>
+        <button className="help-card-close" onClick={onClose} aria-label="Close the tip" data-tip="Close">
+          <X size={14} />
+        </button>
+      </div>
+    </>,
     document.body
   );
 }

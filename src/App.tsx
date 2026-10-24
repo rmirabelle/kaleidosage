@@ -267,6 +267,9 @@ export default function App() {
   const sceneCard = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".control-panel .source-section > .panel-header-bar"); } }), []);
   const fxCard = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".control-panel .fx-card > .panel-header-bar"); } }), []);
   const playCard = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".control-panel .scene-transport"); } }), []);
+  /* The whole cards, for the green line round each (the Scene and FX tips point at the cards' headers). */
+  const sceneOutline = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".control-panel .source-section"); } }), []);
+  const fxOutline = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".control-panel .fx-card"); } }), []);
   useEffect(() => {
     if (!anyPanelTip) return;
     const onPress = (event: PointerEvent) => {
@@ -2267,6 +2270,7 @@ export default function App() {
       {panelTips.scene && !startScreen && (
         <PointerTip
           anchor={sceneCard}
+          outline={sceneOutline}
           text="This is the scene SOURCE panel. It shows the scene name and controls the scene loop LENGTH. SLOT A holds a checkerboard pattern - good for testing FX. Hover over a slot to load a random image, search for a specific image, choose a pattern, or load your own image or video."
           onClose={() => setPanelTips((tips) => ({ ...tips, scene: false }))}
         />
@@ -2274,6 +2278,7 @@ export default function App() {
       {panelTips.fx && !startScreen && (
         <PointerTip
           anchor={fxCard}
+          outline={fxOutline}
           text="This is the FX panel. The speaker icon toggles the visibility of audio links. The MIDI icon toggles the visibility of MIDI mappings. Random ALL (dice icon) creates a new random set of multiple FX. Nudge ALL (wind icon) nudges all settings by a small amount. Clear ALL (trashcan icon) deletes all added FX. Click + New to add a new effect."
           onClose={() => setPanelTips((tips) => ({ ...tips, fx: false }))}
         />
@@ -2281,6 +2286,7 @@ export default function App() {
       {panelTips.play && !startScreen && (
         <PointerTip
           anchor={playCard}
+          outline={playCard}
           text="This is the PLAY panel. INPUT enables audio reactivity. The play controls stop, start and pause the scene. The position slider loops according to Scene LENGTH."
           onClose={() => setPanelTips((tips) => ({ ...tips, play: false }))}
         />
