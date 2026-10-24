@@ -637,8 +637,7 @@ vec2 complexMap(vec2 p) {
     vec2 saved = vec2(1e9);
     int saveAt = 8;
     float near = 1e-3 * span;
-    for (int i = 0; i < 1250; i++) {
-      if (inside || i >= u_mandelRounds) break;
+    for (int i = 0; i < (inside ? 0 : u_mandelRounds); i++) {
       vec2 big = mandelAt(ref);
       /* The slope per screen unit (dz/dc times the span), so it stays far from the largest 32-bit number at any depth. */
       slope = 2.0 * cmul(big + d, slope) + vec2(span, 0.0);
@@ -915,42 +914,6 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
   /* The Mandelbrot map's second point (see mandelAlt), which goes through the later steps too. */
   vec2 mandelP = p;
   float mandelWeight = 0.0;
-  for (int i = 0; i < 3; i++) {
-    if (i >= u_shapeCount) break;
-    int shapeStep = u_shapeOrder[i];
-    if ((skip & (1 << shapeStep)) != 0) continue;
-    if (shapeStep == 0) {
-      if (u_warpMode != 0) {
-        p += warpOffset(p);
-        if (fading) p2 += warpOffset(p2);
-        if (mandelWeight > 0.0) mandelP += warpOffset(mandelP);
-      }
-    } else if (shapeStep == 1) {
-      if (spiralLast) continue;
-      if (u_mapMode == 2) mapDetail = g0 * mobiusStretch(p);
-      p = complexMap(p);
-      farDistance = depthDistance;
-      if (u_mapMode == 3) mapDetail = g0 * mix(1.0, juliaStretch, u_mapMix);
-      if (u_mapMode == 9) {
-        mapDetail = g0 * mix(1.0, mandelStretch, u_mapMix);
-        mandelP = mandelAlt;
-        mandelWeight = mandelAltWeight;
-      }
-      if (fading) p2 = complexMap(p2);
-      mapped = true;
-    } else {
-      beforeFold = p;
-      /* Before the main fold, which sets the radial crossfade's point. */
-      if (mandelWeight > 0.0) mandelP = fold(mandelP);
-      p = fold(p);
-      folded = true;
-      if (foldAltWeight > 0.0) {
-        fading = true;
-        p2 = foldAlt;
-        fade = foldAltWeight;
-      }
-    }
-  }
   /**
    * The spiral's own jump would show in the measured detail as a thin blur
    * line, so the detail is measured on the point before the spiral, then
@@ -968,38 +931,84 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
    * of the lower count, by the part after the whole number.
    */
   float spiralWhole = floor(u_drosteSpirals);
-  float spiralFade = u_mapMode == 8 ? u_drosteSpirals - spiralWhole : 0.0;
+  float spiralFade = spiralLast && u_mapMode == 8 && u_drosteSpirals - spiralWhole > 1e-3 ? u_drosteSpirals - spiralWhole : 0.0;
   vec2 spiralP = p;
   vec2 spiralAlt = p;
   float spiralAltWeight = 0.0;
   float spiralStretch = 1.0;
-  drosteArms = spiralWhole;
-  if (spiralLast) {
-    p = complexMap(p);
-    if (u_mapMode == 8) {
-      drosteP = drosteAlt;
-      drosteWeight = drosteAltWeight;
-    }
-    farDistance = depthDistance;
-    if (fading) p2 = complexMap(p2);
-    mapped = true;
-    if (u_mapMode == 8) {
-      /* The Droste map measures its own stretch (see drosteMap). */
-      stretch = mix(1.0, drosteStretch, u_mapMix);
+  /**
+   * Loops here run to a count the graphics card learns only at run time
+   * (u_shapeCount, not 3), and each big function (the map, the picture
+   * read) has one call in them, so the shader compiler makes one copy of
+   * each: with a copy per call and per round, this shader took over a
+   * minute to build, and the app lost the graphics card. The last round
+   * is the spiral map, when it goes last (spiralLast).
+   */
+  for (int i = 0; i < u_shapeCount + (spiralLast ? 1 : 0); i++) {
+    bool spiralStep = i >= u_shapeCount;
+    int shapeStep = spiralStep ? 1 : u_shapeOrder[i];
+    if ((skip & (1 << shapeStep)) != 0) continue;
+    if (shapeStep == 0) {
+      if (u_warpMode != 0) {
+        p += warpOffset(p);
+        if (fading) p2 += warpOffset(p2);
+        if (mandelWeight > 0.0) mandelP += warpOffset(mandelP);
+      }
+    } else if (shapeStep == 1) {
+      if (spiralLast && !spiralStep) continue;
+      if (u_mapMode == 2) mapDetail = g0 * mobiusStretch(p);
+      if (spiralStep) beforeSpiral = p;
+      /* The points to map: the point, the radial crossfade's point, and the higher spiral count's point. */
+      int points = 1 + (fading ? 1 : 0) + (spiralFade > 0.0 ? 1 : 0);
+      for (int k = 0; k < points; k++) {
+        bool second = k == 1 && fading;
+        bool higher = k > 0 && !second;
+        drosteArms = higher ? spiralWhole + 1.0 : spiralWhole;
+        vec2 q = complexMap(k == 0 ? p : (second ? p2 : beforeSpiral));
+        if (k == 0) {
+          p = q;
+          farDistance = depthDistance;
+          if (u_mapMode == 3) mapDetail = g0 * mix(1.0, juliaStretch, u_mapMix);
+          if (u_mapMode == 9) {
+            mapDetail = g0 * mix(1.0, mandelStretch, u_mapMix);
+            mandelP = mandelAlt;
+            mandelWeight = mandelAltWeight;
+          }
+          if (spiralStep && u_mapMode == 8) {
+            drosteP = drosteAlt;
+            drosteWeight = drosteAltWeight;
+          }
+        } else if (second) {
+          p2 = q;
+        } else {
+          spiralP = q;
+          spiralAlt = drosteAlt;
+          spiralAltWeight = drosteAltWeight;
+          spiralStretch = mix(1.0, drosteStretch, u_mapMix);
+        }
+        /* The Droste map measures its own stretch (see drosteMap); the last of the point and the crossfade's point sets it. */
+        if (spiralStep && u_mapMode == 8 && !higher) stretch = mix(1.0, drosteStretch, u_mapMix);
+      }
+      if (spiralStep && u_mapMode != 8) {
+        /* The spiral's size, larger where the stretch squeezes the image or the slant tilts it. */
+        float aspect = u_imgRes.x / u_imgRes.y;
+        float twist = abs(u_mapArms);
+        float squeeze = u_spiralCopies == 0.0 ? sqrt(1.0 + aspect * aspect * twist * twist) : max(1.0, u_spiralCopies / max(twist, 0.5));
+        float spiralSize = length(vec2(2.0 * aspect * twist, 2.0)) / TAU * squeeze;
+        stretch = mix(1.0, spiralSize / max(length(beforeSpiral), 1e-4), u_mapMix);
+      }
+      mapped = true;
     } else {
-      /* The spiral's size, larger where the stretch squeezes the image or the slant tilts it. */
-      float aspect = u_imgRes.x / u_imgRes.y;
-      float twist = abs(u_mapArms);
-      float squeeze = u_spiralCopies == 0.0 ? sqrt(1.0 + aspect * aspect * twist * twist) : max(1.0, u_spiralCopies / max(twist, 0.5));
-      float spiralSize = length(vec2(2.0 * aspect * twist, 2.0)) / TAU * squeeze;
-      stretch = mix(1.0, spiralSize / max(length(beforeSpiral), 1e-4), u_mapMix);
-    }
-    if (spiralFade > 1e-3) {
-      drosteArms = spiralWhole + 1.0;
-      spiralP = complexMap(beforeSpiral);
-      spiralAlt = drosteAlt;
-      spiralAltWeight = drosteAltWeight;
-      spiralStretch = mix(1.0, drosteStretch, u_mapMix);
+      beforeFold = p;
+      /* Before the main fold, which sets the radial crossfade's point. */
+      if (mandelWeight > 0.0) mandelP = fold(mandelP);
+      p = fold(p);
+      folded = true;
+      if (foldAltWeight > 0.0) {
+        fading = true;
+        p2 = foldAlt;
+        fade = foldAltWeight;
+      }
     }
   }
   /**
@@ -1012,18 +1021,36 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
   vec2 measured = folded ? beforeFold : (spiralLast ? beforeSpiral : p);
   float detail = min(max(length(dFdx(measured)), length(dFdy(measured))), g0 * 4.0);
   float g = max(detail * stretch, mapDetail) / (folded ? u_zoom : 1.0);
-  vec4 color = sourceColor(p, g);
-  /* The Mandelbrot map's point at twice the angle has twice the detail. */
-  if (mandelWeight > 0.0) color = mix(color, sourceColor(mandelP, g * 2.0), mandelWeight);
-  if (fading) color = mix(color, sourceColor(p2, g), fade);
-  /* The copy one size smaller has its detail smaller by the copy size too. */
+  /**
+   * The picture reads, each with its point, detail and share: the point,
+   * the Mandelbrot map's point at twice the angle (twice the detail), the
+   * radial crossfade's point, the Droste copy one size smaller (its detail
+   * smaller by the copy size), and the higher spiral count's point with its
+   * own copy. The shares are the old chain of mixes multiplied out. One
+   * call in a loop of run-time length (see the step loop).
+   */
   float copySize = clamp(u_drosteSize, 0.05, 0.95);
-  if (drosteWeight > 0.0) color = mix(color, sourceColor(drosteP, g * copySize), drosteWeight);
-  if (spiralLast && spiralFade > 1e-3) {
-    float g2 = max(detail * spiralStretch, mapDetail) / (folded ? u_zoom : 1.0);
-    vec4 higher = sourceColor(spiralP, g2);
-    if (spiralAltWeight > 0.0) higher = mix(higher, sourceColor(spiralAlt, g2 * copySize), spiralAltWeight);
-    color = mix(color, higher, spiralFade);
+  float g2 = max(detail * spiralStretch, mapDetail) / (folded ? u_zoom : 1.0);
+  float mandelShare = mandelWeight > 0.0 ? mandelWeight : 0.0;
+  float fadeShare = fading ? fade : 0.0;
+  float drosteShare = drosteWeight > 0.0 ? drosteWeight : 0.0;
+  float altShare = spiralAltWeight > 0.0 ? spiralAltWeight : 0.0;
+  vec2 readAt[6] = vec2[6](p, mandelP, p2, drosteP, spiralP, spiralAlt);
+  float readDetail[6] = float[6](g, g * 2.0, g, g * copySize, g2, g2 * copySize);
+  float readShare[6] = float[6](
+    (1.0 - mandelShare) * (1.0 - fadeShare) * (1.0 - drosteShare) * (1.0 - spiralFade),
+    mandelShare * (1.0 - fadeShare) * (1.0 - drosteShare) * (1.0 - spiralFade),
+    fadeShare * (1.0 - drosteShare) * (1.0 - spiralFade),
+    drosteShare * (1.0 - spiralFade),
+    (1.0 - altShare) * spiralFade,
+    altShare * spiralFade);
+  int reads = spiralFade > 0.0 ? 6 : 4;
+  vec4 color = sourceColor(p, g);
+  if (readShare[0] < 1.0) {
+    color *= readShare[0];
+    for (int k = 1; k < reads; k++) {
+      if (readShare[k] > 0.0) color += readShare[k] * sourceColor(readAt[k], readDetail[k]);
+    }
   }
   /**
    * Depth fade: the far end of the tunnel or a spiral (its center), the Möbius pole, or Julia's most stretched places
@@ -1067,8 +1094,8 @@ void main() {
    */
   vec4 color = shapeColor(screen, 0, g0);
   int skipped = 0;
-  for (int i = 0; i < 3; i++) {
-    if (i >= u_shapeCount) break;
+  /* A loop of run-time length, so the compiler keeps one more copy of shapeColor, not three (see the step loop in shapeColor). */
+  for (int i = 0; i < u_shapeCount; i++) {
     int shapeStep = u_shapeOrder[i];
     float opacity = u_shapeOpacity[shapeStep];
     int mode = u_shapeBlend[shapeStep];
