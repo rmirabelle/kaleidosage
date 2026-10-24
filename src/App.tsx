@@ -2342,7 +2342,7 @@ export default function App() {
         <PointerTip
           anchor={fxCard}
           outline={fxOutline}
-          text="This is the FX panel. The speaker icon toggles the visibility of audio links. The MIDI icon toggles the visibility of MIDI mappings. Random ALL (dice icon) creates a new random set of multiple FX. Nudge ALL (wind icon) nudges all settings by a small amount. Clear ALL (trashcan icon) deletes all added FX. Click + New to add a new effect."
+          text="This is the FX panel. Click + New to add a new effect. Effects run top-to-bottom. Random ALL (dice icon) creates a new semi-random set of FX. Nudge ALL (wind icon) nudges all effect settings by a small amount. Clear ALL (trash icon) deletes all added effects. The speaker and MIDI icons show or hide audio or MIDI controls for each effect setting."
           onClose={() => setPanelTips((tips) => ({ ...tips, fx: false }))}
         />
       )}
