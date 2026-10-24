@@ -9,7 +9,7 @@ spirals that come back at every depth.
 
 Map mode 9 of the Algorithm effect (see `complexMap` in shaders.ts).
 
-- c is the place (Place menu, `MANDEL_SPOTS` in submodes.ts) plus the
+- c is the place (Place menu, `MANDEL_CENTERS` in submodes.ts) plus the
   screen point, 1.5 / 10^Depth across; Angle turns the view and Pan moves
   it in screen units.
 - z = z^2 + c from 0, up to 200 + 120 Depth rounds (800 at most). A point
@@ -92,3 +92,31 @@ an RTX 5090.
 - Places: Seahorse valley, Spiral, Branches (new), Dendrite, Mini copies (a
   point among small copies of the set, was the cusp at -1.75), Elephant
   valley. Default Depth is now 3.
+
+## Step 4 (built 2026-10-24): real dive with a crossfade
+
+Step 3's endless loop looked static: at a self-repeating point the shapes
+never change (the user: branches never grow or shrink). It is replaced.
+
+- The places are now centers of small copies of the set (found with
+  Newton's method on z_p(c) = 0, from each point's nearest loop length),
+  sizes 4.5e-8 to 1e-6, plus the well-known Seahorse valley point. A dive
+  toward one passes changing shapes and ends at the copy (depth about 6 to
+  7.3). Checked with renders at depths 1, 3, 5 and 6.5.
+- Speed adds depth flown (powers of ten per second). The view goes from
+  Depth down by Dive length (default 4), then starts again. Over the last
+  share of the dive (Crossfade, default 0.25) the start fades in, already
+  diving, from as far before Depth as the view is before the end, so it
+  reaches Depth just as the dive restarts: the frames on both sides of the
+  restart differ by 0.4 of 255.
+- The crossfade draws the shape pass a second time at the second depth,
+  mixed in with the blend's constant alpha (`drawShapes`), so it costs a
+  second pass only while it fades. The exact path is always made for the
+  most rounds, so both depths share it.
+- Step 3's cost limits stay (rounds at most 1250, inside tests). Default
+  Depth is 0.5 again.
+
+Also on 2026-10-24: the app lost the graphics card because the shape shader
+took 65 s to build (ANGLE on Direct3D 11 copies every function call, and
+every round of a fixed-length loop). Calling the map and the picture read
+from one place each, in loops of run-time length, brought it to 11 s.

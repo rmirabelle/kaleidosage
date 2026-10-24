@@ -475,8 +475,6 @@ vec2 mandelAt(int n) { return texelFetch(u_mandelPath, ivec2(n & 1023, n >> 10),
 uniform float u_mandelBands;
 uniform float u_mandelTerraces;
 uniform float u_mandelSoftness;
-/* The rounds the dive's jumps back have skipped (see MANDEL_SPOTS in submodes.ts). */
-uniform float u_mandelShift;
 uniform float u_mandelLight;
 uniform vec2 u_mandelLightDir;
 
@@ -667,15 +665,6 @@ vec2 complexMap(vec2 p) {
       float r = length(m);
       float count = escaped + 1.0 - log2(log(r));
       float band = count / max(u_mandelBands, 0.01);
-      /**
-       * The dive's jumps back skip rounds (u_mandelShift), so the bands move
-       * on by them. The picture repeats every two widths (it is mirrored),
-       * and the terraces every band, so each takes its own remainder, which
-       * keeps the numbers small on a long dive.
-       */
-      float skipped = u_mandelShift / max(u_mandelBands, 0.01);
-      float terrace = fract(band + fract(skipped));
-      band += mod(skipped, 2.0 * u_imgRes.x / u_imgRes.y);
       w = vec2(band, atan(m.y, m.x) / PI);
       /**
        * Across a ring where the escape count changes, the angle doubles: a
@@ -692,7 +681,7 @@ vec2 complexMap(vec2 p) {
       vec2 normal = normalize(cdiv(m, slope));
       float lit = clamp((dot(normal, u_mandelLightDir) + 1.5) / 2.5, 0.0, 1.0);
       float edge = 0.5 * clamp(u_mandelSoftness, 0.0, 1.0) + 1e-4;
-      float t = terrace;
+      float t = fract(band);
       float rise = min(t / (1.0 - edge), (1.0 - t) / edge);
       float step_ = 0.45 + 0.55 * mix(rise, smoothstep(0.0, 1.0, rise), clamp(u_mandelSoftness, 0.0, 1.0));
       mandelShade = mix(1.0, lit, u_mandelLight) * mix(1.0, step_, u_mandelTerraces);

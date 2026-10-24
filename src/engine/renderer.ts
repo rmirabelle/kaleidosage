@@ -118,8 +118,9 @@ export interface FrameValues {
   mandelSoftness: number;
   mandelLight: number;
   mandelLightAngle: number;
-  /** The rounds the dive's jumps back have skipped (see MANDEL_SPOTS): the bands move on by these, so the jumps do not show. */
-  mandelShift: number;
+  /** The dive's crossfade (see frameValues in engine.ts): how much of the view at the second depth shows over the first. */
+  mandelFade: number;
+  mandelFadeDepth: number;
   mapScale: number;
   mapPower: number;
   mapPointX: number;
@@ -1127,22 +1128,23 @@ export class KaleidoRenderer {
     gl.uniform1f(k.uniforms.u_mapPower, v.mapPower);
     gl.uniform2f(k.uniforms.u_mapPoint, v.mapPointX, v.mapPointY);
     gl.uniform1i(k.uniforms.u_mapSteps, Math.round(v.mapSteps));
-    gl.uniform1f(k.uniforms.u_mandelDepth, v.mandelDepth);
+    const mandelDepth = (depth: number) => {
+      gl.uniform1f(k.uniforms.u_mandelDepth, depth);
+      gl.uniform1i(k.uniforms.u_mandelRounds, mandelRounds(depth));
+    };
+    mandelDepth(v.mandelDepth);
     if (v.mapMode === 9) {
       /* The deep zoom's exact path (see mandelPath), in slot 2; the source images use 0 and 1. */
-      const rounds = mandelRounds(v.mandelDepth);
-      const path = this.mandelPath(v.mapPointX, v.mapPointY, rounds);
+      const path = this.mandelPath(v.mapPointX, v.mapPointY, mandelRounds(Infinity));
       gl.activeTexture(gl.TEXTURE2);
       gl.bindTexture(gl.TEXTURE_2D, path.texture);
       gl.uniform1i(k.uniforms.u_mandelPath, 2);
       gl.uniform1i(k.uniforms.u_mandelLength, path.length);
-      gl.uniform1i(k.uniforms.u_mandelRounds, rounds);
       gl.activeTexture(gl.TEXTURE0);
     }
     gl.uniform1f(k.uniforms.u_mandelBands, v.mandelBands);
     gl.uniform1f(k.uniforms.u_mandelTerraces, v.mandelTerraces);
     gl.uniform1f(k.uniforms.u_mandelSoftness, v.mandelSoftness);
-    gl.uniform1f(k.uniforms.u_mandelShift, v.mandelShift);
     gl.uniform1f(k.uniforms.u_mandelLight, v.mandelLight);
     gl.uniform2f(k.uniforms.u_mandelLightDir, Math.cos(v.mandelLightAngle), Math.sin(v.mandelLightAngle));
     gl.uniform1f(k.uniforms.u_mapArms, v.mapArms);
@@ -1189,6 +1191,19 @@ export class KaleidoRenderer {
     const panned = steps.includes("kaleidoscope");
     gl.uniform2f(k.uniforms.u_offset, panned ? v.panX : 0, panned ? v.panY : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (v.mapMode === 9 && v.mandelFade > 0 && steps.includes("map")) {
+      /**
+       * The Mandelbrot dive's crossfade: the same steps again at the second
+       * depth, mixed over the first by the blend's constant share (colors
+       * and cover alike). It costs a second pass only while it fades.
+       */
+      mandelDepth(v.mandelFadeDepth);
+      gl.enable(gl.BLEND);
+      gl.blendColor(0, 0, 0, v.mandelFade);
+      gl.blendFunc(gl.CONSTANT_ALPHA, gl.ONE_MINUS_CONSTANT_ALPHA);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.disable(gl.BLEND);
+    }
     /* The picture textures are also drawn to and read without mip levels, so they go back to plain reads. */
     if (picture) gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   }
@@ -1699,10 +1714,11 @@ export class KaleidoRenderer {
   /**
    * The Mandelbrot map's exact path for a place (the deep zoom, see
    * docs/MANDELBROT.md): z = z^2 + c from 0, worked out here with 64-bit
-   * numbers, until it escapes or for "rounds" rounds. The graphics card
-   * reads it from a two-channel float texture, 1024 values a row, and works
-   * only with each pixel's small difference from it. It is made again only
-   * when the place or the rounds change.
+   * numbers, until it escapes or for "rounds" rounds (always the most, so
+   * the dive's two depths share it). The graphics card reads it from a
+   * two-channel float texture, 1024 values a row, and works only with each
+   * pixel's small difference from it. It is made again only when the place
+   * changes.
    */
   private mandel: { texture: WebGLTexture; key: string; length: number } | null = null;
   private mandelPath(cx: number, cy: number, rounds: number) {
