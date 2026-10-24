@@ -100,12 +100,12 @@ export const SOLID_KEYS: readonly ParamKey[] = ["solidSize", "solidRound", "soli
 /**
  * Each shape's own sliders. The sphere and Morph have no edges to round;
  * for the blobs Roundness is how softly they merge, for the star how round
- * its spikes are. Numbers 2 to 5 were the cylinder, cone, torus and capsule
+ * its spikes are, for the Menger sponge how round its holes are. Numbers 2 to 5 were the cylinder, cone, torus and capsule
  * until 2026-10-24 (no scene used them).
  */
 export const SOLID_SHAPE_KEYS: Record<SolidShape, ParamKey[]> = {
   0: [], 1: ["solidRound"], 2: ["solidMorph"], 3: ["solidBlobs", "solidRound"], 4: ["solidBumps", "solidWaves"], 5: ["solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidRound"],
-  6: ["solidRound"], 7: ["solidRound"], 8: ["solidRound"], 9: ["solidLevels"]
+  6: ["solidRound"], 7: ["solidRound"], 8: ["solidRound"], 9: ["solidLevels", "solidRound"]
 };
 /** The sliders that only some shapes show (see SOLID_SHAPE_KEYS). */
 export const SOLID_SHAPE_ONLY: readonly ParamKey[] = ["solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidLevels"];

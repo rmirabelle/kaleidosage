@@ -2927,27 +2927,32 @@ float star(vec3 q) {
 }
 
 /**
- * The Menger sponge: a cube (as large as the box) with a cross of square
- * holes through it, then through each of its 20 remaining small cubes, and
- * so on for Levels levels (the usual exact distance of a Menger sponge).
- * In each level, a point is in a hole where two of its places in the small
- * cube are within a third of the middle. For the last level, a part of a
- * level makes its holes smaller, so a range on Levels opens them smoothly.
+ * The Menger sponge: a cube (as large as the box) with a cross of three
+ * bars of holes through it, then through each of its 20 remaining small
+ * cubes, and so on for Levels levels. Each bar is a third of its small
+ * cube wide. Roundness sets the bars' cross-section: square at 0 (the
+ * classic sponge), round at 1, a rounded square between (a mix of the two
+ * distances). For the last level, a part of a level makes its bars
+ * thinner, so a range on Levels opens the holes smoothly.
  */
 float menger(vec3 q) {
   vec3 p = q / 0.8;
   vec3 b = abs(p) - 1.0;
   float d = length(max(b, 0.0)) + min(max(b.x, max(b.y, b.z)), 0.0);
   float levels = clamp(u_levels, 1.0, 5.0);
+  float round_ = clamp(u_round, 0.0, 1.0);
   float s = 1.0;
   for (int m = 0; m < 5; m++) {
     float part = clamp(levels - float(m), 0.0, 1.0);
     if (part <= 0.0) break;
-    vec3 a = mod(p * s, 2.0) - 1.0;
+    /* The place in the small cube, 0 at its middle, 1 at its sides. */
+    vec3 u = 1.0 - abs(mod(p * s, 2.0) - 1.0);
+    vec3 square = vec3(max(u.x, u.y), max(u.y, u.z), max(u.z, u.x));
+    vec3 circle = vec3(length(u.xy), length(u.yz), length(u.zx));
+    vec3 bars = mix(square, circle, round_);
+    float cross_ = min(bars.x, min(bars.y, bars.z)) - part / 3.0;
+    d = max(d, -cross_ / s);
     s *= 3.0;
-    vec3 r = abs(1.0 - 3.0 * abs(a));
-    float hole = min(max(r.x, r.y), min(max(r.y, r.z), max(r.z, r.x)));
-    d = max(d, (hole - (2.0 - part)) / s);
   }
   return d * 0.8;
 }

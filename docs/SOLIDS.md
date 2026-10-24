@@ -41,7 +41,7 @@ picture.
 | Setting | What it does |
 |---|---|
 | Size | The shape's size, as a part of the screen height. |
-| Roundness | How round the edges and corners are. 0 is sharp. At the top a cube is almost a sphere. For Blobs, how softly the blobs merge; for Star, how round its spikes are. The Sphere, Morph and Wobbly ball hide this slider. |
+| Roundness | How round the edges and corners are. 0 is sharp. At the top a cube is almost a sphere. For Blobs, how softly the blobs merge; for Star, how round its spikes are; for the Menger sponge, how round its holes are (0 square, 1 round). The Sphere, Morph and Wobbly ball hide this slider. |
 | Squareness | Morph only: from a star with points on the axes (0), through a ball (about 0.38), to a rounded cube (1). A range makes it flow between them. |
 | Blobs | Blobs only: how many balls (2 to 8) drift on slow loops and merge. Between two whole numbers the last blob grows from nothing. |
 | Bumps, Waves | Wobbly ball only: how high the waves over the ball are, and how many. They flow with the animation time. |
@@ -80,9 +80,11 @@ so a range on them changes the speed, not the angle.
   The wobbly ball is a ball moved by three crossed sine waves. The star is a
   ball and capped cones (a point is a cap of width 0), joined by a smooth
   minimum; a spike whose axis is clearly farther than the nearest part so
-  far is skipped, so 32 spikes stay cheap. The Menger sponge is the usual
-  exact Menger distance (a cube, carved by a cross of holes per level); a
-  part of a level makes that level's holes smaller. The ray walks the distance function in up to 96 steps.
+  far is skipped, so 32 spikes stay cheap. The Menger sponge is a cube,
+  carved at each level by a cross of three bars a third of each small cube
+  wide; a bar's cross-section is a mix of a square distance and a circle
+  distance (Roundness), and a part of a level makes that level's bars
+  thinner. The ray walks the distance function in up to 96 steps.
 - The normal (for light, Mirror and Project) comes from the distance
   function at four points around the hit.
 - Wrap: the place on the surface, in the shape's own turning frame, gives
