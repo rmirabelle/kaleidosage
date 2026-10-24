@@ -1,6 +1,5 @@
 import { X } from "@phosphor-icons/react";
 import { help } from "../help/topics";
-import { HelpButton } from "./HelpButton";
 import { useDragReorder } from "./useDragReorder";
 
 export interface DocumentTabInfo {
@@ -63,8 +62,6 @@ export function DocumentTabs({ tabs, activeId, onSelect, onClose, onReorder }: P
           </div>
         );
       })}
-      {/* The help button sits after the last tab. */}
-      <HelpButton topic="scene.tabs" inline />
     </div>
   );
 }

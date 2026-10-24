@@ -10,7 +10,6 @@ import { formatPlayTime, tracks } from "../lib/tracks";
 import { songFollow, type FollowStatus } from "../lib/songFollow";
 import { help } from "../help/topics";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { HelpButton } from "./HelpButton";
 import { PointerTip } from "./PointerTip";
 import { useDragReorder } from "./useDragReorder";
 
@@ -97,7 +96,6 @@ export function FilesCard({ onAddTracks, input, addTip, onAddTipDone }: {
                 <Trash size={14} />
               </button>
             </span>
-            <HelpButton topic="audio.files" />
           </div>
           <div className="files-card-body">
             {tracks.error && <p className="audio-error selectable">{tracks.error}</p>}

@@ -8,7 +8,7 @@ const DRAG_START = 5;
  * press on an item, then a move of more than DRAG_START px, starts the drag.
  * While the pointer moves, the item takes the place the pointer is at, and
  * the new order goes to "onReorder" at once. Each item needs data-key with
- * its key; other children of the list (a help button) do not count.
+ * its key; other children of the list do not count.
  *
  * With "rows", the list wraps onto several rows: an item is before the
  * pointer when its row is above the pointer, or when it is in the pointer's

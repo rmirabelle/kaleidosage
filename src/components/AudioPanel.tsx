@@ -11,7 +11,6 @@ import { Slider } from "./Slider";
 import { EmptyState } from "./EmptyState";
 import { settingButtons } from "../lib/settingButtons";
 import { help } from "../help/topics";
-import { HelpButton } from "./HelpButton";
 
 const BAND_LABELS: Record<AudioBand, string> = { level: "Level", bass: "Bass", mids: "Mids", highs: "Highs" };
 /** How long the beat light stays on after a beat, in milliseconds. */
@@ -175,7 +174,7 @@ export function AudioPanel({ engine, sceneName }: {
     <section className="bottom-panel-page" aria-label="Audio">
       <div className="midi-panel-columns">
         <div className="midi-panel-devices audio-source" {...help("audio.input")}>
-          <div className="stage-label"><Plug size={13} weight="bold" /> Source <HelpButton topic="audio.input" inline /></div>
+          <div className="stage-label"><Plug size={13} weight="bold" /> Source</div>
           {/* A failure, for example a microphone that Windows blocks. */}
           {status.state === "error" && <p className="audio-error audio-setting selectable">{status.message}</p>}
           <div className={`audio-setting ${following ? "follow-off" : ""}`} aria-disabled={following || undefined} data-tip={following ? "Song follow is on: the song's own analysis moves the picture, so this does not change the motion." : "Gain applied to the audio signal before threshold detection."}>
@@ -187,7 +186,7 @@ export function AudioPanel({ engine, sceneName }: {
             <Slider min={THRESHOLD_DB[0]} max={THRESHOLD_DB[1]} step={1} value={settings.thresholdDb} label="Master Threshold" onChange={(value) => audioInput.setThreshold(value)} />
           </div>
           {/* The levels, at the bottom of the Source column, under the settings that shape them. */}
-          <div className="stage-label audio-source-levels" {...help("audio.levels")}><Equalizer size={13} weight="bold" /> Levels <HelpButton topic="audio.levels" inline /></div>
+          <div className="stage-label audio-source-levels" {...help("audio.levels")}><Equalizer size={13} weight="bold" /> Levels</div>
           {listening ? <AudioMeters thresholdDb={settings.thresholdDb} />
             : settings.kind === "none" ? <EmptyState text="Pick an Input above the play controls to make settings move with the sound." />
             : <p className="midi-panel-empty">Starting…</p>}
@@ -196,7 +195,7 @@ export function AudioPanel({ engine, sceneName }: {
         {settings.kind !== "none" && (
           <div className="midi-panel-mappings audio-sensors-column" {...help("audio.sensors")}>
             {/* The scene's audio links ("audio sensors"), under the name of the scene they belong to. */}
-            <div className="stage-label audio-levels-label audio-sensors-label" data-tip={sceneName}><Broadcast size={13} weight="bold" /> Audio sensors: <span className="audio-sensors-scene">{sceneName}</span> <HelpButton topic="audio.sensors" inline /></div>
+            <div className="stage-label audio-levels-label audio-sensors-label" data-tip={sceneName}><Broadcast size={13} weight="bold" /> Audio sensors: <span className="audio-sensors-scene">{sceneName}</span></div>
             <SoundSettings engine={engine} />
           </div>
         )}

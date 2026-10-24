@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openFileDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { ArrowClockwise, ArrowCounterClockwise, ArrowsIn, ArrowsOut, Camera, FilmStrip, FloppyDisk, FolderOpen, Gauge, HandPointing, Info, Playlist, Keyboard, Plus, Question, SignOut, SlidersHorizontal, SpeakerSimpleHigh, X } from "@phosphor-icons/react";
+import { ArrowClockwise, ArrowCounterClockwise, ArrowsIn, ArrowsOut, Camera, FilmStrip, FloppyDisk, FolderOpen, Gauge, HandPointing, Info, Playlist, Keyboard, Plus, SignOut, SlidersHorizontal, SpeakerSimpleHigh, X } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { AboutDialog } from "./components/AboutDialog";
 import { ShortcutsDialog } from "./components/ShortcutsDialog";
@@ -408,8 +408,7 @@ export default function App() {
   /** The keyboard shortcuts sheet (Help, Keyboard Shortcuts, or the "?" key). */
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const closeShortcuts = useCallback(() => setShortcutsOpen(false), []);
-  /** Whether the panel headings show their "?" help buttons (Help, Hide Help Buttons). */
-  const helpButtons = useSyncExternalStore(helpSettings.subscribe, () => helpSettings.get().buttons);
+  /** Whether the pointer tips show (Help, Enable or Disable Pointers). */
   const pointersOn = useSyncExternalStore(helpSettings.subscribe, () => helpSettings.get().pointers);
   const [openRequest, setOpenRequest] = useState<OpenRequest | null>(null);
   const [videoDialogOpen, setVideoDialogOpen] = useState(false);
@@ -2131,7 +2130,6 @@ export default function App() {
       label: "Help",
       items: [
         { label: "Keyboard Shortcuts", icon: <Keyboard size={15} />, shortcut: "?", run: () => setShortcutsOpen(true) },
-        { label: helpButtons ? "Hide Help Buttons" : "Show Help Buttons", icon: <Question size={15} />, run: () => helpSettings.set({ buttons: !helpButtons }) },
         { label: pointersOn ? "Disable Pointers" : "Enable Pointers", icon: <HandPointing size={15} />, run: () => helpSettings.set({ pointers: !pointersOn }) },
         "separator",
         { label: "About Kaleido Sage", icon: <Info size={15} />, run: () => setAboutOpen(true) }

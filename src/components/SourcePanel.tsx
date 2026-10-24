@@ -8,7 +8,6 @@ import { TilingIcon } from "./TilingIcon";
 import { useParamRows } from "./useParamRows";
 import { SourceImages, type SourceImagesProps } from "./SourceImages";
 import { help } from "../help/topics";
-import { HelpButton } from "./HelpButton";
 import { MediaIcon } from "./MediaIcon";
 import { placeSeek } from "./Slider";
 import { scenePosition } from "../engine/loop";
@@ -56,7 +55,6 @@ export function SourcePanel({ engine, sceneName, ...sources }: Omit<SourceImages
     <section className="panel-card source-section" {...help("source")}>
       <div className="panel-header-bar">
         <h2 className="side-panel-title source-title" data-tip={sceneName}><span>{sceneName}</span></h2>
-        <HelpButton topic="source" />
       </div>
       <div className="panel-root-row source-length">
         {row("cycle")}

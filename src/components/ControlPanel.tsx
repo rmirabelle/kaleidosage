@@ -21,7 +21,6 @@ import { useMidi } from "./useMidi";
 import { useSceneHoldOnly } from "./SourcePanel";
 import { useParamRows } from "./useParamRows";
 import { help } from "../help/topics";
-import { HelpButton } from "./HelpButton";
 import { PointerTip } from "./PointerTip";
 
 interface Props {
@@ -462,7 +461,6 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
             </button>
           )}
           <h2 className="side-panel-title">FX</h2>
-          <HelpButton topic="fx" />
           {/* While MIDI holds any range: a play button that plays them all again (Esc does the same). */}
           {anyHeld && (
             <button
@@ -729,8 +727,6 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
         )}
         {/* The empty part of the header opens and closes the group too. */}
         <span className="panel-group-fill" onClick={onToggle} aria-hidden="true" />
-        {/* An open effect has a help button; closed ones keep the header short. */}
-        {open && <HelpButton topic="fx.group" />}
         {/* A locked group cannot be randomized, so its dice hides. */}
         {engine && group && onRandomize && !locked && (
           <button

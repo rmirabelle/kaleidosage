@@ -360,7 +360,6 @@ button { border: 0; }
 .files-collapsed-title { color: #c3c7d0; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; writing-mode: vertical-rl; transform: rotate(180deg); }
 .files-card-buttons { display: flex; gap: 4px; margin-left: auto; }
 .files-card-buttons .button.small { min-height: 24px; }
-.files-card > .panel-header-bar .help-badge { margin-left: 0; }
 .files-card-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 /* A file row is clickable even while it plays (a scene row that shows is not). */
 .scene-list-item.file-item.active { cursor: pointer; }
@@ -373,7 +372,6 @@ button { border: 0; }
 .files-splitter:hover { background-color: var(--accent); }
 .scene-card > .panel-header-bar { justify-content: flex-start; gap: 8px; }
 .scene-list-count { padding: 1px 7px; border-radius: 9px; color: #fff; background: var(--accent); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.scene-card > .panel-header-bar .help-badge { margin-left: auto; }
 /* The Playlist and Scenes titles are the size of the scene's and the song's names (18px), not the Designer's. */
 .scene-card > .panel-header-bar .side-panel-title, .files-card > .panel-header-bar .side-panel-title { font-size: 18px; }
 .scene-list-items { flex: 1; min-height: 0; margin: 0; padding: 6px; overflow-y: auto; list-style: none; scrollbar-width: thin; scrollbar-color: #474c5e transparent; }
@@ -1443,26 +1441,6 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
   backdrop-filter: blur(4px);
 }
 /**
- * A panel's help badge: a bright green circle with a black "?", fixed to
- * the panel's top-right corner and hanging a little over its edges (see
- * HelpButton). Above the panels, under menus, cards and dialogs.
- */
-.help-badge { position: fixed; z-index: 90; place-items: center; padding: 0; border: 0; border-radius: 50%; color: #000; background: #39ff14; box-shadow: 0 0 10px rgba(57,255,20,.65), 0 2px 6px rgba(0,0,0,.5); cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; }
-/* A badge in a title or after the last tab, in the line, not at a corner. */
-.help-badge.inline { position: static; display: inline-grid; flex: 0 0 auto; margin-left: 4px; box-shadow: 0 0 6px rgba(57,255,20,.5); }
-.help-badge:hover, .help-badge.active { transform: scale(1.12); box-shadow: 0 0 16px rgba(57,255,20,.9), 0 2px 8px rgba(0,0,0,.55); }
-/* A help card: under its badge, on the page, above the panels. */
-/* As wide as its longest tip, so a tip never wraps; the text wraps to that width. */
-.help-card { position: fixed; z-index: 150; min-width: 300px; max-width: calc(100vw - 16px); box-sizing: border-box; padding: 26px 28px 24px; border: 1px solid #3e4a6c; border-radius: 10px; color: #d4d8e2; background: #253049; box-shadow: 0 14px 40px rgba(0,0,0,.55); font-size: 12px; line-height: 1.45; letter-spacing: 0; text-transform: none; }
-.help-card h3 { margin: 0 0 12px; color: #fff; font-size: 16px; font-weight: 600; }
-/* The gap between the text and the tips is set here only: two margins that meet would merge into the larger one. */
-.help-card p { width: 0; min-width: 100%; margin: 0 0 22px; }
-/* A text that ends in a colon leads into the list under it, so the list sits close. */
-.help-card p.leads { margin-bottom: 4px; }
-/* A card's close button sits in its corner, outside the card's padding. */
-.help-card-close { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; color: #9aa6c8; background: transparent; cursor: pointer; }
-.help-card-close:hover { color: #fff; background: rgba(255,255,255,.12); }
-/**
  * A context tip at the right of a control, or above or below it (see
  * PointerTip): black text on yellow-green, with an arrow to the control
  * (PointerTip sets its place along the edge). One dark line goes round the
@@ -1484,16 +1462,9 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .welcome-splash-buttons { display: flex; justify-content: center; gap: 10px; margin-top: 18px; }
 /* The line round a panel that a tip tells about (see PointerTip's "outline"): over the panel's own border, and it lets the mouse through. */
 .pointer-ring { position: fixed; z-index: 149; box-sizing: border-box; border: 2px solid #adfa00; border-radius: 6px; pointer-events: none; }
-.pointer-tip .help-card-close { top: 50%; right: 10px; color: #000; transform: translateY(-50%); }
-.pointer-tip .help-card-close:hover { color: #000; background: rgba(0,0,0,.14); }
-.help-card h3 { padding-right: 18px; }
-.help-card ul { margin: 0 0 4px; padding: 0; list-style: none; }
-.help-card li { display: flex; gap: 8px; margin-top: 8px; white-space: nowrap; }
-/* A plain bullet, not an icon: the tips show button icons, and an icon bullet would look like one more button. */
-.help-card .help-buttons li::before { content: "\2022"; flex: 0 0 auto; color: #9aa6c8; }
-/* A true tip (a key, a gesture, no button) keeps the lightbulb. */
-.help-card .help-tips li > svg { flex: 0 0 auto; margin-top: 3px; color: #f5c84b; }
-.help-card .help-buttons + .help-tips { margin-top: 18px; }
+/* The tip's close button, at its right, in the middle of its height. */
+.pointer-tip-close { position: absolute; top: 50%; right: 10px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; color: #000; background: transparent; transform: translateY(-50%); cursor: pointer; }
+.pointer-tip-close:hover { background: rgba(0,0,0,.14); }
 /* A button's icon named in a help text, in a small box like the button. */
 .help-icon { display: inline-grid; place-items: center; min-width: 20px; height: 18px; margin: 0 2px; padding: 0 3px; border: 1px solid #47557a; border-radius: 4px; color: #d4d8e2; background: #1b2337; vertical-align: -4px; }
 .help-icon svg { display: block; }

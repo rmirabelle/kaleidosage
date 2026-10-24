@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import { PencilSimple, Trash, X } from "@phosphor-icons/react";
 import { ContextMenu } from "./ContextMenu";
 import { help } from "../help/topics";
-import { HelpButton } from "./HelpButton";
 import type { DocumentTabInfo } from "./DocumentTabs";
 import { useDragReorder } from "./useDragReorder";
 import { useCtrlHeld } from "./useCtrlHeld";
@@ -63,7 +62,6 @@ export function SceneList({ tabs, activeId, onSelect, onClose, onReorder, onRena
       <section className="panel-card scene-card">
         <div className="panel-header-bar">
           <h2 className="side-panel-title">Scenes</h2>
-          <HelpButton topic="scene.tabs" />
         </div>
         <ol ref={drag.listRef} className={`scene-list-items ${picking ? "picking" : ""}`} role="listbox" aria-label="Scenes">
           {tabs.map((tab, index) => {

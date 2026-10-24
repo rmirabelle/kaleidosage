@@ -140,7 +140,7 @@ function PlacedTip({ anchor, text, onClose, side = "right", outline, alignTop = 
       {outline && <div ref={ringRef} className="pointer-ring" aria-hidden="true" />}
       <div ref={tipRef} className={`pointer-tip ${side}`} role="status">
         <span className="selectable">{text}</span>
-        <button className="help-card-close" onClick={onClose} aria-label="Close the tip" data-tip="Close">
+        <button className="pointer-tip-close" onClick={onClose} aria-label="Close the tip" data-tip="Close">
           <X size={14} />
         </button>
       </div>

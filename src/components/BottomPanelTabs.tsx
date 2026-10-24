@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { SpeakerSimpleHigh, X } from "@phosphor-icons/react";
-import { HelpButton } from "./HelpButton";
 import { MidiIcon } from "./MidiIcon";
 
 export type BottomTab = "midi" | "audio";
@@ -32,8 +31,6 @@ export function BottomPanelTabs({ tab, onTab, onClose }: { tab: BottomTab; onTab
             {label}
           </button>
         ))}
-        {/* The MIDI page's help sits after its title, the MIDI tab; each Audio column has its own help in its heading. */}
-        {tab === "midi" && <HelpButton topic="midi" inline />}
       </div>
       <button className="side-panel-action" onClick={onClose} data-tip="Close the panel" aria-label="Close the panel">
         <X size={13} weight="bold" />

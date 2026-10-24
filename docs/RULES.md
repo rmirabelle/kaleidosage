@@ -61,7 +61,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - In an open playlist, Export Scene As replaces Save Scene and Save Scene As.
 - Edit has Undo and Redo.
 - View items change their label between "Hide" and "Show".
-- Help has Keyboard Shortcuts, Show or Hide Help Buttons, and About.
+- Help has Keyboard Shortcuts, Enable or Disable Pointers, and About.
 - A right-click menu stays inside the window.
 - A click outside, Esc, a resize or a loss of focus closes a right-click menu.
 
@@ -205,12 +205,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 
 - The shortcuts sheet lists every key and gesture in eight groups.
 - Esc, "?", Close or a click outside closes the shortcuts sheet.
-- The "?" help buttons are off at the first run.
-- Help buttons hide while the music plays.
-- A help button hides when its panel hides or scrolls out of view.
-- A help button opens a card with the topic text and tips.
-- Esc, a click outside, a second click or a resize closes a help card.
-- A help card stays inside the window.
+- Pointer tips stay inside the window and do not cover each other.
 - The help line shows the tip of the control under the mouse or with the focus.
 - With no tip, the help line says "Point at a control to see what it does."
 - The help line hides in full screen, on the start screen and with hidden panels.

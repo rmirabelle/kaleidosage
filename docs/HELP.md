@@ -79,7 +79,9 @@ that does it. Rule: an empty list never shows only "No items".
 | MIDI, no controller | Connect a MIDI controller; it shows here at once. | (none) |
 | Input is Nothing (Levels) | Pick an Input to make settings move with the sound. | (none: the Input menu is right above) |
 
-### 3. Panel help cards
+### 3. Panel help cards (removed 2026-10-24)
+
+Removed for the pointer tips (see step 5 below). The design stays here for reference.
 
 A small "?" button at the right of each panel heading (FX, each effect
 group, Source, Audio tab columns, MIDI tab) opens a card under it:
@@ -177,8 +179,8 @@ line each, with a link to each topic. It shows once per version.
    `src/help/shortcuts.ts` (keys and mouse gestures), the sheet is
    `src/components/ShortcutsDialog.tsx`, and a test checks that every menu
    shortcut is in the list.
-4. Panel help cards (part 3), with Help, Hide help buttons. Done
-   2026-10-18: `src/components/HelpButton.tsx` on the Source, FX, open
+4. Panel help cards (part 3), with Help, Hide help buttons. Removed
+   2026-10-24 for the pointer tips (step 5). Was done 2026-10-18: `src/components/HelpButton.tsx` on the Source, FX, open
    effect, tabs, play controls, Audio (Source, Levels, Files, Audio
    sensors) and MIDI headings; the "?" also hides while Files play.
    `src/lib/helpSettings.ts` keeps the choice. Since 2026-10-19 a first
