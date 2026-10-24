@@ -309,6 +309,10 @@ export default function App() {
     }
   }), []);
   const firstRangeButton = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".fx-card .panel-group.open .panel-drift"); } }), []);
+  /* The name of that range button's setting: the setting tip sits above it, its arrow down to the name. */
+  const firstRangeName = useMemo(() => ({
+    get current() { return firstRangeButton.current?.closest(".panel-row")?.querySelector<HTMLElement>(".panel-row-name") ?? null; }
+  }), [firstRangeButton]);
   useEffect(() => {
     if (effectTip !== "range") return;
     const onPress = (event: PointerEvent) => {
@@ -2352,7 +2356,8 @@ export default function App() {
       )}
       {effectTip === "range" && !startScreen && (
         <PointerTip
-          anchor={firstRangeButton}
+          anchor={firstRangeName}
+          side="above"
           text="This is a single effect setting. Use the slider to change the setting's value. The [] icon toggles this setting between static and ranged values. Ranged values animate according to the scene LENGTH or to an audio slice."
           onClose={nextEffectTip}
         />
