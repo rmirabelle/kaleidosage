@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GROUP_PARAMS, PARAM_KEYS, applyRadialStart, createParams, gradientColorAt, rgbToHex, createPlayState, defaultValue, fullRange, NUDGE, hexToRgb, hslToHex, liveValue, NO_EFFECT, nudgeParams, randomizeGroup, randomizeParams, resetEffects, setCustomTime, startRangeAt, withKindOrder, addEffect, removeEffect, toSlider, fromSlider, SLIDER_STEPS } from "./params";
+import { GROUP_PARAMS, PARAM_KEYS, applyRadialStart, createParams, gradientColorAt, rgbToHex, createPlayState, defaultValue, fullRange, NUDGE, hexToRgb, hslToHex, liveValue, NO_EFFECT, nudgeParams, randomizeGroup, randomizeParams, resetEffects, setCustomTime, startRangeAt, withKindOrder, openRange, addEffect, removeEffect, toSlider, fromSlider, SLIDER_STEPS } from "./params";
 
 /** A play state at this many seconds, on both clocks: animation time (the shared cycle) and real time (custom ranges). */
 const at = (time: number) => ({ ...createPlayState(), time, clock: time });
@@ -500,5 +500,30 @@ describe("log sliders", () => {
     Object.assign(cell, { on: true, low: 1, high: 16, ease: "linear" });
     /* Halfway through the cycle, halfway along the slider: 4 is the middle ratio of 1 and 16. */
     expect(liveValue(cell, at(10))).toBeCloseTo(4);
+  });
+});
+
+describe("openRange", () => {
+  const params = createParams();
+
+  it("opens two ends on one value to a tenth of the span, upward", () => {
+    expect(openRange(params.overlayOpacity, 0, 0)).toEqual([0, 0.1]);
+  });
+
+  it("opens downward when there is no room above", () => {
+    expect(openRange(params.overlayOpacity, 1, 1)).toEqual([0.9, 1]);
+  });
+
+  it("keeps a range that has room between its ends, also a reversed one", () => {
+    expect(openRange(params.overlayOpacity, 0.2, 0.6)).toEqual([0.2, 0.6]);
+    expect(openRange(params.overlayOpacity, 0.6, 0.2)).toEqual([0.6, 0.2]);
+  });
+
+  it("no default range has both ends on one value", () => {
+    for (const key of PARAM_KEYS) {
+      const param = params[key];
+      if (!param.drift || param.low === undefined || param.high === undefined) continue;
+      expect(Math.abs(param.high - param.low), key).toBeGreaterThanOrEqual(param.step / 2);
+    }
   });
 });

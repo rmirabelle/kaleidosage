@@ -283,6 +283,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 ## Ranges
 
 - The range button turns one handle into two, and the value moves between them.
+- When both new handles would be on one value, the range opens to a tenth of the slider: up from the value, or down at the top.
 - With its range off, a value is its slider value.
 - When a range comes on, the end handle takes the single value.
 - A setting that goes below zero starts its range at ±10% around 0.

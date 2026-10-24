@@ -1034,6 +1034,21 @@ export function fullRange(param: Param): [number, number] {
   return reversed ? [param.max, param.min] : [param.min, param.max];
 }
 
+/**
+ * The range for a value that turns its range on, from "low" to "high". Both
+ * ends on one value (a value of 0 with the low end at 0, as Color overlay
+ * has at first) would put one handle on the other, so such a range opens to
+ * a tenth of the slider's span: up from that value where there is room,
+ * else down to it. Any other range stays as it is, also a reversed one.
+ */
+export function openRange(param: Param, low: number, high: number): [number, number] {
+  if (Math.abs(high - low) >= param.step / 2) return [low, high];
+  const decimals = (String(param.step).split(".")[1] ?? "").length;
+  const width = Math.max(param.step, Math.round(((param.max - param.min) * 0.1) / param.step) * param.step);
+  const round = (value: number) => Number(value.toFixed(decimals));
+  return low + width <= param.max ? [round(low), round(low + width)] : [round(Math.max(param.min, low - width)), round(low)];
+}
+
 export function formatValue(param: Param, value: number): string {
   const decimals = (String(param.step).split(".")[1] ?? "").length;
   return value.toFixed(Math.max(decimals, param.step < 1 ? 2 : 0)) + (param.unit ?? "");

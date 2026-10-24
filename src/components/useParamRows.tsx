@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowsLeftRight, BracketsSquare, Play, Timer, Trash } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
-import { MAX_CUSTOM_SECONDS, NO_EFFECT, SLIDER_STEPS, defaultValue, formatValue, fromSlider, fullRange, setCustomTime, toSlider, type ContourTone, type Param, type ParamKey } from "../engine/params";
+import { MAX_CUSTOM_SECONDS, NO_EFFECT, SLIDER_STEPS, defaultValue, formatValue, fromSlider, fullRange, openRange, setCustomTime, toSlider, type ContourTone, type Param, type ParamKey } from "../engine/params";
 import { ColorPicker } from "./ColorPicker";
 import { EaseMenu } from "./EaseMenu";
 import { RangeSlider, Slider, rangePosition, trackPosition } from "./Slider";
@@ -243,8 +243,8 @@ function ParamRow({ engine, paramKey, readout, marker, singleMarker, after, badg
       const distance = Number((Math.round((param.max - param.min) * 0.1 / param.step) * param.step).toFixed(decimals));
       setHandles([Math.max(param.min, -distance), Math.min(param.max, distance)]);
     } else if (on) {
-      param.high = param.value;
-      setRange([range[0], param.value]);
+      /* Two ends on one value open to a small range (see openRange). */
+      setHandles(openRange(param, range[0], param.value));
     } else {
       param.value = range[1];
       setValue(param.value);
