@@ -615,6 +615,9 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - A switch to Files turns Song follow on.
 - While a song has no analysis yet, the Song Map shows "Analyzing" with a moving bar.
 - With one scene, Auto Fill is off.
+- The first files in an empty Playlist start the Song Map tips: one at the song's name while it is analyzed, then one at the map.
+- With one scene, the map tip leaves out the scene picks; they show in a tip when a second scene is added.
+- The Song Map calls a slice's level of energy its Mood.
 - With a live input and no audio link in the scene yet, a tip at the right of the FX audio button tells what it does.
 - A second tip shows the next step: "+ New" in an empty FX list, else the speaker of the first setting in view.
 - A click on a button of the FX card closes the first tip; any press in the FX card closes the second.

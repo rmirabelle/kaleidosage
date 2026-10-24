@@ -15,7 +15,7 @@ import { MidiIcon } from "./components/MidiIcon";
 import { MidiPanel } from "./components/MidiPanel";
 import { AudioPanel } from "./components/AudioPanel";
 import { BottomPanelTabs, type BottomTab } from "./components/BottomPanelTabs";
-import { SongMapPanel } from "./components/SongMapPanel";
+import { SongMapPanel, type SongTip } from "./components/SongMapPanel";
 import { SceneTransport, SourcePanel } from "./components/SourcePanel";
 import { StartScreen } from "./components/StartScreen";
 import { LoadingOverlay, type Loading } from "./components/LoadingOverlay";
@@ -251,8 +251,10 @@ export default function App() {
   const endLinksTip = useCallback(() => setLinksTip(false), []);
   const endNextTip = useCallback(() => setNextTip(false), []);
   const endFilesTip = useCallback(() => setFilesTip(false), []);
+  const [songTip, setSongTip] = useState<SongTip>(null);
   const pickInput = useCallback((kind: InputKind, switched: boolean) => {
     setFilesTip(kind === "tracks" && tracks.list.length === 0);
+    if (kind !== "tracks") setSongTip(null);
     /* A switch to Files turns Song follow on: the picture follows the songs. */
     if (kind === "tracks" && switched) songFollow.setEnabled(true);
     /* With Nothing, the audio buttons have no sound to follow, so they hide. */
@@ -847,11 +849,14 @@ export default function App() {
     sceneShownRef.current = { id, byUser: !auto, clock: engine.state.clock };
   }, [engine, holdScene, switchToDoc]);
 
-  /** Adds audio files to the tracks. The first files of an empty track list start to play at once. */
+  /** Adds audio files to the tracks. The first files of an empty track list start to play at once, and start the Song Map's tips (see SongTip). */
   const addTracks = useCallback((paths: string[]) => {
     const wasEmpty = tracks.list.length === 0;
     tracks.add(paths);
-    if (wasEmpty && tracks.list.length > 0) tracks.playTrack(0);
+    if (wasEmpty && tracks.list.length > 0) {
+      tracks.playTrack(0);
+      setSongTip("analyzing");
+    }
   }, []);
 
   /**
@@ -1126,6 +1131,8 @@ export default function App() {
   useEffect(() => { if (followOn) settingButtons.set("audio", true); }, [followOn]);
   /** Hold means something only with more than one scene: it keeps the scene from the next. With one scene, a song plays from start to end, with no loop. */
   const holdUseful = docs.length > 1;
+  /* The Song Map's scene tip waits for a second scene (see SongTip). */
+  useEffect(() => { if (songTip === "waitForScenes" && docs.length > 1) setSongTip("scenes"); }, [songTip, docs.length]);
   const holdUsefulRef = useRef(holdUseful);
   holdUsefulRef.current = holdUseful;
   const switchByStepRef = useRef(switchByStep);
@@ -2131,7 +2138,7 @@ export default function App() {
             </div>
             {sceneListShown && followOn && (
               <div className="song-map-dock">
-                <SongMapPanel sceneCount={docs.length} activeScene={docs.findIndex((doc) => doc.id === activeId)} held={sceneHeld} onSlicePick={pickSlice} />
+                <SongMapPanel sceneCount={docs.length} activeScene={docs.findIndex((doc) => doc.id === activeId)} held={sceneHeld} onSlicePick={pickSlice} tip={songTip} onTip={setSongTip} />
               </div>
             )}
           </div>
