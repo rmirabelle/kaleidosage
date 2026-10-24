@@ -343,7 +343,17 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick, tip, 
                   tracks.pause();
                 }}
               >
-                {/* Only a slice with a picked scene has a number: a slice with no pick changes nothing. */}
+                {/**
+                  * Only a slice with a picked scene has a number: a slice with no pick changes nothing.
+                  * With one scene, each slice with no pick shows a dark 1: that scene plays on all of
+                  * them, and no pick is kept, so Auto Fill still has the slices to fill once a second
+                  * scene comes.
+                  */}
+                {scenes[i]?.scene == null && sceneCount === 1 && (
+                  <span className="song-map-tags">
+                    <span className="song-map-scene-tag current" data-tip="Scene 1 plays here: it is the only scene. Add scenes to pick one for each slice">1</span>
+                  </span>
+                )}
                 {scenes[i]?.scene != null && (
                   <span className="song-map-tags">
                     <span
