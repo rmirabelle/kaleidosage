@@ -274,18 +274,13 @@ export default function App() {
     return () => window.removeEventListener("pointerdown", onPress, true);
   }, [slotTip, newFxTip]);
   /**
-   * The first effect that "+ New" adds (once in each run of the app) shows
-   * the effect tip at the right of its header, then the range tip at the
-   * first range button. A press in the FX card or the close button moves
-   * from one to the next.
+   * Each first effect that "+ New" adds to an empty list shows the effect
+   * tip at the right of its header, then the range tip at the first range
+   * button (until Help, Disable Pointers). A press in the FX card or the
+   * close button moves from one to the next.
    */
   const [effectTip, setEffectTip] = useState<"effect" | "range" | null>(null);
-  const effectTipShownRef = useRef(false);
-  const firstEffect = useCallback(() => {
-    if (effectTipShownRef.current) return;
-    effectTipShownRef.current = true;
-    setEffectTip("effect");
-  }, []);
+  const firstEffect = useCallback(() => setEffectTip("effect"), []);
   const nextEffectTip = useCallback(() => setEffectTip((tip) => (tip === "effect" ? "range" : null)), []);
   const openEffectHeader = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".fx-card .panel-group.open .panel-group-header"); } }), []);
   const firstRangeButton = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".fx-card .panel-drift"); } }), []);
