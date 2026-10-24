@@ -96,6 +96,9 @@ so a range on them changes the speed, not the angle.
 
 ## Planned: Keep background (the object as a layer)
 
+The general design is in LAYERS.md (layers and effect copies); this is its
+phase 2. The notes below are the first plan for it.
+
 Asked 2026-10-24. A switch in the 3D Object effect, Keep background: the
 effects after the 3D Object in the FX list (Kaleidoscope, Warp, Particles,
 any of them) change only the object, and the picture behind it stays as it

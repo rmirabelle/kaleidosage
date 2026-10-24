@@ -1,0 +1,95 @@
+# Layers and effect copies (design)
+
+Decided 2026-10-24. The first need: the 3D Object's Keep background (see
+SOLIDS.md), where the effects after the object change only the object. More
+requests will mix layers and effects freely, so this is the design for all
+of them, built in phases. Each phase leaves the app working and gives the
+same pictures as before for every scene that does not use the new parts.
+
+## Today
+
+- One picture goes down the FX list. Each step reads the picture made so
+  far and writes a new one (see `KaleidoRenderer.render`). Every step
+  writes a fully opaque pixel.
+- Each effect exists once per scene. Its settings are keyed by name
+  (`overlayOpacity`), and MIDI mappings, audio links, song scripts, saved
+  scenes and Randomize all use these names. The FX list (`fxOrder`) holds
+  each step at most once.
+
+## Rule 1: every picture carries its cover
+
+Every picture between two steps is premultiplied RGBA: the color times the
+cover, and the cover in alpha. A picture with alpha 1 everywhere is today's
+picture, so each step must give exactly today's result for alpha 1. The
+rules per kind of step:
+
+- Steps that move pixels (Warp, Map, Kaleidoscope, Smear, the Driver's
+  bend, Sort, the Camera's land): alpha moves with the color it is read
+  with.
+- Steps that filter (Blur, Bloom's blur, Relief, Contours, Sharpen): they
+  filter alpha with the color, so a soft edge stays soft.
+- Steps that change colors (Color, Levels, the Driver's light): they work
+  on the color without the cover (color divided by alpha) and keep alpha.
+- Steps that add light or marks (Particles, Light cycles, Rays, Bloom's
+  glow, Color overlay): what they add adds cover too (alpha grows by the
+  added cover), so it shows over what is under the layer.
+- Steps with a memory of earlier frames (Trails, Smear's history): the
+  memory keeps alpha, so a trail fades its cover with its color.
+- A step that blends with the picture under it (a shape step's Blend, the
+  3D Object's Blend) blends the colors and adds the covers as "over".
+
+The screen and a video export always get an opaque picture: the last pass
+puts the top picture over black (today it is opaque anyway).
+
+## Rule 2: a scene is a stack of layers
+
+- A layer is a source and its own part of the FX list. The source is the
+  source images (A and B), or a 3D Object, later more kinds. A 3D Object
+  source can read the picture of the layers under it (its Wrap, Project
+  and Mirror read it today).
+- The renderer draws each layer's source and steps into a picture of its
+  own, then puts the layers together from the bottom up, each with its
+  blend and opacity.
+- The 3D Object's Keep background is the first layer the user makes: the
+  3D Object starts a new layer, and the steps after it in the FX list are
+  that layer's steps. The layer under it keeps the picture as it was at
+  the 3D Object, so the background does not change.
+
+## Rule 3: effects become copies
+
+- Each effect in a list is a copy with an id, its kind, and its own
+  settings. Two Kaleidoscopes (one per layer, or two in one layer) are two
+  copies.
+- A setting's key is its copy's id and the setting's name. The first copy
+  of each kind has the kind as its id, and its keys stay today's bare
+  names, so every saved scene, MIDI mapping, audio link and song map stays
+  good with no change. A second copy is `kaleidoscope#2`, with keys such as
+  `kaleidoscope#2.foldCount`.
+- An effect with memory (Trails, Smear, Particles, Light cycles, Sort)
+  keeps its memory per copy.
+- Saved scenes get a new version with the copies and layers; an older scene
+  opens as one layer with one copy of each effect it has.
+
+## Phases
+
+1. Rule 1, with no change on the screen: every shader carries alpha, and a
+   check renders scenes with the code before and after and compares the
+   pixels (`tools/test-layers.mjs`).
+2. Keep background: the 3D Object's switch starts a second layer. Each
+   effect is still once per scene: the layers share the one FX list, split
+   at the 3D Object. The scene file saves the switch.
+3. Effect copies: the data model, keys, migration, MIDI, audio links, song
+   scripts, Randomize, and "+ New" that allows a second copy.
+4. The layers interface: a list of layers, each with its own FX list,
+   blend, opacity, and a switch to hide it.
+
+Phase 2 already follows rules 1 and 2, so phases 3 and 4 build on it and do
+not undo it.
+
+## Open points
+
+- The texture memory grows by one picture per layer (and one per copy with
+  memory). The texture memory estimate (`textureMemory.ts`) must count it.
+- Song follow and MIDI pick settings by key; the key form above keeps the
+  old keys, but the MIDI panel and the Audio panel must show which copy a
+  key belongs to.
