@@ -455,6 +455,12 @@ float depthDistance;
  */
 float mandelShade = 1.0;
 float mandelStretch = 1.0;
+/**
+ * The Mandelbrot map's second picture point near the rings where the escape
+ * count changes, and its weight (see Softness in complexMap).
+ */
+vec2 mandelAlt;
+float mandelAltWeight = 0.0;
 /* Depth in powers of ten (0 to 13), band width, terraces, light, and the light's direction. */
 uniform float u_mandelDepth;
 /**
@@ -602,8 +608,10 @@ vec2 complexMap(vec2 p) {
      * from the formula's own slope (z over its derivative, the usual normal
      * map of a Mandelbrot), and Terraces darkens each band toward one edge,
      * which looks like stacked steps. Softness turns each step's sharp edge
-     * into a slope (at 1, the bands rise and fall evenly, with no edge). Points that never escape are in the
-     * set: black. Deeper views need more rounds (u_mandelRounds).
+     * into a slope (at 1, the bands rise and fall evenly, with no edge), and
+     * blends the picture across the rings where the escape count changes.
+     * Points that never escape are in the set: black. Deeper views need
+     * more rounds (u_mandelRounds).
      */
     float span = 1.5 * pow(10.0, -clamp(u_mandelDepth, 0.0, 13.0));
     vec2 dc = onAxis * span;
@@ -612,6 +620,7 @@ vec2 complexMap(vec2 p) {
     vec2 slope = vec2(0.0);
     int ref = 0;
     float escaped = -1.0;
+    mandelAltWeight = 0.0;
     for (int i = 0; i < 2500; i++) {
       if (i >= u_mandelRounds) break;
       vec2 big = mandelAt(ref);
@@ -638,6 +647,18 @@ vec2 complexMap(vec2 p) {
       float count = escaped + 1.0 - log2(log(r));
       float band = count / max(u_mandelBands, 0.01);
       w = vec2(band, atan(m.y, m.x) / PI);
+      /**
+       * Across a ring where the escape count changes, the angle doubles: a
+       * point just past the escape size (256) touches points that escaped
+       * one round later, at twice its angle. Softness blends the picture at
+       * twice the angle in, from all of it at the ring to none at this far
+       * through the ring (at 1, the whole ring), so the ring has no seam.
+       */
+      float through = log2(log(r) / log(256.0));
+      float soft = clamp(u_mandelSoftness, 0.0, 1.0);
+      vec2 twice = cmul(m, m);
+      mandelAlt = vec2(band, atan(twice.y, twice.x) / PI);
+      mandelAltWeight = soft > 0.0 ? 1.0 - smoothstep(0.0, soft, through) : 0.0;
       vec2 normal = normalize(cdiv(m, slope));
       float lit = clamp((dot(normal, u_mandelLightDir) + 1.5) / 2.5, 0.0, 1.0);
       float edge = 0.5 * clamp(u_mandelSoftness, 0.0, 1.0) + 1e-4;
@@ -675,6 +696,7 @@ vec2 complexMap(vec2 p) {
   /* Roll and twist for the maps with no seam to keep (see mapRoll). */
   if (u_mapMode == 1 || u_mapMode == 3 || u_mapMode == 5) w = turn(w, u_mapRoll + u_mapCurl * length(w));
   if (u_mapMode == 8) drosteAlt = mix(p, drosteAlt, u_mapMix);
+  if (u_mapMode == 9) mandelAlt = mix(p, mandelAlt, u_mapMix);
   return mix(p, w, u_mapMix);
 }
 
@@ -859,6 +881,9 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
   /* The Möbius or Julia map's exact stretch, as texture detail (see mobiusStretch and juliaStretch). */
   float mapDetail = 0.0;
   float farDistance = 1e9;
+  /* The Mandelbrot map's second point (see mandelAlt), which goes through the later steps too. */
+  vec2 mandelP = p;
+  float mandelWeight = 0.0;
   for (int i = 0; i < 3; i++) {
     if (i >= u_shapeCount) break;
     int shapeStep = u_shapeOrder[i];
@@ -867,6 +892,7 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
       if (u_warpMode != 0) {
         p += warpOffset(p);
         if (fading) p2 += warpOffset(p2);
+        if (mandelWeight > 0.0) mandelP += warpOffset(mandelP);
       }
     } else if (shapeStep == 1) {
       if (spiralLast) continue;
@@ -874,11 +900,17 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
       p = complexMap(p);
       farDistance = depthDistance;
       if (u_mapMode == 3) mapDetail = g0 * mix(1.0, juliaStretch, u_mapMix);
-      if (u_mapMode == 9) mapDetail = g0 * mix(1.0, mandelStretch, u_mapMix);
+      if (u_mapMode == 9) {
+        mapDetail = g0 * mix(1.0, mandelStretch, u_mapMix);
+        mandelP = mandelAlt;
+        mandelWeight = mandelAltWeight;
+      }
       if (fading) p2 = complexMap(p2);
       mapped = true;
     } else {
       beforeFold = p;
+      /* Before the main fold, which sets the radial crossfade's point. */
+      if (mandelWeight > 0.0) mandelP = fold(mandelP);
       p = fold(p);
       folded = true;
       if (foldAltWeight > 0.0) {
@@ -950,6 +982,8 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
   float detail = min(max(length(dFdx(measured)), length(dFdy(measured))), g0 * 4.0);
   float g = max(detail * stretch, mapDetail) / (folded ? u_zoom : 1.0);
   vec4 color = sourceColor(p, g);
+  /* The Mandelbrot map's point at twice the angle has twice the detail. */
+  if (mandelWeight > 0.0) color = mix(color, sourceColor(mandelP, g * 2.0), mandelWeight);
   if (fading) color = mix(color, sourceColor(p2, g), fade);
   /* The copy one size smaller has its detail smaller by the copy size too. */
   float copySize = clamp(u_drosteSize, 0.05, 0.95);

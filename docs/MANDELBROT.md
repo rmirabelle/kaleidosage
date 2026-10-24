@@ -35,7 +35,10 @@ valley (0.2892573747165706, 0.013391178939759867, a Misiurewicz point among
 the elephants; the main cusp at 0.25 showed only a thin line).
 
 Softness (added 2026-10-24) turns each terrace's sharp edge into a slope; at
-1 the bands rise and fall evenly.
+1 the bands rise and fall evenly. It also blends the picture across the rings where the
+escape count changes: there the angle doubles, so a point just past the
+escape size also samples the picture at twice its angle (a second sample,
+like the Droste spiral's edge blend), fading out through the ring.
 
 ## Step 2 (built 2026-10-24): deep zoom
 
