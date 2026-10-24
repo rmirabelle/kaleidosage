@@ -1463,18 +1463,22 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .help-card-close { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; color: #9aa6c8; background: transparent; cursor: pointer; }
 .help-card-close:hover { color: #fff; background: rgba(255,255,255,.12); }
 /**
- * A context tip at the right of a control or above it (see PointerTip):
- * black text on neon green, with an arrow to the control (PointerTip sets
- * its place along the edge). The tip and its arrow are solid, and the 90%
- * opacity is on the whole tip, so they fade as one shape with no line
- * between them.
+ * A context tip at the right of a control, or above or below it (see
+ * PointerTip): black text on sage green, with an arrow to the control
+ * (PointerTip sets its place along the edge). One dark line goes round the
+ * tip and its arrow: the arrow's solid inner half covers the tip's line
+ * where they join, so the two show as one shape. Fully opaque.
  */
-.pointer-tip { position: fixed; z-index: 150; display: flex; align-items: center; gap: 6px; max-width: 300px; padding: 14px 42px 14px 16px; border: 0; border-radius: 8px; color: #000; background: #39ff14; opacity: .9; box-shadow: 0 10px 30px rgba(0,0,0,.5); font-size: 12.5px; font-weight: 600; line-height: 1.45; }
-.pointer-tip::before { content: ""; position: absolute; top: var(--arrow-y, 50%); left: -5px; width: 10px; height: 10px; background: #39ff14; transform: translateY(-50%) rotate(45deg); }
-.pointer-tip.above::before { top: auto; bottom: -5px; left: var(--arrow-x, 50%); transform: translateX(-50%) rotate(45deg); }
-/* The green line round a panel that a tip tells about (see PointerTip's "outline"): over the panel's own border, and it lets the mouse through. */
-.pointer-ring { position: fixed; z-index: 149; box-sizing: border-box; border: 2px solid #39ff14; border-radius: 6px; pointer-events: none; }
-.pointer-tip.below::before { top: -5px; left: var(--arrow-x, 50%); transform: translateX(-50%) rotate(45deg); }
+.pointer-tip { --tip-fill: #b3c7a2; --tip-line: #4e6343; position: fixed; z-index: 150; display: flex; align-items: center; gap: 6px; max-width: 300px; padding: 14px 42px 14px 16px; border: 1px solid var(--tip-line); border-radius: 8px; color: #000; background: var(--tip-fill); box-shadow: 0 10px 30px rgba(0,0,0,.5); font-size: 12.5px; font-weight: 600; line-height: 1.45; }
+.pointer-tip::before { content: ""; position: absolute; box-sizing: border-box; width: 10px; height: 10px; background: var(--tip-fill); }
+/* At the right of the control: the arrow on the left edge, its left and bottom lines outside. */
+.pointer-tip.right::before { top: var(--arrow-y, 50%); left: -6px; border-left: 1px solid var(--tip-line); border-bottom: 1px solid var(--tip-line); transform: translateY(-50%) rotate(45deg); }
+/* Above the control: the arrow on the bottom edge, its right and bottom lines outside. */
+.pointer-tip.above::before { bottom: -6px; left: var(--arrow-x, 50%); border-right: 1px solid var(--tip-line); border-bottom: 1px solid var(--tip-line); transform: translateX(-50%) rotate(45deg); }
+/* Below the control: the arrow on the top edge, its left and top lines outside. */
+.pointer-tip.below::before { top: -6px; left: var(--arrow-x, 50%); border-left: 1px solid var(--tip-line); border-top: 1px solid var(--tip-line); transform: translateX(-50%) rotate(45deg); }
+/* The line round a panel that a tip tells about (see PointerTip's "outline"): over the panel's own border, and it lets the mouse through. */
+.pointer-ring { position: fixed; z-index: 149; box-sizing: border-box; border: 2px solid #b3c7a2; border-radius: 6px; pointer-events: none; }
 .pointer-tip .help-card-close { top: 50%; right: 10px; color: #000; transform: translateY(-50%); }
 .pointer-tip .help-card-close:hover { color: #000; background: rgba(0,0,0,.14); }
 .help-card h3 { padding-right: 18px; }
