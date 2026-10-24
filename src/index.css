@@ -1458,7 +1458,7 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 /* The welcome card's layer over the whole window, as the About dialog's: the app under it waits until a button of the card is clicked. */
 .welcome-overlay { position: fixed; z-index: 160; inset: 0; display: grid; place-items: center; padding: 28px; background: rgba(12,14,19,.76); backdrop-filter: blur(4px); }
 .welcome-splash { width: min(380px, 100%); padding: 22px 24px 20px; border: 1px solid #adfa00; border-radius: 10px; color: #d4d8e2; background: #1b1e25; box-shadow: 0 16px 50px rgba(0,0,0,.6); text-align: center; }
-.welcome-splash h2 { margin: 0 0 16px; color: #4da3ff; font-size: 24px; font-weight: 750; letter-spacing: -.01em; }
+.welcome-splash h2 { margin: 0 0 16px; color: var(--secondary); font-size: 24px; font-weight: 750; letter-spacing: -.01em; }
 .welcome-splash p { margin: 0; font-size: 13px; line-height: 1.5; }
 .welcome-splash-buttons { display: flex; justify-content: center; gap: 10px; margin-top: 26px; }
 /* The line round a panel that a tip tells about (see PointerTip's "outline"): over the panel's own border, and it lets the mouse through. */
