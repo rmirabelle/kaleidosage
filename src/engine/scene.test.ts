@@ -92,7 +92,7 @@ describe("scene files", () => {
       app: "KaleidoSage",
       version: 1,
       params: { zoom: { value: 99, low: -5 }, segments: { value: "eight" } },
-      state: { mapMode: 9, speed: 50 },
+      state: { mapMode: 10, speed: 50 },
       image: IMAGE
     });
     applyScene(text, params, state);

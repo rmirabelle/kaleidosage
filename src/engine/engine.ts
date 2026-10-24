@@ -1,5 +1,6 @@
 import { GROUP_PARAMS, NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, defaultValue, hexToRgb, liveValue, rangeAt, rangeClock, startRangeAt, type GroupKey, type ParamKey } from "./params";
 import { KaleidoRenderer, type FrameValues, type ImageSource } from "./renderer";
+import { MANDEL_CENTERS } from "./submodes";
 import { audioLinkable, pushRange, pushedValue, type AudioSignal } from "./audio";
 import { copyVideo, cueVideo, releaseVideo, seekVideo, syncVideo, videoLoopPlan, videoLoopTime } from "./video";
 import { familyOf, intensityAt, positionAt, speedAt, travelAt, type Family, type SongScript } from "./songScript";
@@ -1058,7 +1059,9 @@ export class Engine {
     }
     const kaleidoscope = (key: ParamKey, neutral: number) => on.kaleidoscope ? this.live(key) : neutral;
     /* The Möbius point lies on the X axis: its direction would only turn the picture, as Rotation does. */
-    const mapPoint = this.state.mapMode === 2 ? [this.live("mobiusPoint"), 0] : juliaPoint(this.live("juliaShape") * DEGREES, this.live("juliaEdge"));
+    const mapPoint = this.state.mapMode === 2 ? [this.live("mobiusPoint"), 0]
+      : this.state.mapMode === 9 ? MANDEL_CENTERS[this.state.mandelPlace]
+      : juliaPoint(this.live("juliaShape") * DEGREES, this.live("juliaEdge"));
     return {
       fxOrder: this.state.fxOrder,
       shapeActive: { warp: on.warp, map: on.map, kaleidoscope: on.kaleidoscope },
@@ -1090,9 +1093,14 @@ export class Engine {
       warpAngle: this.live("warpAngle") * DEGREES,
       mapMode: on.map ? this.state.mapMode : 0,
       mapMix: this.live("mapMix"),
+      mandelDepth: this.live("mandelDepth"),
+      mandelBands: this.live("mandelBands"),
+      mandelTerraces: this.live("mandelTerraces"),
+      mandelLight: this.live("mandelLight"),
+      mandelLightAngle: this.live("mandelLightAngle") * DEGREES,
       /* Möbius and Julia have their own zoom settings, which take the place of the map zoom. */
       /* Möbius has its own zoom; the Droste spiral has none. */
-      mapScale: this.state.mapMode === 2 || this.state.mapMode === 8 ? 1 : this.state.mapMode === 3 ? this.live("juliaZoom") : this.live("mapScale"),
+      mapScale: this.state.mapMode === 2 || this.state.mapMode === 8 || this.state.mapMode === 9 ? 1 : this.state.mapMode === 3 ? this.live("juliaZoom") : this.live("mapScale"),
       mapPower: this.live("mapPower"),
       mapPointX: mapPoint[0],
       mapPointY: mapPoint[1],
@@ -1115,7 +1123,7 @@ export class Engine {
       mapTravel: this.state.mapMode === 8 ? drosteTravel(this.state.mapTravel, this.live("drosteSize")) : this.state.mapTravel,
       tunnelTwist: this.live("tunnelTwist") * DEGREES,
       /* Möbius and Julia have their own depth fade settings; the Droste spiral has none, so its center never darkens. */
-      mapFog: this.state.mapMode === 8 ? 0 : this.live(this.state.mapMode === 2 ? "mobiusFog" : this.state.mapMode === 3 ? "juliaFog" : "mapFog"),
+      mapFog: this.state.mapMode === 8 || this.state.mapMode === 9 ? 0 : this.live(this.state.mapMode === 2 ? "mobiusFog" : this.state.mapMode === 3 ? "juliaFog" : "mapFog"),
       mapFogSoftness: this.live(this.state.mapMode === 2 ? "mobiusFogSoftness" : this.state.mapMode === 3 ? "juliaFogSoftness" : "mapFogSoftness"),
       mobiusTurn: this.live("mobiusTurn") * DEGREES,
       mobiusRotation: this.live("mobiusRotation") * DEGREES,

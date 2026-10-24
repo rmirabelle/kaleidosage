@@ -447,6 +447,21 @@ vec2 drosteMap(vec2 z) {
  */
 float depthDistance;
 
+/**
+ * The Mandelbrot map (u_mapMode 9), set by complexMap: the shade from its
+ * light and terraces (0 inside the set, which is black), and how much it
+ * stretches the picture (like juliaStretch), so thin bands blur instead of
+ * breaking into noise.
+ */
+float mandelShade = 1.0;
+float mandelStretch = 1.0;
+/* Depth in powers of ten (0 to 5), band width, terraces, light, and the light's direction. */
+uniform float u_mandelDepth;
+uniform float u_mandelBands;
+uniform float u_mandelTerraces;
+uniform float u_mandelLight;
+uniform vec2 u_mandelLightDir;
+
 vec2 complexMap(vec2 p) {
   depthDistance = 1e9;
   if (u_mapMode == 0) return p;
@@ -560,6 +575,50 @@ vec2 complexMap(vec2 p) {
     w = drosteMap(turn(z, -u_drosteRotation));
     drosteStretch /= u_mapScale;
     depthDistance = length(z);
+  } else if (u_mapMode == 9) {
+    /**
+     * Mandelbrot: z = z^2 + c from z = 0, with c the place (u_mapPoint)
+     * plus the screen point, 1.5 / 10^Depth across. A point that escapes
+     * gets its smooth escape count (the usual "continuous" count); the
+     * picture lies across the bands (one band is one picture height across,
+     * Band width rounds) and up by the angle it escaped at, so the picture
+     * shows inside each band. The light comes from the formula's own slope
+     * (z over its derivative, the usual normal map of a Mandelbrot), and
+     * Terraces darkens each band toward one edge, which looks like stacked
+     * steps. Points that never escape are in the set: black. Deeper views
+     * need more rounds, so the rounds grow with Depth.
+     */
+    float span = 1.5 * pow(10.0, -clamp(u_mandelDepth, 0.0, 5.0));
+    vec2 c = u_mapPoint + onAxis * span;
+    vec2 m = vec2(0.0);
+    vec2 slope = vec2(0.0);
+    int rounds = int(clamp(200.0 + 120.0 * u_mandelDepth, 200.0, 800.0));
+    float escaped = -1.0;
+    for (int i = 0; i < 800; i++) {
+      if (i >= rounds) break;
+      slope = 2.0 * cmul(m, slope) + vec2(1.0, 0.0);
+      m = cmul(m, m) + c;
+      if (dot(m, m) > 65536.0) {
+        escaped = float(i);
+        break;
+      }
+    }
+    if (escaped < 0.0) {
+      mandelShade = 0.0;
+      mandelStretch = 1.0;
+      w = vec2(0.0);
+    } else {
+      float r = length(m);
+      float count = escaped + 1.0 - log2(log(r));
+      float band = count / max(u_mandelBands, 0.01);
+      w = vec2(band, atan(m.y, m.x) / PI);
+      vec2 normal = normalize(cdiv(m, slope));
+      float lit = clamp((dot(normal, u_mandelLightDir) + 1.5) / 2.5, 0.0, 1.0);
+      float step_ = 0.45 + 0.55 * fract(band);
+      mandelShade = mix(1.0, lit, u_mandelLight) * mix(1.0, step_, u_mandelTerraces);
+      /* The band count's change per screen unit: |dz/dc| / (|z| ln|z|), times the span, over the band width. */
+      mandelStretch = length(slope) / (r * log(r)) * span / max(u_mandelBands, 0.01) / max(u_mapScale, 1e-4);
+    }
   } else if (u_mapMode == 5) {
     w = csin(onAxis * PI) / PI;
   } else if (u_mapMode == 6) {
@@ -786,6 +845,7 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
       p = complexMap(p);
       farDistance = depthDistance;
       if (u_mapMode == 3) mapDetail = g0 * mix(1.0, juliaStretch, u_mapMix);
+      if (u_mapMode == 9) mapDetail = g0 * mix(1.0, mandelStretch, u_mapMix);
       if (fading) p2 = complexMap(p2);
       mapped = true;
     } else {
@@ -886,6 +946,16 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
   if (mapped && u_mapMode >= 2 && u_mapMode != 5 && u_mapFog > 0.0) {
     float power = 1.0 / max(u_mapFogSoftness * u_mapFogSoftness, 1e-3);
     color.rgb *= mix(1.0, exp(-0.0513 * pow(u_mapFog / max(farDistance, 1e-4), power)), u_mapMix);
+  }
+  /**
+   * The Mandelbrot map's light and terraces, and its black set. Where one
+   * pixel holds more than about one band (mapDetail, see mandelStretch),
+   * the light and terraces would sparkle, so they fade to an even shade
+   * there, as the picture already blurs.
+   */
+  if (mapped && u_mapMode == 9) {
+    float busy = mandelShade > 0.0 ? smoothstep(0.3, 1.2, mapDetail) : 0.0;
+    color.rgb *= mix(1.0, mix(mandelShade, 0.62, busy), u_mapMix);
   }
   return color;
 }

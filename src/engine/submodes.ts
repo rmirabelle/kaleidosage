@@ -1,5 +1,5 @@
 import type { ParamKey, PlayState } from "./params";
-import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, SmearShape, SolidMap, SolidShape, WarpType } from "./renderer";
+import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, SmearShape, SolidMap, SolidShape, WarpType, MandelPlace } from "./renderer";
 
 /** The effects in the Add effect menu, in menu order, with the names their groups show. */
 export const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
@@ -57,9 +57,23 @@ export const MAP_KEYS: Record<MapMode, ParamKey[]> = {
   5: ["mapAngle", "mapRoll", "mapCurl", "mapScale", "mapPanX", "mapPanY", "mapMix"],
   6: ["mapSpeed", "tunnelTwist", "mapAngle", "mapFog", "mapFogSoftness", "mapScale", "mapPanX", "mapPanY", "mapMix"],
   7: ["mapSpeed", "mapArms", "mapAngle", "mapFog", "mapFogSoftness", "mapScale", "mapPanX", "mapPanY", "mapMix"],
-  8: ["mapSpeed", "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drostePictureTurn", "drosteRotation", "mapPanX", "mapPanY", "mapMix"]
+  8: ["mapSpeed", "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drostePictureTurn", "drosteRotation", "mapPanX", "mapPanY", "mapMix"],
+  9: ["mandelDepth", "mandelBands", "mandelTerraces", "mandelLight", "mandelLightAngle", "mapAngle", "mapPanX", "mapPanY", "mapMix"]
 };
-export const MAP_MODES = [[8, "Droste spiral"], [2, "Möbius"], [3, "Julia"], [4, "Log spiral"], [5, "Sine"], [6, "Tunnel"], [7, "Seamless spiral"], [1, "Power (z^n)"]] as const;
+export const MAP_MODES = [[8, "Droste spiral"], [2, "Möbius"], [3, "Julia"], [9, "Mandelbrot"], [4, "Log spiral"], [5, "Sine"], [6, "Tunnel"], [7, "Seamless spiral"], [1, "Power (z^n)"]] as const;
+
+/**
+ * The Mandelbrot map's places to dive into: points on the set's edge,
+ * where detail goes on at every depth (Depth zooms toward them).
+ */
+export const MANDEL_PLACES = [[0, "Seahorse valley"], [1, "Spiral"], [2, "Dendrite"], [3, "Mini copy"], [4, "Elephant valley"]] as const;
+export const MANDEL_CENTERS: Record<MandelPlace, [number, number]> = {
+  0: [-0.743643887037151, 0.13182590420533],
+  1: [-0.77568377, 0.13646737],
+  2: [0, 1],
+  3: [-1.75, 0],
+  4: [0.25, 0]
+};
 
 /** The sliders each time smear pattern uses; Angle only turns the Linear and Sweep patterns. */
 export const SMEAR_KEYS: Record<SmearShape, ParamKey[]> = {

@@ -8,7 +8,9 @@ export type BlurMask = 0 | 1 | 2 | 3 | 4 | 5;
 /** 0 = no trails, 1 = mix, 2 = lighten. */
 export type TrailMode = 0 | 1 | 2;
 /** 0 = none, 1 = power, 2 = Mobius, 3 = Julia, 4 = log spiral, 5 = sine, 6 = tunnel. */
-export type MapMode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+export type MapMode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+/** The Mandelbrot map's places to dive into (see MANDEL_PLACES). */
+export type MandelPlace = 0 | 1 | 2 | 3 | 4;
 /** 0 = no warp, 1 = warp the screen (breaks the symmetry), 2 = warp the image (keeps it). */
 export type WarpMode = 0 | 1 | 2;
 /** 0 = radial wedges around one center, 1 = triangle tiles, 2 = hexagon tiles. */
@@ -105,6 +107,12 @@ export interface FrameValues {
   warpTime: number;
   mapMode: MapMode;
   mapMix: number;
+  /** The Mandelbrot map (map mode 9): depth in powers of ten, band width, terraces, light, and the light's angle (radians). */
+  mandelDepth: number;
+  mandelBands: number;
+  mandelTerraces: number;
+  mandelLight: number;
+  mandelLightAngle: number;
   mapScale: number;
   mapPower: number;
   mapPointX: number;
@@ -1112,6 +1120,11 @@ export class KaleidoRenderer {
     gl.uniform1f(k.uniforms.u_mapPower, v.mapPower);
     gl.uniform2f(k.uniforms.u_mapPoint, v.mapPointX, v.mapPointY);
     gl.uniform1i(k.uniforms.u_mapSteps, Math.round(v.mapSteps));
+    gl.uniform1f(k.uniforms.u_mandelDepth, v.mandelDepth);
+    gl.uniform1f(k.uniforms.u_mandelBands, v.mandelBands);
+    gl.uniform1f(k.uniforms.u_mandelTerraces, v.mandelTerraces);
+    gl.uniform1f(k.uniforms.u_mandelLight, v.mandelLight);
+    gl.uniform2f(k.uniforms.u_mandelLightDir, Math.cos(v.mandelLightAngle), Math.sin(v.mandelLightAngle));
     gl.uniform1f(k.uniforms.u_mapArms, v.mapArms);
     gl.uniform1f(k.uniforms.u_spiralCopies, v.spiralCopies);
     gl.uniform1f(k.uniforms.u_drosteSize, v.drosteSize);
