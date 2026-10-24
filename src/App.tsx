@@ -2357,6 +2357,7 @@ export default function App() {
       {effectTip === "effect" && !startScreen && (
         <PointerTip
           anchor={effectHeader}
+          alignTop
           text="This is the editor for a single effect. Click the effect name to toggle its panel. The gray dice icon randomizes all settings for this effect. The X icon removes this effect. The grab handle lets you drag this effect up or down in the stack. FX are applied top-to-bottom."
           onClose={nextEffectTip}
         />

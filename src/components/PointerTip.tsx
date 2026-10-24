@@ -22,6 +22,8 @@ interface Shown {
   /** A green line around a panel that the tip tells about, and that panel. */
   ring: HTMLDivElement | null;
   outline: RefObject<HTMLElement | null> | undefined;
+  /** A tip at the right starts level with the control's top, not its middle. */
+  alignTop: boolean;
 }
 interface Box { left: number; top: number; right: number; bottom: number }
 
@@ -56,7 +58,7 @@ function placeAll() {
     const height = entry.tip.offsetHeight;
     if (entry.side === "right") {
       /* A tip about a whole panel starts level with the panel's top; the arrow still points at the control (the panel's header). */
-      const top = panel ? panel.top : target.top + target.height / 2 - height / 2;
+      const top = panel ? panel.top : entry.alignTop ? target.top : target.top + target.height / 2 - height / 2;
       plans.push({ entry, target, width, height, left: Math.min(target.right + GAP, window.innerWidth - width - EDGE), top });
     } else {
       const left = within(target.left + target.width / 2 - width / 2, EDGE, window.innerWidth - width - EDGE);
@@ -119,18 +121,20 @@ interface TipProps {
   onClose: () => void;
   side?: Side;
   outline?: RefObject<HTMLElement | null>;
+  /** At the right: start level with the control's top, with the arrow near the tip's top. */
+  alignTop?: boolean;
 }
 
-function PlacedTip({ anchor, text, onClose, side = "right", outline }: TipProps) {
+function PlacedTip({ anchor, text, onClose, side = "right", outline, alignTop = false }: TipProps) {
   const tipRef = useRef<HTMLDivElement>(null);
   const ringRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const tip = tipRef.current;
     if (!tip) return;
-    const entry = { tip, anchor, side, ring: ringRef.current, outline };
+    const entry = { tip, anchor, side, ring: ringRef.current, outline, alignTop };
     show(entry);
     return () => hide(entry);
-  }, [anchor, side, outline]);
+  }, [anchor, side, outline, alignTop]);
   return createPortal(
     <>
       {outline && <div ref={ringRef} className="pointer-ring" aria-hidden="true" />}
