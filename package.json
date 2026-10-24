@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:camera": "node tools/test-camera.mjs",
+    "test:layers": "node tools/test-layers.mjs",
     "tauri": "tauri"
   },
   "dependencies": {
