@@ -93,3 +93,53 @@ so a range on them changes the speed, not the angle.
 
 - The torus knot is left out for now; a distance function for it is slow.
 - Randomize picks 3D Object with a chance of about 0.2.
+
+## Planned: Keep background (the object as a layer)
+
+Asked 2026-10-24. A switch in the 3D Object effect, Keep background: the
+effects after the 3D Object in the FX list (Kaleidoscope, Warp, Particles,
+any of them) change only the object, and the picture behind it stays as it
+was at the 3D Object step. The effects can move the object out past its
+outline (a kaleidoscope of the object over a still background).
+
+How it works:
+
+1. Layer mode. With Keep background on, the 3D Object step keeps two
+   pictures: the background (the picture under the shape, with Background
+   and the shadow) in a texture of its own, and the object alone on a clear
+   picture, with its cover as transparency (premultiplied: color times
+   cover, and cover in alpha). The steps after it work on the object
+   picture.
+2. Every step carries transparency. Today 27 of the 35 shaders write a
+   fully opaque pixel. Each gets a rule for alpha, with premultiplied
+   color:
+   - Steps that move pixels (Warp, Map, Kaleidoscope after a picture step,
+     Smear, Driver's bend, Sort, Camera's land): the alpha moves with the
+     color it was read with.
+   - Steps that filter (Blur, Bloom's blur, Relief, Contours, Sharpen):
+     they filter alpha with the color, so soft edges stay soft.
+   - Steps that change colors (Color, Levels): they work on the color
+     without the cover (divided by alpha), and keep alpha.
+   - Steps that add light or marks (Particles, Light cycles, Rays, Bloom's
+     glow, Color overlay): what they add also adds cover, so it shows over
+     the background.
+   - Trails: the trail picture keeps alpha, so the object's trails show
+     over the background and fade with it.
+   Without Keep background, alpha is 1 everywhere, so every step gives the
+   same picture as today.
+3. The last pass puts the object picture over the kept background, with
+   the 3D Object's Blend and Opacity (in layer mode they apply here, not at
+   the 3D Object step). The screen and the video export get an opaque
+   picture.
+4. The switch: a check box in the 3D Object effect, kept with the scene
+   (PlayState) and in saved scenes; Randomize leaves it as it is. With no
+   step after the 3D Object, it changes nothing.
+
+Order of the work: layer mode and the last pass with no step after the
+object (it must look as today); then the steps that move pixels and the
+filters; then the steps that add light; then Trails and Camera. Each step:
+the shader compiles, and a check that alpha 1 in gives today's picture.
+
+Open points: the background is kept as it is at the 3D Object step, so a
+step before the object that moves (Warp, Trails) still moves it; a second
+3D Object after the first draws into the object picture.
