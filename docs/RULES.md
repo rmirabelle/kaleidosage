@@ -622,8 +622,8 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - At first no slice is selected, and the slice tools are off.
 - While the music plays, the slice under the playhead is selected.
 - The Song Map calls a slice's level of energy its Mood.
-- New Scene with no scene open shows a tip at Slot A and one at the FX card's "+ New".
-- Both go when you press in a slot or in the FX card; each also has its own close button.
+- New Scene with no scene open shows an overview tip at the right of the Scene, FX and Play cards.
+- Each has its own close button; a press anywhere in the left panel closes all three.
 - Each first effect that "+ New" adds to an empty list shows a tip at the right of its header.
 - That tip stays until its close button, also while the effect is closed.
 - Then a tip shows at the first range button of the open effect; with no effect open, it waits until one opens.

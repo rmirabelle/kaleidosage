@@ -254,25 +254,27 @@ export default function App() {
   const endFilesTip = useCallback(() => setFilesTip(false), []);
   const [songTip, setSongTip] = useState<SongTip>(null);
   /**
-   * The first scene (New Scene with no scene open) shows a tip at Slot A
-   * and one at the FX card's "+ New", until they are closed or the user
-   * presses in a slot or in the FX card. The controls are looked up in each
-   * frame (see PointerTip): the panel is made again often.
+   * The first scene (New Scene with no scene open) shows an overview tip at
+   * the right of each card of the left panel: Scene, FX and Play. Each has
+   * its own close button; a press anywhere in the left panel closes all
+   * three. The cards are looked up in each frame (see PointerTip): the
+   * panel is made again often.
    */
-  const [slotTip, setSlotTip] = useState(false);
-  const [newFxTip, setNewFxTip] = useState(false);
-  const slotA = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>("[data-image-slot='0']"); } }), []);
-  const newFxButton = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".fx-card .panel-header-bar .add-effect button"); } }), []);
+  type PanelTips = { scene: boolean; fx: boolean; play: boolean };
+  const NO_PANEL_TIPS: PanelTips = { scene: false, fx: false, play: false };
+  const [panelTips, setPanelTips] = useState<PanelTips>(NO_PANEL_TIPS);
+  const anyPanelTip = panelTips.scene || panelTips.fx || panelTips.play;
+  const sceneCard = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".control-panel .source-section"); } }), []);
+  const fxCard = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".control-panel .fx-card"); } }), []);
+  const playCard = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".control-panel .scene-transport"); } }), []);
   useEffect(() => {
-    if (!slotTip && !newFxTip) return;
+    if (!anyPanelTip) return;
     const onPress = (event: PointerEvent) => {
-      if (!(event.target as Element).closest?.("[data-image-slot], .fx-card")) return;
-      setSlotTip(false);
-      setNewFxTip(false);
+      if ((event.target as Element).closest?.(".control-panel")) setPanelTips(NO_PANEL_TIPS);
     };
     window.addEventListener("pointerdown", onPress, true);
     return () => window.removeEventListener("pointerdown", onPress, true);
-  }, [slotTip, newFxTip]);
+  }, [anyPanelTip]);
   /**
    * Each first effect that "+ New" adds to an empty list shows the effect
    * tip at the right of its header (until Help, Disable Pointers). It stays
@@ -1468,10 +1470,7 @@ export default function App() {
   /** Starts a new, untitled scene in a new tab. The scene that was shown stays in its own tab. The app stops listening outside a playlist (see quietOutsidePlaylist). */
   const newScene = useCallback(() => {
     if (!engine) return;
-    if (docsRef.current.length === 0) {
-      setSlotTip(true);
-      setNewFxTip(true);
-    }
+    if (docsRef.current.length === 0) setPanelTips({ scene: true, fx: true, play: true });
     quietOutsidePlaylist();
     /* With no input, the new scene starts with the settings' audio buttons hidden. */
     if (audioInput.settings.kind === "none") settingButtons.set("audio", false);
@@ -2265,14 +2264,27 @@ export default function App() {
       )}
       {/* The help line: the tip of the control under the mouse, always in view under the panels (not in full screen, not with the settings hidden). */}
       {!fullscreen && !startScreen && panelOpen && <HelpLine />}
-      {slotTip && !startScreen && (
+      {panelTips.scene && !startScreen && (
         <PointerTip
-          anchor={slotA}
-          text="SLOT A contains a checkerboard pattern - good for testing FX. Use it, or hover over the slot to load a random image, search the web for an image, choose a pattern, or load your own image or video."
-          onClose={() => setSlotTip(false)}
+          anchor={sceneCard}
+          text="This is the SCENE panel: the pictures that the effects change. SLOT A holds a checkerboard, good for testing FX. Hover over a slot to load a random image, search the web, choose a pattern, or load your own image or video. LENGTH sets how long the scene plays."
+          onClose={() => setPanelTips((tips) => ({ ...tips, scene: false }))}
         />
       )}
-      {newFxTip && !startScreen && <PointerTip anchor={newFxButton} text="Click to add a new effect." onClose={() => setNewFxTip(false)} />}
+      {panelTips.fx && !startScreen && (
+        <PointerTip
+          anchor={fxCard}
+          text="This is the FX panel: the effects that change the picture, from top to bottom. Click + New to add an effect, or the red random ALL button to add several at once."
+          onClose={() => setPanelTips((tips) => ({ ...tips, fx: false }))}
+        />
+      )}
+      {panelTips.play && !startScreen && (
+        <PointerTip
+          anchor={playCard}
+          text="This is the PLAY panel. Play, pause or stop the scene, and drag the bar to move in its LENGTH. Pick an Input to make settings react to sound."
+          onClose={() => setPanelTips((tips) => ({ ...tips, play: false }))}
+        />
+      )}
       {effectTip === "effect" && !startScreen && (
         <PointerTip
           anchor={effectHeader}
