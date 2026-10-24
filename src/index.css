@@ -1472,6 +1472,7 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .pointer-tip { position: fixed; z-index: 150; display: flex; align-items: center; gap: 6px; max-width: 300px; padding: 14px 42px 14px 16px; border: 0; border-radius: 8px; color: #000; background: #39ff14; opacity: .9; box-shadow: 0 10px 30px rgba(0,0,0,.5); font-size: 12.5px; font-weight: 600; line-height: 1.45; }
 .pointer-tip::before { content: ""; position: absolute; top: var(--arrow-y, 50%); left: -5px; width: 10px; height: 10px; background: #39ff14; transform: translateY(-50%) rotate(45deg); }
 .pointer-tip.above::before { top: auto; bottom: -5px; left: var(--arrow-x, 50%); transform: translateX(-50%) rotate(45deg); }
+.pointer-tip.below::before { top: -5px; left: var(--arrow-x, 50%); transform: translateX(-50%) rotate(45deg); }
 .pointer-tip .help-card-close { top: 50%; right: 10px; color: #000; transform: translateY(-50%); }
 .pointer-tip .help-card-close:hover { color: #000; background: rgba(0,0,0,.14); }
 .help-card h3 { padding-right: 18px; }

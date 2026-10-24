@@ -13,7 +13,7 @@ const pointersOn = () => helpSettings.get().pointers;
 
 /**
  * A context tip with an arrow to a control, and a close button: at the
- * right of the control, or above it ("side"). It stays in the window (the
+ * right of the control, or above or below it ("side"). It stays in the window (the
  * arrow still points at the control), and follows the control while the
  * panels around it change size. Help, Disable Pointers hides every tip.
  */
@@ -21,7 +21,7 @@ export function PointerTip(props: {
   anchor: RefObject<HTMLElement | null>;
   text: string;
   onClose: () => void;
-  side?: "right" | "above";
+  side?: "right" | "above" | "below";
 }) {
   const on = useSyncExternalStore(subscribeHelp, pointersOn);
   return on ? <PlacedTip {...props} /> : null;
@@ -31,7 +31,7 @@ function PlacedTip({ anchor, text, onClose, side = "right" }: {
   anchor: RefObject<HTMLElement | null>;
   text: string;
   onClose: () => void;
-  side?: "right" | "above";
+  side?: "right" | "above" | "below";
 }) {
   const tipRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -45,11 +45,13 @@ function PlacedTip({ anchor, text, onClose, side = "right" }: {
         if (target) {
           const width = tip.offsetWidth;
           const height = tip.offsetHeight;
-          if (side === "above") {
+          if (side === "above" || side === "below") {
             const center = target.left + target.width / 2;
             const left = within(center - width / 2, EDGE, window.innerWidth - width - EDGE);
             tip.style.left = `${left}px`;
-            tip.style.top = `${Math.max(EDGE, target.top - height - 12)}px`;
+            tip.style.top = side === "above"
+              ? `${Math.max(EDGE, target.top - height - 12)}px`
+              : `${Math.min(window.innerHeight - height - EDGE, target.bottom + 12)}px`;
             tip.style.setProperty("--arrow-x", `${within(center - left, ARROW_INSET, width - ARROW_INSET)}px`);
           } else {
             const middle = target.top + target.height / 2;

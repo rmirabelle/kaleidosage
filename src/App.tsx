@@ -292,6 +292,10 @@ export default function App() {
     }
   }), []);
   const firstRangeButton = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".fx-card .panel-group.open .panel-drift"); } }), []);
+  /* The Length tip goes with the range tip: out of sight while the range tip waits for an open effect. */
+  const lengthControl = useMemo(() => ({
+    get current() { return firstRangeButton.current ? document.querySelector<HTMLElement>(".source-length") : null; }
+  }), [firstRangeButton]);
   useEffect(() => {
     if (effectTip !== "range") return;
     const onPress = (event: PointerEvent) => {
@@ -2280,6 +2284,14 @@ export default function App() {
         <PointerTip
           anchor={firstRangeButton}
           text="Click to toggle between static and ranged values. Ranged values animate according to the scene LENGTH or to an audio slice. Click the stopwatch icon next to a ranged setting to set an independent loop length."
+          onClose={nextEffectTip}
+        />
+      )}
+      {effectTip === "range" && !startScreen && (
+        <PointerTip
+          anchor={lengthControl}
+          side="below"
+          text="LENGTH sets how long this scene plays before the next scene. Ranged values animate once over this time."
           onClose={nextEffectTip}
         />
       )}
