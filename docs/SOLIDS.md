@@ -83,9 +83,14 @@ so a range on them changes the speed, not the angle.
 - Mirror: the reflected ray's direction gives the place in the picture
   (the picture as a ball around the shape), so the reflection moves as the
   shape turns.
-- Light: as in the Camera effect: a soft shade from the angle to the light,
-  a shine from the reflection, and a soft shadow on the background from
-  the shape's distance function.
+- Light: as in the Camera effect: a soft shade from the angle to the light
+  and a shine from the reflection. The shadow is cast (changed 2026-10-24;
+  before, it was a slice through the middle of the shape, moved away from
+  the light, which changed shape oddly as a flat-faced shape turned): the
+  picture is a wall 0.9 shape sizes behind the shape's middle, and a ray
+  from each place on it goes toward the light; how near it passes to the
+  shape gives the soft edge (the usual soft shadow of a distance
+  function). Only rays that cross the sphere around the shape walk it.
 - A smooth edge, one pixel wide, from the distance at the last step, so
   the outline does not stair-step.
 

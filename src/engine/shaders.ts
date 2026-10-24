@@ -2734,8 +2734,9 @@ void main() {
  * the picture (mirrored), so no seam shows.
  *
  * Light: a soft shade from the angle to the light, a highlight, and a soft
- * drop shadow on the picture behind. The outline is smooth: a ray that
- * passes within a pixel of the shape covers the pixel in part.
+ * shadow that the shape casts on the picture behind it (see castLight).
+ * The outline is smooth: a ray that passes within a pixel of the shape
+ * covers the pixel in part.
  */
 export const SOLID_SHADER = `#version 300 es
 precision highp float;
@@ -2978,6 +2979,38 @@ vec3 wrapAt(vec3 q, vec3 n) {
   return color / total;
 }
 
+/**
+ * The cast shadow: the picture is a wall a little behind the shape (WALL
+ * shape sizes behind its middle), and a ray from this place on the wall
+ * goes toward the light. How near it passes to the shape makes the soft
+ * edge (the usual soft shadow of a distance function): 1 is in full
+ * light, 0 in full shadow. Only rays that cross the sphere around the
+ * shape walk it. So the shadow always has the outline the shape casts, and
+ * turns with it.
+ */
+float castLight(vec2 screen) {
+  const float WALL = 0.9;
+  const float SOFT = 5.0;
+  vec3 from = vec3(screen, -WALL * scale());
+  vec3 oc = from - vec3(u_center, 0.0);
+  float bound = 1.45 * scale();
+  float b = dot(oc, u_light);
+  float h = b * b - (dot(oc, oc) - bound * bound);
+  if (h <= 0.0) return 1.0;
+  float end = -b + sqrt(h);
+  if (end <= 0.0) return 1.0;
+  float t = max(-b - sqrt(h), 0.02 * scale());
+  float light = 1.0;
+  for (int i = 0; i < 48; i++) {
+    float d = scene(from + u_light * t);
+    light = min(light, SOFT * d / t);
+    if (light < 0.001) return 0.0;
+    t += clamp(d, 0.01 * scale(), 0.25 * scale());
+    if (t > end) break;
+  }
+  return smoothstep(0.0, 1.0, clamp(light, 0.0, 1.0));
+}
+
 void main() {
   vec2 screen = vec2((v_uv.x - 0.5) * u_aspect, v_uv.y - 0.5);
   /* The picture carries its cover (premultiplied): Background and the shadow dim its color; the shape covers it. */
@@ -2986,12 +3019,7 @@ void main() {
   vec3 eye = vec3(0.0, 0.0, EYE);
   vec3 rd = normalize(vec3(screen, 0.0) - eye);
 
-  /* The drop shadow: how near the shape is to this place, moved toward the light (so the shadow falls away from it). */
-  if (u_shadow > 0.0) {
-    vec3 behind = vec3(screen + u_light.xy * scale() * 0.5, 0.0);
-    float d = scene(behind);
-    base *= 1.0 - u_shadow * 0.75 * (1.0 - smoothstep(0.0, 0.5 * scale(), d));
-  }
+  if (u_shadow > 0.0) base *= 1.0 - u_shadow * 0.75 * (1.0 - castLight(screen));
 
   /* The sphere around the shape: rays that miss it miss the shape. */
   vec3 oc = eye - vec3(u_center, 0.0);
