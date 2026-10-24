@@ -2283,7 +2283,7 @@ export default function App() {
       {effectTip === "range" && !startScreen && (
         <PointerTip
           anchor={firstRangeButton}
-          text="Click to toggle between static and ranged values. Ranged values animate according to the scene LENGTH or to an audio slice. Click the stopwatch icon next to a ranged setting to set an independent loop length."
+          text="Click to toggle between static and ranged values. Ranged values animate according to the scene LENGTH or to an audio slice."
           onClose={nextEffectTip}
         />
       )}
