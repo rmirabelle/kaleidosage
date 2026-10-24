@@ -123,9 +123,11 @@ interface TipProps {
   outline?: RefObject<HTMLElement | null>;
   /** At the right: start level with the control's top, with the arrow near the tip's top. */
   alignTop?: boolean;
+  /** A wider tip, for a long text. */
+  wide?: boolean;
 }
 
-function PlacedTip({ anchor, text, onClose, side = "right", outline, alignTop = false }: TipProps) {
+function PlacedTip({ anchor, text, onClose, side = "right", outline, alignTop = false, wide = false }: TipProps) {
   const tipRef = useRef<HTMLDivElement>(null);
   const ringRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -138,7 +140,7 @@ function PlacedTip({ anchor, text, onClose, side = "right", outline, alignTop = 
   return createPortal(
     <>
       {outline && <div ref={ringRef} className="pointer-ring" aria-hidden="true" />}
-      <div ref={tipRef} className={`pointer-tip ${side}`} role="status">
+      <div ref={tipRef} className={`pointer-tip ${side} ${wide ? "wide" : ""}`} role="status">
         <span className="selectable">{text}</span>
         <button className="pointer-tip-close" onClick={onClose} aria-label="Close the tip" data-tip="Close">
           <X size={14} />

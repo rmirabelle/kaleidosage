@@ -2346,6 +2346,7 @@ export default function App() {
       {panelTips.scene && !startScreen && (
         <PointerTip
           anchor={sceneCard}
+          wide
           outline={sceneOutline}
           text="This is the scene SOURCE panel. It shows the scene name and controls the scene loop LENGTH. SLOT A holds a checkerboard pattern - good for testing FX. Hover over a slot to load a random image, search for a specific image, choose a pattern, or load your own image or video."
           onClose={() => setPanelTips((tips) => ({ ...tips, scene: false }))}
@@ -2354,6 +2355,7 @@ export default function App() {
       {panelTips.fx && !startScreen && (
         <PointerTip
           anchor={fxCard}
+          wide
           outline={fxOutline}
           text="This is the FX panel. Click + New to add a new effect. Effects run top-to-bottom. Random ALL (dice icon) creates a new semi-random set of FX. Nudge ALL (wind icon) nudges all effect settings by a small amount. Clear ALL (trash icon) deletes all added effects. The speaker and MIDI icons show or hide audio or MIDI controls for each effect setting."
           onClose={() => setPanelTips((tips) => ({ ...tips, fx: false }))}

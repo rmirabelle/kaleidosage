@@ -1462,6 +1462,8 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .welcome-splash-buttons { display: flex; justify-content: center; gap: 10px; margin-top: 18px; }
 /* The line round a panel that a tip tells about (see PointerTip's "outline"): over the panel's own border, and it lets the mouse through. */
 .pointer-ring { position: fixed; z-index: 149; box-sizing: border-box; border: 2px solid #adfa00; border-radius: 6px; pointer-events: none; }
+/* A tip with a long text, such as a panel's overview, is wider, so it is not too tall. */
+.pointer-tip.wide { max-width: 420px; }
 /* The tip's close button, in its top-right corner, outside the tip's padding. */
 .pointer-tip-close { position: absolute; top: 5px; right: 5px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; color: #000; background: transparent; cursor: pointer; }
 .pointer-tip-close:hover { background: rgba(0,0,0,.14); }
