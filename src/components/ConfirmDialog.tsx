@@ -7,12 +7,14 @@ import { X } from "@phosphor-icons/react";
  * a click outside the dialog cancels. While it is open, keys do not reach
  * the app's shortcuts. "details" shows under the message, for example a list.
  * With "closeButton", an X in the corner takes the place of Cancel.
+ * "confirmIcon" shows before the confirm button's label.
  */
-export function ConfirmDialog({ title, message, details, confirmLabel, onConfirm, onCancel, otherLabel, onOther, closeButton }: {
+export function ConfirmDialog({ title, message, details, confirmLabel, confirmIcon, onConfirm, onCancel, otherLabel, onOther, closeButton }: {
   title: string;
   message: ReactNode;
   details?: ReactNode;
   confirmLabel: string;
+  confirmIcon?: ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
   otherLabel?: string;
@@ -52,7 +54,7 @@ export function ConfirmDialog({ title, message, details, confirmLabel, onConfirm
         <div className="about-dialog-actions confirm-dialog-actions">
           {!closeButton && <button className="button secondary" onClick={onCancel}>Cancel</button>}
           {otherLabel && onOther && <button className="button secondary" onClick={onOther}>{otherLabel}</button>}
-          <button ref={confirmRef} className="button primary" onClick={onConfirm}>{confirmLabel}</button>
+          <button ref={confirmRef} className="button primary" onClick={onConfirm}>{confirmIcon}{confirmLabel}</button>
         </div>
       </div>
     </div>

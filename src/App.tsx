@@ -2490,6 +2490,7 @@ export default function App() {
           title={saveQuestion.title}
           message={`${saveQuestion.name ?? sceneFileName} has changes that are not saved. ${saveQuestion.reason}`}
           confirmLabel="Save"
+          confirmIcon={<FloppyDisk size={16} weight="bold" />}
           otherLabel="Don't save"
           onConfirm={() => {
             const { answer, save } = saveQuestion;

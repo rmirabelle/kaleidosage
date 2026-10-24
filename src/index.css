@@ -1588,11 +1588,12 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .about-dialog-actions .button { min-height: 35px; padding: 0 15px; }
 /* A confirm question: the About dialog's frame and footer, with a short text. */
 .about-dialog.confirm-dialog { width: min(400px, 100%); }
-.confirm-dialog-content { padding: 22px 24px 18px; background: linear-gradient(180deg, #292d37, #242832); }
-.confirm-dialog-content h2 { margin: 0; color: #f1f2f4; font-size: 16px; font-weight: 700; }
+.confirm-dialog-content { padding: 22px 24px 26px; background: linear-gradient(180deg, #292d37, #242832); }
+/* The title as the welcome card's: large, in the app's blue, with room under it. */
+.confirm-dialog-content h2 { margin: 0 0 16px; color: var(--secondary); font-size: 24px; font-weight: 750; letter-spacing: -.01em; }
 /* With a close button in the corner (closeButton), the title keeps clear of it. */
 .about-dialog-close + .confirm-dialog-content h2 { padding-right: 28px; }
-.confirm-dialog-content p { margin: 10px 0 0; color: #b9bdc8; font-size: 13px; line-height: 1.45; }
+.confirm-dialog-content p { margin: 0; color: #b9bdc8; font-size: 13px; line-height: 1.45; }
 /* A setting or MIDI control named in a question, in the MIDI orange. */
 .confirm-dialog-content .midi-name { color: var(--midi-on); }
 .confirm-dialog-actions { gap: 8px; }
