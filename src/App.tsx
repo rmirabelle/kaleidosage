@@ -264,6 +264,9 @@ export default function App() {
   const NO_PANEL_TIPS: PanelTips = { scene: false, fx: false, play: false };
   const [panelTips, setPanelTips] = useState<PanelTips>(NO_PANEL_TIPS);
   const anyPanelTip = panelTips.scene || panelTips.fx || panelTips.play;
+  /** The welcome card in the middle of the picture: with the first scene of a run, it offers to turn the pointers off. */
+  const [welcome, setWelcome] = useState(false);
+  const welcomeShownRef = useRef(false);
   const sceneCard = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".control-panel .source-section > .panel-header-bar"); } }), []);
   const fxCard = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".control-panel .fx-card > .panel-header-bar"); } }), []);
   /* The Play card has no header: its tip points at the card's first row. */
@@ -1475,7 +1478,14 @@ export default function App() {
   /** Starts a new, untitled scene in a new tab. The scene that was shown stays in its own tab. The app stops listening outside a playlist (see quietOutsidePlaylist). */
   const newScene = useCallback(() => {
     if (!engine) return;
-    if (docsRef.current.length === 0) setPanelTips({ scene: true, fx: true, play: true });
+    if (docsRef.current.length === 0) {
+      setPanelTips({ scene: true, fx: true, play: true });
+      /* The first scene of each run, with the pointers on, also shows the welcome card. */
+      if (!welcomeShownRef.current && helpSettings.get().pointers) {
+        welcomeShownRef.current = true;
+        setWelcome(true);
+      }
+    }
     quietOutsidePlaylist();
     /* With no input, the new scene starts with the settings' audio buttons hidden. */
     if (audioInput.settings.kind === "none") settingButtons.set("audio", false);
@@ -2227,6 +2237,24 @@ export default function App() {
                 <button onClick={() => void exitFullscreen()} data-tip="Exit full screen `Esc`" aria-label="Exit full screen">
                   <ArrowsIn size={18} />
                 </button>
+              </div>
+            )}
+            {welcome && !startScreen && (
+              <div className="welcome-splash" role="dialog" aria-label="Welcome">
+                <h2>Welcome to Kaleido Sage</h2>
+                <p>Green pointers will show you around the app as you go. You can turn them off now, or later in the Help menu.</p>
+                <div className="welcome-splash-buttons">
+                  <button
+                    className="button secondary"
+                    onClick={() => {
+                      helpSettings.set({ pointers: false });
+                      setWelcome(false);
+                    }}
+                  >
+                    Disable Pointers
+                  </button>
+                  <button className="button primary" onClick={() => setWelcome(false)}>Show Me Around</button>
+                </div>
               </div>
             )}
             {fatalError && <div className="fatal-error selectable">{fatalError}</div>}

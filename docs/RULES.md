@@ -629,6 +629,8 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Then a tip shows at the first range button of the open effect; with no effect open, it waits until one opens.
 - A tip under the scene's Length shows with it.
 - Either close button, or a press in the FX card while they show, ends both.
+- With the pointers on, the first scene of each run also shows a welcome card in the middle of the picture.
+- Its Disable Pointers button turns the pointers off; Show Me Around closes it.
 - Help, Disable Pointers hides every pointer tip, and Help, Enable Pointers shows them again; the choice stays.
 - With a live input and no audio link in the scene yet, a tip at the right of the FX audio button tells what it does.
 - A second tip shows the next step: "+ New" in an empty FX list, else the speaker of the first setting in view.
