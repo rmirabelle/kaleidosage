@@ -6,7 +6,7 @@ export const PARAM_KEYS = [
   "warpOpacity", "mapOpacity", "foldOpacity",
   "warpAmount", "warpScale", "warpCellSize", "warpCellAngle", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle",
   "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl",
-  "mandelDepth", "mandelEnd", "mandelFade", "mandelBands", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle",
+  "mandelDepth", "mandelEnd", "mandelFade", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle",
   "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
   "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness",
   "segments", "tileSize", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl",
@@ -270,6 +270,8 @@ export interface PlayState {
   warpType: WarpType;
   /** How far the warp noise has flowed; it grows with time × warp flow. */
   warpTime: number;
+  /** The Mandelbrot map's bands moved so far by Band flow (in bands), added up like warpTime. */
+  mandelFlowTime: number;
   /** How far the view has flown into the tunnel; it grows with time × tunnel speed. */
   mapTravel: number;
   /** Where the camera's aim point is on the land (screen heights); it moves with time × camera speed, the way the camera looks. */
@@ -442,6 +444,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   mandelEnd: { label: "End depth", min: 0.5, max: 10, step: 0.01, value: 4.5, drift: "wave", low: 3, high: 6, on: false },
   mandelFade: { label: "Crossfade", min: 0.05, max: 0.5, step: 0.01, value: 0.25, drift: "wave", low: 0.15, high: 0.4, on: false },
   mandelBands: { label: "Band width", min: 0.2, max: 20, step: 0.01, scale: "log", value: 3, drift: "wave", low: 1.5, high: 6, on: false },
+  mandelFlow: { label: "Band flow", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -0.5, high: 0.5, on: false },
   mandelTerraces: { label: "Terraces", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.3, high: 0.9, on: false },
   mandelSoftness: { label: "Softness", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.8, on: false },
   mandelLight: { label: "Light", min: 0, max: 1, step: 0.01, value: 0.7, drift: "wave", low: 0.4, high: 1, on: false },
@@ -895,7 +898,7 @@ export function createPlayState(): PlayState {
     /* No effect is in the list at start-up, so every effect group is off. */
     groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, bloom: false, sharpen: false, color: false, levels: false },
     locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, bloom: false, sharpen: false, color: false, levels: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, sortOrder: 0, particleBlend: 0, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, sortOrder: 0, particleBlend: 0, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1248,7 +1251,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   /** The images are the user's choice; Randomize does not change the blend. */
   source: ["imageBlend"],
   warp: ["warpOpacity", "warpAmount", "warpScale", "warpCellSize", "warpCellAngle", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle"],
-  map: ["mapOpacity", "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl", "mandelDepth", "mandelEnd", "mandelFade", "mandelBands", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle", "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
+  map: ["mapOpacity", "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl", "mandelDepth", "mandelEnd", "mandelFade", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle", "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
     "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness"],
   kaleidoscope: ["foldOpacity", "segments", "tileSize", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl"],
   blur: ["blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel"],

@@ -127,3 +127,12 @@ depth flown divided by the length). Now Start depth and End depth set the
 dive's two ends, the dive keeps its own progress (0 to 1, in mapTravel), so
 a change to either end only stretches it, and at Speed 0 the view stays at
 Start depth.
+
+Bands (2026-10-24): small Band width changes made the picture jump,
+because the bands counted from round 0 and deep views are hundreds of
+rounds out. Now they count from the view's lowest escape count
+(`mandelStart` in renderer.ts: the corners and edge middles, worked out in
+64-bit numbers each frame), so Band width changes only their spacing (a 1%
+change moved the picture 4.4 of 255 on average). Band flow moves the bands
+on purpose, in bands per second (state `mandelFlowTime`, saved with the
+scene like warpTime).

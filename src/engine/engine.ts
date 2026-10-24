@@ -827,6 +827,7 @@ export class Engine {
     this.state.clock = 0;
     for (const key of PARAM_KEYS) if (this.params[key].drift) startRangeAt(this.params[key], 0);
     this.state.warpTime = 0;
+    this.state.mandelFlowTime = 0;
     this.state.driverTime = 0;
     this.state.solidSpinTurns = 0;
     this.state.solidTumbleTurns = 0;
@@ -962,6 +963,7 @@ export class Engine {
     this.state.time += animated;
     /** Flow is a speed, so its live value is added up over time; a drifting flow speeds up and slows down smoothly. */
     this.state.warpTime += animated * (this.live("warpFlow") + this.warpFlowOffset);
+    this.state.mandelFlowTime += animated * this.live("mandelFlow");
     this.state.driverTime += animated * this.live("driverSpeed");
     /* The 3D Object's spin and tumble are speeds in turns per minute, added up the same way. */
     this.state.solidSpinTurns = (this.state.solidSpinTurns + animated * this.live("solidSpin") / 60) % 1;
@@ -1111,6 +1113,7 @@ export class Engine {
       warpMarble: this.live("warpMarble"),
       warpDetail: this.params.warpDetail.value,
       warpTime: this.state.warpTime,
+      mandelFlow: this.state.mandelFlowTime,
       warpType: this.state.warpType,
       warpCenterX: this.live("warpCenterX"),
       warpCenterY: this.live("warpCenterY"),
