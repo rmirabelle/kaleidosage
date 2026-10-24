@@ -1,8 +1,8 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openFileDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { ArrowClockwise, ArrowCounterClockwise, ArrowsIn, ArrowsOut, Camera, FilmStrip, FloppyDisk, FolderOpen, Gauge, Info, Playlist, Keyboard, Plus, Question, SignOut, SlidersHorizontal, SpeakerSimpleHigh, X } from "@phosphor-icons/react";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
+import { ArrowClockwise, ArrowCounterClockwise, ArrowsIn, ArrowsOut, Camera, FilmStrip, FloppyDisk, FolderOpen, Gauge, HandPointing, Info, Playlist, Keyboard, Plus, Question, SignOut, SlidersHorizontal, SpeakerSimpleHigh, X } from "@phosphor-icons/react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { AboutDialog } from "./components/AboutDialog";
 import { ShortcutsDialog } from "./components/ShortcutsDialog";
 import { HelpLine } from "./components/HelpLine";
@@ -16,6 +16,7 @@ import { MidiPanel } from "./components/MidiPanel";
 import { AudioPanel } from "./components/AudioPanel";
 import { BottomPanelTabs, type BottomTab } from "./components/BottomPanelTabs";
 import { SongMapPanel, type SongTip } from "./components/SongMapPanel";
+import { PointerTip } from "./components/PointerTip";
 import { SceneTransport, SourcePanel } from "./components/SourcePanel";
 import { StartScreen } from "./components/StartScreen";
 import { LoadingOverlay, type Loading } from "./components/LoadingOverlay";
@@ -252,6 +253,21 @@ export default function App() {
   const endNextTip = useCallback(() => setNextTip(false), []);
   const endFilesTip = useCallback(() => setFilesTip(false), []);
   const [songTip, setSongTip] = useState<SongTip>(null);
+  /**
+   * The first scene (New Scene with no scene open) shows a tip at Slot A,
+   * until it is closed or the user presses in the slot. The slot is looked
+   * up in each frame (see PointerTip): the Source card is made again often.
+   */
+  const [slotTip, setSlotTip] = useState(false);
+  const slotA = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>("[data-image-slot='0']"); } }), []);
+  useEffect(() => {
+    if (!slotTip) return;
+    const onPress = (event: PointerEvent) => {
+      if ((event.target as Element).closest?.("[data-image-slot='0']")) setSlotTip(false);
+    };
+    window.addEventListener("pointerdown", onPress, true);
+    return () => window.removeEventListener("pointerdown", onPress, true);
+  }, [slotTip]);
   const pickInput = useCallback((kind: InputKind, switched: boolean) => {
     setFilesTip(kind === "tracks" && tracks.list.length === 0);
     if (kind !== "tracks") setSongTip(null);
@@ -315,6 +331,7 @@ export default function App() {
   const closeShortcuts = useCallback(() => setShortcutsOpen(false), []);
   /** Whether the panel headings show their "?" help buttons (Help, Hide Help Buttons). */
   const helpButtons = useSyncExternalStore(helpSettings.subscribe, () => helpSettings.get().buttons);
+  const pointersOn = useSyncExternalStore(helpSettings.subscribe, () => helpSettings.get().pointers);
   const [openRequest, setOpenRequest] = useState<OpenRequest | null>(null);
   const [videoDialogOpen, setVideoDialogOpen] = useState(false);
   /** The slot that the photo search dialog loads into, while it is open. */
@@ -1415,6 +1432,7 @@ export default function App() {
   /** Starts a new, untitled scene in a new tab. The scene that was shown stays in its own tab. The app stops listening outside a playlist (see quietOutsidePlaylist). */
   const newScene = useCallback(() => {
     if (!engine) return;
+    if (docsRef.current.length === 0) setSlotTip(true);
     quietOutsidePlaylist();
     /* With no input, the new scene starts with the settings' audio buttons hidden. */
     if (audioInput.settings.kind === "none") settingButtons.set("audio", false);
@@ -2028,6 +2046,7 @@ export default function App() {
       items: [
         { label: "Keyboard Shortcuts", icon: <Keyboard size={15} />, shortcut: "?", run: () => setShortcutsOpen(true) },
         { label: helpButtons ? "Hide Help Buttons" : "Show Help Buttons", icon: <Question size={15} />, run: () => helpSettings.set({ buttons: !helpButtons }) },
+        { label: pointersOn ? "Disable Pointers" : "Enable Pointers", icon: <HandPointing size={15} />, run: () => helpSettings.set({ pointers: !pointersOn }) },
         "separator",
         { label: "About Kaleido Sage", icon: <Info size={15} />, run: () => setAboutOpen(true) }
       ]
@@ -2206,6 +2225,13 @@ export default function App() {
       )}
       {/* The help line: the tip of the control under the mouse, always in view under the panels (not in full screen, not with the settings hidden). */}
       {!fullscreen && !startScreen && panelOpen && <HelpLine />}
+      {slotTip && !startScreen && (
+        <PointerTip
+          anchor={slotA}
+          text="SLOT A contains a checkerboard pattern for testing. Hover over it to load a random image, search the web for an image, choose a pattern, or load your own image or video into the slot."
+          onClose={() => setSlotTip(false)}
+        />
+      )}
       {resetAsked && (
         <ConfirmDialog
           title="Clear all effects?"

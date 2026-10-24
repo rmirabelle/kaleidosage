@@ -10,6 +10,8 @@ interface HelpSettings {
    * clean app; the user turns them on when they want help.
    */
   buttons: boolean;
+  /** False after Help, Disable Pointers: the neon tips that point at a control (see PointerTip) do not show. On at first. */
+  pointers: boolean;
 }
 
 const STORE_KEY = "kaleidosage.help";
@@ -17,9 +19,9 @@ const STORE_KEY = "kaleidosage.help";
 function load(): HelpSettings {
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) ?? "{}") as Partial<HelpSettings>;
-    return { buttons: saved.buttons === true };
+    return { buttons: saved.buttons === true, pointers: saved.pointers !== false };
   } catch {
-    return { buttons: false };
+    return { buttons: false, pointers: true };
   }
 }
 

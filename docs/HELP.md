@@ -186,7 +186,11 @@ line each, with a link to each topic. It shows once per version.
    badges are green circles with a black "?", fixed to each panel's
    top-right corner. The "More" link waits for the help page (step 6).
 5. First-scene guide (part 1). Built 2026-10-18, removed 2026-10-19 (see
-   part 1); later.
+   part 1); later. Since 2026-10-23, pointer tips (`src/components/PointerTip.tsx`):
+   neon green tips with an arrow to a control, each shown once at a step
+   (the first scene's Slot A, a picked input, an empty Playlist, the Song
+   Map's analysis and slices). Help, Disable Pointers hides them all
+   (`helpSettings.pointers`); they are on at first.
 6. Help page with search (part 4).
 7. Tooltip form (part 6), panel by panel.
 8. Idea explainers (part 7), then What's new (part 8).

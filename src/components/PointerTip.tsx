@@ -1,19 +1,33 @@
-import { useLayoutEffect, useRef, type RefObject } from "react";
+import { useLayoutEffect, useRef, useSyncExternalStore, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { X } from "@phosphor-icons/react";
+import { helpSettings } from "../lib/helpSettings";
 
 /** The space between the tip and the window's edges, and the arrow's least distance from the tip's corners. */
 const EDGE = 8;
 const ARROW_INSET = 16;
 const within = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 
+const subscribeHelp = (listener: () => void) => helpSettings.subscribe(listener);
+const pointersOn = () => helpSettings.get().pointers;
+
 /**
  * A context tip with an arrow to a control, and a close button: at the
  * right of the control, or above it ("side"). It stays in the window (the
  * arrow still points at the control), and follows the control while the
- * panels around it change size.
+ * panels around it change size. Help, Disable Pointers hides every tip.
  */
-export function PointerTip({ anchor, text, onClose, side = "right" }: {
+export function PointerTip(props: {
+  anchor: RefObject<HTMLElement | null>;
+  text: string;
+  onClose: () => void;
+  side?: "right" | "above";
+}) {
+  const on = useSyncExternalStore(subscribeHelp, pointersOn);
+  return on ? <PlacedTip {...props} /> : null;
+}
+
+function PlacedTip({ anchor, text, onClose, side = "right" }: {
   anchor: RefObject<HTMLElement | null>;
   text: string;
   onClose: () => void;

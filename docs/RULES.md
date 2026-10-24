@@ -622,6 +622,8 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - At first no slice is selected, and the slice tools are off.
 - While the music plays, the slice under the playhead is selected.
 - The Song Map calls a slice's level of energy its Mood.
+- New Scene with no scene open shows a tip at Slot A; it goes when you close it or press in Slot A.
+- Help, Disable Pointers hides every pointer tip, and Help, Enable Pointers shows them again; the choice stays.
 - With a live input and no audio link in the scene yet, a tip at the right of the FX audio button tells what it does.
 - A second tip shows the next step: "+ New" in an empty FX list, else the speaker of the first setting in view.
 - A click on a button of the FX card closes the first tip; any press in the FX card closes the second.
