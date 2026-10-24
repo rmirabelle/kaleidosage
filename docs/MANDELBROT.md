@@ -120,3 +120,10 @@ Also on 2026-10-24: the app lost the graphics card because the shape shader
 took 65 s to build (ANGLE on Direct3D 11 copies every function call, and
 every round of a fixed-length loop). Calling the map and the picture read
 from one place each, in loops of run-time length, brought it to 11 s.
+
+Changed the same day: Depth and Dive length were hard to tell apart, and a
+small change to Dive length made the view jump (the dive's place was the
+depth flown divided by the length). Now Start depth and End depth set the
+dive's two ends, the dive keeps its own progress (0 to 1, in mapTravel), so
+a change to either end only stretches it, and at Speed 0 the view stays at
+Start depth.

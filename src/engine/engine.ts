@@ -968,7 +968,18 @@ export class Engine {
     this.state.solidTumbleTurns = (this.state.solidTumbleTurns + animated * this.live("solidTumble") / 60) % 1;
     /* Tunnel speed is a speed too, so the distance flown is added up the same way. */
     const mapSpeed = this.live("mapSpeed");
-    this.state.mapTravel += animated * (this.state.mapMode === 8 ? mapSpeed / drosteCopy(this.live("drosteSize")) : mapSpeed);
+    if (this.state.mapMode === 9) {
+      /**
+       * The Mandelbrot dive keeps its progress, 0 to 1 from Start depth to
+       * End depth, so a change to either depth only stretches the dive (a
+       * distance flown divided by the dive's length would jump).
+       */
+      const dive = this.live("mandelEnd") - this.live("mandelDepth");
+      const progress = this.state.mapTravel + animated * mapSpeed / Math.max(0.1, dive);
+      this.state.mapTravel = progress - Math.floor(progress);
+    } else {
+      this.state.mapTravel += animated * (this.state.mapMode === 8 ? mapSpeed / drosteCopy(this.live("drosteSize")) : mapSpeed);
+    }
     /* Camera speed too: the aim point flies over the land the way the camera looks (see CAMERA_SHADER: the eye is on the Turn side of the aim point). */
     const heading = this.live("cameraTurn") * DEGREES;
     const flight = animated * this.live("cameraSpeed");
@@ -1063,16 +1074,16 @@ export class Engine {
       : this.state.mapMode === 9 ? MANDEL_CENTERS[this.state.mandelPlace]
       : juliaPoint(this.live("juliaShape") * DEGREES, this.live("juliaEdge"));
     /**
-     * The Mandelbrot dive: Speed adds up depth flown (powers of ten per
-     * second, in mapTravel). The view goes from Depth down by Dive length,
-     * then starts again. Over the last part (Crossfade, a share of the dive)
-     * the start fades in, already diving: it is as far before Depth as the
-     * view is before the end, so it reaches Depth just as the dive starts
+     * The Mandelbrot dive: Speed is in powers of ten per second, and the
+     * dive's progress (mapTravel, see step) takes the view from Start depth
+     * to End depth, then it starts again. At Speed 0 the view stays at Start
+     * depth. Over the last part (Crossfade, a share of the dive) the start
+     * fades in, already diving: it is as far before Start depth as the view
+     * is before the end, so it reaches Start depth just as the dive starts
      * again, and nothing jumps. A negative Speed runs it backward.
      */
-    const diveLength = Math.max(0.01, this.live("mandelDive"));
-    const diveRun = this.state.mapTravel / diveLength;
-    const divePart = this.state.mapMode === 9 ? diveRun - Math.floor(diveRun) : 0;
+    const diveLength = Math.max(0.1, this.live("mandelEnd") - this.live("mandelDepth"));
+    const divePart = this.state.mapMode === 9 && this.live("mapSpeed") !== 0 ? this.state.mapTravel % 1 : 0;
     const diveFade = Math.min(0.99, Math.max(0.01, this.live("mandelFade")));
     const fadeIn = Math.min(1, Math.max(0, (divePart - (1 - diveFade)) / diveFade));
     return {
