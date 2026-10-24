@@ -28,16 +28,30 @@ Map mode 9 of the Algorithm effect (see `complexMap` in shaders.ts).
 - Randomize does not pick Mandelbrot yet: it costs more than the other
   maps.
 
-Places: Seahorse valley (-0.743643887037151, 0.13182590420533), Spiral
-(-0.77568377, 0.13646737), Dendrite (i), Mini copy (the cusp of the copy at
--1.75), Elephant valley (the main cusp, 0.25).
+Places: Seahorse valley (-0.7436438870371587, 0.1318259042053120), Spiral
+(-0.10109636384562, 0.95628651080914, a Misiurewicz point: spirals at every
+depth), Dendrite (i), Mini copy (the cusp of the copy at -1.75), Elephant
+valley (the main cusp, 0.25).
 
-Limit: the graphics card's 32-bit numbers hold about 7 digits, so near Depth
-5 (100,000 times) the picture starts to turn blocky.
+## Step 2 (built 2026-10-24): deep zoom
 
-## Step 2 (planned): deep zoom
+Perturbation, the usual deep-zoom method. Depth now goes to 13 (10 trillion
+times).
 
-Perturbation, the usual deep-zoom method: one exact path for the place,
-computed in JavaScript with doubles (about 15 digits), and on the graphics
-card only each pixel's small difference from that path. That reaches about
-10^13. Deeper dives need more rounds, so the frame cost grows with Depth.
+- `mandelPath` in renderer.ts works out the place's exact path in JavaScript
+  with 64-bit numbers (about 15 digits), until it escapes, and sends it to the
+  graphics card as a two-channel float texture, 1024 values a row. It is made
+  again only when the place or the rounds change.
+- The shader works only with each pixel's small difference d from that path:
+  d' = 2 Z d + d^2 + dc. dc, the screen point's part of c, fits 32-bit
+  numbers at any depth.
+- Rebasing: where z = Z + d comes nearer 0 than d, or the path ends, the pixel
+  goes on against the path's start (d = z, Z = 0). So any place works, also
+  one whose path escapes early, and no pixel turns into a glitch blob.
+- Rounds: 300 + 150 Depth, 2500 at most (`mandelRounds`). The frame cost
+  grows with Depth.
+- The slope for the light is kept per screen unit, so it does not overflow
+  32-bit numbers in deep views.
+
+Checked by renders at Depth 2.5, 6, 9 and 12 (Seahorse valley), 8 (Spiral)
+and 10 (Dendrite): crisp detail, no blocks.

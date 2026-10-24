@@ -40,6 +40,10 @@ export const isShapeStep = (step: FxStep): step is ShapeStep => (SHAPE_STEPS as 
 export type SmearShape = 0 | 1 | 2 | 3 | 4;
 
 const SHAPE_CODES: Record<ShapeStep, number> = { warp: 0, map: 1, kaleidoscope: 2 };
+/** The Mandelbrot path texture's row length (see mandelPath). */
+const MANDEL_ROW = 1024;
+/** The Mandelbrot map's rounds: deeper views need more before their points escape (at most 2500, the shader's limit). */
+export const mandelRounds = (depth: number) => Math.round(Math.min(2500, Math.max(300, 300 + 150 * depth)));
 /** 0 normal, 1 screen, 2 multiply, 3 overlay, 4 difference, 5 lighten, 6 darken, 7 add. */
 export type LayerBlend = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 /** How the camera's land goes on past the picture: 0 mirrored, 1 repeated as it is, 2 not at all (sky around the picture). */
@@ -1121,6 +1125,17 @@ export class KaleidoRenderer {
     gl.uniform2f(k.uniforms.u_mapPoint, v.mapPointX, v.mapPointY);
     gl.uniform1i(k.uniforms.u_mapSteps, Math.round(v.mapSteps));
     gl.uniform1f(k.uniforms.u_mandelDepth, v.mandelDepth);
+    if (v.mapMode === 9) {
+      /* The deep zoom's exact path (see mandelPath), in slot 2; the source images use 0 and 1. */
+      const rounds = mandelRounds(v.mandelDepth);
+      const path = this.mandelPath(v.mapPointX, v.mapPointY, rounds);
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, path.texture);
+      gl.uniform1i(k.uniforms.u_mandelPath, 2);
+      gl.uniform1i(k.uniforms.u_mandelLength, path.length);
+      gl.uniform1i(k.uniforms.u_mandelRounds, rounds);
+      gl.activeTexture(gl.TEXTURE0);
+    }
     gl.uniform1f(k.uniforms.u_mandelBands, v.mandelBands);
     gl.uniform1f(k.uniforms.u_mandelTerraces, v.mandelTerraces);
     gl.uniform1f(k.uniforms.u_mandelLight, v.mandelLight);
@@ -1674,6 +1689,44 @@ export class KaleidoRenderer {
     gl.uniform1i(s.uniforms.u_back, 1);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.activeTexture(gl.TEXTURE0);
+  }
+
+  /**
+   * The Mandelbrot map's exact path for a place (the deep zoom, see
+   * docs/MANDELBROT.md): z = z^2 + c from 0, worked out here with 64-bit
+   * numbers, until it escapes or for "rounds" rounds. The graphics card
+   * reads it from a two-channel float texture, 1024 values a row, and works
+   * only with each pixel's small difference from it. It is made again only
+   * when the place or the rounds change.
+   */
+  private mandel: { texture: WebGLTexture; key: string; length: number } | null = null;
+  private mandelPath(cx: number, cy: number, rounds: number) {
+    const key = `${cx},${cy},${rounds}`;
+    if (this.mandel?.key === key) return this.mandel;
+    const gl = this.gl;
+    const rows = Math.ceil((rounds + 1) / MANDEL_ROW);
+    const data = new Float32Array(MANDEL_ROW * rows * 2);
+    let x = 0;
+    let y = 0;
+    let length = 0;
+    for (let n = 0; n <= rounds; n++) {
+      data[2 * n] = x;
+      data[2 * n + 1] = y;
+      length = n + 1;
+      if (x * x + y * y > 4) break;
+      const next = x * x - y * y + cx;
+      y = 2 * x * y + cy;
+      x = next;
+    }
+    const texture = this.mandel?.texture ?? gl.createTexture()!;
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, MANDEL_ROW, rows, 0, gl.RG, gl.FLOAT, data);
+    gl.activeTexture(gl.TEXTURE0);
+    this.mandel = { texture, key, length };
+    return this.mandel;
   }
 
   /** Freeze background's picture behind the 3D Object (see render), made at the screen's size when first needed. */

@@ -64,12 +64,14 @@ export const MAP_MODES = [[8, "Droste spiral"], [2, "Möbius"], [3, "Julia"], [9
 
 /**
  * The Mandelbrot map's places to dive into: points on the set's edge,
- * where detail goes on at every depth (Depth zooms toward them).
+ * where detail goes on at every depth (Depth zooms toward them, to 10^13).
  */
 export const MANDEL_PLACES = [[0, "Seahorse valley"], [1, "Spiral"], [2, "Dendrite"], [3, "Mini copy"], [4, "Elephant valley"]] as const;
 export const MANDEL_CENTERS: Record<MandelPlace, [number, number]> = {
-  0: [-0.743643887037151, 0.13182590420533],
-  1: [-0.77568377, 0.13646737],
+  /* Exact to the 16 digits a double holds, so the deep zoom (to 10^13) stays on the edge. */
+  0: [-0.7436438870371587, 0.1318259042053120],
+  /* A Misiurewicz point: a spiral that comes back at every depth. */
+  1: [-0.10109636384562, 0.95628651080914],
   2: [0, 1],
   3: [-1.75, 0],
   4: [0.25, 0]

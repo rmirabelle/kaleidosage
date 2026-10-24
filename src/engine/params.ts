@@ -438,7 +438,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   juliaShape: { label: "Shape", min: 0, max: 360, step: 1, value: 120, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   /** Julia has its own Darkness and Softness (see mapFog): the far end is where the steps stretch the picture most. */
   juliaFog: { label: "Darkness", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.3, high: 0.7, on: false },
-  mandelDepth: { label: "Depth", min: 0, max: 5, step: 0.01, value: 0.5, drift: "wave", low: 0, high: 3, on: false },
+  mandelDepth: { label: "Depth", min: 0, max: 13, step: 0.01, value: 0.5, drift: "wave", low: 0, high: 3, on: false },
   mandelBands: { label: "Band width", min: 0.2, max: 20, step: 0.01, scale: "log", value: 3, drift: "wave", low: 1.5, high: 6, on: false },
   mandelTerraces: { label: "Terraces", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.3, high: 0.9, on: false },
   mandelLight: { label: "Light", min: 0, max: 1, step: 0.01, value: 0.7, drift: "wave", low: 0.4, high: 1, on: false },

@@ -455,8 +455,17 @@ float depthDistance;
  */
 float mandelShade = 1.0;
 float mandelStretch = 1.0;
-/* Depth in powers of ten (0 to 5), band width, terraces, light, and the light's direction. */
+/* Depth in powers of ten (0 to 13), band width, terraces, light, and the light's direction. */
 uniform float u_mandelDepth;
+/**
+ * The deep zoom (see mandelPath in renderer.ts): the place's exact path,
+ * 1024 values a row, how many values it has (it ends where it escapes),
+ * and the rounds to run.
+ */
+uniform sampler2D u_mandelPath;
+uniform int u_mandelLength;
+uniform int u_mandelRounds;
+vec2 mandelAt(int n) { return texelFetch(u_mandelPath, ivec2(n & 1023, n >> 10), 0).xy; }
 uniform float u_mandelBands;
 uniform float u_mandelTerraces;
 uniform float u_mandelLight;
@@ -578,29 +587,44 @@ vec2 complexMap(vec2 p) {
   } else if (u_mapMode == 9) {
     /**
      * Mandelbrot: z = z^2 + c from z = 0, with c the place (u_mapPoint)
-     * plus the screen point, 1.5 / 10^Depth across. A point that escapes
-     * gets its smooth escape count (the usual "continuous" count); the
-     * picture lies across the bands (one band is one picture height across,
-     * Band width rounds) and up by the angle it escaped at, so the picture
-     * shows inside each band. The light comes from the formula's own slope
-     * (z over its derivative, the usual normal map of a Mandelbrot), and
-     * Terraces darkens each band toward one edge, which looks like stacked
-     * steps. Points that never escape are in the set: black. Deeper views
-     * need more rounds, so the rounds grow with Depth.
+     * plus the screen point, 1.5 / 10^Depth across. For deep views, the
+     * place's exact path Z comes from the renderer (64-bit numbers), and
+     * this works only with the pixel's small difference from it, d (the
+     * usual perturbation): d' = 2 Z d + d^2 + dc, where dc is the screen
+     * point's part of c, which 32-bit numbers hold well at any depth. Where
+     * z = Z + d comes nearer 0 than d itself, or the path ends, d would
+     * lose its precision, so the pixel goes on against the path's start
+     * instead (rebasing: d = z, Z = 0). A point that escapes gets the usual
+     * smooth escape count; the picture lies across the bands (one band is
+     * one picture height across, Band width rounds) and up by the angle it
+     * escaped at, so the picture shows inside each band. The light comes
+     * from the formula's own slope (z over its derivative, the usual normal
+     * map of a Mandelbrot), and Terraces darkens each band toward one edge,
+     * which looks like stacked steps. Points that never escape are in the
+     * set: black. Deeper views need more rounds (u_mandelRounds).
      */
-    float span = 1.5 * pow(10.0, -clamp(u_mandelDepth, 0.0, 5.0));
-    vec2 c = u_mapPoint + onAxis * span;
+    float span = 1.5 * pow(10.0, -clamp(u_mandelDepth, 0.0, 13.0));
+    vec2 dc = onAxis * span;
+    vec2 d = vec2(0.0);
     vec2 m = vec2(0.0);
     vec2 slope = vec2(0.0);
-    int rounds = int(clamp(200.0 + 120.0 * u_mandelDepth, 200.0, 800.0));
+    int ref = 0;
     float escaped = -1.0;
-    for (int i = 0; i < 800; i++) {
-      if (i >= rounds) break;
-      slope = 2.0 * cmul(m, slope) + vec2(1.0, 0.0);
-      m = cmul(m, m) + c;
+    for (int i = 0; i < 2500; i++) {
+      if (i >= u_mandelRounds) break;
+      vec2 big = mandelAt(ref);
+      /* The slope per screen unit (dz/dc times the span), so it stays far from the largest 32-bit number at any depth. */
+      slope = 2.0 * cmul(big + d, slope) + vec2(span, 0.0);
+      d = 2.0 * cmul(big, d) + cmul(d, d) + dc;
+      ref++;
+      m = mandelAt(ref) + d;
       if (dot(m, m) > 65536.0) {
         escaped = float(i);
         break;
+      }
+      if (dot(m, m) < dot(d, d) || ref >= u_mandelLength - 1) {
+        d = m;
+        ref = 0;
       }
     }
     if (escaped < 0.0) {
@@ -616,8 +640,8 @@ vec2 complexMap(vec2 p) {
       float lit = clamp((dot(normal, u_mandelLightDir) + 1.5) / 2.5, 0.0, 1.0);
       float step_ = 0.45 + 0.55 * fract(band);
       mandelShade = mix(1.0, lit, u_mandelLight) * mix(1.0, step_, u_mandelTerraces);
-      /* The band count's change per screen unit: |dz/dc| / (|z| ln|z|), times the span, over the band width. */
-      mandelStretch = length(slope) / (r * log(r)) * span / max(u_mandelBands, 0.01) / max(u_mapScale, 1e-4);
+      /* The band count's change per screen unit: |dz/d(screen)| / (|z| ln|z|), over the band width. */
+      mandelStretch = length(slope) / (r * log(r)) / max(u_mandelBands, 0.01) / max(u_mapScale, 1e-4);
     }
   } else if (u_mapMode == 5) {
     w = csin(onAxis * PI) / PI;
