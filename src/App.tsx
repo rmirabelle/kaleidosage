@@ -476,7 +476,7 @@ export default function App() {
     setPlaylistDirty(false);
   }, [playlistNow]);
   /** Set below, once savePlaylist exists: asks "Save changes?" for the playlist. */
-  const askToSavePlaylistRef = useRef<(title: string, reason: string) => Promise<boolean>>(async () => true);
+  const askToSavePlaylistRef = useRef<(reason: string) => Promise<boolean>>(async () => true);
   /** The selected scene's Undo history; each scene has its own. */
   const historyRef = useRef<SettingsHistory | null>(null);
   const [resetAsked, setResetAsked] = useState(false);
@@ -486,7 +486,6 @@ export default function App() {
    * and the answer, true to go on with the action.
    */
   const [saveQuestion, setSaveQuestion] = useState<{
-    title: string;
     reason: string;
     answer: (go: boolean) => void;
     /** What has the changes, when it is not the selected scene (the playlist), and how Save saves it. */
@@ -823,9 +822,9 @@ export default function App() {
     || docsRef.current.some((doc) => doc.id === activeIdRef.current ? fingerprint() !== savedFingerprintRef.current : doc.dirty)), [fingerprint, playlistChanged]);
 
   /** Read current settings here; the title bar's dirty indicator updates on a timer. */
-  const askToSave = useCallback((title: string, reason: string) => new Promise<boolean>((resolve) => {
+  const askToSave = useCallback((reason: string) => new Promise<boolean>((resolve) => {
     if (fingerprint() === savedFingerprintRef.current) resolve(true);
-    else setSaveQuestion({ title, reason, answer: resolve });
+    else setSaveQuestion({ reason, answer: resolve });
   }), [fingerprint]);
 
   /** The scene as it is now counts as saved: the asterisk goes away until the next change. */
@@ -1009,18 +1008,18 @@ export default function App() {
    * Asks "Save changes?" for each scene with unsaved changes, the selected
    * one first, each in its own tab. Returns false when the user cancels.
    */
-  const askToSaveAll = useCallback(async (title: string, reason: string) => {
+  const askToSaveAll = useCallback(async (reason: string) => {
     /* In a playlist the scenes are the playlist's: one question for all of them. */
-    if (playlistPathRef.current) return askToSavePlaylistRef.current(title, reason);
+    if (playlistPathRef.current) return askToSavePlaylistRef.current(reason);
     const activeFirst = [...docsRef.current].sort((a, b) => Number(b.id === activeIdRef.current) - Number(a.id === activeIdRef.current));
     for (const doc of activeFirst) {
       if (doc.id !== activeIdRef.current) {
         if (!doc.dirty) continue;
         switchToDoc(doc.id);
       }
-      if (!(await askToSave(title, reason))) return false;
+      if (!(await askToSave(reason))) return false;
     }
-    return askToSavePlaylistRef.current(title, reason);
+    return askToSavePlaylistRef.current(reason);
   }, [askToSave, switchToDoc]);
 
   /**
@@ -1551,7 +1550,7 @@ export default function App() {
       const rest = docsRef.current.filter((doc) => doc.id !== closing);
       const reason = rest.length ? "Closing the scene closes its tab." : "Closing returns to the start screen.";
       /* A scene in a playlist closes without a question: the playlist (Save Playlist) keeps it as it was saved. */
-      if (!playlistPathRef.current && !(await askToSave("Save changes before closing the scene?", reason))) return;
+      if (!playlistPathRef.current && !(await askToSave(reason))) return;
       sceneGenerationRef.current++;
       setSceneGeneration(sceneGenerationRef.current);
       if (rest.length) {
@@ -1646,10 +1645,10 @@ export default function App() {
     return true;
   }, [engine, fingerprint, holdScene, markPlaylistClean, playlistAudio, setActivePath, showError, showStatus, writeDocs]);
 
-  askToSavePlaylistRef.current = (title: string, reason: string) => new Promise<boolean>((resolve) => {
+  askToSavePlaylistRef.current = (reason: string) => new Promise<boolean>((resolve) => {
     const path = playlistPathRef.current;
     if (!path || !playlistUnsaved()) resolve(true);
-    else setSaveQuestion({ title, reason, answer: resolve, name: fileNameOf(path), save: () => savePlaylist() });
+    else setSaveQuestion({ reason, answer: resolve, name: fileNameOf(path), save: () => savePlaylist() });
   });
 
   /* Open Playlist opens the one Open dialog, which lists scenes and playlists (see openScene). */
@@ -1668,7 +1667,7 @@ export default function App() {
   const closePlaylist = useCallback(async () => {
     const path = playlistPathRef.current;
     if (!engine || !path) return;
-    if (!(await askToSavePlaylistRef.current("Save changes before closing the playlist?", "Closing the playlist closes its scenes and its files."))) return;
+    if (!(await askToSavePlaylistRef.current("Closing the playlist closes its scenes and its files."))) return;
     holdScene(false);
     tracks.clear();
     if (fullscreen) await exitFullscreen();
@@ -1737,7 +1736,7 @@ export default function App() {
 
   /* A playlist picked in the Open dialog closes the open scenes, so their changes, and the playlist's, are saved or given up first. */
   const openPickedPlaylist = useCallback(async (path: string) => {
-    if (!(await askToSaveAll("Save changes before opening a playlist?", "Opening a playlist closes the open scenes."))) return;
+    if (!(await askToSaveAll("Opening a playlist closes the open scenes."))) return;
     await openPlaylistPath(path);
   }, [askToSaveAll, openPlaylistPath]);
 
@@ -1911,7 +1910,7 @@ export default function App() {
     const unlisten = getCurrentWindow().onCloseRequested((event) => {
       if (!anyDirtyRef.current()) return;
       event.preventDefault();
-      void askToSaveAllRef.current("Save changes before closing?", "Kaleido Sage closes after this.").then((go) => {
+      void askToSaveAllRef.current("Kaleido Sage closes after this.").then((go) => {
         if (go) void getCurrentWindow().destroy();
       });
     });
@@ -2481,13 +2480,13 @@ export default function App() {
           version={appVersion}
           initialUpdateInfo={startupUpdate}
           onClose={() => setAboutOpen(false)}
-          beforeInstall={() => askToSaveAll("Save changes before updating?", "Kaleido Sage closes to install the update.")}
+          beforeInstall={() => askToSaveAll("Kaleido Sage closes to install the update.")}
         />
       )}
       {/* After the About dialog, so this question shows over it. */}
       {saveQuestion && (
         <ConfirmDialog
-          title={saveQuestion.title}
+          title="Save Changes?"
           message={`${saveQuestion.name ?? sceneFileName} has changes that are not saved. ${saveQuestion.reason}`}
           confirmLabel="Save"
           confirmIcon={<FloppyDisk size={16} weight="bold" />}
