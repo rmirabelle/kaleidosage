@@ -2288,7 +2288,7 @@ export default function App() {
       {effectTip === "effect" && !startScreen && (
         <PointerTip
           anchor={effectHeader}
-          text="Edit this effect. Click the panel header to toggle the panel open or closed. Click the gray random button on an effect to randomize its settings. Click the red random ALL button to randomly add multiple effects."
+          text="This is the editor for a single effect. Click the effect name to toggle its panel. The gray dice icon randomizes all settings for this effect. The X icon removes this effect. The grab handle lets you drag this effect up or down in the stack. FX are applied top-to-bottom."
           onClose={nextEffectTip}
         />
       )}
