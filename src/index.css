@@ -1447,7 +1447,7 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
  * tip and its arrow: the arrow's solid inner half covers the tip's line
  * where they join, so the two show as one shape. Fully opaque.
  */
-.pointer-tip { --tip-fill: #adfa00; --tip-line: #3f5c00; position: fixed; z-index: 150; display: flex; align-items: center; gap: 6px; max-width: 300px; padding: 14px 42px 14px 16px; border: 1px solid var(--tip-line); border-radius: 8px; color: #000; background: var(--tip-fill); box-shadow: 0 10px 30px rgba(0,0,0,.5); font-size: 12.5px; font-weight: 600; line-height: 1.45; }
+.pointer-tip { --tip-fill: #adfa00; --tip-line: #3f5c00; position: fixed; z-index: 150; display: flex; align-items: center; gap: 6px; max-width: 300px; padding: 14px 34px 14px 16px; border: 1px solid var(--tip-line); border-radius: 8px; color: #000; background: var(--tip-fill); box-shadow: 0 10px 30px rgba(0,0,0,.5); font-size: 12.5px; font-weight: 600; line-height: 1.45; }
 .pointer-tip::before { content: ""; position: absolute; box-sizing: border-box; width: 10px; height: 10px; background: var(--tip-fill); }
 /* At the right of the control: the arrow on the left edge, its left and bottom lines outside. */
 .pointer-tip.right::before { top: var(--arrow-y, 50%); left: -6px; border-left: 1px solid var(--tip-line); border-bottom: 1px solid var(--tip-line); transform: translateY(-50%) rotate(45deg); }
@@ -1462,8 +1462,8 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .welcome-splash-buttons { display: flex; justify-content: center; gap: 10px; margin-top: 18px; }
 /* The line round a panel that a tip tells about (see PointerTip's "outline"): over the panel's own border, and it lets the mouse through. */
 .pointer-ring { position: fixed; z-index: 149; box-sizing: border-box; border: 2px solid #adfa00; border-radius: 6px; pointer-events: none; }
-/* The tip's close button, at its right, in the middle of its height. */
-.pointer-tip-close { position: absolute; top: 50%; right: 10px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; color: #000; background: transparent; transform: translateY(-50%); cursor: pointer; }
+/* The tip's close button, in its top-right corner, outside the tip's padding. */
+.pointer-tip-close { position: absolute; top: 5px; right: 5px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; color: #000; background: transparent; cursor: pointer; }
 .pointer-tip-close:hover { background: rgba(0,0,0,.14); }
 /* A button's icon named in a help text, in a small box like the button. */
 .help-icon { display: inline-grid; place-items: center; min-width: 20px; height: 18px; margin: 0 2px; padding: 0 3px; border: 1px solid #47557a; border-radius: 4px; color: #d4d8e2; background: #1b2337; vertical-align: -4px; }
