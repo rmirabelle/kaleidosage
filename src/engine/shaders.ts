@@ -2760,6 +2760,8 @@ uniform float u_blobs;
 uniform float u_bumps;
 uniform float u_waves;
 uniform float u_spikes;
+uniform float u_spikeTip;
+uniform float u_spikeCount;
 uniform float u_time;
 /* From the shape's own frame to the view. */
 uniform mat3 u_turn;
@@ -2852,28 +2854,72 @@ float wobbly(vec3 q) {
   /* The waves steepen the surface, so the walk trusts the distance less. */
   return (length(q) - 0.8 - height * w) / (1.0 + height * f * 1.8);
 }
-/** One spike of the star: a cone from the middle along "axis", "tall" long, "wide" across at its foot. */
-float spike(vec3 q, vec3 axis, float tall, float wide) {
+/**
+ * One spike of the star: a cone cut off flat (the usual capped cone) from
+ * the middle along "axis", "tall" long, "wide" across at its foot and
+ * "top" across at its end (0 is a point).
+ */
+float spike(vec3 q, vec3 axis, float tall, float wide, float top) {
   float y = dot(q, axis);
-  float x = length(q - axis * y);
-  vec2 edge = vec2(-wide, tall);
-  vec2 w = vec2(x - wide, y);
-  float along = clamp(dot(w, edge) / dot(edge, edge), 0.0, 1.0);
-  float side = length(w - edge * along);
-  if (y < 0.0) return length(vec2(max(x - wide, 0.0), y));
-  return edge.x * w.y - edge.y * w.x > 0.0 ? -side : side;
+  float half_ = tall * 0.5;
+  vec2 p = vec2(length(q - axis * y), y - half_);
+  vec2 k1 = vec2(top, half_);
+  vec2 k2 = vec2(top - wide, tall);
+  vec2 ca = vec2(p.x - min(p.x, p.y < 0.0 ? wide : top), abs(p.y) - half_);
+  vec2 cb = p - k1 + k2 * clamp(dot(k1 - p, k2) / dot(k2, k2), 0.0, 1.0);
+  float s = cb.x < 0.0 && ca.y < 0.0 ? -1.0 : 1.0;
+  return s * sqrt(min(dot(ca, ca), dot(cb, cb)));
 }
-/** The star: 12 spikes toward an icosahedron's corners around a ball; Spike length sets how long, Roundness how round they are. */
-float star(vec3 q) {
+/**
+ * The direction of spike "i" of "n": the corners of an octahedron (6), a
+ * cube (8), an icosahedron (12) or a dodecahedron (20), so those counts are
+ * fully even; other counts take even places on a spiral over the ball (a
+ * Fibonacci sphere).
+ */
+vec3 spikeAxis(int i, int n) {
   const float g = 1.61803399;
-  float tall = 0.6 + 0.55 * clamp(u_spikes, 0.0, 1.0);
+  if (n == 6) {
+    vec3 axis = i < 2 ? vec3(1.0, 0.0, 0.0) : i < 4 ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
+    return (i & 1) == 0 ? axis : -axis;
+  }
+  if (n == 8 || (n == 20 && i < 8)) return normalize(vec3(i & 1, (i >> 1) & 1, (i >> 2) & 1) * 2.0 - 1.0);
+  if (n == 12 || n == 20) {
+    int j = n == 20 ? i - 8 : i;
+    int a = j / 3;
+    int b = j - a * 3;
+    vec2 s = vec2(a & 1, (a >> 1) & 1) * 2.0 - 1.0;
+    /* The dodecahedron's other 12 corners: the cyclic turns of (0, ±1/g, ±g). */
+    vec2 c = n == 20 ? s * vec2(1.0 / g, g) : vec2(s.x, s.y * g);
+    return normalize(b == 0 ? vec3(0.0, c.x, c.y) : b == 1 ? vec3(c.x, c.y, 0.0) : vec3(c.y, 0.0, c.x));
+  }
+  float y = 1.0 - 2.0 * (float(i) + 0.5) / float(n);
+  float r = sqrt(max(1.0 - y * y, 0.0));
+  float turn = float(i) * 2.39996323;
+  return vec3(cos(turn) * r, y, sin(turn) * r);
+}
+/**
+ * The star: Spikes (4 to 32) spikes around a ball, thinner as there are
+ * more. Spike length 0 keeps each spike inside the ball (its end corner on
+ * the ball's surface), so the star is a smooth ball; 1 makes them 1.15
+ * long. Spike shape goes from pointed (0) to capped (1); Roundness rounds
+ * them. A spike that is clearly farther than the nearest part so far (its
+ * axis's distance less its width) is not worked out, so many spikes stay
+ * cheap.
+ */
+float star(vec3 q) {
+  const float CORE = 0.5;
+  int n = int(clamp(floor(u_spikeCount + 0.5), 4.0, 32.0));
+  float wide = clamp(0.26 * sqrt(12.0 / float(n)), 0.1, 0.4);
+  float top = wide * clamp(u_spikeTip, 0.0, 1.0);
+  float tall = mix(sqrt(CORE * CORE - top * top), 1.15, clamp(u_spikes, 0.0, 1.0));
   float k = 0.02 + radius() * 0.5;
-  float d = length(q) - 0.42;
-  for (int i = 0; i < 4; i++) {
-    vec2 s = vec2(i & 1, (i >> 1) & 1) * 2.0 - 1.0;
-    d = smin(d, spike(q, normalize(vec3(0.0, s.x, s.y * g)), tall, 0.26), k);
-    d = smin(d, spike(q, normalize(vec3(s.x, s.y * g, 0.0)), tall, 0.26), k);
-    d = smin(d, spike(q, normalize(vec3(s.y * g, 0.0, s.x)), tall, 0.26), k);
+  float d = length(q) - CORE;
+  for (int i = 0; i < 32; i++) {
+    if (i >= n) break;
+    vec3 axis = spikeAxis(i, n);
+    float far = length(q - axis * clamp(dot(q, axis), 0.0, tall)) - wide;
+    if (far > d + k) continue;
+    d = smin(d, spike(q, axis, tall, wide, top), k);
   }
   return d * 0.8;
 }

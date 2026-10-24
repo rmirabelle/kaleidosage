@@ -45,7 +45,9 @@ picture.
 | Squareness | Morph only: from a star with points on the axes (0), through a ball (about 0.38), to a rounded cube (1). A range makes it flow between them. |
 | Blobs | Blobs only: how many balls (2 to 8) drift on slow loops and merge. Between two whole numbers the last blob grows from nothing. |
 | Bumps, Waves | Wobbly ball only: how high the waves over the ball are, and how many. They flow with the animation time. |
-| Spike length | Star only: how long its 12 spikes are. |
+| Spike length | Star only: how long its spikes are; at 0 they stay inside the ball, so the star is a smooth ball. |
+| Spikes | Star only: how many spikes (4 to 32), thinner as there are more. 6, 8, 12 and 20 sit on the corners of an octahedron, a cube, an icosahedron and a dodecahedron; other counts sit evenly on a spiral over the ball. |
+| Spike shape | Star only: from pointed (0) to capped, as wide at the end as at the foot (1). |
 | Spin | How fast the shape turns around its own axis, in turns per minute. Negative turns the other way. |
 | Tumble | How fast the axis itself turns over, in turns per minute. |
 | Tilt | How far the axis leans toward the viewer, in degrees. |
@@ -75,8 +77,9 @@ so a range on them changes the speed, not the angle.
   p = 2 its distance is trusted less, and near Squareness 0 the soft
   shadow can show faint bands). Blobs are balls joined by a smooth minimum.
   The wobbly ball is a ball moved by three crossed sine waves. The star is a
-  ball and 12 cones toward an icosahedron's corners, joined by a smooth
-  minimum. The ray walks the distance function in up to 96 steps.
+  ball and capped cones (a point is a cap of width 0), joined by a smooth
+  minimum; a spike whose axis is clearly farther than the nearest part so
+  far is skipped, so 32 spikes stay cheap. The ray walks the distance function in up to 96 steps.
 - The normal (for light, Mirror and Project) comes from the distance
   function at four points around the hit.
 - Wrap: the place on the surface, in the shape's own turning frame, gives

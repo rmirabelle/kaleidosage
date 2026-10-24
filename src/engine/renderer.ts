@@ -276,6 +276,10 @@ export interface FrameValues {
   solidBumps: number;
   solidWaves: number;
   solidSpikes: number;
+  /** The star's spike shape: 0 pointed, 1 capped (as wide at the top as at the foot). */
+  solidSpikeTip: number;
+  /** How many spikes the star has (4 to 32). */
+  solidSpikeCount: number;
   /** Animation seconds: the blobs drift and the bumps flow with it. */
   solidTime: number;
   solidSpin: number;
@@ -1631,6 +1635,8 @@ export class KaleidoRenderer {
     gl.uniform1f(s.uniforms.u_bumps, v.solidBumps);
     gl.uniform1f(s.uniforms.u_waves, Math.max(0, v.solidWaves));
     gl.uniform1f(s.uniforms.u_spikes, v.solidSpikes);
+    gl.uniform1f(s.uniforms.u_spikeTip, v.solidSpikeTip);
+    gl.uniform1f(s.uniforms.u_spikeCount, v.solidSpikeCount);
     gl.uniform1f(s.uniforms.u_time, v.solidTime);
     const [cs, ss] = [Math.cos(v.solidSpin), Math.sin(v.solidSpin)];
     const tilt = v.solidTilt + v.solidTumble;
