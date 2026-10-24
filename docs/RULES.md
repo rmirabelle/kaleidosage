@@ -625,7 +625,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Its close button, or a press in the FX card while it shows, ends it.
 - The first range that you turn on after a first effect shows a tip at the right of that setting, and closes the effect tips and the overview tips.
 - That tip hides while the range is off or the effect is closed; its close button, or a press in the FX card outside that setting, ends it.
-- With the pointers on, the first scene of each run also shows a welcome card in the middle of the picture.
+- With the pointers on, the first scene of each run shows a welcome card over the whole window; the app takes no clicks or keys until one of its buttons is clicked.
 - Its Disable Pointers button turns the pointers off; Show Me Around closes it and then shows the overview tips.
 - Without the welcome card (later first scenes of the run), the overview tips show at once.
 - Help, Disable Pointers hides every pointer tip, and Help, Enable Pointers shows them again; the choice stays.

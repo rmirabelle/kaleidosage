@@ -1950,7 +1950,7 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (aboutOpen || shortcutsOpen || openRequest || videoDialogOpen || searchSlot !== null || event.altKey || event.metaKey) return;
+      if (aboutOpen || shortcutsOpen || welcome || openRequest || videoDialogOpen || searchSlot !== null || event.altKey || event.metaKey) return;
       /* "?" opens the keyboard shortcuts sheet, also on the start screen, but not while typing in a text field. */
       if (event.key === "?" && !(event.target instanceof HTMLInputElement && event.target.type === "text")) {
         event.preventDefault();
@@ -2043,7 +2043,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [aboutOpen, shortcutsOpen, closeScene, crossfadeToDoc, engine, exitFullscreen, newScene, nudge, openImage, openRequest, videoDialogOpen, searchSlot, openScene, randomize, redo, savePlaylist, saveScene, startScreen, stop, switchByStep, toggleAudioPanel, toggleFullscreen, toggleMidiPanel, togglePause, undo]);
+  }, [aboutOpen, shortcutsOpen, welcome, closeScene, crossfadeToDoc, engine, exitFullscreen, newScene, nudge, openImage, openRequest, videoDialogOpen, searchSlot, openScene, randomize, redo, savePlaylist, saveScene, startScreen, stop, switchByStep, toggleAudioPanel, toggleFullscreen, toggleMidiPanel, togglePause, undo]);
 
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
@@ -2277,32 +2277,6 @@ export default function App() {
                 </button>
               </div>
             )}
-            {welcome && !startScreen && (
-              <div className="welcome-splash" role="dialog" aria-label="Welcome">
-                <h2>Welcome to Kaleido Sage</h2>
-                <p>Green pointers will show you around the app as you go. You can turn them off now, or later in the Help menu.</p>
-                <div className="welcome-splash-buttons">
-                  <button
-                    className="button secondary"
-                    onClick={() => {
-                      helpSettings.set({ pointers: false });
-                      setWelcome(false);
-                    }}
-                  >
-                    Disable Pointers
-                  </button>
-                  <button
-                    className="button primary"
-                    onClick={() => {
-                      setWelcome(false);
-                      setPanelTips(ALL_PANEL_TIPS);
-                    }}
-                  >
-                    Show Me Around
-                  </button>
-                </div>
-              </div>
-            )}
             {fatalError && <div className="fatal-error selectable">{fatalError}</div>}
             {status && (
               <div className={`status-toast ${status.error ? "error" : ""}`} role={status.error ? "alert" : "status"}>
@@ -2471,6 +2445,35 @@ export default function App() {
           onCancel={() => setVideoDialogOpen(false)}
           onExport={(options) => void exportVideo(options)}
         />
+      )}
+      {/* The welcome card, over the whole window: the app waits for one of its two buttons. */}
+      {welcome && !startScreen && (
+        <div className="welcome-overlay" role="presentation">
+          <div className="welcome-splash" role="dialog" aria-modal="true" aria-label="Welcome">
+            <h2>Welcome to Kaleido Sage</h2>
+            <p>Green pointers will show you around the app as you go. You can turn them off now, or later in the Help menu.</p>
+            <div className="welcome-splash-buttons">
+              <button
+                className="button secondary"
+                onClick={() => {
+                  helpSettings.set({ pointers: false });
+                  setWelcome(false);
+                }}
+              >
+                Disable Pointers
+              </button>
+              <button
+                className="button primary"
+                onClick={() => {
+                  setWelcome(false);
+                  setPanelTips(ALL_PANEL_TIPS);
+                }}
+              >
+                Show Me Around
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {shortcutsOpen && <ShortcutsDialog onClose={closeShortcuts} />}
       {aboutOpen && (
