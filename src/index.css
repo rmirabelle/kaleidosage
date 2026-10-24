@@ -1542,8 +1542,9 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .about-app-icon img { width: 154px; height: 154px; object-fit: contain; }
 .about-dialog-copy { min-width: 0; }
 .about-dialog-copy h2 { margin: 0; color: var(--secondary); font-size: 24px; font-weight: 750; letter-spacing: -.02em; }
-.about-version { margin-top: 3px; color: #848a9a; font-size: 11px; }
-.about-dialog-copy > p { margin: 14px 0 4px; color: #eceef2; font-size: 13px; line-height: 1.4; }
+/* Half the name's size, bold and gray, as the start screen's tagline is to its name (a little lighter, as it is small). */
+.about-tagline { margin-top: 2px; color: #5f6474; font-size: 14px; font-weight: 700; line-height: 1.2; letter-spacing: -.01em; }
+.about-version { margin-top: 10px; color: #848a9a; font-size: 11px; }
 .about-dialog-copy > span { color: #858b9a; font-size: 11px; }
 .about-update-button {
   min-height: 33px;

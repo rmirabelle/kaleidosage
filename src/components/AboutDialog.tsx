@@ -101,8 +101,9 @@ export function AboutDialog({ version, initialUpdateInfo, onClose, beforeInstall
           <div className="about-app-icon"><img src="/kaleido-sage-logo.png" alt="" /></div>
           <div className="about-dialog-copy">
             <h2 id="about-title">Kaleido Sage</h2>
+            {/* The tagline right under the name, bold and quiet, as on the start screen. */}
+            <div className="about-tagline">Visual FX Playground</div>
             <div className="about-version">Version {version || "—"}</div>
-            <p>Visual FX Playground</p>
             <span>by Robert Mirabelle</span>
             <UpdateSection state={state} onCheck={() => void check()} onDownload={() => void download()} />
           </div>
