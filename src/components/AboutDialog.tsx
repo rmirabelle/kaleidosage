@@ -102,11 +102,21 @@ export function AboutDialog({ version, initialUpdateInfo, onClose, beforeInstall
           <div className="about-dialog-copy">
             <h2 id="about-title">Kaleido Sage</h2>
             <div className="about-version">Version {version || "—"}</div>
-            <p>Any image or video, in endless motion.</p>
+            <p>Visual FX Playground</p>
             <span>by Robert Mirabelle</span>
             <UpdateSection state={state} onCheck={() => void check()} onDownload={() => void download()} />
           </div>
         </div>
+        {/**
+          * The models that Song follow uses, credited one per line, as their
+          * licenses ask (see src-tauri/src/song_analysis.rs and
+          * song_sections.rs): LinkSeg's weights are CC BY 4.0, Beat This! is MIT.
+          */}
+        <section className="about-credits selectable" aria-label="Credits">
+          <h3>Credits</h3>
+          <p>Beat This! by F. Foscarin, J. Schlüter and G. Widmer (MIT license; Rust port by danigb).</p>
+          <p>LinkSeg by M. Buisson, B. McFee and S. Essid (model weights under CC BY 4.0, creativecommons.org/licenses/by/4.0; ONNX port by linkseg-web, MIT license).</p>
+        </section>
         {!downloading && (
           <footer className="about-dialog-actions">
             <button className="button secondary" onClick={onClose}>Close</button>

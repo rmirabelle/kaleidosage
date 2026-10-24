@@ -12,11 +12,8 @@ interface Props {
  * The first screen after start-up, styled like the Image Sage start screen.
  * It covers the work area until the user starts a new scene, or opens a
  * scene or a playlist. The author and the version are on one quiet line
- * under the tagline, above the buttons. At the bottom, in small quiet text
- * under a "Credits:" line, the models that Song follow uses are credited
- * one per line, as their licenses ask
- * (see src-tauri/src/song_analysis.rs and song_sections.rs): LinkSeg's
- * weights are CC-BY 4.0, Beat This! is MIT.
+ * under the tagline, above the buttons. The credits for the models of Song
+ * follow are in the About dialog.
  */
 export function StartScreen({ version, onNewScene, onOpen }: Props) {
   return (
@@ -39,11 +36,6 @@ export function StartScreen({ version, onNewScene, onOpen }: Props) {
             <FolderOpen size={19} weight="bold" /> Open Scene/Playlist
           </button>
         </div>
-      </div>
-      <div className="start-model-credits selectable">
-        <div>Credits:</div>
-        <div>Beat This! by F. Foscarin, J. Schlüter and G. Widmer (MIT license; Rust port by danigb).</div>
-        <div>LinkSeg by M. Buisson, B. McFee and S. Essid (model weights under CC BY 4.0, creativecommons.org/licenses/by/4.0; ONNX port by linkseg-web, MIT license).</div>
       </div>
     </section>
   );
