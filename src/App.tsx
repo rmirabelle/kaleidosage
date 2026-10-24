@@ -265,7 +265,7 @@ export default function App() {
   const [panelTips, setPanelTips] = useState<PanelTips>(NO_PANEL_TIPS);
   const anyPanelTip = panelTips.scene || panelTips.fx || panelTips.play;
   const sceneCard = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".control-panel .source-section"); } }), []);
-  const fxCard = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".control-panel .fx-card"); } }), []);
+  const fxCard = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".control-panel .fx-card > .panel-header-bar"); } }), []);
   const playCard = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".control-panel .scene-transport"); } }), []);
   useEffect(() => {
     if (!anyPanelTip) return;
