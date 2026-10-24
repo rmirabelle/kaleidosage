@@ -59,7 +59,7 @@ export type CycleMove = 0 | 1;
  */
 export type CyclePaint = 0 | 1 | 2 | 3;
 /** The 3D Object's shape: sphere, cube, cylinder, cone, torus, capsule, octahedron, icosahedron, pyramid (see SOLID_SHADER). */
-export type SolidShape = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+export type SolidShape = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 /** How the picture goes onto the 3D Object: 0 wrapped on its surface, 1 bent through it like a lens, 2 reflected in it like chrome. */
 export type SolidMap = 0 | 1 | 2;
 /** How the two images fade: 0 = crossfade, 1 = dissolve by brightness (light areas change first). */
@@ -280,6 +280,8 @@ export interface FrameValues {
   solidSpikeTip: number;
   /** How many spikes the star has (4 to 32). */
   solidSpikeCount: number;
+  /** The Menger sponge's levels of holes (1 to 5). */
+  solidLevels: number;
   /** Animation seconds: the blobs drift and the bumps flow with it. */
   solidTime: number;
   solidSpin: number;
@@ -1637,6 +1639,7 @@ export class KaleidoRenderer {
     gl.uniform1f(s.uniforms.u_spikes, v.solidSpikes);
     gl.uniform1f(s.uniforms.u_spikeTip, v.solidSpikeTip);
     gl.uniform1f(s.uniforms.u_spikeCount, v.solidSpikeCount);
+    gl.uniform1f(s.uniforms.u_levels, v.solidLevels);
     gl.uniform1f(s.uniforms.u_time, v.solidTime);
     const [cs, ss] = [Math.cos(v.solidSpin), Math.sin(v.solidSpin)];
     const tilt = v.solidTilt + v.solidTumble;

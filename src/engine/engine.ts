@@ -1205,6 +1205,7 @@ export class Engine {
       solidSpikes: this.live("solidSpikes"),
       solidSpikeTip: this.live("solidSpikeTip"),
       solidSpikeCount: this.live("solidSpikeCount"),
+      solidLevels: this.live("solidLevels"),
       solidTime: this.state.time,
       solidSpin: this.state.solidSpinTurns * Math.PI * 2,
       solidTumble: this.state.solidTumbleTurns * Math.PI * 2,

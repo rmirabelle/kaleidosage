@@ -2762,6 +2762,8 @@ uniform float u_waves;
 uniform float u_spikes;
 uniform float u_spikeTip;
 uniform float u_spikeCount;
+/* The Menger sponge's levels of holes (1 to 5; between two whole numbers the next level's holes grow). */
+uniform float u_levels;
 uniform float u_time;
 /* From the shape's own frame to the view. */
 uniform mat3 u_turn;
@@ -2924,6 +2926,32 @@ float star(vec3 q) {
   return d * 0.8;
 }
 
+/**
+ * The Menger sponge: a cube (as large as the box) with a cross of square
+ * holes through it, then through each of its 20 remaining small cubes, and
+ * so on for Levels levels (the usual exact distance of a Menger sponge).
+ * In each level, a point is in a hole where two of its places in the small
+ * cube are within a third of the middle. For the last level, a part of a
+ * level makes its holes smaller, so a range on Levels opens them smoothly.
+ */
+float menger(vec3 q) {
+  vec3 p = q / 0.8;
+  vec3 b = abs(p) - 1.0;
+  float d = length(max(b, 0.0)) + min(max(b.x, max(b.y, b.z)), 0.0);
+  float levels = clamp(u_levels, 1.0, 5.0);
+  float s = 1.0;
+  for (int m = 0; m < 5; m++) {
+    float part = clamp(levels - float(m), 0.0, 1.0);
+    if (part <= 0.0) break;
+    vec3 a = mod(p * s, 2.0) - 1.0;
+    s *= 3.0;
+    vec3 r = abs(1.0 - 3.0 * abs(a));
+    float hole = min(max(r.x, r.y), min(max(r.y, r.z), max(r.z, r.x)));
+    d = max(d, (hole - (2.0 - part)) / s);
+  }
+  return d * 0.8;
+}
+
 /*
  * A shape with flat faces: the largest of its planes' distances, or with
  * Roundness a smooth largest (log of a sum of exponentials), which rounds
@@ -2997,6 +3025,7 @@ float unitShape(vec3 q) {
   if (u_shape == 3) return blobs(q);
   if (u_shape == 4) return wobbly(q);
   if (u_shape == 5) return star(q);
+  if (u_shape == 9) return menger(q);
   return flatShape(q) * 0.7;
 }
 
@@ -3038,8 +3067,8 @@ vec3 wrapAt(vec3 q, vec3 n) {
     vec3 d = normalize(q);
     return readAt(vec2(around * 2.0, asin(clamp(d.y, -1.0, 1.0)) / PI + 0.5));
   }
-  if (u_shape == 1 || u_shape == 2) {
-    /* The box: each axis's face, weighted by a high power of the normal, so a flat face reads only itself. */
+  if (u_shape == 1 || u_shape == 2 || u_shape == 9) {
+    /* The box (Morph and the Menger sponge too): each axis's face, weighted by a high power of the normal, so a flat face reads only itself. */
     vec3 w = pow(abs(n), vec3(8.0));
     w /= w.x + w.y + w.z;
     vec3 color = vec3(0.0);

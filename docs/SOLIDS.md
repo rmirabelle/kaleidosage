@@ -21,7 +21,7 @@ picture.
 ## Menus
 
 - **Shape** (presets): Sphere, Cube, Morph, Blobs, Wobbly ball, Star,
-  Octahedron, Icosahedron, Pyramid. Morph, Blobs, Wobbly ball and Star came
+  Octahedron, Icosahedron, Pyramid, Menger sponge. Morph, Blobs, Wobbly ball and Star came
   on 2026-10-24 in place of the Cylinder, Cone, Torus and Capsule (no scene
   used them; the new shapes took their numbers, 2 to 5).
 - **Map**: how the picture goes onto the shape.
@@ -48,6 +48,7 @@ picture.
 | Spike length | Star only: how long its spikes are; at 0 they stay inside the ball, so the star is a smooth ball. |
 | Spikes | Star only: how many spikes (4 to 32), thinner as there are more. 6, 8, 12 and 20 sit on the corners of an octahedron, a cube, an icosahedron and a dodecahedron; other counts sit evenly on a spiral over the ball. |
 | Spike shape | Star only: from pointed (0) to capped, as wide at the end as at the foot (1). |
+| Levels | Menger sponge only: how many levels of holes (1 to 5). Between two whole numbers the next level's holes grow, so a range opens and closes them smoothly. |
 | Spin | How fast the shape turns around its own axis, in turns per minute. Negative turns the other way. |
 | Tumble | How fast the axis itself turns over, in turns per minute. |
 | Tilt | How far the axis leans toward the viewer, in degrees. |
@@ -79,7 +80,9 @@ so a range on them changes the speed, not the angle.
   The wobbly ball is a ball moved by three crossed sine waves. The star is a
   ball and capped cones (a point is a cap of width 0), joined by a smooth
   minimum; a spike whose axis is clearly farther than the nearest part so
-  far is skipped, so 32 spikes stay cheap. The ray walks the distance function in up to 96 steps.
+  far is skipped, so 32 spikes stay cheap. The Menger sponge is the usual
+  exact Menger distance (a cube, carved by a cross of holes per level); a
+  part of a level makes that level's holes smaller. The ray walks the distance function in up to 96 steps.
 - The normal (for light, Mirror and Project) comes from the distance
   function at four points around the hit.
 - Wrap: the place on the surface, in the shape's own turning frame, gives
@@ -110,7 +113,7 @@ so a range on them changes the speed, not the angle.
 
 ## Open points
 
-- Next: fractals (a Menger sponge, a Mandelbulb) and a cut gem.
+- Next: a Mandelbulb, and a cut gem.
 - Randomize picks 3D Object with a chance of about 0.2.
 
 ## Freeze background
