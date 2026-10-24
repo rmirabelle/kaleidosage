@@ -21,7 +21,7 @@ picture.
 ## Menus
 
 - **Shape** (presets): Sphere, Cube, Morph, Blobs, Wobbly ball, Star,
-  Octahedron, Icosahedron, Pyramid, Menger sponge. Morph, Blobs, Wobbly ball and Star came
+  Octahedron, Icosahedron, Pyramid, Menger sponge, Mandelbulb. Morph, Blobs, Wobbly ball and Star came
   on 2026-10-24 in place of the Cylinder, Cone, Torus and Capsule (no scene
   used them; the new shapes took their numbers, 2 to 5).
 - **Map**: how the picture goes onto the shape.
@@ -48,6 +48,7 @@ picture.
 | Spike length | Star only: how long its spikes are; at 0 they stay inside the ball, so the star is a smooth ball. |
 | Spikes | Star only: how many spikes (4 to 32), thinner as there are more. 6, 8, 12 and 20 sit on the corners of an octahedron, a cube, an icosahedron and a dodecahedron; other counts sit evenly on a spiral over the ball. |
 | Spike shape | Star only: from pointed (0) to capped, as wide at the end as at the foot (1). |
+| Power | Mandelbulb only: the power of its formula (2 to 12). 8 is the classic bulb; a range makes it boil and bloom. |
 | Levels | Menger sponge only: how many levels of holes (1 to 5). Between two whole numbers the next level's holes grow, so a range opens and closes them smoothly. |
 | Spin | How fast the shape turns around its own axis, in turns per minute. Negative turns the other way. |
 | Tumble | How fast the axis itself turns over, in turns per minute. |
@@ -84,7 +85,10 @@ so a range on them changes the speed, not the angle.
   carved at each level by a cross of three bars a third of each small cube
   wide; a bar's cross-section is a mix of a square distance and a circle
   distance (Roundness), and a part of a level makes that level's bars
-  thinner. The ray walks the distance function in up to 96 steps.
+  thinner. The Mandelbulb is the usual distance estimate (8 rounds of
+  raising the point to Power in a sphere's angles; 0.5 log r r / dr), scaled
+  by 1.3 to fit; the shadow's rays use 4 rounds. It costs much more than the
+  other shapes. The ray walks the distance function in up to 96 steps.
 - The normal (for light, Mirror and Project) comes from the distance
   function at four points around the hit.
 - Wrap: the place on the surface, in the shape's own turning frame, gives
@@ -115,7 +119,7 @@ so a range on them changes the speed, not the angle.
 
 ## Open points
 
-- Next: a Mandelbulb, and a cut gem.
+- Next: a cut gem; coloring fractals by how each point behaves in the formula (a new Map choice).
 - Randomize picks 3D Object with a chance of about 0.2.
 
 ## Freeze background

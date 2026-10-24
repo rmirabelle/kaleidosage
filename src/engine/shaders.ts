@@ -2764,6 +2764,8 @@ uniform float u_spikeTip;
 uniform float u_spikeCount;
 /* The Menger sponge's levels of holes (1 to 5; between two whole numbers the next level's holes grow). */
 uniform float u_levels;
+/* The Mandelbulb's power (2 to 12). */
+uniform float u_power;
 uniform float u_time;
 /* From the shape's own frame to the view. */
 uniform mat3 u_turn;
@@ -2957,6 +2959,35 @@ float menger(vec3 q) {
   return d * 0.8;
 }
 
+/* How many times the Mandelbulb repeats its formula: fewer for the shadow's rays (see castLight), which need less detail. */
+int bulbSteps = 8;
+/**
+ * The Mandelbulb: the 3D cousin of the Mandelbrot set. Each point is
+ * turned and raised to Power in a sphere's angles, again and again; the
+ * points whose value stays small belong to it. The distance comes from how
+ * fast the value grows (the usual distance estimate of a Mandelbulb). The
+ * bulb is scaled so it fits the frame like the other shapes.
+ */
+float mandelbulb(vec3 q) {
+  const float SIZE = 1.3;
+  vec3 c = q * SIZE;
+  vec3 z = c;
+  float power = clamp(u_power, 2.0, 12.0);
+  float grow = 1.0;
+  float r = length(z);
+  for (int i = 0; i < 8; i++) {
+    if (i >= bulbSteps) break;
+    r = length(z);
+    if (r > 2.0) break;
+    float theta = acos(clamp(z.y / max(r, 1e-6), -1.0, 1.0)) * power;
+    float phi = atan(z.z, z.x) * power;
+    grow = pow(r, power - 1.0) * power * grow + 1.0;
+    z = pow(r, power) * vec3(sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi)) + c;
+  }
+  r = length(z);
+  return 0.5 * log(max(r, 1e-6)) * r / grow / SIZE;
+}
+
 /*
  * A shape with flat faces: the largest of its planes' distances, or with
  * Roundness a smooth largest (log of a sum of exponentials), which rounds
@@ -3031,6 +3062,7 @@ float unitShape(vec3 q) {
   if (u_shape == 4) return wobbly(q);
   if (u_shape == 5) return star(q);
   if (u_shape == 9) return menger(q);
+  if (u_shape == 10) return mandelbulb(q);
   return flatShape(q) * 0.7;
 }
 
@@ -3068,7 +3100,7 @@ vec2 onFace(vec3 q, vec3 axis) {
  */
 vec3 wrapAt(vec3 q, vec3 n) {
   float around = atan(q.z, q.x) / (2.0 * PI) + 0.5;
-  if (u_shape == 0 || u_shape == 3 || u_shape == 4 || u_shape == 5) {
+  if (u_shape == 0 || u_shape == 3 || u_shape == 4 || u_shape == 5 || u_shape == 10) {
     vec3 d = normalize(q);
     return readAt(vec2(around * 2.0, asin(clamp(d.y, -1.0, 1.0)) / PI + 0.5));
   }
@@ -3116,7 +3148,7 @@ vec3 wrapAt(vec3 q, vec3 n) {
  * shape walk it. So the shadow always has the outline the shape casts, and
  * turns with it.
  */
-float castLight(vec2 screen) {
+float castWalk(vec2 screen) {
   const float WALL = 0.9;
   const float SOFT = 5.0;
   vec3 from = vec3(screen, -WALL * scale());
@@ -3146,6 +3178,13 @@ float castLight(vec2 screen) {
     if (t > end) break;
   }
   return smoothstep(0.0, 1.0, clamp(light, 0.0, 1.0));
+}
+/* The cast shadow (see castWalk), with a less detailed Mandelbulb, as its rays need less detail. */
+float castLight(vec2 screen) {
+  bulbSteps = 4;
+  float light = castWalk(screen);
+  bulbSteps = 8;
+  return light;
 }
 
 void main() {
