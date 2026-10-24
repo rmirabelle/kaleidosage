@@ -35,7 +35,8 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * colored by their mood, with a red lightning mark where a hit starts one, and
  * show the number of the scene the user picked for them, in amber, with
  * an outline for the scene selected in the scene list; a slice with no
- * pick has no number, as it changes nothing (see showSchedule.ts). While a slice is selected, a Ctrl+click
+ * pick has no number, as it changes nothing (see showSchedule.ts). At
+ * first no slice is selected, and the slice tools are off. While a slice is selected, a Ctrl+click
  * on a scene in the scene list picks that scene for it (see
  * songFollow.pickScene); while Ctrl is held, the selected slice shows the
  * same amber as the scene under the pointer. A click selects a slice and plays its song from the
@@ -58,13 +59,16 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
 /**
  * The Song Map's tips, one at a time, after the first files are added to an
  * empty Playlist: "analyzing" at the song's name while its analysis runs,
- * then "slices" at the map. With one scene, the slices tip leaves out the
- * scene picks, and "waitForScenes" holds them back until a second scene is
- * there; "scenes" then shows them at the map.
+ * then "slices" at the first slice. Its close button leaves "sliceClick":
+ * no tip, but the first click on a slice still shows "edit", above the
+ * toolbar. With one scene, the edit tip leaves out the scene picks, and
+ * "waitForScenes" holds them back until a second scene is there; "scenes"
+ * then shows them above the card.
  */
-export type SongTip = "analyzing" | "slices" | "waitForScenes" | "scenes" | null;
+export type SongTip = "analyzing" | "slices" | "sliceClick" | "edit" | "waitForScenes" | "scenes" | null;
 
 const SLICES_TIP = "Click on a slice to audition that section of the song. Adjust slice timing and mood as needed.";
+const EDIT_TIP = "Edit the selected slice. Changing its Mood controls how the scene responds to the music. Click the Hit button to give the scene more emphasis.";
 const SCENES_TIP = "Assign a scene to a selected slice by Ctrl+clicking on a scene in the Scenes list. Click Auto Fill to auto-assign scenes to unassigned slices.";
 
 /**
@@ -97,16 +101,20 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick, tip, 
     const next = tracks.list[trackIndex + step];
     if (!next) return;
     setViewed(next.path === playingPath ? null : next.path);
-    setSelected(0);
+    setSelected(-1);
   };
   const scenes = schedule[trackIndex] ?? [];
   const analysis = path ? songFollow.analysisFor(path) : undefined;
   const name = tracks.list.find((track) => track.path === path)?.name ?? "";
   /* The map as the plan has it: the edited slices, or the automatic map turned into slices. */
   const slices = useMemo(() => (analysis ? mapOf(planSong(analysis)) : []), [analysis, version]);
-  const [selected, setSelected] = useState(0);
-  const index = Math.min(selected, slices.length - 1);
+  /** The selected slice, or -1 for none: at first none is, until a click or the music selects one. */
+  const [selected, setSelected] = useState(-1);
+  const index = selected < 0 ? -1 : Math.min(selected, slices.length - 1);
   const strip = useRef<HTMLDivElement>(null);
+  const toolbar = useRef<HTMLDivElement>(null);
+  /* The first slice, for the slices tip; looked up in each frame (see PointerTip), as the slices change. */
+  const firstSlice = useMemo(() => ({ get current() { return strip.current?.querySelector<HTMLElement>(".song-map-slice") ?? null; } }), []);
   const playhead = useRef<HTMLDivElement>(null);
   const scrub = useRef<HTMLInputElement>(null);
   const fill = useRef<HTMLDivElement>(null);
@@ -125,7 +133,7 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick, tip, 
   };
   /* The selected slice, for a Ctrl+click in the scene list; none while the page does not show. */
   useEffect(() => {
-    songFollow.selectSlice(analysis && slices.length ? { path, index } : null);
+    songFollow.selectSlice(analysis && index >= 0 ? { path, index } : null);
   }, [analysis, path, index, slices.length]);
   useEffect(() => () => songFollow.selectSlice(null), []);
 
@@ -137,8 +145,9 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick, tip, 
   slicesRef.current = view;
   /**
    * The playhead follows the song in each animation frame, while this song
-   * plays. Each time another slice starts to play (or the playhead jumps
-   * into it), that slice is selected.
+   * plays. While the music plays, each time another slice starts to play
+   * (or the playhead jumps into it, or the music starts), that slice is
+   * selected; a stopped song selects nothing.
    */
   useEffect(() => {
     let frame = 0;
@@ -152,7 +161,7 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick, tip, 
         const now = shown ? tracks.position : 0;
         if (scrub.current && !dragging.current) scrub.current.value = String(now);
         placeSeek(scrub.current, fill.current, cap.current, Number(scrub.current?.value ?? 0) / Math.max(1e-3, analysis.duration));
-        const current = shown ? slicesRef.current.filter((slice) => slice.start <= now).length - 1 : -1;
+        const current = shown && tracks.playing ? slicesRef.current.filter((slice) => slice.start <= now).length - 1 : -1;
         if (current >= 0 && current !== lastPlaying) setSelected(current);
         lastPlaying = current;
       }
@@ -229,7 +238,7 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick, tip, 
       onKeyDown={(event) => {
         const target = event.target as Element;
         if (target.closest("input, select, [role=listbox]")) return;
-        if (event.key === "Delete" || event.key === "Backspace") {
+        if ((event.key === "Delete" || event.key === "Backspace") && slice) {
           if (slices.length > 1) apply(deleteSlice(slices, index));
           setSelected(Math.max(0, index - 1));
         } else return;
@@ -239,7 +248,8 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick, tip, 
       }}
     >
       {title}
-      <div className="song-map-toolbar">
+      {/* The selected slice's tools are off while no slice is selected; Split needs only the playhead. */}
+      <div ref={toolbar} className="song-map-toolbar">
         <button
           className="panel-button song-map-fill"
           /* With one scene, every slice plays it anyway. */
@@ -249,78 +259,81 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick, tip, 
         >
           <ListNumbers size={15} /> Auto Fill
         </button>
-        {slice && (
-          <>
-            <div className="song-map-field">
-              <span>Mood</span>
-              <div className="panel-buttons">
-                {TIERS.map((tier) => (
-                  <button key={tier} className={`panel-button text-only ${slice.tier === tier ? "active" : ""}`} aria-pressed={slice.tier === tier} onClick={() => apply(changeSlice(slices, index, { tier }))}>
-                    {capital(TIER_NAMES[tier])}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {/* The selected slice: Hit stays pressed while it is on; Split, Merge and Delete change the slices. */}
-            <div className="song-map-field song-map-slice-tools">
-              <span>Slice</span>
-              <div className="panel-buttons">
-                <button
-                  className={`panel-button ${slice.drop ? "active" : ""}`}
-                  aria-pressed={slice.drop}
-                  disabled={index === 0}
-                  onClick={() => apply(changeSlice(slices, index, { drop: !slice.drop }))}
-                  data-tip={index === 0 ? "The first slice has nothing before it, so it cannot start with a hit" : "Hit: the picture rises before this slice, and changes hard as it starts; then the slice moves with its mood"}
-                >
-                  <Lightning size={15} /> Hit
-                </button>
-                <button
-                  className="panel-button"
-                  disabled={tracks.current?.path !== path}
-                  onClick={() => {
-                    const next = splitAt(slices, snap ? analysis.downbeats : null, tracks.position);
-                    if (next.length === slices.length) return;
-                    apply(next);
-                    setSelected(next.filter((candidate) => candidate.start <= tracks.position + 0.01).length - 1);
-                  }}
-                  data-tip={tracks.current?.path !== path ? "Play this song to split at the playhead" : snap ? "Split the slice at the playhead, at the bar nearest it. Nothing happens at a bar where a slice starts already" : "Split the slice exactly at the playhead (Snap is off)"}
-                >
-                  <Scissors size={15} /> Split
-                </button>
-                <button className="panel-button" disabled={index >= slices.length - 1} onClick={() => apply(mergeWithNext(slices, index))} data-tip="Join this slice with the next one; it keeps this slice's name and mood">
-                  <ArrowsInLineHorizontal size={15} /> Merge
-                </button>
-                <button
-                  className="panel-button icon"
-                  disabled={slices.length < 2}
-                  aria-label="Delete this slice"
-                  onClick={() => {
-                    apply(deleteSlice(slices, index));
-                    setSelected(Math.max(0, index - 1));
-                  }}
-                  data-tip="Delete this slice: the slice before it grows into its place `Delete`"
-                >
-                  <Trash size={15} />
-                </button>
-              </div>
-            </div>
-            <label className="panel-check-inline song-map-snap" data-tip="Snap: Split and a divider drag go to the nearest bar start. Off, they go exactly where you put them">
-              <input type="checkbox" checked={snap} onChange={(event) => setSnap(event.target.checked)} />
-              Snap
-            </label>
-          </>
-        )}
+        <div className="song-map-field">
+          <span>Mood</span>
+          <div className="panel-buttons">
+            {TIERS.map((tier) => (
+              <button
+                key={tier}
+                className={`panel-button text-only ${slice?.tier === tier ? "active" : ""}`}
+                aria-pressed={slice?.tier === tier}
+                disabled={!slice}
+                onClick={() => apply(changeSlice(slices, index, { tier }))}
+              >
+                {capital(TIER_NAMES[tier])}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* The selected slice: Hit stays pressed while it is on; Split, Merge and Delete change the slices. */}
+        <div className="song-map-field song-map-slice-tools">
+          <span>Slice</span>
+          <div className="panel-buttons">
+            <button
+              className={`panel-button ${slice?.drop ? "active" : ""}`}
+              aria-pressed={Boolean(slice?.drop)}
+              disabled={!slice || index === 0}
+              onClick={() => apply(changeSlice(slices, index, { drop: !slice?.drop }))}
+              data-tip={!slice ? "Select a slice to give it a hit" : index === 0 ? "The first slice has nothing before it, so it cannot start with a hit" : "Hit: the picture rises before this slice, and changes hard as it starts; then the slice moves with its mood"}
+            >
+              <Lightning size={15} /> Hit
+            </button>
+            <button
+              className="panel-button"
+              disabled={tracks.current?.path !== path}
+              onClick={() => {
+                const next = splitAt(slices, snap ? analysis.downbeats : null, tracks.position);
+                if (next.length === slices.length) return;
+                apply(next);
+                setSelected(next.filter((candidate) => candidate.start <= tracks.position + 0.01).length - 1);
+              }}
+              data-tip={tracks.current?.path !== path ? "Play this song to split at the playhead" : snap ? "Split the slice at the playhead, at the bar nearest it. Nothing happens at a bar where a slice starts already" : "Split the slice exactly at the playhead (Snap is off)"}
+            >
+              <Scissors size={15} /> Split
+            </button>
+            <button className="panel-button" disabled={!slice || index >= slices.length - 1} onClick={() => apply(mergeWithNext(slices, index))} data-tip="Join this slice with the next one; it keeps this slice's name and mood">
+              <ArrowsInLineHorizontal size={15} /> Merge
+            </button>
+            <button
+              className="panel-button icon"
+              disabled={!slice || slices.length < 2}
+              aria-label="Delete this slice"
+              onClick={() => {
+                apply(deleteSlice(slices, index));
+                setSelected(Math.max(0, index - 1));
+              }}
+              data-tip="Delete this slice: the slice before it grows into its place `Delete`"
+            >
+              <Trash size={15} />
+            </button>
+          </div>
+        </div>
+        <label className="panel-check-inline song-map-snap" data-tip="Snap: Split and a divider drag go to the nearest bar start. Off, they go exactly where you put them">
+          <input type="checkbox" checked={snap} onChange={(event) => setSnap(event.target.checked)} />
+          Snap
+        </label>
         <button className="panel-button song-map-reset" disabled={!analysis.mapEdits} onClick={() => songFollow.editMap(path, null)} data-tip="Give back the map that the analysis found: its slices, moods and hits, with no picked scenes">
           <ArrowCounterClockwise size={14} /> Reset Map
         </button>
       </div>
       <div className="song-map-body">
-        {/* Above the card, so they cover neither the map nor its toolbar. */}
-        {tip === "slices" && (
+        {/* Above what they point at, so they do not cover the slices. */}
+        {tip === "slices" && <PointerTip anchor={firstSlice} side="above" text={SLICES_TIP} onClose={() => onTip("sliceClick")} />}
+        {tip === "edit" && (
           <PointerTip
-            anchor={card}
+            anchor={toolbar}
             side="above"
-            text={sceneCount > 1 ? `${SLICES_TIP} ${SCENES_TIP}` : SLICES_TIP}
+            text={sceneCount > 1 ? `${EDIT_TIP} ${SCENES_TIP}` : EDIT_TIP}
             onClose={() => onTip(sceneCount > 1 ? null : "waitForScenes")}
           />
         )}
@@ -337,6 +350,8 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick, tip, 
                 aria-label={`${capital(TIER_NAMES[candidate.tier])}, ${time(candidate.start)} to ${time(sliceEnd)}${candidate.drop ? ", starts with a hit" : ""}`}
                 onClick={() => {
                   setSelected(i);
+                  /* The first click on a slice answers the slices tip: the next tip tells how to edit the slice. */
+                  if (tip === "slices" || tip === "sliceClick") onTip("edit");
                   /* The song plays from the slice's start, and the slice's scene comes in (see App's show schedule); the map follows the song that plays again. */
                   if (scenes[i]) onSlicePick(scenes[i]);
                   tracks.playAt(trackIndex, candidate.start);
