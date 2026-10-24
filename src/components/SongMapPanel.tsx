@@ -114,6 +114,7 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick, tip, 
   const dragging = useRef(false);
   const ctrlHeld = useCtrlHeld();
   const nameRef = useRef<HTMLSpanElement>(null);
+  const card = useRef<HTMLElement>(null);
   /* The analysis is done: the analyzing tip gives way to the slices tip. */
   useEffect(() => { if (tip === "analyzing" && analysis) onTip("slices"); }, [tip, analysis, onTip]);
   /** Snap: Split and a divider drag go to the nearest bar start; off, to the exact place (see songMapEdits.ts). */
@@ -221,6 +222,7 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick, tip, 
 
   return (
     <section
+      ref={card}
       className="panel-card song-map-page"
       aria-label="Song Map"
       tabIndex={-1}
@@ -313,14 +315,16 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick, tip, 
         </button>
       </div>
       <div className="song-map-body">
+        {/* Above the card, so they cover neither the map nor its toolbar. */}
         {tip === "slices" && (
           <PointerTip
-            anchor={strip}
+            anchor={card}
+            side="above"
             text={sceneCount > 1 ? `${SLICES_TIP} ${SCENES_TIP}` : SLICES_TIP}
             onClose={() => onTip(sceneCount > 1 ? null : "waitForScenes")}
           />
         )}
-        {tip === "scenes" && <PointerTip anchor={strip} text={SCENES_TIP} onClose={() => onTip(null)} />}
+        {tip === "scenes" && <PointerTip anchor={card} side="above" text={SCENES_TIP} onClose={() => onTip(null)} />}
         <div ref={strip} className="song-map-strip" data-tip="Click a slice to select it and play the song from its start; right-click to stop the song where it is. Ctrl+click a scene in the scene list to play it on the selected slice">
           {view.map((candidate, i) => {
             const sliceEnd = view[i + 1]?.start ?? duration;

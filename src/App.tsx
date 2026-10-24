@@ -849,14 +849,11 @@ export default function App() {
     sceneShownRef.current = { id, byUser: !auto, clock: engine.state.clock };
   }, [engine, holdScene, switchToDoc]);
 
-  /** Adds audio files to the tracks. The first files of an empty track list start to play at once, and start the Song Map's tips (see SongTip). */
+  /** Adds audio files to the tracks, stopped: the first file of an empty list becomes the current track, and its analysis and the Song Map's tips (see SongTip) start. */
   const addTracks = useCallback((paths: string[]) => {
     const wasEmpty = tracks.list.length === 0;
     tracks.add(paths);
-    if (wasEmpty && tracks.list.length > 0) {
-      tracks.playTrack(0);
-      setSongTip("analyzing");
-    }
+    if (wasEmpty && tracks.list.length > 0) setSongTip("analyzing");
   }, []);
 
   /**

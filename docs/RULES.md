@@ -831,7 +831,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - A list of one track repeats that track.
 - New files go to the end of the list.
 - The list does not add a file that is already in it.
-- The first files in an empty list start to play at once.
+- Added files do not start to play; the first file of an empty list becomes the current file.
 - Removing the playing track stops the music, and the next track takes its place.
 - A new track order keeps the current track.
 - Stop pauses the music and goes back to the start of the track.
