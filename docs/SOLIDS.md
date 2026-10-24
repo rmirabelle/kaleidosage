@@ -94,9 +94,13 @@ so a range on them changes the speed, not the angle.
 - The torus knot is left out for now; a distance function for it is slow.
 - Randomize picks 3D Object with a chance of about 0.2.
 
-## Keep background (the object as a layer)
+## Keep background
 
-Built 2026-10-24 (see LAYERS.md, phases 1 and 2). The plan as it was:
+Built 2026-10-24 (see LAYERS.md, phases 1 and 2): the effects after the 3D
+Object paint the object, which is drawn last, over the picture kept at its
+place. The first plan below (the object as a clear layer that the later
+effects move) was built first and then changed: a kaleidoscope folded the
+object's outline across the screen, and the user wanted the object painted.
 
 The general design is in LAYERS.md (layers and effect copies); this is its
 phase 2. The notes below are the first plan for it.

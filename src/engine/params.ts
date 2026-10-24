@@ -345,9 +345,9 @@ export interface PlayState {
   solidMap: SolidMap;
   solidBlend: LayerBlend;
   /**
-   * Keep background: the 3D Object starts a layer of its own (see
-   * docs/LAYERS.md). The steps after it in the FX list change only the
-   * object, and the picture behind it stays as it was at the 3D Object.
+   * Keep background (see docs/LAYERS.md): the steps after the 3D Object
+   * in the FX list change only the picture painted on the object, which is
+   * drawn last; the picture behind it stays as it was at the 3D Object.
    */
   solidKeep: boolean;
   solidSpinTurns: number;

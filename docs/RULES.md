@@ -283,9 +283,9 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 
 - The range button turns one handle into two, and the value moves between them.
 - When both new handles would be on one value, the range opens to a tenth of the slider: up from the value, or down at the top.
-- The 3D Object's Keep background: the effects after it in the FX list change only the object; the picture behind it stays as it was at the 3D Object.
+- The 3D Object's Keep background: the effects after it in the FX list change only the picture painted on the object; the picture behind it stays as it was at the 3D Object.
+- With Keep background, the object is drawn last, so its outline does not change.
 - With no effect after the 3D Object, Keep background changes nothing.
-- With Keep background, the 3D Object's Blend and Opacity apply where its layer goes over the kept picture, after the effects that change it.
 - A scene saved before Keep background opens with it off.
 - With its range off, a value is its slider value.
 - When a range comes on, the end handle takes the single value.

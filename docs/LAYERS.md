@@ -59,9 +59,9 @@ puts the top picture over black (today it is opaque anyway).
   own, then puts the layers together from the bottom up, each with its
   blend and opacity.
 - The 3D Object's Keep background is the first layer the user makes: the
-  3D Object starts a new layer, and the steps after it in the FX list are
-  that layer's steps. The layer under it keeps the picture as it was at
-  the 3D Object, so the background does not change.
+  picture at the 3D Object's place is the layer under it, and the steps
+  after it make the picture that paints the object, which is drawn last
+  over that layer.
 
 ## Rule 3: effects become copies
 
@@ -86,12 +86,15 @@ puts the top picture over black (today it is opaque anyway).
 2. Keep background: the 3D Object's switch starts a second layer. Each
    effect is still once per scene: the layers share the one FX list, split
    at the 3D Object. The scene file saves the switch. Built 2026-10-24:
-   `PlayState.solidKeep`; the renderer's 3D Object step draws the picture
-   behind the shape into `keptTarget` and the shape alone on a clear
-   picture, the steps after it change that picture, and `drawLayers`
-   (LAYER_SHADER) puts it over the kept picture with the 3D Object's blend
-   and opacity. Phase 1 was built the same day, checked by
-   tools/test-layers.mjs (97 scenes, every pixel the same).
+   `PlayState.solidKeep`. What the user wants is the object painted by
+   the steps after it, with its outline kept: at the 3D Object's place the
+   renderer keeps the picture in `keptTarget` and passes it on unchanged,
+   the steps after it change it, and the 3D Object is drawn last, painted
+   with that picture (u_tex), over the kept one (u_back). The first build
+   made the object a clear layer that the later steps moved (a kaleidoscope
+   folded its outline across the screen); that was not the effect. Phase 1
+   was built the same day, checked by tools/test-layers.mjs (97 scenes,
+   every pixel the same).
 3. Effect copies: the data model, keys, migration, MIDI, audio links, song
    scripts, Randomize, and "+ New" that allows a second copy.
 4. The layers interface: a list of layers, each with its own FX list,
