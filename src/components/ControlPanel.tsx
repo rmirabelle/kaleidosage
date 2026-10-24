@@ -973,13 +973,13 @@ function SolidSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =>
   );
 }
 
-/** The 3D Object's Keep background switch (see docs/LAYERS.md): the effects after it change only the picture painted on the object. */
+/** The 3D Object's Freeze background switch (see docs/LAYERS.md): the effects after it change only the picture painted on the object. */
 function KeepBackground({ engine }: { engine: Engine }) {
   const [keep, setKeep] = useState(engine.state.solidKeep);
   return (
     <label
       className="panel-check-inline panel-keep-background"
-      data-tip="Keep background: the effects after the 3D Object in the FX list change only the picture painted on the object, which is drawn last. The picture behind it stays as it is here."
+      data-tip="Freeze background: the effects after the 3D Object in the FX list change only the picture painted on the object, which is drawn last. The picture behind it stays as it is here."
     >
       <input
         type="checkbox"
@@ -989,7 +989,7 @@ function KeepBackground({ engine }: { engine: Engine }) {
           setKeep(event.target.checked);
         }}
       />
-      Keep background
+      Freeze background
     </label>
   );
 }

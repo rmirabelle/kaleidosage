@@ -264,7 +264,7 @@ export interface FrameValues {
   solid: number;
   solidShape: SolidShape;
   solidMap: SolidMap;
-  /** Keep background: the steps after the 3D Object change only the picture on the shape (see render). */
+  /** Freeze background: the steps after the 3D Object change only the picture on the shape (see render). */
   solidKeep: boolean;
   solidBlend: LayerBlend;
   solidBackground: number;
@@ -932,7 +932,7 @@ export class KaleidoRenderer {
     }
     const first = Array.isArray(passes[0]) ? passes.shift() as ShapeStep[] : [];
     /**
-     * Keep background (docs/LAYERS.md, phase 2): with a step after the 3D
+     * Freeze background (docs/LAYERS.md, phase 2): with a step after the 3D
      * Object, the steps after it change only the picture on the shape. The
      * 3D Object's place keeps the picture as it is there in keptTarget, and
      * passes it on unchanged; the steps after it change it as usual, but the
@@ -1597,7 +1597,7 @@ export class KaleidoRenderer {
    */
   /**
    * The 3D Object: the shape painted with "source", over "back" (the same
-   * picture, or with Keep background the picture kept at the 3D Object's
+   * picture, or with Freeze background the picture kept at the 3D Object's
    * place, see render).
    */
   private drawSolid(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture) {
@@ -1640,7 +1640,7 @@ export class KaleidoRenderer {
     gl.activeTexture(gl.TEXTURE0);
   }
 
-  /** Keep background's picture behind the 3D Object (see render), made at the screen's size when first needed. */
+  /** Freeze background's picture behind the 3D Object (see render), made at the screen's size when first needed. */
   private kept: { target: Target; size: [number, number] } | null = null;
   private keptTarget(width: number, height: number) {
     this.kept ??= { target: this.createTarget(), size: [0, 0] };

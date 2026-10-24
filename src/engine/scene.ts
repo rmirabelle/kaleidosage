@@ -272,7 +272,7 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   state.solidShape = mode(saved.solidShape, [0, 1, 2, 3, 4, 5, 6, 7, 8] as const) ?? state.solidShape;
   state.solidMap = mode(saved.solidMap, [0, 1, 2] as const) ?? state.solidMap;
   state.solidBlend = mode(saved.solidBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? state.solidBlend;
-  /* A scene from before Keep background has the 3D Object in the one picture, as it had then. */
+  /* A scene from before Freeze background has the 3D Object in the one picture, as it had then. */
   state.solidKeep = saved.solidKeep === true;
   if (isNumber(saved.solidSpinTurns)) state.solidSpinTurns = saved.solidSpinTurns % 1;
   if (isNumber(saved.solidTumbleTurns)) state.solidTumbleTurns = saved.solidTumbleTurns % 1;

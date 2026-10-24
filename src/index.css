@@ -888,8 +888,8 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 /* A check box with its name on one line (a video slot's Loop). */
 .panel-check-inline { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; color: #a2a7b5; font-size: 12px; white-space: nowrap; cursor: pointer; }
 .panel-check-inline input { margin: 0; accent-color: var(--accent); cursor: pointer; }
-/* The 3D Object's Keep background switch, on its own line under the Map menu, in line with the menus. */
-.panel-keep-background { display: flex; padding: 2px 6px 6px; }
+/* The 3D Object's Freeze background switch, on its own line under the Map menu, in line with the menus: the box and its name centered on one line, with room above and below. */
+.panel-keep-background { display: flex; align-items: center; gap: 8px; min-height: 24px; padding: 8px 6px 10px; line-height: 1; }
 .panel-root-row .panel-row-name { color: #a2a7b5; }
 /* Length on one line: the name, then the slider, then the value. The top row's box steps aside so its parts line up with the slider. Length has no range, so it needs no space for the range buttons. */
 .panel-root-row > .panel-row { display: flex; align-items: center; gap: 10px; }

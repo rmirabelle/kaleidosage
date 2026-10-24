@@ -2763,7 +2763,7 @@ uniform float u_shading;
 uniform float u_shine;
 uniform float u_shadow;
 /**
- * The picture behind the shape: the same as u_tex, or with Keep background
+ * The picture behind the shape: the same as u_tex, or with Freeze background
  * the picture kept at the 3D Object's place in the FX list, while u_tex,
  * which paints the shape, went on through the steps after it.
  */

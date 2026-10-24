@@ -283,10 +283,10 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 
 - The range button turns one handle into two, and the value moves between them.
 - When both new handles would be on one value, the range opens to a tenth of the slider: up from the value, or down at the top.
-- The 3D Object's Keep background: the effects after it in the FX list change only the picture painted on the object; the picture behind it stays as it was at the 3D Object.
-- With Keep background, the object is drawn last, so its outline does not change.
-- With no effect after the 3D Object, Keep background changes nothing.
-- A scene saved before Keep background opens with it off.
+- The 3D Object's Freeze background: the effects after it in the FX list change only the picture painted on the object; the picture behind it stays as it was at the 3D Object.
+- With Freeze background, the object is drawn last, so its outline does not change.
+- With no effect after the 3D Object, Freeze background changes nothing.
+- A scene saved before Freeze background opens with it off.
 - With its range off, a value is its slider value.
 - When a range comes on, the end handle takes the single value.
 - A setting that goes below zero starts its range at ±10% around 0.

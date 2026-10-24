@@ -345,7 +345,7 @@ export interface PlayState {
   solidMap: SolidMap;
   solidBlend: LayerBlend;
   /**
-   * Keep background (see docs/LAYERS.md): the steps after the 3D Object
+   * Freeze background (see docs/LAYERS.md): the steps after the 3D Object
    * in the FX list change only the picture painted on the object, which is
    * drawn last; the picture behind it stays as it was at the 3D Object.
    */

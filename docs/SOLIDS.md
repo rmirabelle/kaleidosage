@@ -94,7 +94,7 @@ so a range on them changes the speed, not the angle.
 - The torus knot is left out for now; a distance function for it is slow.
 - Randomize picks 3D Object with a chance of about 0.2.
 
-## Keep background
+## Freeze background
 
 Built 2026-10-24 (see LAYERS.md, phases 1 and 2): the effects after the 3D
 Object paint the object, which is drawn last, over the picture kept at its
@@ -105,7 +105,7 @@ object's outline across the screen, and the user wanted the object painted.
 The general design is in LAYERS.md (layers and effect copies); this is its
 phase 2. The notes below are the first plan for it.
 
-Asked 2026-10-24. A switch in the 3D Object effect, Keep background: the
+Asked 2026-10-24. A switch in the 3D Object effect, Freeze background: the
 effects after the 3D Object in the FX list (Kaleidoscope, Warp, Particles,
 any of them) change only the object, and the picture behind it stays as it
 was at the 3D Object step. The effects can move the object out past its
@@ -113,7 +113,7 @@ outline (a kaleidoscope of the object over a still background).
 
 How it works:
 
-1. Layer mode. With Keep background on, the 3D Object step keeps two
+1. Layer mode. With Freeze background on, the 3D Object step keeps two
    pictures: the background (the picture under the shape, with Background
    and the shadow) in a texture of its own, and the object alone on a clear
    picture, with its cover as transparency (premultiplied: color times
@@ -134,7 +134,7 @@ How it works:
      the background.
    - Trails: the trail picture keeps alpha, so the object's trails show
      over the background and fade with it.
-   Without Keep background, alpha is 1 everywhere, so every step gives the
+   Without Freeze background, alpha is 1 everywhere, so every step gives the
    same picture as today.
 3. The last pass puts the object picture over the kept background, with
    the 3D Object's Blend and Opacity (in layer mode they apply here, not at

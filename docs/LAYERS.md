@@ -1,6 +1,6 @@
 # Layers and effect copies (design)
 
-Decided 2026-10-24. The first need: the 3D Object's Keep background (see
+Decided 2026-10-24. The first need: the 3D Object's Freeze background (see
 SOLIDS.md), where the effects after the object change only the object. More
 requests will mix layers and effects freely, so this is the design for all
 of them, built in phases. Each phase leaves the app working and gives the
@@ -58,7 +58,7 @@ puts the top picture over black (today it is opaque anyway).
 - The renderer draws each layer's source and steps into a picture of its
   own, then puts the layers together from the bottom up, each with its
   blend and opacity.
-- The 3D Object's Keep background is the first layer the user makes: the
+- The 3D Object's Freeze background is the first layer the user makes: the
   picture at the 3D Object's place is the layer under it, and the steps
   after it make the picture that paints the object, which is drawn last
   over that layer.
@@ -83,7 +83,7 @@ puts the top picture over black (today it is opaque anyway).
 1. Rule 1, with no change on the screen: every shader carries alpha, and a
    check renders scenes with the code before and after and compares the
    pixels (`tools/test-layers.mjs`).
-2. Keep background: the 3D Object's switch starts a second layer. Each
+2. Freeze background: the 3D Object's switch starts a second layer. Each
    effect is still once per scene: the layers share the one FX list, split
    at the 3D Object. The scene file saves the switch. Built 2026-10-24:
    `PlayState.solidKeep`. What the user wants is the object painted by

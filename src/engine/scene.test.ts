@@ -39,7 +39,7 @@ describe("scene files", () => {
     expect([loaded.solidShape, loaded.solidMap, loaded.solidBlend, loaded.solidSpinTurns, loaded.solidTumbleTurns]).toEqual([7, 2, 3, 0.25, 0.5]);
   });
 
-  it("keep the 3D object's Keep background, which is off in a scene from before it", () => {
+  it("keep the 3D object's Freeze background, which is off in a scene from before it", () => {
     const state = createPlayState();
     state.solidKeep = true;
     const loaded = createPlayState();
