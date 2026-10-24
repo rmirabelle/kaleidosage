@@ -483,7 +483,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
               className="panel-button icon"
               disabled={fxOrder.length === 0}
               onClick={onNudge}
-              data-tip="Nudge all `n`: move every unlocked value a little, up or down at random. Values at 0 stay at 0."
+              data-tip="Nudge all: move every unlocked value a little, up or down at random. Values at 0 stay at 0."
               aria-label="Nudge all"
             >
               <Wind size={16} />

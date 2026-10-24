@@ -92,7 +92,6 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - O opens an image or video for source A.
 - S saves the picture as a PNG.
 - X gives new random settings.
-- N nudges every unlocked setting.
 - "?" opens the shortcuts sheet, but not in a text field.
 - Ctrl+V with an image on the clipboard loads it into source A.
 - Keys without Ctrl do nothing while a menu or text field has the focus.
@@ -621,7 +620,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - New Scene with no scene open shows an overview tip at the right of the Scene, FX and Play cards.
 - Each has its own close button; a press anywhere in the left panel closes all three.
 - Each first effect that "+ New" or Random all adds to an empty list shows a tip at the right of the first effect's header.
-- With no effect, Nudge all and Clear all are off, and the N key does nothing.
+- With no effect, Nudge all and Clear all are off.
 - That tip stays until its close button, also while the effect is closed.
 - Then a tip shows at the first range button of the open effect; with no effect open, it waits until one opens.
 - Its close button, or a press in the FX card while it shows, ends it.

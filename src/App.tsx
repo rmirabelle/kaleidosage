@@ -1166,8 +1166,7 @@ export default function App() {
 
   /** Nudge: every unlocked value moves a little, up or down at random. */
   const nudge = useCallback(() => {
-    /* With no effect, there is nothing to nudge (the N key; the button is off). */
-    if (!engine || engine.state.fxOrder.length === 0) return;
+    if (!engine) return;
     nudgeParams(engine.params, engine.state);
     setRevision((value) => value + 1);
     showStatus("Nudged every unlocked setting");
@@ -2038,8 +2037,7 @@ export default function App() {
           })
           : event.shiftKey ? stop : togglePause,
         o: () => void openImage(),
-        x: randomize,
-        n: nudge
+        x: randomize
       };
       const action = run[key];
       if (!action) return;
@@ -2050,7 +2048,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [aboutOpen, shortcutsOpen, welcome, closeScene, crossfadeToDoc, engine, exitFullscreen, newScene, nudge, openImage, openRequest, videoDialogOpen, searchSlot, openScene, randomize, redo, savePlaylist, saveScene, startScreen, stop, switchByStep, toggleAudioPanel, toggleFullscreen, toggleMidiPanel, togglePause, undo]);
+  }, [aboutOpen, shortcutsOpen, welcome, closeScene, crossfadeToDoc, engine, exitFullscreen, newScene, openImage, openRequest, videoDialogOpen, searchSlot, openScene, randomize, redo, savePlaylist, saveScene, startScreen, stop, switchByStep, toggleAudioPanel, toggleFullscreen, toggleMidiPanel, togglePause, undo]);
 
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {

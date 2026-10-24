@@ -48,8 +48,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
       { keys: ["O"], does: "Open an image or video" },
       { keys: ["Ctrl+V"], does: "Use the image on the clipboard" },
       { keys: ["Drop a file"], does: "Use that image or video" },
-      { keys: ["X"], does: "Random all: new settings for every unlocked effect" },
-      { keys: ["N"], does: "Nudge all: move every unlocked value a little" }
+      { keys: ["X"], does: "Random all: new settings for every unlocked effect" }
     ]
   },
   {

@@ -68,7 +68,7 @@ export const HELP_TOPICS = {
       "New {new} adds an effect.",
       "Drag an effect's grip {grip} to change the order.",
       "Random all {random} `x` gives new settings to every unlocked effect.",
-      "Nudge all {nudge} `n` moves each value a little.",
+      "Nudge all {nudge} moves each value a little.",
       "Clear all {trash} removes every effect; locked effects stay."
     ],
     keywords: ["effect", "effects", "add effect", "order", "random", "nudge", "clear"]
