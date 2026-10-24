@@ -58,23 +58,34 @@ export const MAP_KEYS: Record<MapMode, ParamKey[]> = {
   6: ["mapSpeed", "tunnelTwist", "mapAngle", "mapFog", "mapFogSoftness", "mapScale", "mapPanX", "mapPanY", "mapMix"],
   7: ["mapSpeed", "mapArms", "mapAngle", "mapFog", "mapFogSoftness", "mapScale", "mapPanX", "mapPanY", "mapMix"],
   8: ["mapSpeed", "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drostePictureTurn", "drosteRotation", "mapPanX", "mapPanY", "mapMix"],
-  9: ["mandelDepth", "mandelBands", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle", "mapAngle", "mapPanX", "mapPanY", "mapMix"]
+  9: ["mandelDepth", "mapSpeed", "mandelBands", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle", "mapAngle", "mapPanX", "mapPanY", "mapMix"]
 };
 export const MAP_MODES = [[8, "Droste spiral"], [2, "Möbius"], [3, "Julia"], [9, "Mandelbrot"], [4, "Log spiral"], [5, "Sine"], [6, "Tunnel"], [7, "Seamless spiral"], [1, "Power (z^n)"]] as const;
 
 /**
  * The Mandelbrot map's places to dive into: points on the set's edge,
- * where detail goes on at every depth (Depth zooms toward them, to 10^13).
+ * where detail goes on at every depth (Depth zooms toward them, to 10^10).
  */
-export const MANDEL_PLACES = [[0, "Seahorse valley"], [1, "Spiral"], [2, "Dendrite"], [3, "Mini copy"], [4, "Elephant valley"]] as const;
-export const MANDEL_CENTERS: Record<MandelPlace, [number, number]> = {
-  /* Exact to the 16 digits a double holds, so the deep zoom (to 10^13) stays on the edge. */
-  0: [-0.7436438870371587, 0.1318259042053120],
-  /* A Misiurewicz point: a spiral that comes back at every depth. */
-  1: [-0.10109636384562, 0.95628651080914],
-  2: [0, 1],
-  3: [-1.75, 0],
-  4: [0.2892573747165706, 0.013391178939759867]
+export const MANDEL_PLACES = [[0, "Seahorse valley"], [1, "Spiral"], [5, "Branches"], [2, "Dendrite"], [3, "Mini copies"], [4, "Elephant valley"]] as const;
+/**
+ * Each place is a Misiurewicz point (exact to the 16 digits a double holds):
+ * its path from 0 lands, after some rounds, on a loop of "period" rounds
+ * that it then repeats forever. Near such a point the set repeats itself:
+ * zoom in "depth" powers of ten (the loop's growth, |product of 2z| around
+ * it) and turn "turn" degrees (that product's angle), and the picture is
+ * the same again, with every point "period" rounds later to escape. So the
+ * dive (Speed) zooms in forever by jumping back one repeat each time (see
+ * frameValues in engine.ts).
+ */
+/** The depth from which the dive repeats: there the repeats match to about half a step of 255 (only Mini copies a little less). */
+export const MANDEL_LOOP = 6;
+export const MANDEL_SPOTS: Record<MandelPlace, { c: [number, number]; period: number; depth: number; turn: number }> = {
+  0: { c: [-0.7432918908524302, 0.13124055230879758], period: 2, depth: 0.06192095077291505, turn: 27.07812952999563 },
+  1: { c: [-0.10109636384562, 0.95628651080914], period: 1, depth: 0.12330601888523902, turn: 119.55310680517294 },
+  2: { c: [0, 1], period: 2, depth: 0.752574989159953, turn: 45 },
+  3: { c: [-1.3117661937700285, 0.0707202868267519], period: 4, depth: 0.07910783173821165, turn: 88.93785377527834 },
+  4: { c: [0.2892573747165706, 0.013391178939759867], period: 1, depth: 0.0568403601377231, turn: -20.642726357196196 },
+  5: { c: [-0.23541099887046357, 0.8310842552947726], period: 6, depth: 0.7112740323402498, turn: -65.87432410130288 }
 };
 
 /** The sliders each time smear pattern uses; Angle only turns the Linear and Sweep patterns. */

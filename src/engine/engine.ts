@@ -1,6 +1,6 @@
 import { GROUP_PARAMS, NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, defaultValue, hexToRgb, liveValue, rangeAt, rangeClock, startRangeAt, type GroupKey, type ParamKey } from "./params";
 import { KaleidoRenderer, type FrameValues, type ImageSource } from "./renderer";
-import { MANDEL_CENTERS } from "./submodes";
+import { MANDEL_LOOP, MANDEL_SPOTS } from "./submodes";
 import { audioLinkable, pushRange, pushedValue, type AudioSignal } from "./audio";
 import { copyVideo, cueVideo, releaseVideo, seekVideo, syncVideo, videoLoopPlan, videoLoopTime } from "./video";
 import { familyOf, intensityAt, positionAt, speedAt, travelAt, type Family, type SongScript } from "./songScript";
@@ -1060,8 +1060,20 @@ export class Engine {
     const kaleidoscope = (key: ParamKey, neutral: number) => on.kaleidoscope ? this.live(key) : neutral;
     /* The Möbius point lies on the X axis: its direction would only turn the picture, as Rotation does. */
     const mapPoint = this.state.mapMode === 2 ? [this.live("mobiusPoint"), 0]
-      : this.state.mapMode === 9 ? MANDEL_CENTERS[this.state.mandelPlace]
+      : this.state.mapMode === 9 ? MANDEL_SPOTS[this.state.mandelPlace].c
       : juliaPoint(this.live("juliaShape") * DEGREES, this.live("juliaEdge"));
+    /**
+     * The Mandelbrot dive: Speed adds up depth flown (powers of ten per
+     * second, in mapTravel), on top of Depth. Past MANDEL_LOOP, the place
+     * looks the same one repeat deeper (see MANDEL_SPOTS), so a deeper view
+     * is drawn as the same view whole repeats less deep: turned back by the
+     * repeats' turn (its light too) and with their skipped rounds. The dive
+     * never ends, and no view costs more than one repeat past MANDEL_LOOP.
+     */
+    const spot = MANDEL_SPOTS[this.state.mandelPlace];
+    const dive = this.live("mandelDepth") + this.state.mapTravel;
+    const repeats = this.state.mapMode === 9 && dive >= MANDEL_LOOP ? Math.floor((dive - MANDEL_LOOP) / spot.depth) : 0;
+    const diveTurn = -repeats * spot.turn;
     return {
       fxOrder: this.state.fxOrder,
       shapeActive: { warp: on.warp, map: on.map, kaleidoscope: on.kaleidoscope },
@@ -1093,12 +1105,13 @@ export class Engine {
       warpAngle: this.live("warpAngle") * DEGREES,
       mapMode: on.map ? this.state.mapMode : 0,
       mapMix: this.live("mapMix"),
-      mandelDepth: this.live("mandelDepth"),
+      mandelDepth: dive - repeats * spot.depth,
       mandelBands: this.live("mandelBands"),
       mandelTerraces: this.live("mandelTerraces"),
       mandelSoftness: this.live("mandelSoftness"),
       mandelLight: this.live("mandelLight"),
-      mandelLightAngle: this.live("mandelLightAngle") * DEGREES,
+      mandelLightAngle: (this.live("mandelLightAngle") - diveTurn) * DEGREES,
+      mandelShift: repeats * spot.period,
       /* Möbius and Julia have their own zoom settings, which take the place of the map zoom. */
       /* Möbius has its own zoom; the Droste spiral has none. */
       mapScale: this.state.mapMode === 2 || this.state.mapMode === 8 || this.state.mapMode === 9 ? 1 : this.state.mapMode === 3 ? this.live("juliaZoom") : this.live("mapScale"),
@@ -1115,7 +1128,7 @@ export class Engine {
       drosteRotation: this.live("drosteRotation") * DEGREES,
       drostePictureTurn: this.live("drostePictureTurn") * DEGREES,
       mapTwist: this.live("mapTwist") * DEGREES,
-      mapAngle: this.live("mapAngle") * DEGREES,
+      mapAngle: (this.live("mapAngle") + diveTurn) * DEGREES,
       /* Möbius has its own pan, roll and twist. */
       mapPanX: this.state.mapMode === 2 ? 0 : this.live("mapPanX"),
       mapPanY: this.state.mapMode === 2 ? 0 : this.live("mapPanY"),

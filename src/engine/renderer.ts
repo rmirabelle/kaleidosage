@@ -10,7 +10,7 @@ export type TrailMode = 0 | 1 | 2;
 /** 0 = none, 1 = power, 2 = Mobius, 3 = Julia, 4 = log spiral, 5 = sine, 6 = tunnel. */
 export type MapMode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 /** The Mandelbrot map's places to dive into (see MANDEL_PLACES). */
-export type MandelPlace = 0 | 1 | 2 | 3 | 4;
+export type MandelPlace = 0 | 1 | 2 | 3 | 4 | 5;
 /** 0 = no warp, 1 = warp the screen (breaks the symmetry), 2 = warp the image (keeps it). */
 export type WarpMode = 0 | 1 | 2;
 /** 0 = radial wedges around one center, 1 = triangle tiles, 2 = hexagon tiles. */
@@ -42,8 +42,8 @@ export type SmearShape = 0 | 1 | 2 | 3 | 4;
 const SHAPE_CODES: Record<ShapeStep, number> = { warp: 0, map: 1, kaleidoscope: 2 };
 /** The Mandelbrot path texture's row length (see mandelPath). */
 const MANDEL_ROW = 1024;
-/** The Mandelbrot map's rounds: deeper views need more before their points escape (at most 2500, the shader's limit). */
-export const mandelRounds = (depth: number) => Math.round(Math.min(2500, Math.max(300, 300 + 150 * depth)));
+/** The Mandelbrot map's rounds: deeper views need more before their points escape (at most 1250, which keeps the cost down). */
+export const mandelRounds = (depth: number) => Math.round(Math.min(1250, Math.max(250, 250 + 100 * depth)));
 /** 0 normal, 1 screen, 2 multiply, 3 overlay, 4 difference, 5 lighten, 6 darken, 7 add. */
 export type LayerBlend = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 /** How the camera's land goes on past the picture: 0 mirrored, 1 repeated as it is, 2 not at all (sky around the picture). */
@@ -118,6 +118,8 @@ export interface FrameValues {
   mandelSoftness: number;
   mandelLight: number;
   mandelLightAngle: number;
+  /** The rounds the dive's jumps back have skipped (see MANDEL_SPOTS): the bands move on by these, so the jumps do not show. */
+  mandelShift: number;
   mapScale: number;
   mapPower: number;
   mapPointX: number;
@@ -1140,6 +1142,7 @@ export class KaleidoRenderer {
     gl.uniform1f(k.uniforms.u_mandelBands, v.mandelBands);
     gl.uniform1f(k.uniforms.u_mandelTerraces, v.mandelTerraces);
     gl.uniform1f(k.uniforms.u_mandelSoftness, v.mandelSoftness);
+    gl.uniform1f(k.uniforms.u_mandelShift, v.mandelShift);
     gl.uniform1f(k.uniforms.u_mandelLight, v.mandelLight);
     gl.uniform2f(k.uniforms.u_mandelLightDir, Math.cos(v.mandelLightAngle), Math.sin(v.mandelLightAngle));
     gl.uniform1f(k.uniforms.u_mapArms, v.mapArms);

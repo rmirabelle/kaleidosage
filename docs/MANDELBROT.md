@@ -9,7 +9,7 @@ spirals that come back at every depth.
 
 Map mode 9 of the Algorithm effect (see `complexMap` in shaders.ts).
 
-- c is the place (Place menu, `MANDEL_CENTERS` in submodes.ts) plus the
+- c is the place (Place menu, `MANDEL_SPOTS` in submodes.ts) plus the
   screen point, 1.5 / 10^Depth across; Angle turns the view and Pan moves
   it in screen units.
 - z = z^2 + c from 0, up to 200 + 120 Depth rounds (800 at most). A point
@@ -62,3 +62,33 @@ times).
 
 Checked by renders at Depth 2.5, 6, 9 and 12 (Seahorse valley), 8 (Spiral)
 and 10 (Dendrite): crisp detail, no blocks.
+
+## Step 3 (built 2026-10-24): endless dive and cost limits
+
+The user asked for an endless dive, and found that high Depth overloaded even
+an RTX 5090.
+
+- Every place is now a Misiurewicz point: its path from 0 lands on a loop
+  of `period` rounds. Near such a point the set repeats: zoom in `depth`
+  powers of ten (log10 of |product of 2z| around the loop) and turn `turn`
+  degrees (that product's angle), and the picture is the same, with every
+  point `period` rounds later to escape. Checked with renders of a view and
+  the same view one repeat deeper.
+- Speed (the map's shared Speed slider) adds depth flown, in powers of ten
+  per second, to Depth. Past `MANDEL_LOOP` (6), a deeper view is drawn as
+  the same view whole repeats less deep: turned back by their turn (the
+  light too, since it turns with the view), with their skipped rounds added
+  to the bands (`u_mandelShift`; the picture takes it modulo two picture
+  widths, the terraces modulo one band). The jump back measured 0.0 to 0.3
+  of 255 (Mini copies 2.5). At depth 3 the repeats did not yet match well
+  enough (up to 36 of 255), so the loop sits at 6.
+- So no view is deeper than 6 plus one repeat (at most 6.75), whatever
+  Depth or the dive says: that is the main cost limit.
+- Rounds: 250 + 100 Depth, 1250 at most (was 2500). Depth goes to 10.
+- Inside tests skip the rounds of points in the set: the main heart shape
+  and the large circle (each made 2% smaller), and a path that comes back
+  within 1/1000 of the view's width of a point saved at rounds 8, 16, 32...
+  (it is caught in a loop). They change at most 25 edge pixels of 204,000.
+- Places: Seahorse valley, Spiral, Branches (new), Dendrite, Mini copies (a
+  point among small copies of the set, was the cusp at -1.75), Elephant
+  valley. Default Depth is now 3.

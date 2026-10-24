@@ -461,7 +461,7 @@ float mandelStretch = 1.0;
  */
 vec2 mandelAlt;
 float mandelAltWeight = 0.0;
-/* Depth in powers of ten (0 to 13), band width, terraces, light, and the light's direction. */
+/* Depth in powers of ten (0 to 10), band width, terraces, light, and the light's direction. */
 uniform float u_mandelDepth;
 /**
  * The deep zoom (see mandelPath in renderer.ts): the place's exact path,
@@ -475,6 +475,8 @@ vec2 mandelAt(int n) { return texelFetch(u_mandelPath, ivec2(n & 1023, n >> 10),
 uniform float u_mandelBands;
 uniform float u_mandelTerraces;
 uniform float u_mandelSoftness;
+/* The rounds the dive's jumps back have skipped (see MANDEL_SPOTS in submodes.ts). */
+uniform float u_mandelShift;
 uniform float u_mandelLight;
 uniform vec2 u_mandelLightDir;
 
@@ -613,7 +615,7 @@ vec2 complexMap(vec2 p) {
      * Points that never escape are in the set: black. Deeper views need
      * more rounds (u_mandelRounds).
      */
-    float span = 1.5 * pow(10.0, -clamp(u_mandelDepth, 0.0, 13.0));
+    float span = 1.5 * pow(10.0, -clamp(u_mandelDepth, 0.0, 10.0));
     vec2 dc = onAxis * span;
     vec2 d = vec2(0.0);
     vec2 m = vec2(0.0);
@@ -621,8 +623,22 @@ vec2 complexMap(vec2 p) {
     int ref = 0;
     float escaped = -1.0;
     mandelAltWeight = 0.0;
-    for (int i = 0; i < 2500; i++) {
-      if (i >= u_mandelRounds) break;
+    /**
+     * Points inside the set run every round, so they cost the most. Two
+     * tests find many of them first: the main heart shape and the large
+     * circle to its left (both made 2% smaller, so a point near their edge
+     * still runs), and, while the loop runs, a path that comes back to a
+     * point it saved (it is caught in a loop, so it never escapes).
+     */
+    vec2 c = u_mapPoint + dc;
+    float qx = c.x - 0.25;
+    float q = qx * qx + c.y * c.y;
+    bool inside = q * (q + qx) < 0.245 * c.y * c.y || (c.x + 1.0) * (c.x + 1.0) + c.y * c.y < 0.06125;
+    vec2 saved = vec2(1e9);
+    int saveAt = 8;
+    float near = 1e-3 * span;
+    for (int i = 0; i < 1250; i++) {
+      if (inside || i >= u_mandelRounds) break;
       vec2 big = mandelAt(ref);
       /* The slope per screen unit (dz/dc times the span), so it stays far from the largest 32-bit number at any depth. */
       slope = 2.0 * cmul(big + d, slope) + vec2(span, 0.0);
@@ -637,6 +653,12 @@ vec2 complexMap(vec2 p) {
         d = m;
         ref = 0;
       }
+      if (i == saveAt) {
+        saved = m;
+        saveAt *= 2;
+      } else if (dot(m - saved, m - saved) < near * near) {
+        break;
+      }
     }
     if (escaped < 0.0) {
       mandelShade = 0.0;
@@ -646,6 +668,15 @@ vec2 complexMap(vec2 p) {
       float r = length(m);
       float count = escaped + 1.0 - log2(log(r));
       float band = count / max(u_mandelBands, 0.01);
+      /**
+       * The dive's jumps back skip rounds (u_mandelShift), so the bands move
+       * on by them. The picture repeats every two widths (it is mirrored),
+       * and the terraces every band, so each takes its own remainder, which
+       * keeps the numbers small on a long dive.
+       */
+      float skipped = u_mandelShift / max(u_mandelBands, 0.01);
+      float terrace = fract(band + fract(skipped));
+      band += mod(skipped, 2.0 * u_imgRes.x / u_imgRes.y);
       w = vec2(band, atan(m.y, m.x) / PI);
       /**
        * Across a ring where the escape count changes, the angle doubles: a
@@ -662,7 +693,7 @@ vec2 complexMap(vec2 p) {
       vec2 normal = normalize(cdiv(m, slope));
       float lit = clamp((dot(normal, u_mandelLightDir) + 1.5) / 2.5, 0.0, 1.0);
       float edge = 0.5 * clamp(u_mandelSoftness, 0.0, 1.0) + 1e-4;
-      float t = fract(band);
+      float t = terrace;
       float rise = min(t / (1.0 - edge), (1.0 - t) / edge);
       float step_ = 0.45 + 0.55 * mix(rise, smoothstep(0.0, 1.0, rise), clamp(u_mandelSoftness, 0.0, 1.0));
       mandelShade = mix(1.0, lit, u_mandelLight) * mix(1.0, step_, u_mandelTerraces);
