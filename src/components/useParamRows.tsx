@@ -7,6 +7,7 @@ import { EaseMenu } from "./EaseMenu";
 import { RangeSlider, Slider, rangePosition, trackPosition } from "./Slider";
 import { createPortal } from "react-dom";
 import { NOT_MAPPABLE, midi } from "../lib/midi";
+import { RANGE_ON_EVENT } from "../lib/pointerEvents";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { MidiIcon } from "./MidiIcon";
 import { useMidi } from "./useMidi";
@@ -361,7 +362,11 @@ function ParamRow({ engine, paramKey, readout, marker, singleMarker, after, badg
               aria-pressed={drifting}
               aria-label={`${param.label} range`}
               data-tip={drifting ? "Range on: the value moves between two handles. Click for a single value." : "Move the value between two handles"}
-              onClick={() => toggleDrift(!drifting)}
+              onClick={(event) => {
+                /* A range that the user turns on can start the ranged slider tip (see App). */
+                if (!drifting) event.currentTarget.dispatchEvent(new Event(RANGE_ON_EVENT, { bubbles: true }));
+                toggleDrift(!drifting);
+              }}
             >
               <BracketsSquare size={13} weight="bold" />
             </button>

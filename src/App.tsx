@@ -55,6 +55,7 @@ import { songFollow } from "./lib/songFollow";
 import { settingButtons } from "./lib/settingButtons";
 import { sliceAt, type ScheduledSlice } from "./engine/showSchedule";
 import { helpSettings } from "./lib/helpSettings";
+import { RANGE_ON_EVENT } from "./lib/pointerEvents";
 import { PLAYLIST_EXTENSION, isPlaylistFile, openPlaylistFile, playlistFingerprint, readManifest, savePlaylistFile, type PlaylistAudio } from "./lib/playlistFile";
 import { revealMainWindow } from "./lib/splash";
 import { isVideoPath, isVideoType, loadVideoBlob, loadVideoFile, stageVideoBlob, type VideoFile } from "./lib/videos";
@@ -302,10 +303,6 @@ export default function App() {
     }
   }), []);
   const firstRangeButton = useMemo(() => ({ get current() { return document.querySelector<HTMLElement>(".fx-card .panel-group.open .panel-drift"); } }), []);
-  /* The Length tip goes with the range tip: out of sight while the range tip waits for an open effect. */
-  const lengthControl = useMemo(() => ({
-    get current() { return firstRangeButton.current ? document.querySelector<HTMLElement>(".source-length") : null; }
-  }), [firstRangeButton]);
   useEffect(() => {
     if (effectTip !== "range") return;
     const onPress = (event: PointerEvent) => {
@@ -314,6 +311,42 @@ export default function App() {
     window.addEventListener("pointerdown", onPress, true);
     return () => window.removeEventListener("pointerdown", onPress, true);
   }, [effectTip, firstRangeButton]);
+  /**
+   * The first range that the user turns on in a run (a click on a
+   * setting's [] button, see useParamRows) shows the ranged slider tip at
+   * the right of that setting. The setting is found by its range button's
+   * name, as the panel is made again often; the tip hides while the range
+   * is off or the effect is closed. Its close button, or a press in the FX
+   * card outside that setting, ends it.
+   */
+  const [rangedTip, setRangedTip] = useState<string | null>(null);
+  const rangedTipShownRef = useRef(false);
+  useEffect(() => {
+    const onRangeOn = (event: Event) => {
+      const label = (event.target as Element).getAttribute("aria-label");
+      if (rangedTipShownRef.current || !label) return;
+      rangedTipShownRef.current = true;
+      setRangedTip(label);
+    };
+    window.addEventListener(RANGE_ON_EVENT, onRangeOn);
+    return () => window.removeEventListener(RANGE_ON_EVENT, onRangeOn);
+  }, []);
+  const rangedRow = useMemo(() => ({
+    get current() {
+      if (!rangedTip) return null;
+      const button = document.querySelector<HTMLElement>(`.fx-card .panel-group.open .panel-drift[aria-label="${CSS.escape(rangedTip)}"]`);
+      return button?.getAttribute("aria-pressed") === "true" ? button.closest<HTMLElement>(".panel-row") : null;
+    }
+  }), [rangedTip]);
+  useEffect(() => {
+    if (!rangedTip) return;
+    const onPress = (event: PointerEvent) => {
+      const target = event.target as Element;
+      if (target.closest?.(".fx-card") && !rangedRow.current?.contains(target)) setRangedTip(null);
+    };
+    window.addEventListener("pointerdown", onPress, true);
+    return () => window.removeEventListener("pointerdown", onPress, true);
+  }, [rangedTip, rangedRow]);
   const pickInput = useCallback((kind: InputKind, switched: boolean) => {
     setFilesTip(kind === "tracks" && tracks.list.length === 0);
     if (kind !== "tracks") setSongTip(null);
@@ -2331,16 +2364,15 @@ export default function App() {
       {effectTip === "range" && !startScreen && (
         <PointerTip
           anchor={firstRangeButton}
-          text="Click to toggle between static and ranged values. Ranged values animate according to the scene LENGTH or to an audio slice."
+          text="This is a single effect setting. Use the slider to change the setting's value. The [] icon toggles this setting between static and ranged values. Ranged values animate according to the scene LENGTH or to an audio slice."
           onClose={nextEffectTip}
         />
       )}
-      {effectTip === "range" && !startScreen && (
+      {rangedTip && !startScreen && (
         <PointerTip
-          anchor={lengthControl}
-          side="below"
-          text="LENGTH sets how long this scene plays before the next scene. Ranged values animate once over this time."
-          onClose={nextEffectTip}
+          anchor={rangedRow}
+          text="This is a ranged value slider. Drag the handles to set min and max values. Drag inside a range to move the range. Double click the setting name to set range to full. CTRL + drag a handle to move both equally. You can reverse the range, apply an animation easing curve or set a custom loop time for this setting."
+          onClose={() => setRangedTip(null)}
         />
       )}
       {resetAsked && (
