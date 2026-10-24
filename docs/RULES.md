@@ -623,7 +623,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - That tip stays until its close button, also while the effect is closed.
 - Then a tip shows at the first range button of the open effect; with no effect open, it waits until one opens.
 - Its close button, or a press in the FX card while it shows, ends it.
-- The first range that you turn on in a run shows a tip at the right of that setting.
+- The first range that you turn on in a run shows a tip at the right of that setting, and closes the effect tips and the overview tips.
 - That tip hides while the range is off or the effect is closed; its close button, or a press in the FX card outside that setting, ends it.
 - With the pointers on, the first scene of each run also shows a welcome card in the middle of the picture.
 - Its Disable Pointers button turns the pointers off; Show Me Around closes it.

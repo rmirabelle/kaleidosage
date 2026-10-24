@@ -327,6 +327,9 @@ export default function App() {
       if (rangedTipShownRef.current || !label) return;
       rangedTipShownRef.current = true;
       setRangedTip(label);
+      /* The effect's tips give way: they would push the ranged slider tip out of its place. */
+      setEffectTip(null);
+      setPanelTips(NO_PANEL_TIPS);
     };
     window.addEventListener(RANGE_ON_EVENT, onRangeOn);
     return () => window.removeEventListener(RANGE_ON_EVENT, onRangeOn);
