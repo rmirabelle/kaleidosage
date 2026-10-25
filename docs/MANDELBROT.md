@@ -397,7 +397,8 @@ the view keeps its colors briefly, then stays one color. Cause: the picture
 lies across the bands, and deep in a pixel holds many bands, so the blur
 reads the picture at its coarsest level, near its average color.
 
-- Coloring menu (state `mandelColoring`): Picture (as before), Palette, and
+- Coloring menu (state `mandelColoring`): Slots (as before; first named
+  Picture), Palette, and
   Palette per depth. The palette reads the picture along its diagonal
   (mirrored), at log2(count) times Palette spread (0.05 to 4) plus Band
   flow, so a color lasts while the count doubles and stays strong at any
