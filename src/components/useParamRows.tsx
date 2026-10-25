@@ -151,8 +151,12 @@ function ParamRow({ engine, paramKey, readout, marker, singleMarker, after, badg
     engine.state.contourTone = next;
     setTone(next);
   };
-  /** The zero point, when it is inside the slider: a tick mark, and what Ctrl + drag mirrors around. */
-  const noEffect = NO_EFFECT[paramKey];
+  /**
+   * The zero point, when it is inside the slider: a tick mark the handle
+   * snaps to, and what Ctrl + drag mirrors around. Any slider whose range
+   * spans 0 has one at 0, unless NO_EFFECT names another value.
+   */
+  const noEffect = NO_EFFECT[paramKey] ?? (param.scale !== "log" && param.min < 0 && param.max > 0 ? 0 : undefined);
   /** The sliders work in slider positions; a log slider's positions are not its values (see toSlider). */
   const [sliderMin, sliderMax, sliderStep] = sliderLimits(param);
   const at = (number: number) => toSlider(param, number);
