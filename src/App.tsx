@@ -1646,8 +1646,11 @@ export default function App() {
     if (!engine) return;
     holdScene(false);
     tracks.clear();
-    sceneGenerationRef.current++;
-    setSceneGeneration(sceneGenerationRef.current);
+    /**
+     * No new scene generation here: a project that opens next adds its
+     * scenes through setImage, which still has this render's generation
+     * and would drop every scene (Close Project counts one itself).
+     */
     blankScene();
     writeDocs([]);
     storedRef.current.clear();
@@ -1667,6 +1670,9 @@ export default function App() {
     if (!(await askToSaveFileRef.current("Closing the project closes its scenes and its audio files."))) return;
     if (fullscreen) await exitFullscreen();
     await clearFile();
+    /* A photo that still loads for a closed scene does not come back. */
+    sceneGenerationRef.current++;
+    setSceneGeneration(sceneGenerationRef.current);
     quietInput();
     engine.stop();
     setStartScreen(true);
