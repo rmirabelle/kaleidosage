@@ -1,7 +1,7 @@
 import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 
 /** The blur mask: circle with a sharp or a blurred center, gradient, bright areas, dark areas, noise. */
 export type BlurMask = 0 | 1 | 2 | 3 | 4 | 5;
@@ -42,6 +42,24 @@ export type SmearShape = 0 | 1 | 2 | 3 | 4;
 const SHAPE_CODES: Record<ShapeStep, number> = { warp: 0, map: 1, kaleidoscope: 2 };
 /** The Mandelbrot path texture's row length (see mandelPath). */
 const MANDEL_ROW = 1024;
+/**
+ * The Mandelbrot strip (see MandelStrip and MANDEL_STRIP_SHADER): columns
+ * in one turn, rows kept (about 1.8 powers of ten), rows per power of ten
+ * (as tall as a column is wide, in log terms), and the log10 distance of
+ * global row 0 from the place.
+ */
+const STRIP_WIDTH = 3072;
+const STRIP_HEIGHT = 2048;
+const STRIP_ROWS = STRIP_WIDTH * Math.LN10 / (2 * Math.PI);
+const STRIP_ORIGIN = 1;
+/**
+ * A Mandelbrot strip: its count and data textures (see MANDEL_STRIP_SHADER),
+ * the place it was drawn for, and the global rows that are ready, first to
+ * last, with no gaps (last < first: none). Texture row = global row mod
+ * STRIP_HEIGHT, so as a dive moves on, the rows it leaves are drawn over
+ * with the rows ahead.
+ */
+type MandelStrip = { count: WebGLTexture; data: WebGLTexture; framebuffer: WebGLFramebuffer; key: string; first: number; last: number };
 /**
  * The Mandelbrot map's rounds: deeper views need more before their points
  * escape. At depth 10 (5250 rounds) 98 to 100% of the outside points of the
@@ -132,6 +150,8 @@ export interface FrameValues {
   mandelLightAngle: number;
   /** The bands moved so far by Band flow (in bands). */
   mandelFlow: number;
+  /** Where the dive's next crossfade starts (NaN when there is none): the strips get its rows ready ahead (see updateMandelStrips). */
+  mandelNextDepth: number;
   /** The dive's crossfade (see frameValues in engine.ts): how much of the view at the second depth shows over the first. */
   mandelFade: number;
   mandelFadeDepth: number;
@@ -975,6 +995,8 @@ export class KaleidoRenderer {
       else passes.push([step]);
     }
     const first = Array.isArray(passes[0]) ? passes.shift() as ShapeStep[] : [];
+    if (v.mapMode === 9 && active.map) this.updateMandelStrips(v, width, height);
+    else this.stripPass = [null, null];
     /**
      * Freeze background (docs/LAYERS.md, phase 2): with a step after the 3D
      * Object, the steps after it change only the picture on the shape. The
@@ -1142,11 +1164,26 @@ export class KaleidoRenderer {
     gl.uniform1f(k.uniforms.u_mapPower, v.mapPower);
     gl.uniform2f(k.uniforms.u_mapPoint, v.mapPointX, v.mapPointY);
     gl.uniform1i(k.uniforms.u_mapSteps, Math.round(v.mapSteps));
-    const mandelDepth = (depth: number) => {
+    const mandelDepth = (depth: number, pass: number) => {
       gl.uniform1f(k.uniforms.u_mandelDepth, depth);
       gl.uniform1i(k.uniforms.u_mandelRounds, mandelRounds(depth));
+      /* The strip this pass reads (see updateMandelStrips), in slots 3 and 4. */
+      const strip = v.mapMode === 9 ? this.stripPass[pass] : null;
+      gl.uniform1i(k.uniforms.u_stripOn, strip && strip.last > strip.first ? 1 : 0);
+      if (!strip) return;
+      gl.activeTexture(gl.TEXTURE3);
+      gl.bindTexture(gl.TEXTURE_2D, strip.count);
+      gl.uniform1i(k.uniforms.u_stripCount, 3);
+      gl.activeTexture(gl.TEXTURE4);
+      gl.bindTexture(gl.TEXTURE_2D, strip.data);
+      gl.uniform1i(k.uniforms.u_stripData, 4);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.uniform2i(k.uniforms.u_stripSize, STRIP_WIDTH, STRIP_HEIGHT);
+      gl.uniform1f(k.uniforms.u_stripOrigin, STRIP_ORIGIN);
+      gl.uniform1f(k.uniforms.u_stripRows, STRIP_ROWS);
+      gl.uniform2f(k.uniforms.u_stripReady, strip.first, strip.last);
     };
-    mandelDepth(v.mandelDepth);
+    mandelDepth(v.mandelDepth, 0);
     if (v.mapMode === 9) {
       /* The deep zoom's exact path (see mandelPath), in slot 2; the source images use 0 and 1. */
       const path = this.mandelPath(v.mapPointX, v.mapPointY, mandelRounds(Infinity));
@@ -1214,7 +1251,7 @@ export class KaleidoRenderer {
        * depth, mixed over the first by the blend's constant share (colors
        * and cover alike). It costs a second pass only while it fades.
        */
-      mandelDepth(v.mandelFadeDepth);
+      mandelDepth(v.mandelFadeDepth, 1);
       gl.enable(gl.BLEND);
       gl.blendColor(0, 0, 0, v.mandelFade);
       gl.blendFunc(gl.CONSTANT_ALPHA, gl.ONE_MINUS_CONSTANT_ALPHA);
@@ -1738,6 +1775,178 @@ export class KaleidoRenderer {
    * changes.
    */
   private mandel: { texture: WebGLTexture; key: string; length: number } | null = null;
+
+  /**
+   * The Mandelbrot strips (research idea 2 in docs/MANDELBROT.md): the raw
+   * map around the place in log-polar form, drawn a few rows a frame (see
+   * MANDEL_STRIP_SHADER), so a dive reads it instead of running the loop
+   * for every pixel of every frame; the shader runs the loop only where the
+   * rows are not ready (at first, and the tiny middle of the view, past the
+   * strip's deepest row). Two strips: one follows the view, the other the
+   * dive's crossfade, or gets the next crossfade's rows ready ahead. At the
+   * dive's restart they swap roles on their own (each view takes the strip
+   * that holds the most of its rows). stripPass is the strip each pass of
+   * the shape shader reads (0 the view, 1 the crossfade). stripBudget is the
+   * rows drawn a frame, for the view (half that for the other).
+   */
+  private strips: MandelStrip[] | null = null;
+  private stripPass: (MandelStrip | null)[] = [null, null];
+  private stripProgram: Program | null = null;
+  private stripLink: WebGLProgram | null = null;
+  private stripFailed = false;
+  stripBudget = 32;
+
+  /** Starts building the strip shader, without waiting for it where the graphics card can build it in the background. */
+  private stripProgramReady() {
+    const gl = this.gl;
+    if (this.stripProgram) return true;
+    if (this.stripFailed) return false;
+    const parallel = gl.getExtension("KHR_parallel_shader_compile");
+    if (!this.stripLink) {
+      const program = gl.createProgram()!;
+      for (const [type, source] of [[gl.VERTEX_SHADER, VERTEX_SHADER], [gl.FRAGMENT_SHADER, MANDEL_STRIP_SHADER]] as const) {
+        const shader = gl.createShader(type)!;
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        gl.attachShader(program, shader);
+      }
+      gl.bindAttribLocation(program, 0, "a_pos");
+      gl.linkProgram(program);
+      this.stripLink = program;
+    }
+    const program = this.stripLink;
+    if (parallel && !gl.getProgramParameter(program, parallel.COMPLETION_STATUS_KHR)) return false;
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      console.warn("Mandelbrot strip shader:", gl.getProgramInfoLog(program));
+      this.stripFailed = true;
+      return false;
+    }
+    const uniforms: Record<string, WebGLUniformLocation> = {};
+    const count = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS) as number;
+    for (let index = 0; index < count; index++) {
+      const name = gl.getActiveUniform(program, index)!.name;
+      uniforms[name] = gl.getUniformLocation(program, name)!;
+    }
+    this.stripProgram = { program, uniforms };
+    return true;
+  }
+
+  private createStrip(): MandelStrip | null {
+    const gl = this.gl;
+    const count = gl.createTexture()!;
+    const data = gl.createTexture()!;
+    for (const [texture, internal, format, type] of [[count, gl.R32F, gl.RED, gl.FLOAT], [data, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT]] as const) {
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texImage2D(gl.TEXTURE_2D, 0, internal, STRIP_WIDTH, STRIP_HEIGHT, 0, format, type, null);
+    }
+    const framebuffer = gl.createFramebuffer()!;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, count, 0);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, data, 0);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+    const complete = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    if (complete) return { count, data, framebuffer, key: "", first: 0, last: -1 };
+    gl.deleteTexture(count);
+    gl.deleteTexture(data);
+    gl.deleteFramebuffer(framebuffer);
+    return null;
+  }
+
+  /**
+   * Gets the strips ready for this frame: the first global row each view
+   * needs (its farthest screen point, pan included), which strip serves
+   * which view, then a few more rows drawn in each, outer rows first (they
+   * fill the most of the screen).
+   */
+  private updateMandelStrips(v: FrameValues, width: number, height: number) {
+    this.stripPass = [null, null];
+    if (!this.floatTargets || !this.stripProgramReady()) return;
+    if (!this.strips) {
+      const a = this.createStrip();
+      const b = a && this.createStrip();
+      if (!a || !b) {
+        this.stripFailed = true;
+        return;
+      }
+      this.strips = [a, b];
+    }
+    const key = `${v.mapPointX},${v.mapPointY}`;
+    for (const strip of this.strips) {
+      if (strip.key !== key) Object.assign(strip, { key, first: 0, last: -1 });
+    }
+    const aspect = width / Math.max(1, height);
+    const reach = Math.hypot(aspect / 2, 0.5) + Math.hypot(v.mapPanX, v.mapPanY);
+    const top = (depth: number) => {
+      const span = 1.5 * Math.pow(10, -Math.min(10, Math.max(0, depth)));
+      return Math.floor((STRIP_ORIGIN - Math.log10(span * reach * 1.05)) * STRIP_ROWS);
+    };
+    const overlap = (strip: MandelStrip, first: number) =>
+      Math.max(0, Math.min(strip.last, first + STRIP_HEIGHT - 1) - Math.max(strip.first, first) + 1);
+    const mainTop = top(v.mandelDepth);
+    const main = overlap(this.strips[1], mainTop) > overlap(this.strips[0], mainTop) ? this.strips[1] : this.strips[0];
+    const other = main === this.strips[0] ? this.strips[1] : this.strips[0];
+    const secondDepth = v.mandelFade > 0 ? v.mandelFadeDepth : v.mandelNextDepth;
+    this.stripPass = [main, other];
+    this.fillStrip(v, main, mainTop, this.stripBudget);
+    if (Number.isFinite(secondDepth)) this.fillStrip(v, other, top(secondDepth), Math.ceil(this.stripBudget / 2));
+  }
+
+  /** Moves a strip's window to start at global row "top", keeping the ready rows inside it, then draws up to "budget" more rows. */
+  private fillStrip(v: FrameValues, strip: MandelStrip, top: number, budget: number) {
+    const bottom = top + STRIP_HEIGHT - 1;
+    if (strip.last < strip.first || strip.last < top || strip.first > bottom) {
+      strip.first = top;
+      strip.last = top - 1;
+    } else {
+      strip.first = Math.max(strip.first, top);
+      strip.last = Math.min(strip.last, bottom);
+    }
+    let rows = budget;
+    if (strip.first > top) {
+      const count = Math.min(rows, strip.first - top);
+      this.drawStripRows(v, strip, strip.first - count, strip.first - 1);
+      strip.first -= count;
+      rows -= count;
+    }
+    if (rows > 0 && strip.last < bottom) {
+      const count = Math.min(rows, bottom - strip.last);
+      this.drawStripRows(v, strip, strip.last + 1, strip.last + count);
+      strip.last += count;
+    }
+  }
+
+  /** Draws global rows first to last of a strip (split where the texture rows wrap). */
+  private drawStripRows(v: FrameValues, strip: MandelStrip, first: number, last: number) {
+    const gl = this.gl;
+    const program = this.stripProgram!;
+    const path = this.mandelPath(v.mapPointX, v.mapPointY, mandelRounds(Infinity));
+    gl.useProgram(program.program);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, strip.framebuffer);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, path.texture);
+    gl.uniform1i(program.uniforms.u_mandelPath, 2);
+    gl.uniform1i(program.uniforms.u_mandelLength, path.length);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.uniform2f(program.uniforms.u_mapPoint, v.mapPointX, v.mapPointY);
+    gl.uniform1f(program.uniforms.u_stripOrigin, STRIP_ORIGIN);
+    gl.uniform1f(program.uniforms.u_stripRows, STRIP_ROWS);
+    gl.uniform1i(program.uniforms.u_stripWidth, STRIP_WIDTH);
+    for (let row = first; row <= last;) {
+      const textureRow = ((row % STRIP_HEIGHT) + STRIP_HEIGHT) % STRIP_HEIGHT;
+      const count = Math.min(last - row + 1, STRIP_HEIGHT - textureRow);
+      gl.viewport(0, textureRow, STRIP_WIDTH, count);
+      gl.uniform1f(program.uniforms.u_gAtRow0, row);
+      gl.uniform1f(program.uniforms.u_texRow0, textureRow);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      row += count;
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
 
 
   private mandelPath(cx: number, cy: number, rounds: number) {

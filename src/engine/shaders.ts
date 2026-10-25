@@ -51,6 +51,145 @@ vec4 blendCover(vec4 base, vec4 top, int mode, float opacity) {
  * is a plain crossfade; mode 1 dissolves by brightness: the light parts of
  * the second image come through first, and the dark parts last.
  */
+/**
+ * The Mandelbrot map's loop, shared by the picture shader (KALEIDO_SHADER)
+ * and the strip shader (MANDEL_STRIP_SHADER): z = z^2 + c from z = 0, with c
+ * the place (u_mapPoint) plus dc. The place's exact path Z comes from the
+ * renderer (64-bit numbers, see mandelPath), and the loop works only with
+ * the point's small difference from it, d (the usual perturbation):
+ * d' = 2 Z d + d^2 + dc, which 32-bit numbers hold well at any depth. Where
+ * z = Z + d comes nearer 0 than d itself, or the path ends, d would lose its
+ * precision, so the point goes on against the path's start instead
+ * (rebasing: d = z, Z = 0). Returns the round the point escaped past 256 in
+ * (-1 if it did not), the last z (m), and the slope dz/dc times "scale" (so
+ * it stays far from the largest 32-bit number at any depth).
+ */
+const MANDEL_GLSL = `
+/**
+ * The place's exact path, 1024 values a row, and how many values it has
+ * (it ends where it escapes).
+ */
+uniform sampler2D u_mandelPath;
+uniform int u_mandelLength;
+/* A path value as two 32-bit parts: the nearest 32-bit number (xy) and what it leaves out (zw). */
+vec4 mandelAt(int n) { return texelFetch(u_mandelPath, ivec2(n & 1023, n >> 10), 0); }
+
+float mandelRun(vec2 dc, float scale, int rounds, out vec2 m, out vec2 slope) {
+  vec2 d = vec2(0.0);
+  m = vec2(0.0);
+  slope = vec2(0.0);
+  int ref = 0;
+  float escaped = -1.0;
+  /**
+   * Points inside the set run every round, so they cost the most. Two
+   * tests find many of them first: the main heart shape and the large
+   * circle to its left (both made 2% smaller, so a point near their edge
+   * still runs), and, while the loop runs, a path that comes back to a
+   * point it saved (it is caught in a loop, so it never escapes).
+   */
+  vec2 c = u_mapPoint + dc;
+  float qx = c.x - 0.25;
+  float q = qx * qx + c.y * c.y;
+  bool inside = q * (q + qx) < 0.245 * c.y * c.y || (c.x + 1.0) * (c.x + 1.0) + c.y * c.y < 0.06125;
+  vec2 saved = vec2(1e9);
+  int saveAt = 8;
+  /* Off in deep views (scale below 1e-4): there its tolerance is so small that paths passing very near 0 twice look caught. */
+  float near = scale > 1e-4 ? 1e-3 * scale : 0.0;
+  /**
+   * The path's own stretch, the product of 2z over the rounds: a point
+   * caught by a loop in the set has it shrink toward 0 (the loop pulls
+   * nearby paths in), at any depth, as it uses z itself, not the point's
+   * tiny difference (the saved-point test above stops working deep, where
+   * that difference is below what 32-bit numbers hold). Kept from growing
+   * past what they hold.
+   */
+  vec2 pull = vec2(1.0, 0.0);
+  for (int i = 0; i < (inside ? 0 : rounds); i++) {
+    vec2 big = mandelAt(ref).xy;
+    vec2 z = big + d;
+    /* From the second round: every path starts at z = 0. */
+    if (i > 0) pull = 2.0 * cmul(z, pull);
+    if (dot(pull, pull) > 1e20) pull *= 1e-10;
+    slope = 2.0 * cmul(z, slope) + vec2(scale, 0.0);
+    d = 2.0 * cmul(big, d) + cmul(d, d) + dc;
+    ref++;
+    /**
+     * The full z with the path's left-out part too: where z comes near 0
+     * the point goes on from it (just below), and the path's 32-bit
+     * rounding alone would grow into black arcs in deep views.
+     */
+    vec4 next = mandelAt(ref);
+    m = (next.xy + d) + next.zw;
+    if (dot(m, m) > 65536.0) {
+      escaped = float(i);
+      break;
+    }
+    if (dot(m, m) < dot(d, d) || ref >= u_mandelLength - 1) {
+      d = m;
+      ref = 0;
+    }
+    if (i == saveAt) {
+      saved = m;
+      saveAt *= 2;
+    } else if (dot(m - saved, m - saved) < near * near || dot(pull, pull) < 1e-24) {
+      break;
+    }
+  }
+  return escaped;
+}
+`;
+
+/**
+ * The Mandelbrot strip (see MandelStrip in renderer.ts): the raw map around
+ * the place in log-polar form, so a dive reads it instead of running the
+ * loop for every pixel of every frame. A texel's column is the angle
+ * (TAU * column / u_stripWidth) and its row the distance from the place:
+ * global row g lies at 10^(u_stripOrigin - g / u_stripRows), and the rows
+ * drawn here are the texture rows from u_texRow0, row u_texRow0 being global
+ * row u_gAtRow0. As the rows are as tall as the columns are wide (in log
+ * terms), the strip keeps shapes as they are. Out: the smooth escape count
+ * (-1 inside the set) in o0, and in o1 the distance to the set's edge
+ * (log10, in c units), the angle z escaped at and the light's normal angle
+ * (both over PI). The rounds are those of a view 1.5 powers deeper than one
+ * whose corner is at this distance, as the strip serves views down to there.
+ */
+export const MANDEL_STRIP_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+layout(location = 0) out float o0;
+layout(location = 1) out vec4 o1;
+uniform vec2 u_mapPoint;
+uniform float u_stripOrigin;
+uniform float u_stripRows;
+uniform int u_stripWidth;
+uniform float u_gAtRow0;
+uniform float u_texRow0;
+const float TAU = 6.28318530718;
+const float PI = 3.14159265359;
+vec2 cmul(vec2 a, vec2 b) { return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x); }
+vec2 cdiv(vec2 a, vec2 b) { return vec2(a.x * b.x + a.y * b.y, a.y * b.x - a.x * b.y) / max(dot(b, b), 1e-30); }
+${MANDEL_GLSL}
+void main() {
+  float g = u_gAtRow0 + (floor(gl_FragCoord.y) - u_texRow0);
+  float r = pow(10.0, u_stripOrigin - g / u_stripRows);
+  float a = TAU * floor(gl_FragCoord.x) / float(u_stripWidth);
+  float depth = clamp(log(1.5 / r) * 0.4342944819 + 1.5, 0.0, 10.0);
+  int rounds = int(250.0 + 100.0 * depth + 40.0 * depth * depth + 0.5);
+  vec2 m;
+  vec2 slope;
+  float escaped = mandelRun(r * vec2(cos(a), sin(a)), r, rounds, m, slope);
+  if (escaped < 0.0) {
+    o0 = -1.0;
+    o1 = vec4(0.0);
+    return;
+  }
+  float size = length(m);
+  o0 = escaped + 1.0 - log2(log(size));
+  vec2 normal = cdiv(m, slope);
+  float edge = 0.5 * size * log(size) / max(length(slope), 1e-30) * r;
+  o1 = vec4(log(max(edge, 1e-37)) * 0.4342944819, atan(m.y, m.x) / PI, atan(normal.y, normal.x) / PI, 0.0);
+}`;
+
 export const KALEIDO_SHADER = `#version 300 es
 precision highp float;
 out vec4 o;
@@ -465,16 +604,69 @@ vec2 mandelAlt;
 float mandelAltWeight = 0.0;
 /* Depth in powers of ten (0 to 10), band width, terraces, light, and the light's direction. */
 uniform float u_mandelDepth;
-/**
- * The deep zoom (see mandelPath in renderer.ts): the place's exact path,
- * 1024 values a row, how many values it has (it ends where it escapes),
- * and the rounds to run.
- */
-uniform sampler2D u_mandelPath;
-uniform int u_mandelLength;
+/* The rounds to run where the strip is not ready (see mandelFromStrip). */
 uniform int u_mandelRounds;
-/* A path value as two 32-bit parts: the nearest 32-bit number (xy) and what it leaves out (zw). */
-vec4 mandelAt(int n) { return texelFetch(u_mandelPath, ivec2(n & 1023, n >> 10), 0); }
+${MANDEL_GLSL}
+/**
+ * The strip this pass reads (see MANDEL_STRIP_SHADER): on or off, its two
+ * textures and size, where its global rows lie, and the global rows that
+ * are ready (a span with no gaps; texture row = global row mod height).
+ */
+uniform int u_stripOn;
+uniform sampler2D u_stripCount;
+uniform sampler2D u_stripData;
+uniform ivec2 u_stripSize;
+uniform float u_stripOrigin;
+uniform float u_stripRows;
+uniform vec2 u_stripReady;
+
+/**
+ * The map at dc (from the place, c units) read from the strip, if the rows
+ * around its distance are ready: the escape count (-1 inside), the escape
+ * and normal angles (over PI) and the distance to the edge in screen heights.
+ * The count and the distance are mixed from the four texels around the
+ * point; the angles, which jump where they wrap, come from the nearest one.
+ */
+bool mandelFromStrip(vec2 dc, float span, out float count, out float escapeAngle, out float normalAngle, out float edgeDistance) {
+  count = -1.0;
+  escapeAngle = 0.0;
+  normalAngle = 0.0;
+  edgeDistance = 1.0;
+  float r = length(dc);
+  if (u_stripOn == 0 || r <= 0.0) return false;
+  float g = (u_stripOrigin - log(r) * 0.4342944819) * u_stripRows;
+  float g0 = floor(g);
+  if (g0 < u_stripReady.x || g0 + 1.0 > u_stripReady.y) return false;
+  float u = fract(atan(dc.y, dc.x) / TAU) * float(u_stripSize.x);
+  float u0 = floor(u);
+  float fu = u - u0;
+  float fg = g - g0;
+  int ja = int(u0) % u_stripSize.x;
+  int jb = (ja + 1) % u_stripSize.x;
+  int ra = int(mod(g0, float(u_stripSize.y)));
+  int rb = int(mod(g0 + 1.0, float(u_stripSize.y)));
+  float c00 = texelFetch(u_stripCount, ivec2(ja, ra), 0).r;
+  float c10 = texelFetch(u_stripCount, ivec2(jb, ra), 0).r;
+  float c01 = texelFetch(u_stripCount, ivec2(ja, rb), 0).r;
+  float c11 = texelFetch(u_stripCount, ivec2(jb, rb), 0).r;
+  ivec2 nearest = ivec2(fu < 0.5 ? ja : jb, fg < 0.5 ? ra : rb);
+  vec4 data = texelFetch(u_stripData, nearest, 0);
+  float logEdge = data.r;
+  if (min(min(c00, c10), min(c01, c11)) < 0.0) {
+    count = texelFetch(u_stripCount, nearest, 0).r;
+  } else {
+    count = mix(mix(c00, c10, fu), mix(c01, c11, fu), fg);
+    float e00 = texelFetch(u_stripData, ivec2(ja, ra), 0).r;
+    float e10 = texelFetch(u_stripData, ivec2(jb, ra), 0).r;
+    float e01 = texelFetch(u_stripData, ivec2(ja, rb), 0).r;
+    float e11 = texelFetch(u_stripData, ivec2(jb, rb), 0).r;
+    logEdge = mix(mix(e00, e10, fu), mix(e01, e11, fu), fg);
+  }
+  escapeAngle = data.g;
+  normalAngle = data.b;
+  edgeDistance = pow(10.0, logEdge) / span;
+  return true;
+}
 uniform float u_mandelBands;
 uniform float u_mandelTerraces;
 uniform float u_mandelSoftness;
@@ -604,98 +796,50 @@ vec2 complexMap(vec2 p) {
     depthDistance = length(z);
   } else if (u_mapMode == 9) {
     /**
-     * Mandelbrot: z = z^2 + c from z = 0, with c the place (u_mapPoint)
-     * plus the screen point, 1.5 / 10^Depth across. For deep views, the
-     * place's exact path Z comes from the renderer (64-bit numbers), and
-     * this works only with the pixel's small difference from it, d (the
-     * usual perturbation): d' = 2 Z d + d^2 + dc, where dc is the screen
-     * point's part of c, which 32-bit numbers hold well at any depth. Where
-     * z = Z + d comes nearer 0 than d itself, or the path ends, d would
-     * lose its precision, so the pixel goes on against the path's start
-     * instead (rebasing: d = z, Z = 0). A point that escapes gets the usual
-     * smooth escape count; the picture lies across the bands (one band is
-     * one picture height across, Band width rounds) and up by the angle it
-     * escaped at, so the picture shows inside each band. The light comes
-     * from the formula's own slope (z over its derivative, the usual normal
-     * map of a Mandelbrot), and Terraces darkens each band toward one edge,
-     * which looks like stacked steps. Softness turns each step's sharp edge
-     * into a slope (at 1, the bands rise and fall evenly, with no edge), and
-     * blends the picture across the rings where the escape count changes.
-     * Points that never escape are in the set: black. Deeper views need
-     * more rounds (u_mandelRounds).
+     * Mandelbrot: the place (u_mapPoint) plus the screen point, 1.5 /
+     * 10^Depth across, through the loop in MANDEL_GLSL (or read from the
+     * strip). A point that escapes gets the usual smooth escape count; the
+     * picture lies across the bands (one band is one picture height across,
+     * Band width rounds) and up by the angle it escaped at, so the picture
+     * shows inside each band. The light comes from the formula's own slope
+     * (z over its derivative, the usual normal map of a Mandelbrot), and
+     * Terraces darkens each band toward one edge, which looks like stacked
+     * steps. Softness turns each step's sharp edge into a slope (at 1, the
+     * bands rise and fall evenly, with no edge), and blends the picture
+     * across the rings where the escape count changes. Points that never
+     * escape are in the set: black. Deeper views need more rounds.
      */
     float span = 1.5 * pow(10.0, -clamp(u_mandelDepth, 0.0, 10.0));
     vec2 dc = onAxis * span;
-    vec2 d = vec2(0.0);
-    vec2 m = vec2(0.0);
-    vec2 slope = vec2(0.0);
-    int ref = 0;
-    float escaped = -1.0;
     mandelAltWeight = 0.0;
     /**
-     * Points inside the set run every round, so they cost the most. Two
-     * tests find many of them first: the main heart shape and the large
-     * circle to its left (both made 2% smaller, so a point near their edge
-     * still runs), and, while the loop runs, a path that comes back to a
-     * point it saved (it is caught in a loop, so it never escapes).
+     * The raw map at this point: from the strip where it is ready (see
+     * mandelFromStrip), else from the loop (see MANDEL_GLSL).
      */
-    vec2 c = u_mapPoint + dc;
-    float qx = c.x - 0.25;
-    float q = qx * qx + c.y * c.y;
-    bool inside = q * (q + qx) < 0.245 * c.y * c.y || (c.x + 1.0) * (c.x + 1.0) + c.y * c.y < 0.06125;
-    vec2 saved = vec2(1e9);
-    int saveAt = 8;
-    /* Off in deep views (span below 1e-4): there its tolerance is so small that paths passing very near 0 twice look caught. */
-    float near = span > 1e-4 ? 1e-3 * span : 0.0;
-    /**
-     * The path's own stretch, the product of 2z over the rounds: a point
-     * caught by a loop in the set has it shrink toward 0 (the loop pulls
-     * nearby paths in), at any depth, as it uses z itself, not the pixel's
-     * tiny difference (the saved-point test above stops working deep, where
-     * that difference is below what 32-bit numbers hold). Kept from growing
-     * past what they hold.
-     */
-    vec2 pull = vec2(1.0, 0.0);
-    for (int i = 0; i < (inside ? 0 : u_mandelRounds); i++) {
-      vec2 big = mandelAt(ref).xy;
-      vec2 z = big + d;
-      /* From the second round: every path starts at z = 0. */
-      if (i > 0) pull = 2.0 * cmul(z, pull);
-      if (dot(pull, pull) > 1e20) pull *= 1e-10;
-      /* The slope per screen unit (dz/dc times the span), so it stays far from the largest 32-bit number at any depth. */
-      slope = 2.0 * cmul(z, slope) + vec2(span, 0.0);
-      d = 2.0 * cmul(big, d) + cmul(d, d) + dc;
-      ref++;
-      /**
-       * The full z with the path's left-out part too: where z comes near 0
-       * the pixel goes on from it (just below), and the path's 32-bit
-       * rounding alone would grow into black arcs in deep views.
-       */
-      vec4 next = mandelAt(ref);
-      m = (next.xy + d) + next.zw;
-      if (dot(m, m) > 65536.0) {
-        escaped = float(i);
-        break;
-      }
-      if (dot(m, m) < dot(d, d) || ref >= u_mandelLength - 1) {
-        d = m;
-        ref = 0;
-      }
-      if (i == saveAt) {
-        saved = m;
-        saveAt *= 2;
-      } else if (dot(m - saved, m - saved) < near * near || dot(pull, pull) < 1e-24) {
-        break;
+    float count;
+    float escapeAngle;
+    float normalAngle;
+    float edgeDistance;
+    if (!mandelFromStrip(dc, span, count, escapeAngle, normalAngle, edgeDistance)) {
+      vec2 m;
+      vec2 slope;
+      float escaped = mandelRun(dc, span, u_mandelRounds, m, slope);
+      if (escaped >= 0.0) {
+        float size = length(m);
+        count = escaped + 1.0 - log2(log(size));
+        escapeAngle = atan(m.y, m.x) / PI;
+        vec2 normal = cdiv(m, slope);
+        normalAngle = atan(normal.y, normal.x) / PI;
+        /* The distance to the set's edge, in screen heights: the usual estimate, |z| ln|z| / |dz/dc|, with the slope per screen unit. */
+        edgeDistance = 0.5 * size * log(size) / max(length(slope), 1e-30);
       }
     }
-    if (escaped < 0.0) {
+    if (count < 0.0) {
       mandelShade = 0.0;
       mandelStretch = 1.0;
       mandelEdgeLight = 1.0;
       w = vec2(0.0);
     } else {
-      float r = length(m);
-      float count = escaped + 1.0 - log2(log(r));
       /**
        * Band flow moves the bands. It is kept small with a remainder, which
        * must be a whole repeat of what it moves, or it jumps: two picture
@@ -705,16 +849,10 @@ vec2 complexMap(vec2 p) {
       float band = count / max(u_mandelBands, 0.01);
       float terraceBand = band + fract(u_mandelFlow);
       band += mod(u_mandelFlow, 2.0 * u_imgRes.x / u_imgRes.y);
-      /**
-       * The distance to the set's edge, in screen heights: the usual
-       * distance estimate, |z| ln|z| / |dz/dc|, with the slope already per
-       * screen unit. It needs nothing but this pixel, so the light moves
-       * smoothly as the view dives or Edge width moves.
-       */
-      float edgeDistance = 0.5 * r * log(r) / max(length(slope), 1e-30);
+      /* The distance to the set's edge needs nothing but this pixel, so the light moves smoothly as the view dives or Edge width moves. */
       float fall = edgeDistance / u_mandelEdgeWidth;
       mandelEdgeLight = mix(1.0, exp(-fall * fall), clamp(u_mandelEdge, 0.0, 1.0));
-      w = vec2(band, atan(m.y, m.x) / PI);
+      w = vec2(band, escapeAngle);
       /**
        * Across a ring where the escape count changes, the angle doubles: a
        * point just past the escape size (256) touches points that escaped
@@ -722,20 +860,19 @@ vec2 complexMap(vec2 p) {
        * twice the angle in, from all of it at the ring to none at this far
        * through the ring (at 1, the whole ring), so the ring has no seam.
        */
-      float through = log2(log(r) / log(256.0));
+      float through = 1.0 - fract(count + 2.4712336270551026);
       float soft = clamp(u_mandelSoftness, 0.0, 1.0);
-      vec2 twice = cmul(m, m);
-      mandelAlt = vec2(band, atan(twice.y, twice.x) / PI);
+      mandelAlt = vec2(band, mod(2.0 * escapeAngle + 1.0, 2.0) - 1.0);
       mandelAltWeight = soft > 0.0 ? 1.0 - smoothstep(0.0, soft, through) : 0.0;
-      vec2 normal = normalize(cdiv(m, slope));
+      vec2 normal = vec2(cos(PI * normalAngle), sin(PI * normalAngle));
       float lit = clamp((dot(normal, u_mandelLightDir) + 1.5) / 2.5, 0.0, 1.0);
       float edge = 0.5 * clamp(u_mandelSoftness, 0.0, 1.0) + 1e-4;
       float t = fract(terraceBand);
       float rise = min(t / (1.0 - edge), (1.0 - t) / edge);
       float step_ = 0.45 + 0.55 * mix(rise, smoothstep(0.0, 1.0, rise), clamp(u_mandelSoftness, 0.0, 1.0));
       mandelShade = mix(1.0, lit, u_mandelLight) * mix(1.0, step_, u_mandelTerraces);
-      /* The band count's change per screen unit: |dz/d(screen)| / (|z| ln|z|), over the band width. */
-      mandelStretch = length(slope) / (r * log(r)) / max(u_mandelBands, 0.01) / max(u_mapScale, 1e-4);
+      /* The band count's change per screen unit: |dz/d(screen)| / (|z| ln|z|) = 1 / (2 edge distance), over the band width. */
+      mandelStretch = 0.5 / max(edgeDistance, 1e-30) / max(u_mandelBands, 0.01) / max(u_mapScale, 1e-4);
     }
   } else if (u_mapMode == 5) {
     w = csin(onAxis * PI) / PI;

@@ -243,3 +243,38 @@ Default End is 8.
 - Known look: at depth 8 and deeper, the bands are so dense that many
   pixels hold several, so the picture blurs and the light evens out there
   (the busy fade), which shows as flat areas.
+
+## Step 6 (built 2026-10-24): log-polar strips
+
+Research idea 2. The raw map around the place is drawn into strips and
+read by each frame, instead of running the loop for every pixel.
+
+- `MANDEL_GLSL` (shaders.ts) is the loop, shared by the picture shader and
+  `MANDEL_STRIP_SHADER`. A strip texel stores the smooth escape count (-1
+  inside; R32F) and, in RGBA16F, log10 of the distance to the edge (c
+  units), the escape angle and the light's normal angle (over PI). The
+  picture shader derives everything else from those: the softness ring
+  position is 1 - fract(count + log2(ln 256)), the doubled angle is
+  2 * angle wrapped, the band stretch is 1 / (2 * edge distance).
+- Geometry: 3072 columns per turn, 2048 rows kept, rows as tall as columns
+  are wide in log terms (1126 rows per power of ten, so shapes keep their
+  form). Global row g lies at distance 10^(1 - g / 1126) from the place;
+  texture row = g mod 2048, so as a dive moves on, rows it leaves are drawn
+  over with rows ahead. 2 strips: 151 MB of GPU memory.
+- `updateMandelStrips` (renderer.ts): each view (the dive, and the
+  crossfade or the next crossfade's start) needs rows from its farthest
+  screen point (pan included) down; it takes the strip holding most of
+  them, so at the restart the strips swap roles. 32 rows a frame for the
+  view, 16 for the other, outer rows first. Where rows are not ready (at
+  first, and the tiny middle past the deepest row) the shader runs the loop.
+- The strip shader builds in the background (KHR_parallel_shader_compile);
+  until then, the loop runs as before.
+- The strip runs the rounds of a view 1.5 powers deeper than one whose
+  corner is at its distance, so it shows a little less black than the loop.
+- Checked against the loop on the GPU at five views: 0.8 to 1.0 of 255 on
+  average (Branches at depth 9: 9, from its extra rounds). Cost at 1920 by
+  1080 on an RTX 5090, deep views: 0.8 to 1.3 ms a frame (7 to 11 before).
+- Limits: the strip's texels are as fine as the screen at about 490 pixels
+  from the view's middle, so the corners of a large screen are a little
+  softer; a Speed faster than about 1.7 powers a second outruns 32 rows a
+  frame, and the loop fills in.
