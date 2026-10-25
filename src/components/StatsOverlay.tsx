@@ -4,7 +4,7 @@ import type { Engine } from "../engine/engine";
 import type { PassName } from "../engine/gpuTimer";
 import { songFollow } from "../lib/songFollow";
 
-const PASS_LABELS: Record<PassName, string> = { fold: "Warp, map, fold", refold: "Later shape FX", blur: "Blur", trails: "Trails", smear: "Time smear", contours: "Contours", relief: "Relief", driver: "Driver", camera: "Camera", solid: "3D object", sort: "Pixel sort", particles: "Particles", cycles: "Light cycles", rays: "Light rays", bloom: "Bloom", sharpen: "Sharpen", color: "Color", levels: "Levels" };
+const PASS_LABELS: Record<PassName, string> = { fold: "Warp, map, fold", refold: "Later shape FX", blur: "Blur", trails: "Trails", smear: "Time smear", contours: "Contours", relief: "Relief", driver: "Driver", camera: "Camera", solid: "3D object", sort: "Pixel sort", particles: "Particles", cycles: "Light cycles", rays: "Light rays", lasers: "Lasers", bloom: "Bloom", sharpen: "Sharpen", color: "Color", levels: "Levels" };
 /** The panel updates a few times per second, so the numbers can be read. */
 const UPDATE_MS = 250;
 /** The FPS chart's length: one sample per update. */

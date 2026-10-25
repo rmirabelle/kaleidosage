@@ -66,6 +66,7 @@ const SORT_KEYS: ParamKey[] = ["sortAmount", "sortLow", "sortHigh", "sortAngle",
 /* The Blend menu and the Opacity slider (particleAmount) come after these, in the Common part at the bottom of the group. */
 const PARTICLE_KEYS: ParamKey[] = ["particleLevel", "particleBackground", "particleCount", "particleSize", "particleLife", "particleSpeed", "particleFollow", "particleCling", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleGradient", "particleBoost"];
 const RAYS_KEYS: ParamKey[] = ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"];
+const LASER_KEYS: ParamKey[] = ["laserAmount", "laserCount", "laserSpread", "laserAim", "laserWidth", "laserGlow", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"];
 const BLOOM_KEYS: ParamKey[] = ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"];
 const SHARPEN_KEYS: ParamKey[] = ["sharpen", "sharpenRadius"];
 const COLOR_KEYS: ParamKey[] = ["overlayOpacity"];
@@ -275,6 +276,17 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       particles: () => start("particleAmount", 1),
       cycles: () => start("cyclesAmount", 1),
       rays: () => start("raysAmount", 1.5),
+      lasers: () => {
+        if (engine.params.laserAmount.value !== 0 || engine.params.laserAmount.on) return;
+        start("laserAmount", 1);
+        /* The fan sweeps and opens and closes, as in a laser show. */
+        const defaults = createParams();
+        for (const key of ["laserAim", "laserSpread"] as const) {
+          const range = engine.params[key];
+          const { low, high } = range.low !== range.high ? range : defaults[key];
+          Object.assign(range, { low, high, on: true });
+        }
+      },
       bloom: () => start("bloomAmount", 1)
     };
     enable[step]?.();
@@ -373,6 +385,11 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     rays: (grip) => (
       <Group engine={engine} group="rays" title="Light rays" grip={grip} {...accordion("rays")}>
         {RAYS_KEYS.map(row)}
+      </Group>
+    ),
+    lasers: (grip) => (
+      <Group engine={engine} group="lasers" title="Lasers" grip={grip} {...accordion("lasers")}>
+        {LASER_KEYS.map(row)}
       </Group>
     ),
     bloom: (grip) => (

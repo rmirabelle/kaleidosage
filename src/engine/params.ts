@@ -23,6 +23,7 @@ export const PARAM_KEYS = [
   "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY",
   "solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY",
   "raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY",
+  "laserAmount", "laserCount", "laserSpread", "laserAim", "laserWidth", "laserGlow", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY",
   "bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize",
   "sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel"
 ] as const;
@@ -254,7 +255,7 @@ export type Params = Record<ParamKey, Param>;
 export type ContourTone = "hue" | "black" | "white";
 export const CONTOUR_TONES: readonly ContourTone[] = ["hue", "black", "white"];
 
-export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "bloom" | "sharpen" | "color" | "levels";
+export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "bloom" | "sharpen" | "color" | "levels";
 
 export interface PlayState {
   /** Which groups are on. A group that is off has no effect, but keeps its settings. */
@@ -794,6 +795,27 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   raysX: { label: "Center X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.3, high: 0.3, on: false },
   raysY: { label: "Center Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.25, high: 0.25, on: false },
   /**
+   * Lasers (see LASER_SHADER): a fan of thin, bright beams from one point,
+   * added to the picture as light. Spread is the angle of the whole fan,
+   * and Aim the fan's direction (0 = straight up). Width is the beam width
+   * in screen pixels, Glow the haze around each beam, and Fade how fast a
+   * beam gets dimmer along its length. Color is the first beam's hue;
+   * Rainbow spreads the beams' hues around the color wheel. The source is a
+   * part of the screen size from the screen center: -0.5 and 0.5 are the
+   * screen edges, so the start-up source is the middle of the bottom edge.
+   */
+  laserAmount: { label: "Strength", min: 0, max: 3, step: 0.01, value: 0, drift: "wave", low: 0.6, high: 1.5, on: false },
+  laserCount: { label: "Beams", min: 1, max: 32, step: 1, value: 12, drift: "wave", low: 6, high: 16, on: false },
+  laserSpread: { label: "Spread", min: 0, max: 180, step: 1, value: 60, unit: "°", drift: "wave", low: 20, high: 100, on: false },
+  laserAim: { label: "Aim", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "wave", low: -30, high: 30, on: false },
+  laserWidth: { label: "Width", min: 0.5, max: 12, step: 0.1, value: 1.5, unit: "px", drift: "wave", low: 1, high: 3, on: false },
+  laserGlow: { label: "Glow", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.3, high: 0.8, on: false },
+  laserFade: { label: "Fade", min: 0, max: 1, step: 0.01, value: 0.3, drift: "wave", low: 0.1, high: 0.6, on: false },
+  laserHue: { label: "Color", min: 0, max: 360, step: 1, value: 120, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  laserRainbow: { label: "Rainbow", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.5, on: false },
+  laserX: { label: "Source X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.3, high: 0.3, on: false },
+  laserY: { label: "Source Y", min: -0.5, max: 0.5, step: 0.01, value: -0.5, drift: "wave", low: -0.5, high: -0.3, on: false },
+  /**
    * Bloom (see BLOOM_SHADER): the bright parts of the picture glow into the
    * parts around them. Strength is how much glow is added; Threshold is the
    * brightness where the glow starts, and Softness how gradually it starts.
@@ -842,9 +864,9 @@ export function createParams(): Params {
   return params;
 }
 
-/** The start-up orders: the fold, then the map bends the folded picture, then the warp; and blur, trails, time smear, contours, relief, driver, camera, 3D object, pixel sort, particles, light cycles, light rays, bloom, final effects. */
+/** The start-up orders: the fold, then the map bends the folded picture, then the warp; and blur, trails, time smear, contours, relief, driver, camera, 3D object, pixel sort, particles, light cycles, light rays, lasers, bloom, final effects. */
 export const defaultShapeOrder = (): ShapeStep[] => ["kaleidoscope", "map", "warp"];
-export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "driver", "camera", "solid", "sort", "particles", "cycles", "rays", "bloom", "sharpen", "color", "levels"];
+export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "driver", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "bloom", "sharpen", "color", "levels"];
 export const defaultFxOrder = (): FxStep[] => [...defaultShapeOrder(), ...defaultPictureOrder()];
 
 /**
@@ -890,6 +912,7 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
     case "solid": return used("solidAmount");
     case "cycles": return used("cyclesAmount");
     case "rays": return used("raysAmount");
+    case "lasers": return used("laserAmount");
     case "bloom": return used("bloomAmount");
     case "sharpen": return used("sharpen");
     case "color": return used("overlayOpacity");
@@ -901,8 +924,8 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
 export function createPlayState(): PlayState {
   return {
     /* No effect is in the list at start-up, so every effect group is off. */
-    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, bloom: false, sharpen: false, color: false, levels: false },
-    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, bloom: false, sharpen: false, color: false, levels: false },
+    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false },
+    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false },
     blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, sortOrder: 0, particleBlend: 0, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
@@ -1271,6 +1294,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   particles: ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost"],
   cycles: ["cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead", "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY"],
   rays: ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"],
+  lasers: ["laserAmount", "laserCount", "laserSpread", "laserAim", "laserWidth", "laserGlow", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"],
   bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
   sharpen: ["sharpen", "sharpenRadius"],
   color: ["overlayOpacity"],
@@ -1311,7 +1335,7 @@ export function randomizeGroup(params: Params, state: PlayState, group: GroupKey
 
 /** The chance that Randomize puts each effect in the list. Blur looks the least good, so Randomize leaves it out. */
 const EFFECT_CHANCE: Record<FxStep, number> = {
-  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.25, relief: 0.4, driver: 0.3, camera: 0.3, solid: 0.2, sort: 0.2, particles: 0.25, cycles: 0.25, rays: 0.25, bloom: 0.3, sharpen: 0.3, color: 0.15, levels: 0.25
+  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.25, relief: 0.4, driver: 0.3, camera: 0.3, solid: 0.2, sort: 0.2, particles: 0.25, cycles: 0.25, rays: 0.25, lasers: 0.15, bloom: 0.3, sharpen: 0.3, color: 0.15, levels: 0.25
 };
 
 function randomizeAll(params: Params, state?: PlayState) {
@@ -1540,6 +1564,17 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("raysFade", rand(0.2, 0.8), rand(0, 0.2));
   set("raysX", Math.random() < 0.5 ? 0 : rand(-0.3, 0.3), rand(0.05, 0.25));
   set("raysY", Math.random() < 0.5 ? 0 : rand(-0.25, 0.25), rand(0.05, 0.2));
+  set("laserAmount", rand(0.6, 1.5), rand(0.1, 0.3));
+  set("laserCount", Math.round(rand(4, 20)), rand(0, 4));
+  set("laserSpread", rand(20, 120), rand(10, 50));
+  set("laserAim", Math.random() < 0.5 ? 0 : rand(-40, 40), rand(10, 45));
+  set("laserWidth", rand(0.8, 3), rand(0, 1));
+  set("laserGlow", rand(0.2, 0.9), rand(0, 0.2));
+  set("laserFade", rand(0, 0.7), rand(0, 0.2));
+  setAngle("laserHue", 0.3);
+  set("laserRainbow", Math.random() < 0.5 ? 0 : rand(0.1, 1), rand(0, 0.2));
+  set("laserX", Math.random() < 0.6 ? 0 : rand(-0.4, 0.4), rand(0, 0.15));
+  set("laserY", Math.random() < 0.6 ? -0.5 : rand(-0.5, 0.5), rand(0, 0.1));
   set("bloomAmount", rand(0.4, 1.8), rand(0.1, 0.4));
   set("bloomThreshold", rand(0.4, 0.85), rand(0, 0.1));
   set("bloomSoftness", rand(0.1, 0.6), rand(0, 0.15));

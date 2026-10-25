@@ -1,7 +1,7 @@
 import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 
 /** The blur mask: circle with a sharp or a blurred center, gradient, bright areas, dark areas, noise. */
 export type BlurMask = 0 | 1 | 2 | 3 | 4 | 5;
@@ -21,7 +21,7 @@ export type ShapeStep = "warp" | "map" | "kaleidoscope";
 /** The kind of warp: noise, ripple, waves, swirl, bulge and pinch, cells. */
 export type WarpType = 0 | 1 | 2 | 3 | 4 | 5;
 /** The steps that change the drawn picture. The user sets their order. */
-export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "bloom" | "sharpen" | "color" | "levels";
+export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "bloom" | "sharpen" | "color" | "levels";
 /**
  * Any effect step. The user sets one order for all of them. Shape steps
  * that are next to each other run in one pass; a shape step after a
@@ -29,7 +29,7 @@ export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | 
  */
 export type FxStep = ShapeStep | PictureStep;
 export const SHAPE_STEPS: readonly ShapeStep[] = ["warp", "map", "kaleidoscope"];
-export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "camera", "solid", "sort", "particles", "cycles", "rays", "bloom", "sharpen", "color", "levels"];
+export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "bloom", "sharpen", "color", "levels"];
 
 /** Sharpen, Color and Levels, in the order FINISH_SHADER applies them (see drawFinish). */
 type FinishPart = "sharpen" | "color" | "levels";
@@ -445,6 +445,24 @@ export interface FrameValues {
   raysX: number;
   raysY: number;
   /**
+   * Lasers (see LASER_SHADER): strength (0 = off), the number of beams, the
+   * fan's spread and aim (radians, 0 = up), the beam width (screen pixels),
+   * the glow, the fade along a beam, the first hue (0 to 1), how far the
+   * hues go around the wheel, and the source (a part of the screen size
+   * from the screen center).
+   */
+  lasers: number;
+  laserCount: number;
+  laserSpread: number;
+  laserAim: number;
+  laserWidth: number;
+  laserGlow: number;
+  laserFade: number;
+  laserHue: number;
+  laserRainbow: number;
+  laserX: number;
+  laserY: number;
+  /**
    * Bloom (see BLOOM_SHADER): strength (0 = off), the brightness where the
    * glow starts and how gradually, and its size (a mip level at 1080p).
    */
@@ -648,6 +666,7 @@ export class KaleidoRenderer {
   private sortSide = 0;
   private readonly rays: Program;
   private readonly raysMix: Program;
+  private readonly lasers: Program;
   /** Two half-size pictures for the light rays; the ray passes go back and forth between them. */
   private readonly raysTargets: [Target, Target];
   private readonly bloomBright: Program;
@@ -746,6 +765,7 @@ export class KaleidoRenderer {
       show: this.createProgram(SORT_SHADER)
     };
     this.raysMix = this.createProgram(RAYS_MIX_SHADER);
+    this.lasers = this.createProgram(LASER_SHADER);
     this.bloomUp = this.createProgram(BLOOM_UP_SHADER);
     this.bloomMix = this.createProgram(BLOOM_SHADER);
 
@@ -973,6 +993,7 @@ export class KaleidoRenderer {
       /* The sort keeps column numbers in half floats, so it needs float textures. */
       sort: v.sort > 0 && this.floatTargets,
       rays: v.rays > 0,
+      lasers: v.lasers > 0,
       bloom: v.bloom > 0,
       sharpen: v.sharpen > 0,
       color: v.overlayOpacity > 0,
@@ -1100,6 +1121,7 @@ export class KaleidoRenderer {
         else if (step === "particles") this.drawParticles(v, source, target, width, height);
         else if (step === "cycles") this.drawCycles(v, source, target, width, height);
         else if (step === "rays") this.drawRays(v, source, target, width, height);
+        else if (step === "lasers") this.drawLasers(v, source, target, width, height);
         else if (step === "sort") this.drawSort(v, source, target, width, height);
         else if (step === "bloom") this.drawBloom(v, source, target, width, height);
         if (target) source = target.texture;
@@ -2312,6 +2334,30 @@ export class KaleidoRenderer {
     gl.bindTexture(gl.TEXTURE_2D, source);
     gl.uniform1i(m.uniforms.u_picture, 1);
     gl.uniform1f(m.uniforms.u_amount, Math.max(0, v.rays));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /** Lasers: the picture plus the beams, in one pass (LASER_SHADER). Widths are screen pixels, so a video looks like the screen. */
+  private drawLasers(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+    const gl = this.gl;
+    const l = this.lasers;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(l.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.uniform1i(l.uniforms.u_picture, 0);
+    gl.uniform2f(l.uniforms.u_res, width, height);
+    gl.uniform2f(l.uniforms.u_source, v.laserX * width, v.laserY * height);
+    gl.uniform1f(l.uniforms.u_aim, v.laserAim);
+    gl.uniform1f(l.uniforms.u_spread, v.laserSpread);
+    gl.uniform1i(l.uniforms.u_count, Math.min(32, Math.max(1, Math.round(v.laserCount))));
+    gl.uniform1f(l.uniforms.u_width, Math.max(0.25, v.laserWidth * this.texelScale));
+    gl.uniform1f(l.uniforms.u_glow, Math.max(0, v.laserGlow));
+    gl.uniform1f(l.uniforms.u_fade, 3 * Math.max(0, v.laserFade));
+    gl.uniform1f(l.uniforms.u_hue, v.laserHue);
+    gl.uniform1f(l.uniforms.u_rainbow, v.laserRainbow);
+    gl.uniform1f(l.uniforms.u_amount, Math.max(0, v.lasers));
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 

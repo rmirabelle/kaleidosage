@@ -2624,6 +2624,58 @@ void main() {
 }`;
 
 /**
+ * Lasers: a fan of u_count thin beams from u_source (pixels from the screen
+ * center), u_spread wide in all and turned u_aim from straight up. Each
+ * beam is a bright core u_width pixels wide, with a white-hot middle, in a
+ * haze of glow (u_glow), and gets dimmer along its length by u_fade (per
+ * screen height). The beams' hues start at u_hue and go u_rainbow of the
+ * way around the color wheel across the fan. The source point glows too.
+ * The beams are added light (see addLight).
+ */
+export const LASER_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_picture;
+uniform vec2 u_res;
+uniform vec2 u_source;
+uniform float u_aim;
+uniform float u_spread;
+uniform int u_count;
+uniform float u_width;
+uniform float u_glow;
+uniform float u_fade;
+uniform float u_hue;
+uniform float u_rainbow;
+uniform float u_amount;
+${COVER_GLSL}
+/* A fully saturated color of hue h (0 to 1). */
+vec3 hueColor(float h) { return clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0); }
+void main() {
+  vec2 d = (v_uv - 0.5) * u_res - u_source;
+  float haze = u_width * 3.0 + 6.0 * u_res.y / 1080.0;
+  vec3 light = vec3(0.0);
+  for (int i = 0; i < 32; i++) {
+    if (i >= u_count) break;
+    float t = u_count > 1 ? float(i) / float(u_count - 1) - 0.5 : 0.0;
+    float a = u_aim + u_spread * t;
+    vec2 dir = vec2(sin(a), cos(a));
+    float along = dot(d, dir);
+    /* Behind the source there is no beam; the start is soft, so no edge shows there. */
+    float start = smoothstep(-u_width, u_width * 2.0, along);
+    if (start <= 0.0) continue;
+    float across = abs(d.x * dir.y - d.y * dir.x) / u_width;
+    float core = exp(-4.0 * across * across);
+    float glow = u_glow * 0.35 * exp(-across * u_width / haze);
+    vec3 color = hueColor(fract(u_hue + u_rainbow * float(i) / float(max(u_count, 1))));
+    light += (color * (core + glow) + vec3(0.6 * core)) * start * exp(-u_fade * max(along, 0.0) / u_res.y);
+  }
+  float spot = length(d) / (haze * 1.5);
+  light += (hueColor(u_hue) + 0.5) * exp(-spot * spot) * (0.5 + u_glow);
+  o = addLight(texture(u_picture, v_uv), u_amount * light);
+}`;
+
+/**
  * Bloom, step 2: one level of the glow, half the size of the level before
  * (u_texel is one pixel of that level). It reads 13 points in a 4 by 4
  * pixel area, weighted toward the middle, so the level is a soft copy

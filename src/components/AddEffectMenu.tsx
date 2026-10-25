@@ -21,6 +21,7 @@ const EFFECT_NOTES: Record<FxStep, string> = {
   particles: "Bright areas send out moving particles.",
   cycles: "Light cycles race and leave lines in the picture's colors.",
   rays: "Light rays stream out from bright areas.",
+  lasers: "A fan of laser beams sweeps from one point.",
   bloom: "Bright areas glow.",
   sharpen: "Makes edges and fine detail crisper.",
   color: "Tints the whole picture with a color.",
