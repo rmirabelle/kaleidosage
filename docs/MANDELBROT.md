@@ -417,3 +417,7 @@ point at the escape rings (the palette changes too slowly for the rings to
 show), which went through the later steps as its own point. That brought
 the shader build from 28 s to 23 s (the shape shader 18 s -> 11.6 s).
 Softness now shapes only the terraces; Band width sets the terraces' bands.
+
+Speed (2026-10-25): the Mandelbrot's Speed was the map's shared Speed
+(-2 to 2, also Tunnel's and Droste's). It is now its own, `mandelSpeed`,
+-0.5 to 0.5 powers of ten a second, so the shared one keeps its range.

@@ -977,7 +977,7 @@ export class Engine {
        * distance flown divided by the dive's length would jump).
        */
       const dive = this.live("mandelEnd") - this.live("mandelDepth");
-      const progress = this.state.mapTravel + animated * mapSpeed / Math.max(0.1, dive);
+      const progress = this.state.mapTravel + animated * this.live("mandelSpeed") / Math.max(0.1, dive);
       this.state.mapTravel = progress - Math.floor(progress);
     } else {
       this.state.mapTravel += animated * (this.state.mapMode === 8 ? mapSpeed / drosteCopy(this.live("drosteSize")) : mapSpeed);
@@ -1085,7 +1085,7 @@ export class Engine {
      * again, and nothing jumps. A negative Speed runs it backward.
      */
     const diveLength = Math.max(0.1, this.live("mandelEnd") - this.live("mandelDepth"));
-    const divePart = this.state.mapMode === 9 && this.live("mapSpeed") !== 0 ? this.state.mapTravel % 1 : 0;
+    const divePart = this.state.mapMode === 9 && this.live("mandelSpeed") !== 0 ? this.state.mapTravel % 1 : 0;
     const diveFade = Math.min(0.99, Math.max(0.01, this.live("mandelFade")));
     const fadeIn = Math.min(1, Math.max(0, (divePart - (1 - diveFade)) / diveFade));
     return {
@@ -1123,7 +1123,7 @@ export class Engine {
       mandelDepth: this.live("mandelDepth") + divePart * diveLength,
       mandelFade: fadeIn * fadeIn * (3 - 2 * fadeIn),
       mandelFadeDepth: this.live("mandelDepth") + (divePart - 1) * diveLength,
-      mandelNextDepth: this.state.mapMode === 9 && this.live("mapSpeed") !== 0 ? this.live("mandelDepth") - diveFade * diveLength : NaN,
+      mandelNextDepth: this.state.mapMode === 9 && this.live("mandelSpeed") !== 0 ? this.live("mandelDepth") - diveFade * diveLength : NaN,
       mandelBands: this.live("mandelBands"),
       mandelSpread: this.live("mandelSpread"),
       mandelInvert: this.live("mandelInvert"),
