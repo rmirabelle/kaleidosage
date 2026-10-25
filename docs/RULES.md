@@ -24,8 +24,8 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - The app draws its own title bar and window buttons.
 - You drag the title bar to move the window.
 - A double-click on the title bar maximizes or restores the window.
-- The title bar shows the app name, the playlist name, "›" and the scene name.
-- A red asterisk in the title bar shows unsaved changes.
+- The title bar shows the app name, the file name ("Untitled" before the first save), "›" and the scene name.
+- A red asterisk after the file name shows unsaved changes in the file or any of its scenes.
 - The app keeps the window size, position and maximized state between runs.
 - The app always starts in a window, never in full screen.
 - Only one copy of the app runs.
@@ -39,10 +39,10 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 
 - The start screen shows at start-up and covers the work area.
 - It shows the logo, the name, "Visual FX Playground", the author and the version.
-- It has two buttons: New Scene and Open Scene/Playlist.
+- It has two buttons: New and Open.
 - An image that you drop or paste on it starts a scene in a new tab.
-- It closes when you start or open a scene, an image or a playlist.
-- It shows again when you close the last scene or the playlist.
+- It closes when you start or open a file, or an image.
+- It shows again when you close the file or remove its last scene.
 - On the start screen, only Ctrl+O, Ctrl+N and "?" work, and Esc and F11 leave full screen.
 - On the start screen, the save, close, undo, redo and View items are off.
 - The start screen hides the panels, the tabs, the bottom panel and the help line.
@@ -50,15 +50,12 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 
 ## Menus
 
-- The menu bar has six menus: File, Playlist, Scene, Edit, View and Help.
+- The menu bar has five menus: File, Scene, Edit, View and Help.
 - While a menu is open, pointing at another menu opens it.
 - A click outside, Esc or a loss of focus closes a menu.
-- File has Open Image or Video, Save PNG, Export Video and Exit.
+- File has New, Open, Save, Save As, Close, Open Image or Video, Save PNG, Export Video and Exit.
 - Exit closes the window, so the unsaved-changes question can show.
-- Playlist has Open, Save, Save As and Close Playlist.
-- Close Playlist works only while a playlist is open.
-- Scene has New, Open, Save, Save As and Close Scene.
-- In an open playlist, Export Scene As replaces Save Scene and Save Scene As.
+- Scene has New Scene, Export Scene As and Remove Scene.
 - Edit has Undo and Redo.
 - View items change their label between "Hide" and "Show".
 - Help has Keyboard Shortcuts, Enable or Disable Pointers, and About.
@@ -67,11 +64,11 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 
 ## Keyboard shortcuts
 
-- Ctrl+N starts a new scene in a new tab.
+- Ctrl+N starts a new scene in a new tab of the open file.
 - Ctrl+O opens the Open dialog.
-- Ctrl+S saves the scene, or the playlist when a playlist is open.
-- Ctrl+Shift+S saves the scene as a new file, or exports a copy in a playlist.
-- Ctrl+W closes the scene.
+- Ctrl+S saves the file.
+- Ctrl+Shift+S saves the file as a new file.
+- Ctrl+W removes the scene from the file.
 - Ctrl+Z undoes a change.
 - Ctrl+Y and Ctrl+Shift+Z redo a change.
 - In a text field, Ctrl+Z and Ctrl+Y act on the text.
@@ -102,39 +99,33 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 
 - Each open scene has its own tab and its own Undo history.
 - A new scene is "Untitled Scene", then "Untitled Scene 2", with the lowest free number.
-- A saved scene's tab shows its file name.
-- The tab tooltip shows the full path.
-- A tab with unsaved changes shows a red asterisk.
+- A saved scene's tab shows its name.
+- Tabs and the scene list show no unsaved marks; the title bar has the file's one mark.
 - The app checks for unsaved changes twice a second.
 - You drag a tab to move it.
 - Tabs that do not fit go on to more rows.
 - The X on a tab or a middle click closes it. --- remove middle click
 - The scenes play in tab order.
-- In a playlist, or with Files as the input, the scenes show as a list, not tabs.
+- With Files as the input, the scenes show as a list, not tabs.
 - A tab switch crossfades to the new scene over 1.5 seconds. --- I'd like to extend or consider other crossfade options
 - While paused, a tab switch cuts at once.
 - The new scene starts from 0 and keeps the play or pause state of the scene before.
 - A tab switch ends the MIDI holds, bypass and solo of the scene before.
 - New Scene makes a tab with the large checkerboard and every effect off.
-- Outside a playlist, a new or opened scene sets the input to Nothing.
-- Outside a playlist, a new or opened scene empties the track list.
-- Opening a scene that is already open selects its tab.
-- An opened scene replaces the selected tab if that tab is an unchanged untitled scene.
-- Each of several opened scenes gets its own tab, and the last one shows.
-- A playlist among the picked files opens alone.
+- New Scene keeps the input and the tracks; on the start screen it starts a new file.
+- New, Close and a new file from the start screen set the input to Nothing and empty the track list.
+- A single scene that goes into the open file replaces the selected tab if that tab is an unchanged untitled scene.
+- Each of several single scenes gets its own tab, and the last one shows.
 - A long open shows a spinner, the step and a progress bar.
-- The app does not save a scene to a file that is open in another tab.
-- When you close a tab, the tab next to it shows.
+- When you remove a scene, the tab next to it shows.
+- Removing the last scene closes the file.
 
 ## Unsaved changes
 
-- Closing a changed scene asks: Save, Don't save or Cancel.
-- In a playlist, Close Scene does not ask.
-- Closing the window asks about each changed scene, the selected one first.
-- With a playlist open, closing the window asks once, for the playlist.
-- Opening a playlist asks about all unsaved changes first.
-- Close Playlist asks about the playlist's changes first.
-- Installing an update asks about all unsaved changes first.
+- The app asks once, for the file: Save, Don't save or Cancel.
+- Remove Scene does not ask; the file counts as changed.
+- Closing the window, Close, New and opening a show ask first.
+- Installing an update asks first.
 - Cancel stops the action.
 - Don't save goes on without saving.
 - In a confirm dialog, Enter pushes the focused button, or else the confirm button.
@@ -154,7 +145,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - MIDI moves do not turn Hold on.
 - A press in the Source and FX column turns Hold on, but not in the play toolbar.
 - A message tells you how to go on when Hold comes on.
-- A click on Hold, a save, a playlist save or a tab click turns Hold off.
+- A click on Hold, a save or a tab click turns Hold off.
 - With one scene, Hold is off and hidden, also with Song follow on: the song plays from start to end.
 
 ## Full screen and panels
@@ -164,7 +155,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - In full screen, a Settings button and an Exit full screen button show.
 - Those two buttons hide while the cursor is idle and the panels are hidden.
 - The Full screen button shows only while the mouse is over the picture.
-- Closing the last scene or the playlist leaves full screen first.
+- Closing the file leaves full screen first.
 - Hiding the panels hides the left side: panels, scene list and Playlist column.
 - The open effect group stays open when the panels hide and show.
 - Hide Playlist works only with Files as the input and the panels shown.
@@ -412,14 +403,26 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - A new change after Undo clears Redo.
 - A message says when there is nothing to undo or redo.
 
-## Scene files
+## Kaleido Sage files
 
-- A scene file is JSON with the extension `.ksage`.
+- A Kaleido Sage file (`.ksage`) is a ZIP file: kaleidosage.json, its scenes in tab order, and its tracks.
+- The file keeps the audio settings, the Files width and Song follow.
+- The file keeps the tracks and their song analyses only while Files is the input.
+- With another input, Save empties the track list first.
+- A show is a file with two or more scenes, or with audio files.
+- Open puts a show in place of the open file, after the unsaved-changes question.
+- Open puts a single scene into the open file as a new tab.
+- On the start screen, Open opens any file as the open file.
+- Of several picked files, a show opens alone.
+- A file never saved asks for a name; the first scene's name is the default.
+- A new blank scene with no changes is not saved, unless it is the only scene.
+- Export Scene As writes the selected scene to a file of its own, with no tracks.
+- A file that is not in this layout gives "The file is not a Kaleido Sage file."
+- Saving never changes a file on disk but the open file.
 - A scene keeps every setting, range, curve and own time.
 - A scene keeps the play state, the effect list, blends and audio links.
 - A scene keeps its images and its Driver video.
 - A scene does not keep locks.
-- A file that is not a scene gives "The file is not a Kaleido Sage scene."
 - A scene with no image gives "The scene file has no image."
 - A broken second image is skipped.
 - Values outside the limits are clamped when a scene opens.
@@ -428,19 +431,18 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Older scene versions open and convert to the current one.
 - The unsaved-change check ignores time and clocks.
 - Save writes to the open file without a question.
-- A scene that was never saved asks for a name, "Scene.ksage" by default.
 - You cannot save a scene that has no source A.
-- The status shows "Saving scene and embedding media…" and then "Saved".
+- The status shows "Saving the file and its scenes…" and then "Saved".
 - A scene keeps the original bytes of a still image.
 - A scene keeps a test pattern as a PNG.
-- A scene with no video is a plain JSON file.
-- A scene with a video is a ZIP file with the video inside.
+- Inside the file, a scene with no video is plain JSON.
+- Inside the file, a scene with a video is a ZIP with the video inside.
 - A scene keeps no paths to outside files.
 - A scene keeps the Driver video only while the Driver uses Video.
 - A save writes a temporary file first, so a failed save keeps the old file.
 - A scene opens only after the app reads all of it, so a bad file changes nothing.
-- An embedded video plays from inside the scene file.
-- A failed open shows "Could not open the scene." and the reason.
+- An embedded video plays from the open file's unpacked copy.
+- A failed open shows "Could not open" with the file name and the reason.
 
 ## Source slots
 
@@ -516,7 +518,8 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - The dialog shows only folders and supported files.
 - The dialog hides dot files, hidden files and system files.
 - The image dialog shows images and videos.
-- The scene dialog shows scenes and playlists.
+- The file dialog shows Kaleido Sage files (.ksage).
+- The file dialog plays a single scene in the preview, and shows a show's scenes and tracks.
 - The places list shows Home, Desktop, Documents, Pictures, Downloads and each drive.
 - The dialog opens in the last folder for that kind of file.
 - The first time, it opens in Pictures for images, Documents for scenes and Home for audio.
@@ -853,34 +856,27 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Stop pauses the music and goes back to the start of the track.
 - A file that cannot play shows "Could not play" with its name.
 - The footer shows the total play time.
-- Outside a playlist, the track list is empty at each start.
+- The track list is empty at each start of the app.
 - Each new track crossfades to the next scene, with two or more scenes and Hold off.
 - A scene that you picked stays for at least half its Length before a new track changes it.
 - Without Follow, a loop end does not change the scene near the end of a track.
 - Tracks play only in the desktop app.
 
-## Playlist files
+## Shows in a file
 
-- A playlist file has the `.ksplaylist` extension.
-- A playlist holds its scenes, its tracks and their song analyses in one ZIP file.
-- A playlist keeps the audio input, device, gain and threshold.
-- A playlist keeps the selected tab, the Playlist column width and the track lengths.
+- A show keeps its scenes, its tracks and their song analyses in one Kaleido Sage file.
+- The file keeps the audio input, device, gain and threshold.
+- The file keeps the selected tab, the Playlist column width and the track lengths.
 - A save writes a temporary file first and replaces the target only when complete.
-- The default name is "Playlist.ksplaylist".
-- Save Playlist does not change the scenes' own files on disk.
-- Save Playlist leaves out an empty new scene.
-- A wrong file gives "The file is not a Kaleido Sage playlist."
 - A missing or broken audio setting keeps the app's own value.
-- A playlist from a newer version still opens.
+- A file from a newer version still opens.
 - A saved analysis that is broken, over 64 MB or of another version is dropped.
 - The app analyzes a track again when its saved analysis is dropped.
-- A playlist device that this PC does not have becomes the default device.
-- Opening a playlist shows the tab that was selected at save.
-- Opening a playlist stops the tracks at the first track.
-- The Open dialog shows a playlist's scenes and tracks without unpacking it.
-- A change to the scenes, tracks, audio settings or column width marks the playlist unsaved.
-- Close Playlist empties the tracks and keeps the audio settings.
-- The app removes old playlist temp folders at start.
+- A device that this PC does not have becomes the default device.
+- Opening a show starts at its first scene, with the tracks stopped at the first track.
+- The Open dialog shows a show's scenes and tracks without unpacking it.
+- A change to the scenes, tracks, audio settings or column width marks the file unsaved.
+- The app removes old temp folders of open files at start and at the next open of a show.
 
 ## Remembered settings
 

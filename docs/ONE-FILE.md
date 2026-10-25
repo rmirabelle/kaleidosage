@@ -1,7 +1,10 @@
 # One file type: .ksage holds the whole show
 
-A design note, written 2026-10-25, before any code. Nothing here is built
-yet. It replaces the two file types (a `.ksage` scene and a `.ksplaylist`
+A design note, written 2026-10-25, before any code. Built the same day:
+steps 1 to 10 are done (step 4, the conversion of the user's files, is
+`tools/convert-files/`; the user runs it). Two changes from the text
+below: Open also previews a single scene in place (`read_file_scene`, no
+unpack), and the app has no Import menu item. It replaces the two file types (a `.ksage` scene and a `.ksplaylist`
 playlist) with one: a `.ksage` file holds one or more scenes, and the
 audio files and audio settings when there are any. Decisions marked
 "(decided)" came from the user on 2026-10-25.

@@ -319,6 +319,10 @@ the analysis. The playlist then runs the show.
 
 ## 8. Playlist files (decided 2026-10-18)
 
+Replaced on 2026-10-25: the playlist is now a Kaleido Sage file (.ksage),
+the one file type of the app. See docs/ONE-FILE.md. The text below is the
+history.
+
 "Playlist" names the file that holds a whole show; the list of audio
 files in it is "Tracks" (part 7), so one word means one thing.
 

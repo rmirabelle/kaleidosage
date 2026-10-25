@@ -20,3 +20,6 @@ Thumbs.db
 
 # The icon pack the app icons came from; a source file kept outside the repository
 /icon-pack.zip
+
+# The one-time conversion program's build (see docs/ONE-FILE.md)
+/tools/convert-files/target/

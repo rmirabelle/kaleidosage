@@ -1,0 +1,12 @@
+[package]
+name = "convert-files"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# A one-time program (see docs/ONE-FILE.md, Conversion): it is deleted after its run.
+[dependencies]
+serde_json = "1"
+zip = { version = "9.0.3", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+
+[workspace]

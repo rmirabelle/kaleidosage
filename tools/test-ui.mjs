@@ -60,15 +60,15 @@ try {
   };
   const close = () => evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', {key:'w',ctrlKey:true,bubbles:true,cancelable:true}))`);
   const openNew = async () => {
-    await clickText('New Scene');
+    await clickText('New');
     await wait('!document.querySelector(".start-screen")');
   };
   await send('Page.navigate', { url: process.env.DEV_URL || 'http://localhost:14510/' });
   await wait('window.kaleidoEngine && document.querySelector(".start-screen")', 'application ready');
-  await menu('Close Scene');
-  assert.ok(await evaluate('!!document.querySelector(".start-screen")'), 'close disabled without a scene');
+  await menu('Close');
+  assert.ok(await evaluate('!!document.querySelector(".start-screen")'), 'close disabled without a file');
   await openNew();
-  await menu('Close Scene');
+  await menu('Close');
   await wait('!!document.querySelector(".start-screen")', 'clean scene closes');
   assert.equal(await evaluate('document.querySelectorAll("[role=alertdialog]").length'), 0);
   console.log('PASS clean close returns to start without prompting');
@@ -96,7 +96,9 @@ try {
   await evaluate(`window.__saveMode = 'cancel'; window.__saved = 0; window.isTauri = true;
     window.__TAURI_INTERNALS__ = { metadata: {currentWindow: {label: 'main'}, currentWebview: {label: 'main'}}, invoke: async (cmd) => {
       if (cmd === 'plugin:dialog|save') return window.__saveMode === 'cancel' ? null : 'C:/test/scene.ksage';
-      if (cmd === 'save_scene') { if(window.__saveMode === 'fail') throw Error('Test write failure'); window.__saved++; return; }
+      if (cmd === 'scene_copy_path') return 'C:/test/kaleidosage-file-test/Untitled Scene.ksage';
+      if (cmd === 'save_scene') return;
+      if (cmd === 'save_file') { if(window.__saveMode === 'fail') throw Error('Test write failure'); window.__saved++; return; }
       throw Error('Unexpected native call: '+cmd);
     }}; window.kaleidoEngine.params.cameraHeight.value = -.37;`);
   for (const mode of ['cancel', 'fail', 'save']) {
@@ -109,7 +111,7 @@ try {
       assert.equal(await evaluate('window.__saved'), 1);
     } else {
       await wait('!document.querySelector("[role=alertdialog]")');
-      if (mode === 'fail') await wait('document.body.textContent.includes("Could not save the scene")');
+      if (mode === 'fail') await wait('document.body.textContent.includes("Could not save the file")');
       await sleep(200);
       assert.equal(await evaluate('!!document.querySelector(".start-screen")'), false);
       assert.equal(await evaluate('window.kaleidoEngine.params.cameraHeight.value'), -.37);
@@ -121,7 +123,7 @@ try {
   await clickText('Add effect');
   await clickText('Blur', '[aria-label="Add effect"] button');
   await wait('!!document.querySelector(".panel-group-toggle")');
-  await menu('Save Scene');
+  await menu('Save');
   await wait('window.__saved === 2 && !document.querySelector(".titlebar-dirty")');
   await evaluate(`const e=window.kaleidoEngine; const original=e.renderer.render.bind(e.renderer); e.renderer.render=(frame)=>{window.__frame=frame;original(frame)};`);
   await wait('window.__frame?.blur > 0');

@@ -13,6 +13,10 @@ plays it full screen. Tauri 2 + React + WebGL 2.
   the frame loop, not through React state.
 - `src-tauri/src/files.rs` reads picked image files and saves PNG snapshots to
   `Pictures\Kaleido Sage` (raw request body + `file-name` header).
+- `src-tauri/src/file_archive.rs` and `src/lib/kaleidoFile.ts` hold the one
+  file type, `.ksage`: a ZIP of `kaleidosage.json`, the scenes (each in the
+  one-scene layout of `scene_archive.rs`) and the tracks. Every open scene
+  is the open file's (see `docs/ONE-FILE.md`).
 - `src-tauri/src/updater.rs` checks `rmirabelle/kaleidosage` GitHub releases.
 - `prototype.html` is the original single-file prototype. It is a reference only.
 

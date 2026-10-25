@@ -111,7 +111,7 @@ First topics:
 - Audio: Input kinds, Master Gain, Master Threshold, Levels
 - Audio sensors: what follows what, Threshold, Range, Release, beats
 - MIDI: Learn, mapping, relative knobs, 14-bit controls, holds and play
-- Playlists: what a playlist holds, Save Playlist, Export Scene As
+- Kaleido Sage files: what a file holds, shows and single scenes, Save, Export Scene As
 - Full screen, PNG and video export
 - Keyboard shortcuts (part 5)
 
@@ -145,8 +145,8 @@ their help topic and their panel card:
 - **Range:** a value that moves between two handles over the scene length.
 - **Audio sensor:** a level line rising over the Threshold, the setting
   moving by its Range, and falling back over its Release.
-- **Scene and playlist scope:** a playlist holds copies of its scenes; the
-  scene files on disk stay as they are.
+- **Scene and file scope:** a file holds copies of its scenes; the
+  files on disk that its scenes came from stay as they are.
 
 ### 8. What's new
 
