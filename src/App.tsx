@@ -34,7 +34,8 @@ import { createParams, createPlayState, nudgeParams, randomizeGroup, randomizePa
 import { SettingsHistory } from "./engine/history";
 import { scenePosition } from "./engine/loop";
 import { SCENE_EXTENSION, applyScene, blobToSceneImage, sceneFingerprint, serializeScene, type SceneImage } from "./engine/scene";
-import { loadSceneMedia, readScene, writeScene } from "./lib/scenes";
+import { loadSceneMedia, loadSceneSource, readScene, writeScene } from "./lib/scenes";
+import { adoptImage, keepImage, keepScenes, keptImageBytes, readKept, type Kept, type KeptImage } from "./lib/reloadKeeper";
 import type { ImageSource } from "./engine/renderer";
 import {
   makeThumbnail,
@@ -134,6 +135,13 @@ interface StoredScene {
 }
 
 let nextDocId = 1;
+
+/** Dev only: each stored tab's scene text for the reload keeper, made once per stored scene (see reloadKeeper.ts). */
+const keptText = new WeakMap<StoredScene, string>();
+/* A stand-in for the scene text only: the kept images are stored apart (see KeptImage). */
+const KEPT_IMAGE: SceneImage = { type: "image/png", data: "kept" };
+/** True while the kept tabs open after a reload; keeping waits, so the empty start-up state does not replace them. */
+let restoringKept = false;
 
 /** Windows file names do not care about case. */
 const samePath = (a: string | null, b: string | null) => a !== null && b !== null && a.toLowerCase() === b.toLowerCase();
@@ -1830,9 +1838,114 @@ export default function App() {
    */
   const startedRef = useRef(false);
   useEffect(() => {
-    if (!engine || startedRef.current) return;
+    if (!engine) return;
+    /** Dev only: the open tabs as the reload keeper keeps them (see reloadKeeper.ts). */
+    const takeKept = (): Kept => ({
+      activeId: activeIdRef.current,
+      docs: docsRef.current.flatMap((doc) => {
+        if (doc.id === activeIdRef.current) {
+          const driver = driverRef.current;
+          return [{
+            id: doc.id, path: scenePathRef.current, untitled: doc.untitled, dirty: fingerprint() !== savedFingerprintRef.current,
+            scene: serializeScene(engine.params, engine.state, { image: KEPT_IMAGE }),
+            images: [keepImage(imagesRef.current[0]), keepImage(imagesRef.current[1])],
+            driver: driver ? { video: driver.videoFile, name: driver.name } : null,
+            openGroup: openGroupRef.current
+          }];
+        }
+        const stored = storedRef.current.get(doc.id);
+        if (!stored) return [];
+        let scene = keptText.get(stored);
+        if (!scene) {
+          scene = serializeScene(stored.params, stored.state, { image: KEPT_IMAGE });
+          keptText.set(stored, scene);
+        }
+        return [{
+          id: doc.id, path: doc.path, untitled: doc.untitled, dirty: doc.dirty, scene,
+          images: [keepImage(stored.images[0]), keepImage(stored.images[1])],
+          driver: stored.driver ? { video: stored.driver.videoFile, name: stored.driver.name } : null,
+          openGroup: stored.openGroup
+        }];
+      })
+    });
+    /* In dev, start-up effects run twice; the second run must not start keeping while the tabs still open. */
+    if (startedRef.current) {
+      if (!restoringKept) keepScenes(takeKept);
+      return;
+    }
     startedRef.current = true;
     markClean();
+    const kept = readKept();
+    if (!kept) {
+      keepScenes(takeKept);
+      return;
+    }
+    /**
+     * After a reload, the tabs open again as they were: each scene with its
+     * images, file and unsaved mark, and the selected tab selected. Undo
+     * starts again from the scene as it is. Keeping starts only once they
+     * are open, so the empty start-up state does not replace the snapshot.
+     */
+    const loadKeptImage = async (image: KeptImage | null): Promise<SlotImage | null> => {
+      if (!image) return null;
+      try {
+        let loaded: { source: ImageSource; blob?: Blob; videoFile?: VideoFile };
+        if (image.video) {
+          loaded = await loadSceneMedia({ type: image.video.mime, video: image.video.id });
+        } else {
+          const blob = image.key ? await keptImageBytes(image.key) : null;
+          if (!blob) return null;
+          loaded = { source: await loadSceneSource(blob), blob };
+        }
+        const slot: SlotImage = { ...loaded, label: image.label, thumbnail: makeThumbnail(loaded.source), patternId: image.patternId, id: nextImageId++ };
+        if (image.key) adoptImage(slot, image.key);
+        return slot;
+      } catch {
+        return null;
+      }
+    };
+    const restore = async () => {
+      const loaded: { doc: SceneDoc; params: Params; state: PlayState; images: [SlotImage, SlotImage | null]; driver: DriverVideo | null; openGroup: string | null }[] = [];
+      for (const keptDoc of kept.docs) {
+        const params = createParams();
+        const state = createPlayState();
+        try {
+          applyScene(keptDoc.scene, params, state);
+        } catch {
+          continue;
+        }
+        /* A scene needs its first image. */
+        const first = await loadKeptImage(keptDoc.images[0]);
+        if (!first) continue;
+        const second = await loadKeptImage(keptDoc.images[1]);
+        let driver: DriverVideo | null = null;
+        if (keptDoc.driver) {
+          const media = await loadSceneMedia({ type: keptDoc.driver.video.mime, video: keptDoc.driver.video.id }).catch(() => null);
+          if (media?.source instanceof HTMLVideoElement && media.videoFile) driver = { video: media.source, videoFile: media.videoFile, name: keptDoc.driver.name, id: nextImageId++ };
+        }
+        loaded.push({ doc: { id: keptDoc.id, path: keptDoc.path, untitled: keptDoc.untitled, dirty: keptDoc.dirty }, params, state, images: [first, second], driver, openGroup: keptDoc.openGroup });
+      }
+      if (loaded.length === 0 || activeIdRef.current !== null) return;
+      /* Each tab's Undo history is made on the engine's settings, as addDoc makes it, starting from that scene. */
+      for (const { doc, params, state, images, driver, openGroup } of loaded) {
+        Object.assign(engine.params, structuredClone(params));
+        Object.assign(engine.state, structuredClone(state));
+        const history = new SettingsHistory(engine.params, engine.state);
+        const savedFingerprint = doc.dirty ? "" : sceneFingerprint(params, state, [images[0].id, images[1]?.id ?? null, driver?.id ?? null]);
+        storedRef.current.set(doc.id, { params, state, images, driver, savedFingerprint, history, openGroup });
+      }
+      writeDocs(loaded.map((entry) => entry.doc));
+      nextDocId = Math.max(nextDocId, ...loaded.map((entry) => entry.doc.id + 1));
+      const active = loaded.find((entry) => entry.doc.id === kept.activeId) ?? loaded[0];
+      restoreDoc(active.doc.id);
+      setStartScreen(false);
+      showStatus(loaded.length === 1 ? "Reopened the scene after the reload" : `Reopened ${loaded.length} scenes after the reload`);
+    };
+    restoringKept = true;
+    void restore().catch((error: unknown) => console.error("Could not reopen the kept scenes", error)).finally(() => {
+      restoringKept = false;
+      keepScenes(takeKept);
+    });
   }, [engine]);
 
   /** The engine's audio links follow the running sound source; with none, they have no effect. */
