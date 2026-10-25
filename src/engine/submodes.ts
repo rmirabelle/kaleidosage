@@ -1,5 +1,5 @@
 import type { ParamKey, PlayState } from "./params";
-import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, SmearShape, SolidMap, SolidShape, WarpType, MandelPlace } from "./renderer";
+import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, SmearShape, SolidMap, SolidShape, WarpType, MandelPlace, MandelColoring } from "./renderer";
 
 /** The effects in the Add effect menu, in menu order, with the names their groups show. */
 export const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
@@ -58,7 +58,7 @@ export const MAP_KEYS: Record<MapMode, ParamKey[]> = {
   6: ["mapSpeed", "tunnelTwist", "mapAngle", "mapFog", "mapFogSoftness", "mapScale", "mapPanX", "mapPanY", "mapMix"],
   7: ["mapSpeed", "mapArms", "mapAngle", "mapFog", "mapFogSoftness", "mapScale", "mapPanX", "mapPanY", "mapMix"],
   8: ["mapSpeed", "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drostePictureTurn", "drosteRotation", "mapPanX", "mapPanY", "mapMix"],
-  9: ["mandelDepth", "mandelEnd", "mapSpeed", "mandelFade", "mandelEdge", "mandelEdgeWidth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle", "mapAngle", "mapPanX", "mapPanY", "mapMix"]
+  9: ["mandelDepth", "mandelEnd", "mapSpeed", "mandelFade", "mandelSpread", "mandelInvert", "mandelEdge", "mandelEdgeWidth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle", "mapAngle", "mapPanX", "mapPanY", "mapMix"]
 };
 export const MAP_MODES = [[8, "Droste spiral"], [2, "Möbius"], [3, "Julia"], [9, "Mandelbrot"], [4, "Log spiral"], [5, "Sine"], [6, "Tunnel"], [7, "Seamless spiral"], [1, "Power (z^n)"]] as const;
 
@@ -71,6 +71,14 @@ export const MAP_MODES = [[8, "Droste spiral"], [2, "Möbius"], [3, "Julia"], [9
  * on. Exact to the 16 digits a double holds.
  */
 export const MANDEL_PLACES = [[0, "Seahorse valley"], [1, "Spiral"], [5, "Branches"], [2, "Dendrite"], [3, "Mini copies"], [4, "Elephant valley"]] as const;
+/**
+ * How the Mandelbrot map colors. Picture: the picture across the bands (deep
+ * in, the bands are so dense that it blurs to its average color). Palette:
+ * colors read from the picture along its diagonal, by the log of the round
+ * count, so they change slowly and stay strong at any depth. Palette per
+ * depth: that palette also moves on as the view goes deeper.
+ */
+export const MANDEL_COLORINGS: readonly (readonly [MandelColoring, string])[] = [[0, "Picture"], [1, "Palette"], [2, "Palette per depth"]];
 export const MANDEL_CENTERS: Record<MandelPlace, [number, number]> = {
   /* The well-known deep-zoom point of Seahorse valley (loop 998, 6.3e-16, depth 15.4). */
   0: [-0.7436438870371587, 0.1318259042053120],

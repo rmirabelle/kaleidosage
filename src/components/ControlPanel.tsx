@@ -9,7 +9,7 @@ import { settingButtons } from "../lib/settingButtons";
 import { GradientEditor } from "./GradientEditor";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
-import { BLUR_KEYS, BLUR_MASKS, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
+import { BLUR_KEYS, BLUR_MASKS, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_COLORINGS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
 import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -820,7 +820,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace" | "mandelColoring";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange }: {
@@ -878,6 +878,7 @@ function MapSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => R
     <>
       <ModeSelect engine={engine} stateKey="mapMode" options={MAP_MODES} name="Type" onChange={setMode} />
       {mode === 9 && <ModeSelect engine={engine} stateKey="mandelPlace" options={MANDEL_PLACES} name="Place" />}
+      {mode === 9 && <ModeSelect engine={engine} stateKey="mandelColoring" options={MANDEL_COLORINGS} name="Coloring" />}
       <SplitRows keys={[...MAP_KEYS[mode], OPACITY_KEY.map]} row={row} blend={<LayerBlend engine={engine} step="map" />} />
     </>
   );

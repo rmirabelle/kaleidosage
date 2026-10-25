@@ -603,6 +603,8 @@ float mandelStretch = 1.0;
  */
 float mandelBeyond = 0.0;
 float mandelBusyShade = 1.0;
+/* How fast the bands and the escape angle change per screen unit, which sets where the light would sparkle (the picture's own stretch can be slower, see the palette). */
+float mandelSparkle = 1.0;
 /**
  * The screen pixel's size in the map's units (set by shapeColor), and
  * whether this pixel took extra samples (see mandelLook's use in complexMap).
@@ -699,6 +701,14 @@ uniform float u_mandelEdge;
 uniform float u_mandelEdgeWidth;
 /* The bands moved by Band flow. */
 uniform float u_mandelFlow;
+/**
+ * Coloring (0 picture, 1 palette, 2 palette per depth; see MANDEL_COLORINGS
+ * in submodes.ts), the palette's spread (repeats per doubling of the round
+ * count), and Invert (0 to 1).
+ */
+uniform int u_mandelColoring;
+uniform float u_mandelSpread;
+uniform float u_mandelInvert;
 uniform float u_mandelLight;
 uniform vec2 u_mandelLightDir;
 
@@ -918,6 +928,7 @@ vec2 complexMap(vec2 p) {
     mandelBusyShade = look.w;
     if (count < 0.0 || look.z >= 1.0) {
       mandelStretch = 1.0;
+      mandelSparkle = 1.0;
       w = vec2(0.0);
     } else {
       /**
@@ -951,6 +962,28 @@ vec2 complexMap(vec2 p) {
       float acrossBands = 0.5 / max(edgeDistance, 1e-30) / max(u_mandelBands, 0.01);
       float upAngle = logSize / (TAU * max(edgeDistance, 1e-30));
       mandelStretch = max(acrossBands, upAngle) / max(u_mapScale, 1e-4);
+      mandelSparkle = mandelStretch;
+      if (u_mandelColoring != 0) {
+        /**
+         * The palette: the picture read along its diagonal (bottom left to
+         * top right, and back, as it is mirrored), by the log of the round
+         * count times the spread, so a color lasts while the count doubles
+         * and the colors stay strong at any depth (the picture across dense
+         * bands blurs to its average color). Band flow moves it (repeats a
+         * second); per depth, it also moves on 0.2 repeats a power of ten as
+         * the view goes deeper. It changes too slowly for the escape rings
+         * to show, so Softness's second point is not needed. Its blur
+         * follows its own change: the count's, |dcount| / (count ln 2), times
+         * the spread and the diagonal's length.
+         */
+        float aspect = u_imgRes.x / u_imgRes.y;
+        float t = log2(max(count, 1.0)) * u_mandelSpread + mod(u_mandelFlow, 2.0);
+        if (u_mandelColoring == 2) t += 0.2 * u_mandelDepth;
+        float along = 1.0 - abs(1.0 - mod(t, 2.0));
+        w = vec2((along - 0.5) * aspect, along - 0.5);
+        mandelAltWeight = 0.0;
+        mandelStretch = u_mandelSpread * acrossBands * max(u_mandelBands, 0.01) / (max(count, 1.0) * 0.6931471806) * sqrt(aspect * aspect + 1.0) / max(u_mapScale, 1e-4);
+      }
     }
   } else if (u_mapMode == 5) {
     w = csin(onAxis * PI) / PI;
@@ -1325,15 +1358,18 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
   }
   /**
    * The Mandelbrot map's light and terraces, and its black set. Where one
-   * pixel holds more than about one band (mapDetail, see mandelStretch),
+   * pixel holds more than about one band (see mandelSparkle),
    * the light and terraces would sparkle, so they give way to a shade from
    * the distance to the set's edge (see mandelLook). The picture already
    * blurs there. Then the points past the view's round limit fade to black.
    */
   if (mapped && u_mapMode == 9) {
     /* A pixel with extra samples sparkles less, so it keeps its light to about twice the band density. */
-    float busy = mandelShade > 0.0 ? (mandelSampled ? smoothstep(0.6, 2.4, mapDetail) : smoothstep(0.3, 1.2, mapDetail)) : 0.0;
+    float sparkle = g0 * mix(1.0, mandelSparkle, u_mapMix);
+    float busy = mandelShade > 0.0 ? (mandelSampled ? smoothstep(0.6, 2.4, sparkle) : smoothstep(0.3, 1.2, sparkle)) : 0.0;
     color.rgb *= mix(1.0, mix(mandelShade, mandelBusyShade, busy) * mandelEdgeLight * (1.0 - mandelBeyond), u_mapMix);
+    /* Invert: the colors flipped (with their cover, as they are premultiplied), so the set turns bright and the outside dark. */
+    color.rgb = mix(color.rgb, color.a - color.rgb, clamp(u_mandelInvert, 0.0, 1.0) * u_mapMix);
   }
   return color;
 }

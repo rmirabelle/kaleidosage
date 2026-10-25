@@ -389,3 +389,22 @@ Sources: [Practical interior distance rendering (mathr)](https://mathr.co.uk/blo
 [Atom domain size estimation (mathr)](https://mathr.co.uk/blog/2013-12-10_atom_domain_size_estimation.html),
 [Geometric orbit traps (Quilez)](https://iquilezles.org/articles/ftrapsgeometric/),
 [Plotting algorithms for the Mandelbrot set (Wikipedia)](https://en.wikipedia.org/wiki/Plotting_algorithms_for_the_Mandelbrot_set).
+
+## Step 8 (built 2026-10-24): Coloring, Palette spread, Invert
+
+The user: the source picture has little influence; with a colorful picture
+the view keeps its colors briefly, then stays one color. Cause: the picture
+lies across the bands, and deep in a pixel holds many bands, so the blur
+reads the picture at its coarsest level, near its average color.
+
+- Coloring menu (state `mandelColoring`): Picture (as before), Palette, and
+  Palette per depth. The palette reads the picture along its diagonal
+  (mirrored), at log2(count) times Palette spread (0.05 to 4) plus Band
+  flow, so a color lasts while the count doubles and stays strong at any
+  depth. Per depth adds 0.2 a power of ten of the view's depth. Its blur
+  follows its own, much slower change (spread times |dcount| / (count ln
+  2) times the diagonal); where the light would sparkle still follows the
+  bands' density (`mandelSparkle`).
+- Invert (0 to 1) flips the colors (with their cover), so the set turns
+  bright and the outside dark.
+- Shader build: 28 s in all on the RTX 5090 (the shape shader 18 s).

@@ -11,6 +11,8 @@ export type TrailMode = 0 | 1 | 2;
 export type MapMode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 /** The Mandelbrot map's places to dive into (see MANDEL_PLACES). */
 export type MandelPlace = 0 | 1 | 2 | 3 | 4 | 5;
+/** How the Mandelbrot map colors (see MANDEL_COLORINGS): the picture across the bands, a palette from the picture, or that palette moving with depth. */
+export type MandelColoring = 0 | 1 | 2;
 /** 0 = no warp, 1 = warp the screen (breaks the symmetry), 2 = warp the image (keeps it). */
 export type WarpMode = 0 | 1 | 2;
 /** 0 = radial wedges around one center, 1 = triangle tiles, 2 = hexagon tiles. */
@@ -143,6 +145,10 @@ export interface FrameValues {
   /** The Mandelbrot map (map mode 9): depth in powers of ten, band width, terraces, their softness, light, and the light's angle (radians). */
   mandelDepth: number;
   mandelBands: number;
+  /** Coloring (see MandelColoring), the palette's spread (repeats per doubling of the round count), and Invert (0 to 1). */
+  mandelColoring: MandelColoring;
+  mandelSpread: number;
+  mandelInvert: number;
   /** Edge light: how much the open areas away from the set's edge fade to black, and how far from the edge (in screen heights) the light reaches. */
   mandelEdge: number;
   mandelEdgeWidth: number;
@@ -1198,6 +1204,9 @@ export class KaleidoRenderer {
       gl.activeTexture(gl.TEXTURE0);
     }
     gl.uniform1f(k.uniforms.u_mandelBands, v.mandelBands);
+    gl.uniform1i(k.uniforms.u_mandelColoring, v.mandelColoring);
+    gl.uniform1f(k.uniforms.u_mandelSpread, v.mandelSpread);
+    gl.uniform1f(k.uniforms.u_mandelInvert, v.mandelInvert);
     gl.uniform1f(k.uniforms.u_mandelFlow, v.mandelFlow);
     gl.uniform1f(k.uniforms.u_mandelEdge, v.mandelEdge);
     gl.uniform1f(k.uniforms.u_mandelEdgeWidth, Math.max(1e-4, v.mandelEdgeWidth));
