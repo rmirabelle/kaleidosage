@@ -446,8 +446,9 @@ export interface FrameValues {
   raysY: number;
   /**
    * Lasers (see LASER_SHADER): strength (0 = off), the number of beams, the
-   * fan's spread and aim (radians, 0 = up), the beam width (screen pixels),
-   * the glow, the fade along a beam, the first hue (0 to 1), how far the
+   * fan's spread and aim (radians, 0 = up), the base line's length (a part
+   * of the screen height) and angle (radians, 0 = level), the beam width
+   * (screen pixels), the glow and its size (screen pixels), the fade along a beam, the first hue (0 to 1), how far the
    * hues go around the wheel, and the source (a part of the screen size
    * from the screen center).
    */
@@ -455,8 +456,11 @@ export interface FrameValues {
   laserCount: number;
   laserSpread: number;
   laserAim: number;
+  laserBase: number;
+  laserBaseAngle: number;
   laserWidth: number;
   laserGlow: number;
+  laserGlowSize: number;
   laserFade: number;
   laserHue: number;
   laserRainbow: number;
@@ -2349,11 +2353,15 @@ export class KaleidoRenderer {
     gl.uniform1i(l.uniforms.u_picture, 0);
     gl.uniform2f(l.uniforms.u_res, width, height);
     gl.uniform2f(l.uniforms.u_source, v.laserX * width, v.laserY * height);
+    /* The base line turns clockwise with its angle, as the aim does. */
+    const base = Math.max(0, v.laserBase) * height;
+    gl.uniform2f(l.uniforms.u_base, Math.cos(v.laserBaseAngle) * base, -Math.sin(v.laserBaseAngle) * base);
     gl.uniform1f(l.uniforms.u_aim, v.laserAim);
     gl.uniform1f(l.uniforms.u_spread, v.laserSpread);
     gl.uniform1i(l.uniforms.u_count, Math.min(32, Math.max(1, Math.round(v.laserCount))));
     gl.uniform1f(l.uniforms.u_width, Math.max(0.25, v.laserWidth * this.texelScale));
     gl.uniform1f(l.uniforms.u_glow, Math.max(0, v.laserGlow));
+    gl.uniform1f(l.uniforms.u_glowSize, Math.max(0.5, v.laserGlowSize * this.texelScale));
     gl.uniform1f(l.uniforms.u_fade, 3 * Math.max(0, v.laserFade));
     gl.uniform1f(l.uniforms.u_hue, v.laserHue);
     gl.uniform1f(l.uniforms.u_rainbow, v.laserRainbow);

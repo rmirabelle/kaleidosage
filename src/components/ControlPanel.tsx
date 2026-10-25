@@ -66,7 +66,7 @@ const SORT_KEYS: ParamKey[] = ["sortAmount", "sortLow", "sortHigh", "sortAngle",
 /* The Blend menu and the Opacity slider (particleAmount) come after these, in the Common part at the bottom of the group. */
 const PARTICLE_KEYS: ParamKey[] = ["particleLevel", "particleBackground", "particleCount", "particleSize", "particleLife", "particleSpeed", "particleFollow", "particleCling", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleGradient", "particleBoost"];
 const RAYS_KEYS: ParamKey[] = ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"];
-const LASER_KEYS: ParamKey[] = ["laserAmount", "laserCount", "laserSpread", "laserAim", "laserWidth", "laserGlow", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"];
+const LASER_KEYS: ParamKey[] = ["laserAmount", "laserCount", "laserSpread", "laserAim", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"];
 const BLOOM_KEYS: ParamKey[] = ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"];
 const SHARPEN_KEYS: ParamKey[] = ["sharpen", "sharpenRadius"];
 const COLOR_KEYS: ParamKey[] = ["overlayOpacity"];
