@@ -355,3 +355,37 @@ rises with depth, as before the strip.
   Averaging only the light, not the busy shade, changed almost nothing:
   the busy shade was the noise.
 - Cost at 1920 by 1080 on an RTX 5090: 0.9 to 1.6 ms a frame (0.8 to 1.3).
+
+## Research notes 3 (2026-10-24): moving edges, live black areas
+
+The user: only the bands move; the edges should morph and breathe, and
+over black everything is static.
+
+- In a zoom the set's edge itself only changes shape between layers (see
+  step 5); any small change to the formula (a start value, the power, a
+  Julia parameter) moves the nearby edge mostly as a whole (as Morph did),
+  with little change of shape. So the motion has to come from coloring
+  that moves near and inside the edge.
+- **Interior coloring makes black areas live.** Programs color inside the
+  set by: the multiplier of the loop a point is caught by (interior
+  coordinates: rays and rings inside each component), the Lyapunov
+  exponent (average ln|2z| along the path, smooth, near 0 at the edge and
+  very negative at a component's center), the interior distance estimate
+  (period, then Newton's method for the periodic point, then derivatives;
+  costly and noisy at deep zooms), atom domains (the period of the nearest
+  near-miss), or the final z (internal level sets). Our loop already has
+  the product of 2z (the "pull" inside test), so the Lyapunov exponent is
+  nearly free: log|pull| / rounds when the test stops the point.
+- **Stripe Average** (and its family) averages a function of the angle of
+  z over the path; it draws flame-like patterns along the filaments. As
+  the average of e^(i s arg z), the stripes' phase can move after the fact
+  (0.5 + 0.5 Re(A e^(i phase))), so the strip could store A (two numbers)
+  and the patterns could flow along the edges at no extra cost.
+- Animating the escape radius only moves bands; animating the round limit
+  grows the black edge (what the view's limit does as a dive goes on).
+
+Sources: [Practical interior distance rendering (mathr)](https://mathr.co.uk/blog/2014-11-02_practical_interior_distance_rendering.html),
+[Mandelbrot set interior (Wikibooks)](https://en.wikibooks.org/wiki/Fractals/Iterations_in_the_complex_plane/Mandelbrot_set_interior),
+[Atom domain size estimation (mathr)](https://mathr.co.uk/blog/2013-12-10_atom_domain_size_estimation.html),
+[Geometric orbit traps (Quilez)](https://iquilezles.org/articles/ftrapsgeometric/),
+[Plotting algorithms for the Mandelbrot set (Wikipedia)](https://en.wikipedia.org/wiki/Plotting_algorithms_for_the_Mandelbrot_set).
