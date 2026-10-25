@@ -411,6 +411,10 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Open Project puts the picked project in place of the open one, after the unsaved-changes question.
 - Import Scene(s) adds all scenes of each picked project to the open project, after its scenes.
 - Import Scene(s) does not add the picked projects' audio files or audio settings.
+- Import Scene(s) skips a scene that is the same, byte for byte, as a saved, unchanged scene of the project.
+- When imported scenes have the same names as scenes of the project, one question asks: Replace, Keep Both or Cancel.
+- Replace puts each new scene in the old scene's place, and its song map picks go with it.
+- After an import, the status tells how many scenes came in, were replaced and were skipped.
 - A project never saved asks for a name; the first scene's name is the default.
 - A new blank scene with no changes is not saved, unless it is the only scene.
 - Export Scene writes the selected scene to a project of its own, with no tracks.

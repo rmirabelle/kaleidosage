@@ -55,7 +55,7 @@ import { settingButtons } from "./lib/settingButtons";
 import { sliceAt, type ScheduledSlice } from "./engine/showSchedule";
 import { helpSettings } from "./lib/helpSettings";
 import { RANGE_ON_EVENT } from "./lib/pointerEvents";
-import { FILE_EXTENSION, fileFingerprint, isFileCopy, openKaleidoFile, readManifest, saveKaleidoFile, type FileAudio } from "./lib/kaleidoFile";
+import { FILE_EXTENSION, fileFingerprint, isFileCopy, matchingScenes, openKaleidoFile, readManifest, saveKaleidoFile, type FileAudio } from "./lib/kaleidoFile";
 import { revealMainWindow } from "./lib/splash";
 import { isVideoPath, isVideoType, loadVideoBlob, loadVideoFile, stageVideoBlob, type VideoFile } from "./lib/videos";
 import { checkForUpdate, getAppVersion, type UpdateInfo } from "./lib/updater";
@@ -507,6 +507,11 @@ export default function App() {
     name: string;
     save: () => Promise<boolean>;
   } | null>(null);
+  /**
+   * The open "Replace scenes?" question of Import Scene(s): the imported
+   * scenes' names that the project has too, and the answer.
+   */
+  const [importQuestion, setImportQuestion] = useState<{ names: string[]; answer: (choice: "replace" | "both" | "cancel") => void } | null>(null);
   const [appVersion, setAppVersion] = useState("");
   const [startupUpdate, setStartupUpdate] = useState<UpdateInfo | null>(null);
   /** The start screen shows until a new scene starts or an image or scene opens. */
@@ -540,13 +545,15 @@ export default function App() {
     engine?.setDriverVideo(driver?.video ?? null);
   }, [engine]);
 
-  const writeDocs = useCallback((next: SceneDoc[]) => {
+  /** "replaced": scenes that took the place of others (old id to new id), so their song map picks go to the new scene. */
+  const writeDocs = useCallback((next: SceneDoc[], replaced?: ReadonlyMap<number, number>) => {
     const before = docsRef.current;
     docsRef.current = next;
     setDocs(next);
     /* A scene that moved or closed: the song map slices that picked it follow it, or go back to the show's order (see songFollow.moveScenes). */
     const place = new Map(next.map((doc, index) => [doc.id, index]));
-    if (before.some((doc, index) => place.get(doc.id) !== index)) songFollow.moveScenes((index) => place.get(before[index]?.id ?? -1) ?? null);
+    const placeOf = (doc: SceneDoc | undefined) => doc ? place.get(replaced?.get(doc.id) ?? doc.id) : undefined;
+    if (before.some((doc, index) => placeOf(doc) !== index)) songFollow.moveScenes((index) => placeOf(before[index]) ?? null);
   }, []);
 
   const selectDocId = useCallback((id: number | null) => {
@@ -1740,30 +1747,68 @@ export default function App() {
   }, [askToSaveAll, engine, openFilePath]);
 
   /**
-   * Import Scene(s): every scene of each picked project goes into the open
+   * Import Scene(s): the scenes of each picked project go into the open
    * project, in order, after its scenes, each in a new tab. The picked
    * projects' audio files and audio settings do not come in, and their
-   * files on disk do not change. The open project counts as changed.
+   * files on disk do not change. A scene that is the same (byte for byte)
+   * as a saved, unchanged scene of the project is skipped. When scenes have
+   * the same name as scenes of the project, one question asks: Replace
+   * (the new scene takes the old one's place), Keep Both, or Cancel.
    */
   const importScenes = useCallback(async (paths: string[]) => {
     if (!engine || paths.length === 0 || docsRef.current.length === 0) return;
     const title = paths.length === 1 ? `Importing ${fileNameOf(paths[0])}` : `Importing ${paths.length} projects`;
+    const sceneName = (path: string) => fileNameOf(path).replace(/\.ksage$/i, "");
+    const docPath = (doc: SceneDoc) => doc.id === activeIdRef.current ? scenePathRef.current : doc.path;
+    const docDirty = (doc: SceneDoc) => doc.id === activeIdRef.current ? fingerprint() !== savedFingerprintRef.current : doc.dirty;
     try {
+      const unpacked: string[] = [];
       for (const [index, path] of paths.entries()) {
         setLoading({ title, detail: `Unpacking ${fileNameOf(path)}…`, progress: index / paths.length });
         /* The open project's unpacked scenes and tracks stay (see openKaleidoFile). */
-        const opened = await openKaleidoFile(path, { keepOthers: true });
-        for (const [number, scene] of opened.scenes.entries()) {
-          setLoading({ title, detail: `${fileNameOf(path)}: scene ${number + 1} of ${opened.scenes.length}`, progress: (index + number / opened.scenes.length) / paths.length });
-          await openScenePath(scene);
-        }
+        unpacked.push(...(await openKaleidoFile(path, { keepOthers: true })).scenes);
       }
+      const saved = docsRef.current.flatMap((doc) => {
+        const path = docPath(doc);
+        return path !== null && !docDirty(doc) ? [path] : [];
+      });
+      const matches = await matchingScenes(unpacked, saved);
+      const scenes = unpacked.filter((_, index) => matches[index] === null);
+      const skipped = unpacked.length - scenes.length;
+      /* The project's scenes by name (no case, no .ksage), for the scenes that have the same name. */
+      const byName = new Map(docsRef.current.map((doc) => [docFileName(docPath(doc), doc.untitled).replace(/\.ksage$/i, "").toLowerCase(), doc.id]));
+      const clashes = [...new Set(scenes.map(sceneName).filter((name) => byName.has(name.toLowerCase())))];
+      let replace = false;
+      if (clashes.length) {
+        setLoading(null);
+        const choice = await new Promise<"replace" | "both" | "cancel">((answer) => setImportQuestion({ names: clashes, answer }));
+        if (choice === "cancel") return;
+        replace = choice === "replace";
+      }
+      let replaced = 0;
+      for (const [index, scene] of scenes.entries()) {
+        setLoading({ title, detail: `Scene ${index + 1} of ${scenes.length}: ${sceneName(scene)}`, progress: index / scenes.length });
+        const old = replace ? byName.get(sceneName(scene).toLowerCase()) : undefined;
+        await openScenePath(scene);
+        const added = activeIdRef.current;
+        /* Replace: the new scene takes the old one's place in the list, and the old one goes. Each old scene is replaced once. */
+        if (old === undefined || added === null || old === added || !docsRef.current.some((doc) => doc.id === old)) continue;
+        byName.delete(sceneName(scene).toLowerCase());
+        const newDoc = docsRef.current.find((doc) => doc.id === added)!;
+        storedRef.current.delete(old);
+        writeDocs(docsRef.current.filter((doc) => doc.id !== added).map((doc) => doc.id === old ? newDoc : doc), new Map([[old, added]]));
+        replaced++;
+      }
+      const parts = [`Imported ${scenes.length === 1 ? "1 scene" : `${scenes.length} scenes`}`];
+      if (replaced) parts.push(`${replaced} replaced`);
+      if (skipped) parts.push(`${skipped} skipped (already in the project)`);
+      showStatus(parts.join(", "), 5000);
     } catch (error) {
       showError(`Could not import the scenes. ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setLoading(null);
     }
-  }, [engine, openScenePath, showError]);
+  }, [engine, fingerprint, openScenePath, showError, showStatus, writeDocs]);
 
   /** Puts the tabs in a new order (a drag in the tab bar). The scenes play in tab order, and the file keeps it. */
   const reorderDocs = useCallback((ids: number[]) => {
@@ -2574,6 +2619,29 @@ export default function App() {
           initialUpdateInfo={startupUpdate}
           onClose={() => setAboutOpen(false)}
           beforeInstall={() => askToSaveAll("Kaleido Sage closes to install the update.")}
+        />
+      )}
+      {importQuestion && (
+        <ConfirmDialog
+          title="Replace Scenes?"
+          message={importQuestion.names.length === 1
+            ? "The project has a scene with the same name. Replace it with the imported scene, or keep both?"
+            : `The project has ${importQuestion.names.length} scenes with the same names. Replace them with the imported scenes, or keep both?`}
+          details={<ul>{importQuestion.names.map((name) => <li key={name}>{name}</li>)}</ul>}
+          confirmLabel="Replace"
+          otherLabel="Keep Both"
+          onConfirm={() => {
+            importQuestion.answer("replace");
+            setImportQuestion(null);
+          }}
+          onOther={() => {
+            importQuestion.answer("both");
+            setImportQuestion(null);
+          }}
+          onCancel={() => {
+            importQuestion.answer("cancel");
+            setImportQuestion(null);
+          }}
         />
       )}
       {/* After the About dialog, so this question shows over it. */}

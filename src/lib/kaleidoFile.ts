@@ -122,6 +122,13 @@ export const isShow = (summary: Pick<FileSummary, "scenes" | "tracks">) => summa
 export const openKaleidoFile = (path: string, { keepOthers = false }: { keepOthers?: boolean } = {}) =>
   invoke<{ manifest: string; scenes: string[]; tracks: string[]; analyses: (string | null)[] }>("open_file", { path, keepOthers });
 
+/**
+ * Import Scene(s): for each unpacked scene in "candidates", the index of the
+ * first scene file in "existing" (the open project's saved scene copies)
+ * with the same bytes, or null (Rust: matching_scenes).
+ */
+export const matchingScenes = (candidates: string[], existing: string[]) => invoke<(number | null)[]>("matching_scenes", { candidates, existing });
+
 /** Reads the scene at "index" of a file in place, as readScene reads a scene file (see lib/scenes.ts): for the Open dialog's preview. */
 export async function readFileScene(path: string, index = 0) {
   const bytes = await invoke<ArrayBuffer>("read_file_scene", { path, index });

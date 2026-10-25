@@ -314,6 +314,47 @@ pub async fn read_file_scene(app: tauri::AppHandle, path: String, index: usize) 
     .map(tauri::ipc::Response::new)
 }
 
+/** True when the two files have the same bytes. Files of another size are not read. */
+fn same_bytes(a: &Path, b: &Path) -> Result<bool, String> {
+    use std::io::Read;
+    let size = |path: &Path| std::fs::metadata(path).map(|m| m.len()).map_err(|e| e.to_string());
+    if size(a)? != size(b)? {
+        return Ok(false);
+    }
+    let (mut a, mut b) = (File::open(a).map_err(|e| e.to_string())?, File::open(b).map_err(|e| e.to_string())?);
+    let (mut left, mut right) = (vec![0; 1 << 16], vec![0; 1 << 16]);
+    loop {
+        let count = a.read(&mut left).map_err(|e| e.to_string())?;
+        if count == 0 {
+            return Ok(true);
+        }
+        b.read_exact(&mut right[..count]).map_err(|e| e.to_string())?;
+        if left[..count] != right[..count] {
+            return Ok(false);
+        }
+    }
+}
+
+/**
+ * For each scene file in "candidates" (scenes that Import Scene(s)
+ * unpacked), the index of the first file in "existing" (the open
+ * project's saved scene copies) with the same bytes, or None.
+ */
+fn matching(candidates: &[String], existing: &[String]) -> Vec<Option<usize>> {
+    candidates
+        .iter()
+        .map(|candidate| existing.iter().position(|other| same_bytes(Path::new(candidate), Path::new(other)).unwrap_or(false)))
+        .collect()
+}
+
+/** Import Scene(s): which unpacked scenes are the same as a scene of the open project (see matching). */
+#[tauri::command]
+pub async fn matching_scenes(candidates: Vec<String>, existing: Vec<String>) -> Result<Vec<Option<usize>>, String> {
+    tauri::async_runtime::spawn_blocking(move || matching(&candidates, &existing))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /** At the app's start: nothing is open, so every old temp folder goes. */
 pub fn clean_at_start() {
     std::thread::spawn(|| clean_unpacked(None));
@@ -440,6 +481,19 @@ mod tests {
         source.reader().read_to_end(&mut bytes).unwrap();
         assert_eq!(bytes, b"video-bytes-inside");
         assert!(scene_part(&file, 2).is_err());
+    }
+
+    #[test]
+    fn finds_scenes_with_the_same_bytes() {
+        let folder = tempfile::tempdir().unwrap();
+        let write = |name: &str, bytes: &[u8]| {
+            let path = folder.path().join(name);
+            std::fs::write(&path, bytes).unwrap();
+            path.to_string_lossy().into_owned()
+        };
+        let existing = vec![write("a.ksage", b"scene one"), write("b.ksage", b"scene two")];
+        let candidates = vec![write("c.ksage", b"scene two"), write("d.ksage", b"scene 2!!"), write("e.ksage", b"other")];
+        assert_eq!(matching(&candidates, &existing), vec![Some(1), None, None]);
     }
 
     #[test]
