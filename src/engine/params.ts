@@ -444,7 +444,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   mandelEnd: { label: "End", min: 0.5, max: 10, step: 0.01, value: 8, drift: "wave", low: 6, high: 10, on: false },
   mandelFade: { label: "Crossfade", min: 0.05, max: 0.5, step: 0.01, value: 0.25, drift: "wave", low: 0.15, high: 0.4, on: false },
   mandelBands: { label: "Band width", min: 2, max: 4, step: 0.001, value: 3, drift: "wave", low: 2.8, high: 3.2, on: false },
-  mandelSpeed: { label: "Speed", min: -0.5, max: 0.5, step: 0.001, value: 0.15, drift: "wave", low: 0.05, high: 0.3, on: false },
+  mandelSpeed: { label: "Speed", min: -4, max: 4, step: 0.001, value: 0.15, drift: "wave", low: 0.05, high: 0.3, on: false },
   mandelSpread: { label: "Palette spread", min: 0.05, max: 4, step: 0.001, scale: "log", value: 0.5, drift: "wave", low: 0.3, high: 1, on: false },
   mandelInvert: { label: "Invert", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 1, on: false },
   mandelEdge: { label: "Edge light", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.6, high: 1, on: false },

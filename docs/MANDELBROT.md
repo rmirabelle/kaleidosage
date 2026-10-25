@@ -421,3 +421,4 @@ Softness now shapes only the terraces; Band width sets the terraces' bands.
 Speed (2026-10-25): the Mandelbrot's Speed was the map's shared Speed
 (-2 to 2, also Tunnel's and Droste's). It is now its own, `mandelSpeed`,
 -0.5 to 0.5 powers of ten a second, so the shared one keeps its range.
+The same day it went to -4 to 4, for longer scenes.
