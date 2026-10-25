@@ -830,7 +830,6 @@ export class Engine {
     this.state.mandelFlowTime = 0;
     this.state.driverTime = 0;
     this.state.solidSpinTurns = 0;
-    this.state.mandelMorphTurns = 0;
     this.state.solidTumbleTurns = 0;
     this.state.mapTravel = 0;
     this.state.cameraX = 0;
@@ -968,7 +967,6 @@ export class Engine {
     this.state.driverTime += animated * this.live("driverSpeed");
     /* The 3D Object's spin and tumble are speeds in turns per minute, added up the same way. */
     this.state.solidSpinTurns = (this.state.solidSpinTurns + animated * this.live("solidSpin") / 60) % 1;
-    this.state.mandelMorphTurns = (this.state.mandelMorphTurns + animated * this.live("mandelMorphSpeed") / 60) % 1;
     this.state.solidTumbleTurns = (this.state.solidTumbleTurns + animated * this.live("solidTumble") / 60) % 1;
     /* Tunnel speed is a speed too, so the distance flown is added up the same way. */
     const mapSpeed = this.live("mapSpeed");
@@ -1127,8 +1125,6 @@ export class Engine {
       mandelFadeDepth: this.live("mandelDepth") + (divePart - 1) * diveLength,
       mandelBands: this.live("mandelBands"),
       mandelEdge: this.live("mandelEdge"),
-      mandelSeedX: this.live("mandelMorph") * Math.cos(this.state.mandelMorphTurns * Math.PI * 2),
-      mandelSeedY: this.live("mandelMorph") * Math.sin(this.state.mandelMorphTurns * Math.PI * 2),
       mandelEdgeWidth: this.live("mandelEdgeWidth"),
       mandelTerraces: this.live("mandelTerraces"),
       mandelSoftness: this.live("mandelSoftness"),

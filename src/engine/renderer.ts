@@ -116,9 +116,6 @@ export interface FrameValues {
   mandelBands: number;
   /** Edge light: how much the open areas away from the set's edge fade to black, and how far from the edge (in screen heights) the light reaches. */
   mandelEdge: number;
-  /** Morph: where every point's path starts (0 for the true Mandelbrot set); it circles, so the set changes shape. */
-  mandelSeedX: number;
-  mandelSeedY: number;
   mandelEdgeWidth: number;
   mandelTerraces: number;
   mandelSoftness: number;
@@ -1136,28 +1133,20 @@ export class KaleidoRenderer {
     gl.uniform1f(k.uniforms.u_mapPower, v.mapPower);
     gl.uniform2f(k.uniforms.u_mapPoint, v.mapPointX, v.mapPointY);
     gl.uniform1i(k.uniforms.u_mapSteps, Math.round(v.mapSteps));
-    const mandelDepth = (depth: number, slot: number) => {
+    const mandelDepth = (depth: number) => {
       gl.uniform1f(k.uniforms.u_mandelDepth, depth);
       gl.uniform1i(k.uniforms.u_mandelRounds, mandelRounds(depth));
-      if (v.mapMode !== 9) return;
-      /**
-       * Morph's start is sized by the square root of the view's width, as
-       * the start acts about like a move of c by its square: so Morph moves
-       * the shapes by about the same share of the view at any depth.
-       */
-      const size = Math.sqrt(1.5 * Math.pow(10, -Math.min(10, Math.max(0, depth))));
-      const seedX = v.mandelSeedX * size;
-      const seedY = v.mandelSeedY * size;
+    };
+    mandelDepth(v.mandelDepth);
+    if (v.mapMode === 9) {
       /* The deep zoom's exact path (see mandelPath), in slot 2; the source images use 0 and 1. */
-      const path = this.mandelPath(slot, v.mapPointX, v.mapPointY, mandelRounds(Infinity), seedX, seedY);
-      gl.uniform2f(k.uniforms.u_mandelSeed, seedX, seedY);
+      const path = this.mandelPath(v.mapPointX, v.mapPointY, mandelRounds(Infinity));
       gl.activeTexture(gl.TEXTURE2);
       gl.bindTexture(gl.TEXTURE_2D, path.texture);
       gl.uniform1i(k.uniforms.u_mandelPath, 2);
       gl.uniform1i(k.uniforms.u_mandelLength, path.length);
       gl.activeTexture(gl.TEXTURE0);
-    };
-    mandelDepth(v.mandelDepth, 0);
+    }
     gl.uniform1f(k.uniforms.u_mandelBands, v.mandelBands);
     gl.uniform1f(k.uniforms.u_mandelFlow, v.mandelFlow);
     gl.uniform1f(k.uniforms.u_mandelEdge, v.mandelEdge);
@@ -1216,7 +1205,7 @@ export class KaleidoRenderer {
        * depth, mixed over the first by the blend's constant share (colors
        * and cover alike). It costs a second pass only while it fades.
        */
-      mandelDepth(v.mandelFadeDepth, 1);
+      mandelDepth(v.mandelFadeDepth);
       gl.enable(gl.BLEND);
       gl.blendColor(0, 0, 0, v.mandelFade);
       gl.blendFunc(gl.CONSTANT_ALPHA, gl.ONE_MINUS_CONSTANT_ALPHA);
@@ -1732,25 +1721,24 @@ export class KaleidoRenderer {
 
   /**
    * The Mandelbrot map's exact path for a place (the deep zoom, see
-   * docs/MANDELBROT.md): z = z^2 + c from Morph's start (0 with no Morph),
-   * worked out here with 64-bit numbers, until it escapes or for "rounds"
-   * rounds (always the most). The graphics card reads it from a two-channel
-   * float texture, 1024 values a row, and works only with each pixel's small
-   * difference from it. Slot 0 is the view's, slot 1 the dive crossfade's
-   * (Morph's start depends on the depth); each is made again only when its
-   * place or start changes.
+   * docs/MANDELBROT.md): z = z^2 + c from 0, worked out here with 64-bit
+   * numbers, until it escapes or for "rounds" rounds (always the most, so
+   * the dive's two depths share it). The graphics card reads it from a
+   * two-channel float texture, 1024 values a row, and works only with each
+   * pixel's small difference from it. It is made again only when the place
+   * changes.
    */
-  private mandel: ({ texture: WebGLTexture; key: string; length: number } | null)[] = [null, null];
-  private mandelPath(slot: number, cx: number, cy: number, rounds: number, seedX: number, seedY: number) {
-    const key = `${cx},${cy},${rounds},${seedX},${seedY}`;
-    const kept = this.mandel[slot];
-    if (kept?.key === key) return kept;
+  private mandel: { texture: WebGLTexture; key: string; length: number } | null = null;
+
+
+  private mandelPath(cx: number, cy: number, rounds: number) {
+    const key = `${cx},${cy},${rounds}`;
+    if (this.mandel?.key === key) return this.mandel;
     const gl = this.gl;
     const rows = Math.ceil((rounds + 1) / MANDEL_ROW);
     const data = new Float32Array(MANDEL_ROW * rows * 2);
-    /* From Morph's start, which every pixel shares, so each pixel's difference still starts at 0. */
-    let x = seedX;
-    let y = seedY;
+    let x = 0;
+    let y = 0;
     let length = 0;
     for (let n = 0; n <= rounds; n++) {
       data[2 * n] = x;
@@ -1761,16 +1749,15 @@ export class KaleidoRenderer {
       y = 2 * x * y + cy;
       x = next;
     }
-    const texture = kept?.texture ?? gl.createTexture()!;
+    const texture = this.mandel?.texture ?? gl.createTexture()!;
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, MANDEL_ROW, rows, 0, gl.RG, gl.FLOAT, data);
     gl.activeTexture(gl.TEXTURE0);
-    const path = { texture, key, length };
-    this.mandel[slot] = path;
-    return path;
+    this.mandel = { texture, key, length };
+    return this.mandel;
   }
 
   /** Freeze background's picture behind the 3D Object (see render), made at the screen's size when first needed. */

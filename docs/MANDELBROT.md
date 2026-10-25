@@ -162,15 +162,9 @@ areas go black and the busy edges stay. It needs only the pixel, so it
 moves smoothly. Edge light (0 to 1) mixes it in; Edge width is 0.002 to
 0.3 screen heights.
 
-Morph (2026-10-24): every point's path starts at a small value that
-circles (Morph speed, rpm, state `mandelMorphTurns`), not at 0, so the set
-itself changes shape. The start is Morph times the square root of the
-view's width (it acts about like a move of c by its square), so Morph
-moves the shapes by about the same share of the view at any depth (an
-unscaled 0.03 left depth 4 empty, and did little at depth 1). The exact
-path starts there too, so each pixel's difference still starts at 0; it is
-kept per pass (slot 0 the view, slot 1 the crossfade), as the start
-depends on the depth. Rebasing goes against the path's start
-(d = z - start), and the heart and circle inside tests are off while
-Morph is on (they hold only for a start of 0). Morph is 0 to 1.5: 0.3
-changes the shapes a little, 1 a lot.
+Morph (tried 2026-10-24, removed): every point's path started at a small
+circling value instead of 0. Its effect was almost all a move of the whole
+picture in a circle (the start acts like a move of c by its square); with
+the view made to follow the place's copy, very little change of shape was
+left. Quadratic formulas with another start are the same set moved, so a
+real change of shape would need another formula.

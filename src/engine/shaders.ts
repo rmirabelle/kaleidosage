@@ -482,8 +482,6 @@ uniform float u_mandelSoftness;
  * and the distance from the edge (in screen heights) where they are black.
  */
 uniform float u_mandelEdge;
-/* Morph: where every point's path starts (0 for the true set). */
-uniform vec2 u_mandelSeed;
 uniform float u_mandelEdgeWidth;
 /* The bands moved by Band flow. */
 uniform float u_mandelFlow;
@@ -643,8 +641,7 @@ vec2 complexMap(vec2 p) {
     vec2 c = u_mapPoint + dc;
     float qx = c.x - 0.25;
     float q = qx * qx + c.y * c.y;
-    /* The heart and circle tests hold only for paths that start at 0 (no Morph). */
-    bool inside = u_mandelSeed == vec2(0.0) && (q * (q + qx) < 0.245 * c.y * c.y || (c.x + 1.0) * (c.x + 1.0) + c.y * c.y < 0.06125);
+    bool inside = q * (q + qx) < 0.245 * c.y * c.y || (c.x + 1.0) * (c.x + 1.0) + c.y * c.y < 0.06125;
     vec2 saved = vec2(1e9);
     int saveAt = 8;
     float near = 1e-3 * span;
@@ -660,8 +657,7 @@ vec2 complexMap(vec2 p) {
         break;
       }
       if (dot(m, m) < dot(d, d) || ref >= u_mandelLength - 1) {
-        /* Against the path's start, which is Morph's start, not always 0. */
-        d = m - mandelAt(0);
+        d = m;
         ref = 0;
       }
       if (i == saveAt) {
