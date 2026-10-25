@@ -1,7 +1,7 @@
 import { FilmStrip, X } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import type { Engine } from "../engine/engine";
-import { TITLE_HOLD, formatLength, loopSeconds, seamlessChanges, type VideoFps, type VideoOptions, type VideoQuality, type VideoStyle } from "../lib/videoExport";
+import { TITLE_HOLD, VIDEO_SIZES, formatLength, loopSeconds, seamlessChanges, type VideoFps, type VideoOptions, type VideoQuality, type VideoSizeId, type VideoStyle } from "../lib/videoExport";
 import { help } from "../help/topics";
 
 /** The choices made last time, so the dialog opens with them. */
@@ -26,7 +26,8 @@ const FPS_CHOICES: VideoFps[] = [60, 30];
 
 interface Props {
   engine: Engine;
-  size: { width: number; height: number };
+  /** The video size for the "Screen" choice: the picture's shape on the screen. */
+  screenSize: { width: number; height: number };
   onCancel: () => void;
   onExport: (options: VideoOptions) => void;
 }
@@ -36,8 +37,11 @@ interface Props {
  * style. Title shows a title box at the start; Seamless loop makes the last
  * frame lead into the first, so the video can repeat with no jump.
  */
-export function ExportVideoDialog({ engine, size, onCancel, onExport }: Props) {
+export function ExportVideoDialog({ engine, screenSize, onCancel, onExport }: Props) {
   const stored = readStored();
+  const sizeChoices = [{ id: "screen" as VideoSizeId, ratio: "Screen", sites: "Same shape", ...screenSize }, ...VIDEO_SIZES];
+  const [sizeId, setSizeId] = useState<VideoSizeId>(sizeChoices.some((choice) => choice.id === stored.size) ? stored.size! : "screen");
+  const size = sizeChoices.find((choice) => choice.id === sizeId)!;
   const [loops, setLoops] = useState(() => LOOP_CHOICES.includes(stored.loops ?? 0) ? stored.loops! : 1);
   const [style, setStyle] = useState<VideoStyle>(stored.style === "title" ? "title" : "loop");
   const [quality, setQuality] = useState<VideoQuality>(QUALITY_CHOICES.some((choice) => choice.value === stored.quality) ? stored.quality! : "high");
@@ -51,7 +55,7 @@ export function ExportVideoDialog({ engine, size, onCancel, onExport }: Props) {
   const submit = () => {
     const typed = Number(fadeOut);
     const fadeOutMs = fadeOut.trim() && Number.isFinite(typed) ? Math.max(0, Math.round(typed)) : null;
-    const options: VideoOptions = { style, title, fadeOutMs, loops, quality, fps };
+    const options: VideoOptions = { size: sizeId, style, title, fadeOutMs, loops, quality, fps };
     try { localStorage.setItem(STORE_KEY, JSON.stringify(options)); } catch { /* Remembering is a convenience only. */ }
     onExport(options);
   };
@@ -76,6 +80,24 @@ export function ExportVideoDialog({ engine, size, onCancel, onExport }: Props) {
           <button className="about-dialog-close" onClick={onCancel} aria-label="Close" data-tip="Close"><X size={18} /></button>
         </header>
         <div className="video-dialog-body">
+          <div className="video-row">
+            <span className="video-label">Size</span>
+            <div className="video-choices" role="radiogroup" aria-label="Size">
+              {sizeChoices.map((choice) => (
+                <button
+                  key={choice.id}
+                  role="radio"
+                  aria-checked={sizeId === choice.id}
+                  className={`video-choice ${sizeId === choice.id ? "active" : ""}`}
+                  data-tip={`${choice.width} × ${choice.height}`}
+                  onClick={() => setSizeId(choice.id)}
+                >
+                  <strong>{choice.ratio}</strong>
+                  <span>{choice.sites}</span>
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="video-row">
             <span className="video-label">Length</span>
             <div className="video-choices" role="radiogroup" aria-label="Length">

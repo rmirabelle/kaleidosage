@@ -60,7 +60,7 @@ import { PLAYLIST_EXTENSION, isPlaylistFile, openPlaylistFile, playlistFingerpri
 import { revealMainWindow } from "./lib/splash";
 import { isVideoPath, isVideoType, loadVideoBlob, loadVideoFile, stageVideoBlob, type VideoFile } from "./lib/videos";
 import { checkForUpdate, getAppVersion, type UpdateInfo } from "./lib/updater";
-import { encodeVideo, videoSize, type VideoOptions } from "./lib/videoExport";
+import { encodeVideo, videoDimensions, videoSize, type VideoOptions } from "./lib/videoExport";
 
 const MIDI_PANEL_HEIGHT_KEY = "kaleidosage.midi-panel-height";
 /** The MIDI panel's height limits, in pixels; it opens at its last height, or DEFAULT. */
@@ -730,10 +730,10 @@ export default function App() {
     }
   }, [engine, showError, showSaved]);
 
-  /** The video size: the picture's shape on the screen, inside 1080p. */
-  const exportSize = () => {
+  /** The picture's shape on the screen (width over height). */
+  const screenAspect = () => {
     const canvas = canvasRef.current;
-    return videoSize(canvas && canvas.clientHeight > 0 ? canvas.clientWidth / canvas.clientHeight : 16 / 9);
+    return canvas && canvas.clientHeight > 0 ? canvas.clientWidth / canvas.clientHeight : 16 / 9;
   };
 
   const openVideoDialog = useCallback(() => {
@@ -754,7 +754,7 @@ export default function App() {
     const path = isTauri() ? await chooseExportPath("mp4", title) : "kaleido.mp4";
     if (!path) return;
     const controller = new AbortController();
-    const size = exportSize();
+    const size = videoDimensions(options.size, screenAspect());
     const job = { path, progress: 0, controller };
     setVideoJob(job);
     let shown = 0;
@@ -2447,7 +2447,7 @@ export default function App() {
       {videoDialogOpen && engine && (
         <ExportVideoDialog
           engine={engine}
-          size={exportSize()}
+          screenSize={videoSize(screenAspect())}
           onCancel={() => setVideoDialogOpen(false)}
           onExport={(options) => void exportVideo(options)}
         />

@@ -26,8 +26,19 @@ export type VideoStyle = "title" | "loop";
 /** Standard keeps the file small; High and Best keep a fixed picture quality, so the file grows with the detail. */
 export type VideoQuality = "standard" | "high" | "best";
 export type VideoFps = 30 | 60;
+/** "screen" keeps the picture's shape on the screen; the others are fixed sizes for video sites. */
+export type VideoSizeId = "screen" | "landscape" | "vertical" | "square" | "portrait";
+
+/** The fixed video sizes, in pixels, with the sites that use them. */
+export const VIDEO_SIZES: { id: Exclude<VideoSizeId, "screen">; ratio: string; sites: string; width: number; height: number }[] = [
+  { id: "landscape", ratio: "16:9", sites: "YouTube", width: 1920, height: 1080 },
+  { id: "vertical", ratio: "9:16", sites: "TikTok, Reels, Shorts", width: 1080, height: 1920 },
+  { id: "square", ratio: "1:1", sites: "Instagram square", width: 1080, height: 1080 },
+  { id: "portrait", ratio: "4:5", sites: "Instagram feed", width: 1080, height: 1350 }
+];
 
 export interface VideoOptions {
+  size: VideoSizeId;
   style: VideoStyle;
   /** The title in the title box; empty shows only the credit. */
   title: string;
@@ -75,6 +86,12 @@ export function videoSize(aspect: number) {
   }
   const even = (value: number) => Math.max(2, Math.round(value / 2) * 2);
   return { width: even(width), height: even(height) };
+}
+
+/** The pixel size of a size choice; "screen" is the screen's shape (see videoSize). */
+export function videoDimensions(id: VideoSizeId, screenAspect: number) {
+  const fixed = VIDEO_SIZES.find((choice) => choice.id === id);
+  return fixed ? { width: fixed.width, height: fixed.height } : videoSize(screenAspect);
 }
 
 /** One loop of the scene, in seconds: the shortest time after which it repeats. */
