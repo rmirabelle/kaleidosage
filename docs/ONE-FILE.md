@@ -3,7 +3,8 @@
 A design note, written 2026-10-25, before any code. Nothing here is built
 yet. It replaces the two file types (a `.ksage` scene and a `.ksplaylist`
 playlist) with one: a `.ksage` file holds one or more scenes, and the
-audio files and audio settings when there are any.
+audio files and audio settings when there are any. Decisions marked
+"(decided)" came from the user on 2026-10-25.
 
 ## What the app does today
 
@@ -21,6 +22,8 @@ audio files and audio settings when there are any.
 - Outside a playlist, a new or opened scene empties the track list and
   sets the input to Nothing (`quietOutsidePlaylist`), because only a
   playlist can keep tracks.
+- A playlist keeps its tracks even when the input is not Files at the
+  save. The user does not want this (see Audio files in the file).
 - The three-column layout (Files, scene list, Source and FX) does not
   follow the audio links. It shows when Files is the audio input, or when a
   playlist is open (`sceneListMode`, `App.tsx` line 2269). With neither,
@@ -31,8 +34,9 @@ audio files and audio settings when there are any.
 ## The new model
 
 - The open document is the file. It holds one or more scenes in order,
-  the tracks (zero or more), the audio settings, the Files width and Song
-  follow. A single scene is a file with one scene in it.
+  and, when Files is the input, the tracks and their song analyses. It
+  also keeps the audio settings, the Files width and Song follow. A
+  single scene is a file with one scene in it.
 - The playlist code becomes the only save and open path. The one-scene
   save path (`saveScene` writing the user's file) goes away, except as
   Export Scene As.
@@ -40,85 +44,117 @@ audio files and audio settings when there are any.
   "Scene" stays the word for each part inside it. "Playlist" goes from the
   menus and the help; the Files card keeps its own name for the list of
   tracks.
+- A file with 2 or more scenes, or with audio files, is a show. A file
+  with one scene and no audio files is a single scene. Both have the same
+  layout on disk; the difference matters only to Open (see Open).
+  (decided)
 
 ## File format
 
-- A new `.ksage` is a ZIP64 archive, entries stored, the same layout as a
+- A `.ksage` is a ZIP64 archive, entries stored, the same layout as a
   `.ksplaylist` today, with one change: the manifest is `kaleidosage.json`
   with `"kind": "file"` and `"version": 1`.
-- The scenes inside stay one-scene files (`scenes/<n>/<name>.ksage`, plain
-  JSON or a ZIP with its videos), so the scene reader does not change. A
-  scene inside a file is never a file of many scenes.
-- The app finds the layout from the bytes, not from the extension:
-  1. Starts with `{`: an old one-scene file (JSON).
-  2. A ZIP with `scene.json`: an old one-scene file with videos.
-  3. A ZIP with `kaleidosage.json`: a new file.
-  4. A ZIP with `playlist.json`: an old playlist (whatever its extension).
-  5. Anything else: "The file is not a Kaleido Sage file."
-- One new Rust command, `file_layout(path)`, returns which of these it is.
-  `is_playlist_path` stays only to list old `.ksplaylist` files.
+- The scenes inside stay in today's scene layout
+  (`scenes/<n>/<name>.ksage`, plain JSON or a ZIP with its videos), so the
+  scene reader does not change. A scene inside a file is never a file of
+  many scenes.
+- The app reads only this layout. A file without `kaleidosage.json` gives
+  "The file is not a Kaleido Sage file." The app has no code for old
+  one-scene files or for `.ksplaylist` files: a one-time conversion
+  changes the user's files first (see Conversion). (decided)
 
-## Old files
+## Conversion (one time, before the new app opens the files)
 
-- An old one-scene `.ksage` opens as a file with one scene. Its path stays
-  the file's path. The next Save writes the new layout over it.
-- An old `.ksplaylist` opens as today. Its path stays until the first
-  Save, which asks for a new name with `.ksage` (the default is the same
-  name). The old `.ksplaylist` stays on disk; the app never deletes it.
-- The Open dialog lists `.ksage` and `.ksplaylist` files.
-- Risk: Kaleido Sage 0.13 and older cannot open a file in the new layout.
-  A user who saves an old scene in the new version cannot open it in an
-  old version. This is acceptable for a single-user app, but the release
-  notes must say it.
+The user is the only user of the app. So the app does not support the old
+files; a one-time program converts every file in `D:\Images\Kaleido Sage`
+(45 scene files and `Robert Mirabelle.ksplaylist`, 2026-10-25). (decided)
+
+1. Back up first: copy all 46 files, as they are, to
+   `D:\Images\Kaleido Sage backup 2026-10-25\`. Check that each copy has
+   the same size as its original. (decided)
+2. Each old scene `X.ksage` becomes a new `X.ksage`: `kaleidosage.json`
+   (input Nothing, selected scene 0) and `scenes/0/X.ksage`, the old
+   file's bytes as they are.
+3. `Robert Mirabelle.ksplaylist` becomes `Robert Mirabelle.ksage`: its
+   `playlist.json` becomes `kaleidosage.json` (kind "file"), and every
+   other entry is copied as it is, with no decode. Then the
+   `.ksplaylist` is deleted (the backup keeps a copy). (decided)
+4. Each new file is written to a temp file beside it, read back to check
+   it, then put in place of the old one.
+5. The program prints one line per file and a total. It runs once, then
+   it is deleted from the repository.
+
+The program is a small Rust program (`tools/convert-files/`), with the
+`zip` and `serde_json` crates that the app uses. It runs when the new app
+code can open the new layout (after step 3 of the order of work), and
+only with the user's go-ahead. Note: the installed Kaleido Sage 0.13
+cannot open the converted files. The backup can.
+
+## Audio files in the file (decided)
+
+- Save keeps the tracks only when the input is Files at the time of the
+  save. With any other input (Nothing, PC sound, Microphone), Save first
+  empties the track list in the app, and then saves the file with no
+  tracks and no song analyses.
+- So a track list that stays in the app from an earlier Files input never
+  goes into the file by accident.
+- The audio settings (input, device, gain, threshold) are always saved.
+
+## Open (decided)
+
+- On the start screen (no file open), Open opens the picked file, show or
+  single scene. It becomes the open file, and Save writes to it.
+- With a file open:
+  - A show (2 or more scenes, or audio files) replaces the open file,
+    after one "Save changes?" for the open file.
+  - A single scene goes into the open file as a new scene, after the
+    others. The open file counts as changed. The single scene's own file
+    on disk does not change.
+- Several files picked at once: the single scenes go in one after the
+  other. If a show is among them, it opens alone, as a playlist does now.
+- So Open also does the work of Import; there is no Import menu item.
 
 ## Menus and keys
 
 | Today | New |
 | --- | --- |
-| Playlist > Open Playlist, Scene > Open Scene (Ctrl+O) | File > Open… (Ctrl+O) |
+| Playlist > Open Playlist, Scene > Open Scene (Ctrl+O) | File > Open… (Ctrl+O), see Open |
 | Playlist > Save Playlist, Scene > Save Scene (Ctrl+S) | File > Save (Ctrl+S) |
 | Save Playlist As, Save Scene As (Ctrl+Shift+S) | File > Save As… (Ctrl+Shift+S) |
 | Playlist > Close Playlist | File > Close |
-| Scene > New Scene (Ctrl+N) | File > New (Ctrl+N): a new file with one blank scene |
-| (none) | Scene > Add Scene: a blank scene in the open file |
-| Open several scenes at once | Scene > Import Scenes…: adds the scenes of other files to the open file |
-| Export Scene As | Scene > Export Scene As… (a one-scene file) |
+| (none) | File > New: a new, untitled file with one blank scene |
+| Scene > New Scene (Ctrl+N) | Scene > New Scene (Ctrl+N): a blank scene in the open file |
+| Export Scene As | Scene > Export Scene As… (a file with that one scene) |
 | Close Scene (Ctrl+W) | Scene > Remove Scene (Ctrl+W), no question; the file counts as changed |
 
 The start screen gets "New" and "Open". The Playlist menu goes.
 
 ## Behavior changes
 
-- Open replaces the open file, after one "Save changes?" for the file.
-  To combine files, the user uses Import Scenes.
-- `quietOutsidePlaylist` goes. File > New and File > Close empty the
-  tracks and set the input to Nothing, as today. Add Scene and Import
-  Scenes keep the tracks and the input.
+- `quietOutsidePlaylist` goes. File > New, File > Close and opening a
+  file on the start screen empty the tracks and set the input to Nothing,
+  as today, unless the opened file has tracks. New Scene and a single
+  scene that goes into the open file keep the tracks and the input.
 - One unsaved mark, for the file. It counts each scene's changes (as
   `playlistUnsaved` does today) and the file's own: scene order, tracks,
-  audio settings, Files width, Song follow, song map edits. Each scene in
-  the list can keep its own dot, so the user sees which scenes changed.
+  audio settings, Files width, Song follow, song map edits. The scenes do
+  not get dots of their own. (decided)
 - Closing the window asks once, for the file.
 - The title bar shows "Night Show.ksage › Scene 2". A file that was never
   saved shows "Untitled".
 - Save As asks for a name. The default is the file's name, or the first
   scene's name for a new file.
-- Rename (scene list) renames the scene inside the file. The file counts
-  as changed.
-- Save Scene asked "There is no source image" for a scene with no image.
-  Save of the file skips a new blank scene with no changes, as Save
-  Playlist does now; a changed scene with no source A stops the save with
-  a message that names the scene.
+- Rename (scene list or tab) renames the scene inside the file. The file
+  counts as changed.
+- Save skips a new blank scene with no changes, as Save Playlist does now.
+  A changed scene with no source A stops the save with a message that
+  names the scene.
 
-## Layout (open question)
+## Layout (decided)
 
-`sceneListMode` is `tracksActive || playlistPath !== null` now. With one
-file type, every saved file has a path, so the rule must change. Options:
-
-1. List when Files is the input, or when the file has 2 or more scenes;
-   tabs for a single scene with no tracks. (Recommended.)
-2. List only when Files is the input; tabs otherwise.
-3. Always the list.
+The scene list (three columns) shows only while Files is the input. With
+any other input, the scenes show as tabs, also for a show with many
+scenes. `sceneListMode` becomes `tracksActive`.
 
 ## Costs and risks
 
@@ -129,66 +165,74 @@ file type, every saved file has a path, so the rule must change. Options:
   `raw_copy_file`, which does not decode them, but still writes them.
 - Open speed: today a one-scene file with a video opens in place, and the
   video streams from inside it. A new file unpacks to the temp folder
-  first, so a 2 GB video is copied before the scene shows. Option for a
+  first, so a large video is copied before the scene shows
+  (`Imagine.ksage` is 39 MB; `Robert Mirabelle` is 380 MB). Option for a
   later step: stream the stored scene and track entries from inside the
   archive at their offsets, as `scene_archive.rs` does for videos now.
   Then nothing is unpacked.
-- Video handles: an old one-scene file with an embedded video streams it
-  from the user's file. The first Save writes the scene's copy to the temp
-  folder and then replaces the user's file. Test that the video keeps
-  playing after that Save, and that a second Save works.
+- Video handles: a scene with an embedded video streams it from the
+  scene's copy in the temp folder. Save writes that copy again while the
+  video plays from it. Test that the video keeps playing after a Save,
+  and that a second Save works.
 - Disk space: each open file keeps an unpacked copy in the temp folder, as
   playlists do now. The app clears old copies at the start and at the next
   Open.
 - Dev reload keeper: `reloadKeeper.ts` keeps the tabs and their paths but
-  not the playlist path. With one file type, it must keep the file's path
-  and saved fingerprint too, or a dev reload loses the file.
-- Song follow picks follow scene positions (`songFollow.moveScenes`).
-  Import Scenes and Remove Scene must keep them right, as tab moves and
-  closes do now.
+  not the playlist path. It must keep the file's path and saved
+  fingerprint too, or a dev reload loses the file.
+- Song follow picks follow scene positions (`songFollow.moveScenes`). A
+  scene that goes into the open file, and Remove Scene, must keep them
+  right, as tab moves and closes do now.
+- Save with an input other than Files empties the track list. A user who
+  switched the input for a moment loses the list in the app. The backup
+  and the last saved file still have it.
 
 ## Order of work
 
 Each step is a commit, with tests passing, before the next.
 
-1. Rust: `file_layout`, the new manifest name, read old `playlist.json`
-   too. Rename `playlist_archive.rs` to `file_archive.rs` (commands
-   `save_file`, `open_file`, `read_file_summary`). Tests for each layout.
+1. Rust: rename `playlist_archive.rs` to `file_archive.rs` (commands
+   `save_file`, `open_file`, `read_file_summary`), with the new manifest
+   name and kind. Tests. Remove `is_playlist_path`; `is_scene_path` stays
+   for `.ksage`.
 2. TS: `src/lib/playlistFile.ts` becomes `src/lib/kaleidoFile.ts`, with
-   the new manifest and tests. Keep `readManifest` reading the old kind.
+   the new manifest, a `isShow(summary)` test (2 or more scenes, or
+   tracks), and tests.
 3. App state: one file path and one saved fingerprint (from
    `playlistPathRef` and `playlistSavedRef`). `SceneDoc.path` becomes the
-   scene's copy in the temp folder, never a user file. Open of an old
-   one-scene file goes through the same path (a one-scene file).
-4. Menus, keys, start screen, title bar, "Save changes?" and window close.
-   Remove `quietOutsidePlaylist`, the Playlist menu, `saveScene` as a
-   save (keep it as Export Scene As).
-5. Import Scenes and Remove Scene, with Song follow picks.
-6. Layout rule (from the open question).
-7. Open dialog: one kind for `.ksage` and `.ksplaylist`; the preview reads
-   `file_layout` and shows the scene or the summary card.
-8. Reload keeper keeps the file.
-9. Docs and help: `docs/RULES.md` (Scene files), `docs/AUDIO.md` part 8,
-   `src/help/topics.ts` (the playlist topic), `tools/test-ui.mjs`,
-   `CLAUDE.md` layout line.
-10. Later, if needed: stream from inside the archive (no unpack), and raw
+   scene's copy in the temp folder, never a user file. Save follows the
+   Audio files rule.
+4. Conversion: write the program, run it with the user's go-ahead (backup
+   first), then delete it.
+5. Open rules, menus, keys, start screen, title bar, "Save changes?" and
+   window close. Remove `quietOutsidePlaylist`, the Playlist menu, and
+   `saveScene` as a save (keep it as Export Scene As).
+6. Remove Scene and single scenes into the open file, with Song follow
+   picks.
+7. Layout rule: `sceneListMode = tracksActive`.
+8. Open dialog: one kind for `.ksage`; the preview reads the summary and
+   shows the scene or the show card.
+9. Reload keeper keeps the file.
+10. Docs and help: `docs/RULES.md` (Scene files), `docs/AUDIO.md` part 8,
+    `src/help/topics.ts` (the playlist topic), `tools/test-ui.mjs`,
+    `CLAUDE.md` layout line.
+11. Later, if needed: stream from inside the archive (no unpack), and raw
     copy of unchanged entries on Save.
 
 ## Checks the user does in the app
 
-- Open an old one-scene file (JSON), an old one with a video, and an old
-  playlist. Each opens with its scenes, tracks and settings.
+- After the conversion: open `Robert Mirabelle.ksage` and a few scene
+  files. Each opens with its scenes, tracks and settings.
 - Save each one. Open it again. Nothing is lost.
-- Save an old scene with a video, keep playing, save again.
-- New, Add Scene, Import Scenes, Remove Scene, Rename, reorder. The unsaved
-  mark and "Save changes?" are right after each.
+- Save a scene with a video while it plays, then save again.
+- With a show open, open a single scene: it goes in as a new scene. Open
+  another show: it replaces the open one, after one question.
+- Switch the input from Files to Nothing, save, open the file again: no
+  tracks.
+- New, New Scene, Remove Scene, Rename, reorder. The unsaved mark and
+  "Save changes?" are right after each.
 - Close the window with changes: one question.
 
 ## Open questions
 
-1. The layout rule (see Layout).
-2. Should Open add the scenes when the open file is a new, untitled file
-   with no changes, as opening a scene into an empty untitled tab does
-   now? (Recommended: yes.)
-3. Does a scene inside a file need its own unsaved dot, or is the file's
-   mark enough?
+None now. All questions from the first draft have answers above.
