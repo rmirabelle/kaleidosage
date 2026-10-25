@@ -168,3 +168,47 @@ picture in a circle (the start acts like a move of c by its square); with
 the view made to follow the place's copy, very little change of shape was
 left. Quadratic formulas with another start are the same set moved, so a
 real change of shape would need another formula.
+
+## Research notes (2026-10-24): what fractal zoom programs do
+
+Asked by the user after Growth and Morph failed: what do Kalles Fraktaler,
+zoomasm, Ultra Fractal and others know that applies here? Ranked by fit.
+
+1. **Deep targets with a long loop give the "evolving" look.** The shapes
+   change as a dive passes from one layer to the next on its way to a
+   small copy; a copy with a long loop has many layers. The Seahorse
+   valley point is the center of a copy with a loop of 998 rounds, which is
+   why it was the only place where the user saw branches evolve; the other
+   places' copies have loops of 16 to 90. Those deep views need more
+   rounds (the black in the user's picture is likely the 1250-round
+   limit), so this pairs with idea 2.
+2. **Exponential map (log-polar) rendering.** Zoom video programs draw the
+   whole dive once, as rings at evenly spaced powers around the target
+   (a strip: across is the angle, down is log of the distance; it is
+   conformal, so spirals keep their shape), then make each frame by
+   reading that strip (zoomasm keeps about 16 strips in GPU memory and
+   reads them with texelFetch). Per frame it costs a texture read, not
+   rounds, so a dive can use many more rounds, stays smooth at any size,
+   and its bands cannot jitter. Limits: the view must be centered on the
+   target (Rotation is free, Pan is not), detail near the very center is
+   thinner, and the strip costs memory (for example 2048 across by a few
+   thousand down in half floats) and a one-time render, done in pieces so
+   the GPU does not time out.
+3. **Stripe Average and its family (Triangle Inequality Average,
+   Curvature Average).** Colorings that average a function over the whole
+   path, giving flame-like patterns that reach out from the set; they need
+   a large escape size (about 1e20). Our loop already has the full z each
+   round, so it would be one more sum per round. A possible band style.
+4. **Not useful here.** Bilinear approximation (BLA) and series
+   approximation skip rounds only when a view needs millions of them; ours
+   stops at 1250. Histogram coloring changes with what is on the screen,
+   so in a moving view it jitters, as Growth did.
+
+Sources: [Exponential Map (Munafo)](https://mrob.com/pub/muency/exponentialmap.html),
+[zoomasm](https://mathr.co.uk/zoomasm/),
+[Fractals/software (Wikibooks)](https://en.wikibooks.org/wiki/Fractals/software),
+[lilac exponent (Fractal Forums)](https://www.fractalforums.com/images-showcase-(rate-my-fractal)/lilac-exponent),
+[Bivariate Linear Approximation (Munafo)](https://mrob.com/pub/muency/bivariatelinearapproximati.html),
+[Perturbation Methods (Munafo)](https://mrob.com/pub/muency/perturbationmethods.html),
+[Triangle Inequality Average (Ultra Fractal)](https://www.ultrafractal.com/help/coloring/standard/triangleinequalityaverage.html),
+[Smooth iteration count (Quilez)](https://iquilezles.org/articles/msetsmooth).
