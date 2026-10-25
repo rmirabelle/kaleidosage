@@ -73,6 +73,8 @@ interface Status {
   duration: number;
   /** Errors stay until closed, and their text can be selected and copied. */
   error?: boolean;
+  /** Work that takes a while (a save): a spinner shows before the message. */
+  busy?: boolean;
 }
 
 const CURSOR_IDLE_MS = 2000;
@@ -517,8 +519,8 @@ export default function App() {
   /** The start screen shows until a new scene starts or an image or scene opens. */
   const [startScreen, setStartScreen] = useState(true);
 
-  const showStatus = useCallback((message: string, duration = 2500, action?: Status["action"]) => {
-    setStatus({ message, duration, action });
+  const showStatus = useCallback((message: string, duration = 2500, action?: Status["action"], busy = false) => {
+    setStatus({ message, duration, action, busy });
   }, []);
 
   const showError = useCallback((message: string, action?: Status["action"]) => {
@@ -1041,7 +1043,7 @@ export default function App() {
       return false;
     }
     try {
-      showStatus("Exporting the scene and embedding media…", 0);
+      showStatus("Exporting the scene and embedding media…", 0, undefined, true);
       const copy = await invoke<string>("scene_copy_path", { name: fileNameOf(path) });
       await writeSceneFile(copy, engine.params, engine.state, imagesRef.current, driverRef.current);
       /* A scene alone has no tracks, so Files as the input would open with an empty list: it keeps no input then. */
@@ -1586,7 +1588,7 @@ export default function App() {
     if (!path) return false;
     try {
       if (audioInput.settings.kind !== "tracks") tracks.clear();
-      showStatus(tracks.list.length ? "Saving the project and its scenes and audio files…" : "Saving the project and its scenes…", 0);
+      showStatus(tracks.list.length ? "Saving the project and its scenes and audio files…" : "Saving the project and its scenes…", 0, undefined, true);
       /**
        * Each scene goes in as it is now, from the engine or from its tab's
        * stored copy. A scene's file on disk never changes: a scene that is
@@ -1757,7 +1759,7 @@ export default function App() {
    */
   const importScenes = useCallback(async (paths: string[]) => {
     if (!engine || paths.length === 0 || docsRef.current.length === 0) return;
-    const title = paths.length === 1 ? `Importing ${fileNameOf(paths[0])}` : `Importing ${paths.length} projects`;
+    const title = paths.length === 1 ? `Importing scenes from ${fileNameOf(paths[0])}` : `Importing scenes from ${paths.length} files`;
     const sceneName = (path: string) => fileNameOf(path).replace(/\.ksage$/i, "");
     const docPath = (doc: SceneDoc) => doc.id === activeIdRef.current ? scenePathRef.current : doc.path;
     const docDirty = (doc: SceneDoc) => doc.id === activeIdRef.current ? fingerprint() !== savedFingerprintRef.current : doc.dirty;
@@ -2442,7 +2444,8 @@ export default function App() {
             )}
             {fatalError && <div className="fatal-error selectable">{fatalError}</div>}
             {status && (
-              <div className={`status-toast ${status.error ? "error" : ""}`} role={status.error ? "alert" : "status"}>
+              <div className={`status-toast ${status.error ? "error" : ""} ${status.busy ? "busy" : ""}`} role={status.error ? "alert" : "status"}>
+                {status.busy && <span className="status-spinner" aria-hidden="true" />}
                 <span className={status.error ? "selectable" : undefined}>{status.message}</span>
                 {status.action && <button onClick={status.action.run}>{status.action.label}</button>}
                 {status.error && (

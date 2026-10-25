@@ -1253,6 +1253,10 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
   backdrop-filter: blur(8px);
   font-size: 12px;
 }
+/* Work that takes a while (a project that saves): a spinner before the message, with more room round it. */
+.status-toast.busy { gap: 12px; padding: 12px 18px; font-size: 13px; }
+.status-spinner { flex: none; width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.15); border-top-color: var(--accent); border-radius: 50%; animation: loading-spin .7s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .status-spinner { animation: none; } }
 .status-toast button { padding: 2px 8px; border-radius: 5px; color: #fff; background: var(--accent); font-size: 11px; cursor: pointer; }
 .status-toast button:hover { background: var(--accent-hover); }
 .status-toast.error { max-width: min(560px, calc(100% - 28px)); align-items: flex-start; border-color: rgba(248,113,113,.45); color: #fecaca; }
