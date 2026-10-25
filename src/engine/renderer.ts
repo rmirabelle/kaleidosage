@@ -448,7 +448,8 @@ export interface FrameValues {
    * Lasers (see LASER_SHADER): strength (0 = off), the number of beams, the
    * fan's spread and sweep (radians, 90° = up, 0 = level), the base line's length (a part
    * of the screen height) and angle (radians, 0 = level), the beam width
-   * (screen pixels), the glow and its size (screen pixels), the fade along a beam, the first hue (0 to 1), how far the
+   * (screen pixels), the glow and its size (screen pixels), the emitter
+   * dot's size (times its normal size, which grows with the beam width), the fade along a beam, the first hue (0 to 1), how far the
    * hues go around the wheel, and the source (a part of the screen size
    * from the screen center).
    */
@@ -461,6 +462,7 @@ export interface FrameValues {
   laserWidth: number;
   laserGlow: number;
   laserGlowSize: number;
+  laserEmitter: number;
   laserFade: number;
   laserHue: number;
   laserRainbow: number;
@@ -2362,6 +2364,8 @@ export class KaleidoRenderer {
     gl.uniform1f(l.uniforms.u_width, Math.max(0.25, v.laserWidth * this.texelScale));
     gl.uniform1f(l.uniforms.u_glow, Math.max(0, v.laserGlow));
     gl.uniform1f(l.uniforms.u_glowSize, Math.max(0.5, v.laserGlowSize * this.texelScale));
+    /* Emitter 1 is a dot three beam widths and 6 px (at 1080p) across. */
+    gl.uniform1f(l.uniforms.u_emitter, Math.max(0, v.laserEmitter) * (v.laserWidth * this.texelScale * 3 + 6 * height / 1080));
     gl.uniform1f(l.uniforms.u_fade, 3 * Math.max(0, v.laserFade));
     gl.uniform1f(l.uniforms.u_hue, v.laserHue);
     gl.uniform1f(l.uniforms.u_rainbow, v.laserRainbow);

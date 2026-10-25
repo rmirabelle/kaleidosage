@@ -1327,6 +1327,7 @@ export class Engine {
       laserWidth: this.live("laserWidth"),
       laserGlow: this.live("laserGlow"),
       laserGlowSize: this.live("laserGlowSize"),
+      laserEmitter: this.live("laserEmitter"),
       laserFade: this.live("laserFade"),
       laserHue: this.live("laserHue") / 360,
       laserRainbow: this.live("laserRainbow"),

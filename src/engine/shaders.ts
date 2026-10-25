@@ -2627,13 +2627,15 @@ void main() {
  * Lasers: a fan of u_count thin beams, u_spread wide in all. The fan is a
  * flat sheet, tilted up by the angle whose sine is u_sweep (1 = straight
  * up, 0 = level and seen edge-on, below 0 = down); each beam is drawn as
- * seen from the front, so a beam that points away gets shorter. The beams start in a row along u_base (the base
- * line, in pixels), centered on u_source (pixels from the screen center).
+ * seen from the front, so a beam that points away gets shorter (only one
+ * that points almost straight away ends on the screen). The beams start in
+ * a row along u_base (the base line, in pixels), centered on u_source
+ * (pixels from the screen center).
  * Each beam is a bright core u_width pixels wide, with a white-hot middle,
  * in a haze u_glow bright that reaches about u_glowSize pixels, and gets
  * dimmer along its length by u_fade (per screen height). The beams' hues
  * start at u_hue and go u_rainbow of the way around the color wheel across
- * the fan. Each beam's start glows too.
+ * the fan. Each beam's start glows in a dot u_emitter pixels across (0 = no dot).
  * The beams are added light (see addLight).
  */
 export const LASER_SHADER = `#version 300 es
@@ -2650,6 +2652,7 @@ uniform int u_count;
 uniform float u_width;
 uniform float u_glow;
 uniform float u_glowSize;
+uniform float u_emitter;
 uniform float u_fade;
 uniform float u_hue;
 uniform float u_rainbow;
@@ -2676,7 +2679,7 @@ void main() {
     vec2 dir = vec2(sin(a), cos(a) * u_sweep);
     float shown = length(dir);
     dir = shown > 1e-5 ? dir / shown : vec2(0.0, 1.0);
-    float beamLength = shown * 3.0 * u_res.y;
+    float beamLength = shown * 12.0 * u_res.y;
     float along = dot(d, dir);
     /* Behind the source there is no beam; the start is soft, so no edge shows there. */
     float start = smoothstep(-u_width, u_width * 2.0, along);
@@ -2690,8 +2693,8 @@ void main() {
     light += (color + 0.6) * core * start * fade;
     glowSum += glow * fade;
     glowColor += color * glow * fade;
-    float near = length(d) / (u_width * 3.0 + 6.0 * u_res.y / 1080.0);
-    float beamSpot = exp(-near * near);
+    float near = length(d) / max(u_emitter, 1e-3);
+    float beamSpot = u_emitter > 0.0 ? exp(-near * near) : 0.0;
     if (beamSpot > spot) {
       spot = beamSpot;
       spotColor = color;

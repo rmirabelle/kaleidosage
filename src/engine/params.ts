@@ -23,7 +23,7 @@ export const PARAM_KEYS = [
   "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY",
   "solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY",
   "raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY",
-  "laserAmount", "laserCount", "laserSpread", "laserSweep", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY",
+  "laserAmount", "laserCount", "laserSpread", "laserSweep", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY",
   "bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize",
   "sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel"
 ] as const;
@@ -804,8 +804,9 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * from one point), and Base angle turns it (0 = level). Width is the beam
    * width in screen pixels; Glow is how bright the haze around each beam
    * is, and Glow size how far it reaches, in screen pixels, so a thin beam
-   * can have a strong glow. Fade is how fast a beam gets dimmer along its
-   * length. Color is the first beam's hue;
+   * can have a strong glow. Emitter is the size of the glowing dot where
+   * each beam starts (0 = no dot). Fade is how fast a beam gets dimmer
+   * along its length (0 = not at all). Color is the first beam's hue;
    * Rainbow spreads the beams' hues around the color wheel. The source is a
    * part of the screen size from the screen center: -0.5 and 0.5 are the
    * screen edges, so the start-up source is the middle of the bottom edge.
@@ -818,6 +819,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   laserBaseAngle: { label: "Base angle", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "wave", low: -20, high: 20, on: false },
   laserWidth: { label: "Width", min: 0.5, max: 12, step: 0.1, value: 1.5, unit: "px", drift: "wave", low: 1, high: 3, on: false },
   laserGlow: { label: "Glow", min: 0, max: 4, step: 0.01, value: 0.5, drift: "wave", low: 0.3, high: 1.5, on: false },
+  laserEmitter: { label: "Emitter", min: 0, max: 3, step: 0.01, value: 1, drift: "wave", low: 0.5, high: 1.5, on: false },
   laserGlowSize: { label: "Glow size", min: 2, max: 80, step: 0.1, scale: "log", value: 10, unit: "px", drift: "wave", low: 6, high: 24, on: false },
   laserFade: { label: "Fade", min: 0, max: 1, step: 0.01, value: 0.3, drift: "wave", low: 0.1, high: 0.6, on: false },
   laserHue: { label: "Color", min: 0, max: 360, step: 1, value: 120, unit: "°", drift: "spin", low: 0, high: 360, on: false },
@@ -1303,7 +1305,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   particles: ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost"],
   cycles: ["cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead", "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY"],
   rays: ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"],
-  lasers: ["laserAmount", "laserCount", "laserSpread", "laserSweep", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"],
+  lasers: ["laserAmount", "laserCount", "laserSpread", "laserSweep", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"],
   bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
   sharpen: ["sharpen", "sharpenRadius"],
   color: ["overlayOpacity"],
@@ -1582,6 +1584,7 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("laserBaseAngle", Math.random() < 0.6 ? 0 : rand(-30, 30), rand(0, 20));
   set("laserGlow", rand(0.2, 2), rand(0, 0.4));
   set("laserGlowSize", rand(5, 30), rand(0, 5));
+  set("laserEmitter", Math.random() < 0.2 ? 0 : rand(0.4, 1.6), rand(0, 0.3));
   set("laserFade", rand(0, 0.7), rand(0, 0.2));
   setAngle("laserHue", 0.3);
   set("laserRainbow", Math.random() < 0.5 ? 0 : rand(0.1, 1), rand(0, 0.2));
