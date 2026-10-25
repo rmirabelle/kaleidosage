@@ -1321,7 +1321,7 @@ export class Engine {
       lasers: on.lasers ? this.live("laserAmount") : 0,
       laserCount: this.live("laserCount"),
       laserSpread: this.live("laserSpread") * DEGREES,
-      laserAim: this.live("laserAim") * DEGREES,
+      laserSweep: this.live("laserSweep") * DEGREES,
       laserBase: this.live("laserBase"),
       laserBaseAngle: this.live("laserBaseAngle") * DEGREES,
       laserWidth: this.live("laserWidth"),

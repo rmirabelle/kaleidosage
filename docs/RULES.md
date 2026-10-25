@@ -230,7 +230,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Adding Algorithm sets Mix and Opacity to full.
 - Adding Algorithm changes a Power map at power 1 to power 2.
 - Adding the Kaleidoscope starts Pan X and Pan Y looping.
-- Adding Lasers starts Aim and Spread looping, so the fan sweeps and opens and closes.
+- Adding Lasers starts Sweep looping, so the fan tilts up and down and looks flat as it passes level.
 - Adding Contours with no lines sets black lines, 16 levels and 1.5 px width.
 - The X button takes an effect out of the list and keeps its settings.
 - You drag a group by its grip to change the order, and the picture changes live.

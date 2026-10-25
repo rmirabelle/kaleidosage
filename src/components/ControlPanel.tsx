@@ -66,7 +66,7 @@ const SORT_KEYS: ParamKey[] = ["sortAmount", "sortLow", "sortHigh", "sortAngle",
 /* The Blend menu and the Opacity slider (particleAmount) come after these, in the Common part at the bottom of the group. */
 const PARTICLE_KEYS: ParamKey[] = ["particleLevel", "particleBackground", "particleCount", "particleSize", "particleLife", "particleSpeed", "particleFollow", "particleCling", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleGradient", "particleBoost"];
 const RAYS_KEYS: ParamKey[] = ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"];
-const LASER_KEYS: ParamKey[] = ["laserAmount", "laserCount", "laserSpread", "laserAim", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"];
+const LASER_KEYS: ParamKey[] = ["laserAmount", "laserCount", "laserSpread", "laserSweep", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"];
 const BLOOM_KEYS: ParamKey[] = ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"];
 const SHARPEN_KEYS: ParamKey[] = ["sharpen", "sharpenRadius"];
 const COLOR_KEYS: ParamKey[] = ["overlayOpacity"];
@@ -279,13 +279,10 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       lasers: () => {
         if (engine.params.laserAmount.value !== 0 || engine.params.laserAmount.on) return;
         start("laserAmount", 1);
-        /* The fan sweeps and opens and closes, as in a laser show. */
-        const defaults = createParams();
-        for (const key of ["laserAim", "laserSpread"] as const) {
-          const range = engine.params[key];
-          const { low, high } = range.low !== range.high ? range : defaults[key];
-          Object.assign(range, { low, high, on: true });
-        }
+        /* The fan sweeps up and down, as in a laser show. */
+        const sweep = engine.params.laserSweep;
+        const { low, high } = sweep.low !== sweep.high ? sweep : createParams().laserSweep;
+        Object.assign(sweep, { low, high, on: true });
       },
       bloom: () => start("bloomAmount", 1)
     };

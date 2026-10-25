@@ -2624,8 +2624,10 @@ void main() {
 }`;
 
 /**
- * Lasers: a fan of u_count thin beams, u_spread wide in all and turned
- * u_aim from straight up. The beams start in a row along u_base (the base
+ * Lasers: a fan of u_count thin beams, u_spread wide in all. The fan is a
+ * flat sheet, tilted up by the angle whose sine is u_sweep (1 = straight
+ * up, 0 = level and seen edge-on, below 0 = down); each beam is drawn as
+ * seen from the front, so a beam that points away gets shorter. The beams start in a row along u_base (the base
  * line, in pixels), centered on u_source (pixels from the screen center).
  * Each beam is a bright core u_width pixels wide, with a white-hot middle,
  * in a haze u_glow bright that reaches about u_glowSize pixels, and gets
@@ -2642,7 +2644,7 @@ uniform sampler2D u_picture;
 uniform vec2 u_res;
 uniform vec2 u_source;
 uniform vec2 u_base;
-uniform float u_aim;
+uniform float u_sweep;
 uniform float u_spread;
 uniform int u_count;
 uniform float u_width;
@@ -2669,8 +2671,12 @@ void main() {
     if (i >= u_count) break;
     float t = u_count > 1 ? float(i) / float(u_count - 1) - 0.5 : 0.0;
     vec2 d = fromSource - u_base * t;
-    float a = u_aim + u_spread * t;
-    vec2 dir = vec2(sin(a), cos(a));
+    float a = u_spread * t;
+    /* The beam's direction on the screen, and how much of its length shows (the rest points away). */
+    vec2 dir = vec2(sin(a), cos(a) * u_sweep);
+    float shown = length(dir);
+    dir = shown > 1e-5 ? dir / shown : vec2(0.0, 1.0);
+    float beamLength = shown * 3.0 * u_res.y;
     float along = dot(d, dir);
     /* Behind the source there is no beam; the start is soft, so no edge shows there. */
     float start = smoothstep(-u_width, u_width * 2.0, along);
@@ -2679,7 +2685,8 @@ void main() {
     /* The glow starts softly over its own size, so no hard edge shows behind the start. */
     float glow = u_glow * 0.5 * exp(-across * u_width / haze) * smoothstep(-haze, haze * 0.5, along);
     vec3 color = hueColor(fract(u_hue + u_rainbow * float(i) / float(max(u_count, 1))));
-    float fade = exp(-u_fade * max(along, 0.0) / u_res.y);
+    /* Fade dims the beam along its length; a short beam also fades out toward its end. */
+    float fade = exp(-u_fade * max(along, 0.0) / u_res.y) * (1.0 - smoothstep(beamLength * 0.4, beamLength, along));
     light += (color + 0.6) * core * start * fade;
     glowSum += glow * fade;
     glowColor += color * glow * fade;

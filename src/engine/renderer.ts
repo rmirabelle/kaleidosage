@@ -446,7 +446,7 @@ export interface FrameValues {
   raysY: number;
   /**
    * Lasers (see LASER_SHADER): strength (0 = off), the number of beams, the
-   * fan's spread and aim (radians, 0 = up), the base line's length (a part
+   * fan's spread and sweep (radians, 90° = up, 0 = level), the base line's length (a part
    * of the screen height) and angle (radians, 0 = level), the beam width
    * (screen pixels), the glow and its size (screen pixels), the fade along a beam, the first hue (0 to 1), how far the
    * hues go around the wheel, and the source (a part of the screen size
@@ -455,7 +455,7 @@ export interface FrameValues {
   lasers: number;
   laserCount: number;
   laserSpread: number;
-  laserAim: number;
+  laserSweep: number;
   laserBase: number;
   laserBaseAngle: number;
   laserWidth: number;
@@ -2356,7 +2356,7 @@ export class KaleidoRenderer {
     /* The base line turns clockwise with its angle, as the aim does. */
     const base = Math.max(0, v.laserBase) * height;
     gl.uniform2f(l.uniforms.u_base, Math.cos(v.laserBaseAngle) * base, -Math.sin(v.laserBaseAngle) * base);
-    gl.uniform1f(l.uniforms.u_aim, v.laserAim);
+    gl.uniform1f(l.uniforms.u_sweep, Math.sin(v.laserSweep));
     gl.uniform1f(l.uniforms.u_spread, v.laserSpread);
     gl.uniform1i(l.uniforms.u_count, Math.min(32, Math.max(1, Math.round(v.laserCount))));
     gl.uniform1f(l.uniforms.u_width, Math.max(0.25, v.laserWidth * this.texelScale));
