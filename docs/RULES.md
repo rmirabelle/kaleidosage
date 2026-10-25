@@ -50,12 +50,11 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 
 ## Menus
 
-- The menu bar has five menus: File, Scene, Edit, View and Help.
+- The menu bar has four menus: File, Edit, View and Help.
 - While a menu is open, pointing at another menu opens it.
 - A click outside, Esc or a loss of focus closes a menu.
-- File has New, Open, Save, Save As, Close, Open Image or Video, Save PNG, Export Video and Exit.
+- File has New, Open, Save, Save As and Close; New Scene, Export Scene As and Remove Scene; Open Image or Video, Save PNG and Export Video; and Exit.
 - Exit closes the window, so the unsaved-changes question can show.
-- Scene has New Scene, Export Scene As and Remove Scene.
 - Edit has Undo and Redo.
 - View items change their label between "Hide" and "Show".
 - Help has Keyboard Shortcuts, Enable or Disable Pointers, and About.

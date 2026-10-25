@@ -2203,7 +2203,12 @@ export default function App() {
     {
       id: "file",
       label: "File",
-      /* The Kaleido Sage file (every open scene, and the tracks), then the picture's own commands (an image or video in, a PNG or video out). */
+      /**
+       * The Kaleido Sage file (every open scene, and the tracks), then its
+       * scenes (a scene is the file's: Export Scene As writes a copy to a
+       * file of its own, and Remove Scene takes it out of the file), then
+       * the picture's own commands (an image or video in, a PNG or video out).
+       */
       items: [
         { label: "New", icon: <FilePlus size={15} />, run: () => void newFile() },
         { label: "Open…", icon: <FolderOpen size={15} />, shortcut: "Ctrl+O", run: () => void openFile() },
@@ -2211,22 +2216,15 @@ export default function App() {
         { label: "Save As…", disabled: startScreen, icon: <FloppyDisk size={15} />, shortcut: "Ctrl+Shift+S", run: () => void saveFile(true) },
         { label: "Close", icon: <X size={15} />, disabled: startScreen, run: () => void closeFile() },
         "separator",
+        { label: "New Scene", icon: <Plus size={15} />, shortcut: "Ctrl+N", run: newScene },
+        { label: "Export Scene As…", disabled: startScreen, icon: <Export size={15} />, run: () => void exportScene() },
+        { label: "Remove Scene", icon: <Trash size={15} />, shortcut: "Ctrl+W", disabled: startScreen, run: () => void closeScene() },
+        "separator",
         { label: "Open Image or Video…", icon: <ColorFolder size={18} />, shortcut: "O", run: () => void openImage() },
         { label: "Save PNG", disabled: startScreen, icon: <Camera size={15} />, run: () => void savePng() },
         { label: "Export Video…", icon: <FilmStrip size={15} />, run: openVideoDialog },
         "separator",
         { label: "Exit", icon: <SignOut size={15} />, shortcut: "Alt+F4", run: () => void (isTauri() ? getCurrentWindow().close() : window.close()) }
-      ]
-    },
-    {
-      id: "scene",
-      label: "Scene",
-      /* A scene is the open file's: Export Scene As writes a copy to a file of its own, and Remove Scene takes it out of the file. */
-      items: [
-        { label: "New Scene", icon: <Plus size={15} />, shortcut: "Ctrl+N", run: newScene },
-        { label: "Export Scene As…", disabled: startScreen, icon: <Export size={15} />, run: () => void exportScene() },
-        "separator",
-        { label: "Remove Scene", icon: <Trash size={15} />, shortcut: "Ctrl+W", disabled: startScreen, run: () => void closeScene() }
       ]
     },
     {
