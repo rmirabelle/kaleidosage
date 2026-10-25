@@ -298,3 +298,37 @@ areas that never grew):
   its depth, before rounding, times Growth 0.1 to 1.5), and points past it
   fade to black over 3% of the limit; the strip runs 1.5 times the rounds,
   enough for Growth at its most.
+
+## Research notes 2 (2026-10-24): clean animation
+
+Asked by the user: how do fractal programs make zooms animate cleanly
+(no noise, no flicker, no moving patterns)?
+
+1. **Distance estimate as the mask.** The grainy noise near the edge comes
+   from bands closer together than the pixels. The distance to the edge in
+   pixels hides it: color = tanh(distance / pixel), dark at the edge
+   (Koebe's 1/4 theorem: no point of the set lies within a quarter of the
+   estimate, and one lies within 4 times it). Our busy-area shade (step 6
+   fixes) is this idea.
+2. **Adaptive supersampling.** Only pixels within 4 pixels of the edge (by
+   the distance estimate) need more samples; mandelbrot-book splits them
+   into four, again and again. Far pixels are already smooth. With the
+   strip, extra samples are a few texture reads each, not more rounds.
+3. **Supersampling for video.** Zoom programs render at a density of
+   rho^2 samples per output pixel (5 by 5 in Heiland-Allen's examples;
+   zoomasm has a samples-per-pixel setting that "reduces sparkling").
+4. **Smooth count is stable.** The smooth escape count depends only on c,
+   so bands built on it do not flicker; textures mapped by the escape
+   angle need their own derivatives, or the mip level is wrong (step 6
+   fixes added the angle's stretch).
+5. **Temporal accumulation** (jittered samples blended over frames, with
+   reprojection) suits a zoom, as the motion is only a scale about the
+   middle; its risk is ghosting, kept down by clamping the history to the
+   current pixel's neighbors and resetting when settings change.
+
+Sources: [Optimizing zoom animations again (mathr)](https://mathr.co.uk/blog/2020-06-18_optimizing_zoom_animations_again.html),
+[mandelbrot-book (adaptive supersampling, DE coloring)](https://github.com/adammaj1/Mandelbrot-book-book),
+[Nebuloculars (mathr)](https://mathr.co.uk/web/nebuloculars.html),
+[zoomasm](https://mathr.co.uk/zoomasm/),
+[Reprojection temporal anti-aliasing](https://brashandplucky.com/2023/05/06/reprojection-temporal-antialiasing.html),
+[A Survey of Temporal Antialiasing Techniques](http://behindthepixels.io/assets/files/TemporalAA.pdf).
