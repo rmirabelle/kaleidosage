@@ -1569,9 +1569,10 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("driverScale", rand(0.6, 2), rand(0.1, 0.4));
   set("driverSpeed", rand(0.3, 1.5), rand(0.1, 0.4));
   set("driverContrast", rand(0.8, 1.8), rand(0.1, 0.3));
-  set("raysAmount", rand(0.8, 2.5), rand(0.2, 0.5));
-  set("raysThreshold", rand(0.4, 0.8), rand(0, 0.1));
-  set("raysLength", rand(0.2, 0.8), rand(0.05, 0.2));
+  /* Gentle light rays: strong or long rays from every bright area look like many lights. */
+  set("raysAmount", rand(0.4, 1), rand(0.05, 0.2));
+  set("raysThreshold", rand(0.65, 0.85), rand(0, 0.05));
+  set("raysLength", rand(0.1, 0.35), rand(0.02, 0.08));
   set("raysFade", rand(0.2, 0.8), rand(0, 0.2));
   set("raysX", Math.random() < 0.5 ? 0 : rand(-0.3, 0.3), rand(0.05, 0.25));
   set("raysY", Math.random() < 0.5 ? 0 : rand(-0.25, 0.25), rand(0.05, 0.2));
@@ -1590,10 +1591,11 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("laserRainbow", Math.random() < 0.5 ? 0 : rand(0.1, 1), rand(0, 0.2));
   set("laserX", Math.random() < 0.6 ? 0 : rand(-0.4, 0.4), rand(0, 0.15));
   set("laserY", Math.random() < 0.6 ? -0.5 : rand(-0.5, 0.5), rand(0, 0.1));
-  set("bloomAmount", rand(0.4, 1.8), rand(0.1, 0.4));
-  set("bloomThreshold", rand(0.4, 0.85), rand(0, 0.1));
-  set("bloomSoftness", rand(0.1, 0.6), rand(0, 0.15));
-  set("bloomSize", rand(1.5, 5), rand(0.3, 1));
+  /* A gentle bloom, for the same reason. */
+  set("bloomAmount", rand(0.3, 0.8), rand(0.05, 0.15));
+  set("bloomThreshold", rand(0.6, 0.85), rand(0, 0.05));
+  set("bloomSoftness", rand(0.1, 0.5), rand(0, 0.1));
+  set("bloomSize", rand(1.5, 3.5), rand(0.2, 0.6));
   set("sharpen", rand(0, 1.2), rand(0, 0.3));
   set("sharpenRadius", rand(0.7, 2.5), rand(0, 0.8));
   set("exposure", Math.random() < 0.6 ? 0 : rand(-1, 0.3), rand(0, 0.5));
@@ -1616,4 +1618,13 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("solidSpikeTip", Math.random() < 0.6 ? 0 : rand(0.2, 1), rand(0, 0.3));
   set("solidSpikeCount", Math.random() < 0.5 ? 12 : Math.round(rand(6, 24)), rand(0, 2));
   set("solidLevels", Math.round(rand(2, 4)), rand(0, 1));
+  /* Light rays and bloom together make every bright area shine; when Randomize picks both, each gets less. */
+  if (state?.fxOrder.includes("rays") && state.fxOrder.includes("bloom")) {
+    for (const key of ["raysAmount", "bloomAmount"] as const) {
+      const param = params[key];
+      param.value *= 0.6;
+      if (param.low !== undefined) param.low *= 0.6;
+      if (param.high !== undefined) param.high *= 0.6;
+    }
+  }
 }
