@@ -619,6 +619,9 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - A switch to Files turns Song follow on.
 - While a song has no analysis yet, the Song Map shows "Analyzing" with a moving bar.
 - With one scene, Auto Fill is off.
+- A song added to the project gets Auto Fill once its analysis is done, with two or more scenes.
+- Its first slice gets the scene after the last pick of the song before it, so the scenes go on through the show.
+- Songs that come with an opened project keep their maps.
 - With one scene, each slice with no pick shows a dark 1 (that scene plays there); no pick is kept.
 - The first files in an empty Playlist start the Song Map tips: one at the song's name while it is analyzed, then one above the first slice.
 - The first click on a slice shows a tip above the Song Map toolbar about editing the slice.

@@ -53,6 +53,8 @@ import { tracks } from "./lib/tracks";
 import { songFollow } from "./lib/songFollow";
 import { settingButtons } from "./lib/settingButtons";
 import { sliceAt, type ScheduledSlice } from "./engine/showSchedule";
+import { mapOf, planSong } from "./engine/songPlan";
+import { fillScenes } from "./engine/songMapEdits";
 import { helpSettings } from "./lib/helpSettings";
 import { RANGE_ON_EVENT } from "./lib/pointerEvents";
 import { FILE_EXTENSION, fileFingerprint, isFileCopy, matchingScenes, openKaleidoFile, readManifest, saveKaleidoFile, type FileAudio } from "./lib/kaleidoFile";
@@ -142,6 +144,34 @@ const keptText = new WeakMap<StoredScene, string>();
 const KEPT_IMAGE: SceneImage = { type: "image/png", data: "kept" };
 /** True while the kept tabs open after a reload; keeping waits, so the empty start-up state does not replace them. */
 let restoringKept = false;
+
+/**
+ * Songs added to the open project (see addTracks) whose song map is not
+ * filled yet. Once a song's analysis is done, Auto Fill picks a scene for
+ * each of its slices (see fillAddedSongs), so a new show has a first map to
+ * edit. Songs that come with an opened project keep their maps.
+ */
+const songsToFill = new Set<string>();
+
+/**
+ * Fills the song map of each added song whose analysis is done (see
+ * songsToFill), as Auto Fill does, with two or more scenes. Its first slice
+ * gets the scene after the last pick of the song before it in the list, so
+ * the scenes go on through the show and do not start again at each song.
+ */
+function fillAddedSongs(sceneCount: number) {
+  for (const path of [...songsToFill]) {
+    const analysis = songFollow.analysisFor(path);
+    if (!analysis) continue;
+    songsToFill.delete(path);
+    const index = tracks.list.findIndex((track) => track.path === path);
+    if (sceneCount < 2 || index < 0 || analysis.mapEdits) continue;
+    const before = tracks.list.slice(0, index).reverse()
+      .map((track) => songFollow.analysisFor(track.path)?.mapEdits?.at(-1)?.scene)
+      .find((scene) => scene !== undefined);
+    songFollow.editMap(path, fillScenes(mapOf(planSong(analysis)), before === undefined ? 0 : (before + 1) % sceneCount, sceneCount));
+  }
+}
 
 /** Windows file names do not care about case. */
 const samePath = (a: string | null, b: string | null) => a !== null && b !== null && a.toLowerCase() === b.toLowerCase();
@@ -972,7 +1002,10 @@ export default function App() {
   /** Adds audio files to the tracks, stopped: the first file of an empty list becomes the current track, and its analysis and the Song Map's tips (see SongTip) start. */
   const addTracks = useCallback((paths: string[]) => {
     const wasEmpty = tracks.list.length === 0;
+    const known = new Set(tracks.list.map((track) => track.path));
     tracks.add(paths);
+    /* Each song that is new in the list gets its song map filled once its analysis is done (see fillAddedSongs). */
+    for (const track of tracks.list) if (!known.has(track.path)) songsToFill.add(track.path);
     if (wasEmpty && tracks.list.length > 0) setSongTip("analyzing");
   }, []);
 
@@ -2070,9 +2103,12 @@ export default function App() {
     apply();
     const stopFollow = songFollow.subscribe(apply);
     const stopTracks = tracks.subscribe(apply);
+    /* A song added to the project gets its song map filled once its analysis is done (see fillAddedSongs). */
+    const stopFill = songFollow.subscribe(() => fillAddedSongs(docsRef.current.length));
     return () => {
       stopFollow();
       stopTracks();
+      stopFill();
     };
   }, [engine, sceneHeld, tracksActive]);
 
