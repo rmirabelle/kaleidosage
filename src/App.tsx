@@ -2162,7 +2162,6 @@ export default function App() {
             tracks.toggle();
           })
           : event.shiftKey ? stop : togglePause,
-        o: () => void openImage(),
         x: randomize
       };
       const action = run[key];
@@ -2174,7 +2173,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [aboutOpen, shortcutsOpen, welcome, closeScene, crossfadeToDoc, engine, exitFullscreen, newFile, newScene, openImage, openRequest, videoDialogOpen, searchSlot, openFile, randomize, redo, saveFile, startScreen, stop, switchByStep, toggleAudioPanel, toggleFullscreen, toggleMidiPanel, togglePause, undo]);
+  }, [aboutOpen, shortcutsOpen, welcome, closeScene, crossfadeToDoc, engine, exitFullscreen, newFile, newScene, openRequest, videoDialogOpen, searchSlot, openFile, randomize, redo, saveFile, startScreen, stop, switchByStep, toggleAudioPanel, toggleFullscreen, toggleMidiPanel, togglePause, undo]);
 
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
@@ -2210,7 +2209,7 @@ export default function App() {
        * Export Scene writes a copy to a project of its own, and Remove Scene
        * takes a scene out), then the picture's own commands (a PNG or a
        * video out). An image or video comes in through the Source card's
-       * slots or the O key.
+       * slots.
        */
       items: [
         { label: "New Project", icon: <FilePlus size={15} />, run: () => void newFile() },

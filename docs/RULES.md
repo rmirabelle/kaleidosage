@@ -86,7 +86,6 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - A opens or closes the Audio panel.
 - M opens or closes the MIDI panel.
 - P shows or hides the Performance panel.
-- O opens an image or video for source A.
 - S saves the picture as a PNG.
 - X gives new random settings.
 - "?" opens the shortcuts sheet, but not in a text field.
