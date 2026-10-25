@@ -1612,8 +1612,21 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .video-dialog-body { display: flex; flex-direction: column; gap: 14px; padding: 18px 20px 16px; background: linear-gradient(180deg, #292d37, #242832); }
 .video-row { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 12px; }
 .video-label { color: #b9bdc8; font-size: 12px; font-weight: 600; }
-.video-choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.video-choice { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 6px; border: 1px solid #474c5e; border-radius: 8px; color: #d4d4d8; background: #2f333e; cursor: pointer; }
+/* The buttons in a row touch and share their borders; the row has round outer corners. */
+.video-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.video-choices.video-sizes { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.video-choice { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding: 8px 6px; border: 1px solid #474c5e; border-radius: 0; color: #d4d4d8; background: #2f333e; cursor: pointer; }
+.video-choice + .video-choice { margin-left: -1px; }
+.video-choice:first-child { border-radius: 8px 0 0 8px; }
+.video-choice:last-child { border-radius: 0 8px 8px 0; }
+.video-choice.active { z-index: 1; }
+.video-sizes .video-choice { justify-content: flex-start; padding: 7px 3px 6px; }
+.video-sizes .video-choice strong { font-size: 13px; }
+.video-sizes .video-choice span { text-align: center; line-height: 1.25; }
+/* The size's shape, scaled to fit a 30 px box. */
+.video-shape { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; margin-bottom: 3px; }
+.video-shape i { display: block; border: 1.5px solid #8c91a1; border-radius: 2px; }
+.video-choice.active .video-shape i { border-color: #c3d0fc; }
 .video-choice strong { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .video-choice span { color: #8c91a1; font-size: 11px; }
 .video-choice:hover { background: #363a47; }

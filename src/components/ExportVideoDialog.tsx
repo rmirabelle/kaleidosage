@@ -24,6 +24,13 @@ const QUALITY_CHOICES: { value: VideoQuality; label: string; note: string }[] = 
 ];
 const FPS_CHOICES: VideoFps[] = [60, 30];
 
+/** The outline of a video size, its long side 28 px. */
+const SHAPE_SIZE = 28;
+const shapeStyle = (width: number, height: number) => {
+  const scale = SHAPE_SIZE / Math.max(width, height, 1);
+  return { width: Math.round(width * scale), height: Math.round(height * scale) };
+};
+
 interface Props {
   engine: Engine;
   /** The video size for the "Screen" choice: the picture's shape on the screen. */
@@ -82,7 +89,7 @@ export function ExportVideoDialog({ engine, screenSize, onCancel, onExport }: Pr
         <div className="video-dialog-body">
           <div className="video-row">
             <span className="video-label">Size</span>
-            <div className="video-choices" role="radiogroup" aria-label="Size">
+            <div className="video-choices video-sizes" role="radiogroup" aria-label="Size">
               {sizeChoices.map((choice) => (
                 <button
                   key={choice.id}
@@ -92,6 +99,7 @@ export function ExportVideoDialog({ engine, screenSize, onCancel, onExport }: Pr
                   data-tip={`${choice.width} × ${choice.height}`}
                   onClick={() => setSizeId(choice.id)}
                 >
+                  <span className="video-shape" aria-hidden="true"><i style={shapeStyle(choice.width, choice.height)} /></span>
                   <strong>{choice.ratio}</strong>
                   <span>{choice.sites}</span>
                 </button>
