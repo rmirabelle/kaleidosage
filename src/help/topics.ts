@@ -41,8 +41,8 @@ export const HELP_TOPICS = {
       "Keys 1 to 9 select the tab with that number, also in full screen.",
       "Ctrl + Tab selects the next tab.",
       "Ctrl + Shift + Tab selects the tab before.",
-      "The {x} on a tab takes the scene out of the file.",
-      "A middle click on a tab takes the scene out of the file.",
+      "The {x} on a tab takes the scene out of the project.",
+      "A middle click on a tab takes the scene out of the project.",
       "Drag a tab to move it; the scenes play in tab order.",
       "With Files as the input, the scenes are a list at the left, not tabs."
     ],
@@ -127,7 +127,7 @@ export const HELP_TOPICS = {
     text: "Audio files that the app plays itself, one after the other, and round again. While Files is the input, the toolbar at the bottom of the Playlist card plays the music, and the show moves to the next scene tab at the end of each scene's loop and at each new file.",
     tips: [
       "Click a file to play it; drag it to move it in the list.",
-      "Drag the line at the list's right edge to make it wider; the file keeps the width.",
+      "Drag the line at the list's right edge to make it wider; the project keeps the width.",
       "The {x} removes a file from the list.",
       "Your changes turn Hold on, so the scene stays. Click Hold, save or pick a tab to go on.",
       "Play, Pause and Stop at the bottom run the music only; the bar seeks in the file.",
@@ -176,16 +176,17 @@ export const HELP_TOPICS = {
     keywords: ["play", "pause", "stop", "full screen", "fullscreen", "space"]
   },
   file: {
-    title: "Kaleido Sage files",
-    text: "A Kaleido Sage file (.ksage) holds the open scenes in tab order and the audio settings. While Files is the input, it holds the audio files too. It plays the same on another PC.",
+    title: "Projects",
+    text: "A project (.ksage) holds the open scenes in tab order and the audio settings. While Files is the input, it holds the audio files too. It plays the same on another PC.",
     tips: [
-      "Ctrl + S saves the file with all of its scenes.",
-      "A show (two or more scenes, or audio files) opens in place of the open file.",
-      "A file with one scene and no audio files goes into the open file as a new scene.",
-      "With an input other than Files, Save takes the audio files out of the file.",
-      "Export Scene As writes the selected scene to a file of its own."
+      "Ctrl + S saves the project with all of its scenes.",
+      "Open Project opens a project in place of the open one; the app asks about changes first.",
+      "Import Scene(s) adds all scenes of other projects, without their audio files.",
+      "Add Blank Scene (Ctrl + N) adds a new scene with every effect off.",
+      "With an input other than Files, Save takes the audio files out of the project.",
+      "Export Scene writes the selected scene to a project of its own."
     ],
-    keywords: ["file", "ksage", "show", "playlist", "set list", "save", "open", "export scene"]
+    keywords: ["project", "file", "ksage", "show", "playlist", "set list", "save", "open", "import", "export scene"]
   },
   export: {
     title: "Pictures and videos",

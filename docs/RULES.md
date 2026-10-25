@@ -24,8 +24,8 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - The app draws its own title bar and window buttons.
 - You drag the title bar to move the window.
 - A double-click on the title bar maximizes or restores the window.
-- The title bar shows the app name, the file name ("Untitled" before the first save), "›" and the scene name.
-- A red asterisk after the file name shows unsaved changes in the file or any of its scenes.
+- The title bar shows the app name, the project's file name ("Untitled Project" before the first save), "›" and the scene name.
+- A red asterisk after the project's name shows unsaved changes in the project or any of its scenes.
 - The app keeps the window size, position and maximized state between runs.
 - The app always starts in a window, never in full screen.
 - Only one copy of the app runs.
@@ -39,10 +39,10 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 
 - The start screen shows at start-up and covers the work area.
 - It shows the logo, the name, "Visual FX Playground", the author and the version.
-- It has two buttons: New and Open.
+- It has two buttons: New Project and Open Project.
 - An image that you drop or paste on it starts a scene in a new tab.
-- It closes when you start or open a file, or an image.
-- It shows again when you close the file or remove its last scene.
+- It closes when you start or open a project, or an image.
+- It shows again when you close the project or remove its last scene.
 - On the start screen, only Ctrl+O, Ctrl+N and "?" work, and Esc and F11 leave full screen.
 - On the start screen, the save, close, undo, redo and View items are off.
 - The start screen hides the panels, the tabs, the bottom panel and the help line.
@@ -53,7 +53,8 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - The menu bar has four menus: File, Edit, View and Help.
 - While a menu is open, pointing at another menu opens it.
 - A click outside, Esc or a loss of focus closes a menu.
-- File has New, Open, Save, Save As and Close; New Scene, Export Scene As and Remove Scene; Open Image or Video, Save PNG and Export Video; and Exit.
+- File has New Project, Open Project, Save Project, Save Project As and Close Project; Add Blank Scene, Import Scene(s), Export Scene and Remove Scene; Open Image or Video, Save PNG and Export Video; and Exit.
+- The scene items are off on the start screen.
 - Exit closes the window, so the unsaved-changes question can show.
 - Edit has Undo and Redo.
 - View items change their label between "Hide" and "Show".
@@ -63,11 +64,11 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 
 ## Keyboard shortcuts
 
-- Ctrl+N starts a new scene in a new tab of the open file.
-- Ctrl+O opens the Open dialog.
-- Ctrl+S saves the file.
-- Ctrl+Shift+S saves the file as a new file.
-- Ctrl+W removes the scene from the file.
+- Ctrl+N adds a blank scene in a new tab; on the start screen it starts a new project.
+- Ctrl+O opens a project.
+- Ctrl+S saves the project.
+- Ctrl+Shift+S saves the project as a new file.
+- Ctrl+W removes the scene from the project.
 - Ctrl+Z undoes a change.
 - Ctrl+Y and Ctrl+Shift+Z redo a change.
 - In a text field, Ctrl+Z and Ctrl+Y act on the text.
@@ -99,7 +100,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Each open scene has its own tab and its own Undo history.
 - A new scene is "Untitled Scene", then "Untitled Scene 2", with the lowest free number.
 - A saved scene's tab shows its name.
-- Tabs and the scene list show no unsaved marks; the title bar has the file's one mark.
+- Tabs and the scene list show no unsaved marks; the title bar has the project's one mark.
 - The app checks for unsaved changes twice a second.
 - You drag a tab to move it.
 - Tabs that do not fit go on to more rows.
@@ -110,20 +111,20 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - While paused, a tab switch cuts at once.
 - The new scene starts from 0 and keeps the play or pause state of the scene before.
 - A tab switch ends the MIDI holds, bypass and solo of the scene before.
-- New Scene makes a tab with the large checkerboard and every effect off.
-- New Scene keeps the input and the tracks; on the start screen it starts a new file.
-- New, Close and a new file from the start screen set the input to Nothing and empty the track list.
-- A single scene that goes into the open file replaces the selected tab if that tab is an unchanged untitled scene.
-- Each of several single scenes gets its own tab, and the last one shows.
+- Add Blank Scene makes a tab with the large checkerboard and every effect off.
+- Add Blank Scene keeps the input and the tracks.
+- New Project and Close Project set the input to Nothing and empty the track list.
+- An imported scene replaces the selected tab if that tab is an unchanged untitled scene.
+- Each imported scene gets its own tab, and the last one shows.
 - A long open shows a spinner, the step and a progress bar.
 - When you remove a scene, the tab next to it shows.
-- Removing the last scene closes the file.
+- Removing the last scene closes the project.
 
 ## Unsaved changes
 
-- The app asks once, for the file: Save, Don't save or Cancel.
-- Remove Scene does not ask; the file counts as changed.
-- Closing the window, Close, New and opening a show ask first.
+- The app asks once, for the project: Save, Don't save or Cancel.
+- Remove Scene does not ask; the project counts as changed.
+- Closing the window, Close Project, New Project and Open Project ask first.
 - Installing an update asks first.
 - Cancel stops the action.
 - Don't save goes on without saving.
@@ -154,7 +155,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - In full screen, a Settings button and an Exit full screen button show.
 - Those two buttons hide while the cursor is idle and the panels are hidden.
 - The Full screen button shows only while the mouse is over the picture.
-- Closing the file leaves full screen first.
+- Closing the project leaves full screen first.
 - Hiding the panels hides the left side: panels, scene list and Playlist column.
 - The open effect group stays open when the panels hide and show.
 - Hide Playlist works only with Files as the input and the panels shown.
@@ -402,22 +403,20 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - A new change after Undo clears Redo.
 - A message says when there is nothing to undo or redo.
 
-## Kaleido Sage files
+## Projects
 
-- A Kaleido Sage file (`.ksage`) is a ZIP file: kaleidosage.json, its scenes in tab order, and its tracks.
-- The file keeps the audio settings, the Files width and Song follow.
-- The file keeps the tracks and their song analyses only while Files is the input.
-- With another input, Save empties the track list first.
-- A show is a file with two or more scenes, or with audio files.
-- Open puts a show in place of the open file, after the unsaved-changes question.
-- Open puts a single scene into the open file as a new tab.
-- On the start screen, Open opens any file as the open file.
-- Of several picked files, a show opens alone.
-- A file never saved asks for a name; the first scene's name is the default.
+- A project is a Kaleido Sage file (`.ksage`), a ZIP file: kaleidosage.json, its scenes in tab order, and its tracks.
+- The project keeps the audio settings, the Files width and Song follow.
+- The project keeps the tracks and their song analyses only while Files is the input.
+- With another input, Save Project empties the track list first.
+- Open Project puts the picked project in place of the open one, after the unsaved-changes question.
+- Import Scene(s) adds all scenes of each picked project to the open project, after its scenes.
+- Import Scene(s) does not add the picked projects' audio files or audio settings.
+- A project never saved asks for a name; the first scene's name is the default.
 - A new blank scene with no changes is not saved, unless it is the only scene.
-- Export Scene As writes the selected scene to a file of its own, with no tracks.
+- Export Scene writes the selected scene to a project of its own, with no tracks.
 - A file that is not in this layout gives "The file is not a Kaleido Sage file."
-- Saving never changes a file on disk but the open file.
+- Saving never changes a file on disk but the open project.
 - A scene keeps every setting, range, curve and own time.
 - A scene keeps the play state, the effect list, blends and audio links.
 - A scene keeps its images and its Driver video.
@@ -517,8 +516,8 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - The dialog shows only folders and supported files.
 - The dialog hides dot files, hidden files and system files.
 - The image dialog shows images and videos.
-- The file dialog shows Kaleido Sage files (.ksage).
-- The file dialog plays a single scene in the preview, and shows a show's scenes and tracks.
+- The project dialog shows Kaleido Sage projects (.ksage), each as KS Scene (one scene, no audio files) or KS Playlist.
+- The project dialog plays a KS Scene in the preview, and shows a KS Playlist's scenes and tracks.
 - The places list shows Home, Desktop, Documents, Pictures, Downloads and each drive.
 - The dialog opens in the last folder for that kind of file.
 - The first time, it opens in Pictures for images, Documents for scenes and Home for audio.
@@ -863,19 +862,19 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 
 ## Shows in a file
 
-- A show keeps its scenes, its tracks and their song analyses in one Kaleido Sage file.
-- The file keeps the audio input, device, gain and threshold.
-- The file keeps the selected tab, the Playlist column width and the track lengths.
+- A show keeps its scenes, its tracks and their song analyses in one project.
+- The project keeps the audio input, device, gain and threshold.
+- The project keeps the selected tab, the Playlist column width and the track lengths.
 - A save writes a temporary file first and replaces the target only when complete.
 - A missing or broken audio setting keeps the app's own value.
-- A file from a newer version still opens.
+- A project from a newer version still opens.
 - A saved analysis that is broken, over 64 MB or of another version is dropped.
 - The app analyzes a track again when its saved analysis is dropped.
 - A device that this PC does not have becomes the default device.
-- Opening a show starts at its first scene, with the tracks stopped at the first track.
-- The Open dialog shows a show's scenes and tracks without unpacking it.
-- A change to the scenes, tracks, audio settings or column width marks the file unsaved.
-- The app removes old temp folders of open files at start and at the next open of a show.
+- Opening a project starts at its first scene, with the tracks stopped at the first track.
+- The Open dialog shows a project's scenes and tracks without unpacking it.
+- A change to the scenes, tracks, audio settings or column width marks the project unsaved.
+- The app removes old temp folders at start and at the next Open Project.
 
 ## Remembered settings
 

@@ -113,7 +113,7 @@ export function SceneList({ tabs, activeId, onSelect, onClose, onReorder, onRena
                   className="scene-list-close"
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={() => onClose(tab.id)}
-                  data-tip={active ? "Remove the scene from the file `Ctrl+w`" : "Remove the scene from the file"}
+                  data-tip={active ? "Remove the scene from the project `Ctrl+w`" : "Remove the scene from the project"}
                   aria-label={`Remove ${tab.fileName}`}
                 >
                   <Trash size={12} weight="bold" />
@@ -129,7 +129,7 @@ export function SceneList({ tabs, activeId, onSelect, onClose, onReorder, onRena
             items={(() => {
               const tab = tabs.find((each) => each.id === menu.id);
               return [
-                { label: tab?.path ? "Rename…" : "Rename… (save the file first)", icon: <PencilSimple size={14} />, disabled: !tab?.path, run: () => tab && setRenaming({ id: tab.id, value: baseName(tab) }) },
+                { label: tab?.path ? "Rename…" : "Rename… (save the project first)", icon: <PencilSimple size={14} />, disabled: !tab?.path, run: () => tab && setRenaming({ id: tab.id, value: baseName(tab) }) },
                 { label: "Remove Scene", icon: <Trash size={14} />, run: () => onClose(menu.id) }
               ];
             })()}

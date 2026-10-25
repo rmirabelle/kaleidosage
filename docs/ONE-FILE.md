@@ -2,9 +2,15 @@
 
 A design note, written 2026-10-25, before any code. Built the same day:
 steps 1 to 10 are done (step 4, the conversion of the user's files, is
-`tools/convert-files/`; the user runs it). Two changes from the text
-below: Open also previews a single scene in place (`read_file_scene`, no
-unpack), and the app has no Import menu item. It replaces the two file types (a `.ksage` scene and a `.ksplaylist`
+`tools/convert-files/`; the user runs it). Changes from the text
+below (decided with the user the same day): the file is a "project" in
+the UI; the File menu has New Project, Open Project, Save Project, Save
+Project As, Close Project, then Add Blank Scene, Import Scene(s), Export
+Scene and Remove Scene, and there is no Scene menu. Open Project always
+puts the project in place of the open one; Import Scene(s) adds all
+scenes of each picked project (KS Scene or KS Playlist in the dialog's
+Type column), without their audio files or audio settings. The Open
+dialog previews a KS Scene in place (`read_file_scene`, no unpack). It replaces the two file types (a `.ksage` scene and a `.ksplaylist`
 playlist) with one: a `.ksage` file holds one or more scenes, and the
 audio files and audio settings when there are any. Decisions marked
 "(decided)" came from the user on 2026-10-25.

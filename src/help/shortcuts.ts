@@ -22,11 +22,11 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
   {
     title: "Scenes",
     shortcuts: [
-      { keys: ["Ctrl+N"], does: "New scene, in a new tab of the open file" },
-      { keys: ["Ctrl+O"], does: "Open a file (a single scene goes into the open file)" },
-      { keys: ["Ctrl+S"], does: "Save the file" },
-      { keys: ["Ctrl+Shift+S"], does: "Save the file as" },
-      { keys: ["Ctrl+W"], does: "Remove the scene from the file" },
+      { keys: ["Ctrl+N"], does: "Add a blank scene (on the start screen: new project)" },
+      { keys: ["Ctrl+O"], does: "Open a project" },
+      { keys: ["Ctrl+S"], does: "Save the project" },
+      { keys: ["Ctrl+Shift+S"], does: "Save the project as" },
+      { keys: ["Ctrl+W"], does: "Remove the scene from the project" },
       { keys: ["1 to 9"], does: "Select that tab, with a crossfade" },
       { keys: ["Ctrl+Tab", "Ctrl+Page Down"], does: "Next tab" },
       { keys: ["Ctrl+Shift+Tab", "Ctrl+Page Up"], does: "Tab before" },

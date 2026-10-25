@@ -3,16 +3,16 @@ import { FilePlus, FolderOpen } from "@phosphor-icons/react";
 interface Props {
   /** The app's version, after the author ("" until it is known). */
   version: string;
-  /** Starts a new, untitled file with one blank scene. */
+  /** Starts a new, untitled project with one blank scene. */
   onNew: () => void;
-  /** Opens the Open dialog, which lists Kaleido Sage files. */
+  /** Opens the Open dialog, which lists Kaleido Sage projects. */
   onOpen: () => void;
 }
 
 /**
  * The first screen after start-up, styled like the Image Sage start screen.
- * It covers the work area until the user starts a new file, or opens a
- * Kaleido Sage file. The author and the version are on one quiet line
+ * It covers the work area until the user starts a new project, or opens a
+ * Kaleido Sage project. The author and the version are on one quiet line
  * under the tagline, above the buttons. The credits for the models of Song
  * follow are in the About dialog.
  */
@@ -31,10 +31,10 @@ export function StartScreen({ version, onNew, onOpen }: Props) {
         </div>
         <div className="start-actions">
           <button className="button primary large" onClick={onNew}>
-            <FilePlus size={19} weight="bold" /> New
+            <FilePlus size={19} weight="bold" /> New Project
           </button>
           <button className="button secondary large" onClick={onOpen}>
-            <FolderOpen size={19} weight="bold" /> Open
+            <FolderOpen size={19} weight="bold" /> Open Project
           </button>
         </div>
       </div>

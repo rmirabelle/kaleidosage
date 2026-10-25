@@ -12,13 +12,15 @@ import { isShow, readFileScene, readFileSummary, type FileSummary } from "../lib
 import { formatPlayTime } from "../lib/tracks";
 import { ColorFolder } from "./ColorFolder";
 
-/** The kind of file the dialog opens: an image (or a video), a Kaleido Sage file (.ksage: a show or a single scene), or an audio file for the tracks. */
+/** The kind of file the dialog opens: an image (or a video), a Kaleido Sage project (.ksage), or an audio file for the tracks. */
 export type OpenKind = "image" | "scene" | "audio";
 
 interface Props {
   kind: OpenKind;
   /** The dialog's heading. */
   title: string;
+  /** The line under the heading, in place of the kind's own (see TEXT). */
+  hint?: string;
   onCancel: () => void;
   onOpen: (path: string) => void;
   /**
@@ -156,7 +158,7 @@ const IMAGE_TYPES: Record<string, string> = {
 
 const TEXT: Record<OpenKind, { hint: string; empty: string; startPlace: PlaceKind }> = {
   image: { hint: "Choose a PNG, JPEG, WebP, GIF, BMP or AVIF image, or an MP4, M4V, WebM, MOV or AVI video.", empty: "This folder has no images or videos.", startPlace: "pictures" },
-  scene: { hint: "Choose a Kaleido Sage file (.ksage). A show (two or more scenes, or audio files) opens in place of the open file; a single scene goes into the open file.", empty: "This folder has no Kaleido Sage files.", startPlace: "documents" },
+  scene: { hint: "Choose a Kaleido Sage project (.ksage). It opens in place of the open project.", empty: "This folder has no Kaleido Sage projects.", startPlace: "documents" },
   audio: { hint: "Choose MP3, WAV, FLAC, OGG, Opus, M4A or AAC audio files for the Files list.", empty: "This folder has no audio files.", startPlace: "home" }
 };
 
@@ -527,7 +529,7 @@ const entryIcon = (entry: BrowseEntry) => {
  * and it remembers its size, column widths, sort order and the last folder
  * for each kind of file. Right-click a file to rename, copy or delete it.
  */
-export function OpenDialog({ kind, title, onCancel, onOpen, onOpenMany }: Props) {
+export function OpenDialog({ kind, title, hint, onCancel, onOpen, onOpenMany }: Props) {
   const multiple = Boolean(onOpenMany);
   const directoryKey = `${DIRECTORY_KEY}.${kind}`;
   const text = TEXT[kind];
@@ -1134,7 +1136,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen, onOpenMany }: Props)
           </div>
           <div>
             <h2 id="open-file-title">{title}</h2>
-            <p>{text.hint}</p>
+            <p>{hint ?? text.hint}</p>
           </div>
           <button className="open-dialog-close" onClick={onCancel} aria-label="Close" data-tip="Close">
             <X size={18} />
@@ -1392,7 +1394,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen, onOpenMany }: Props)
         )}
 
         <footer className="open-dialog-actions">
-          {multiple && <span className="open-dialog-hint">Ctrl + click or Shift + click to pick several. {kind === "scene" ? "Single scenes go into the open file." : "They go to the end of the Files list."}</span>}
+          {multiple && <span className="open-dialog-hint">Ctrl + click or Shift + click to pick several. {kind === "scene" ? "Their scenes go after the open project's scenes." : "They go to the end of the Files list."}</span>}
           <button className="button secondary" onClick={onCancel}>Cancel</button>
           <button
             className="button primary"

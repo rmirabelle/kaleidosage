@@ -60,15 +60,15 @@ try {
   };
   const close = () => evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', {key:'w',ctrlKey:true,bubbles:true,cancelable:true}))`);
   const openNew = async () => {
-    await clickText('New');
+    await clickText('New Project');
     await wait('!document.querySelector(".start-screen")');
   };
   await send('Page.navigate', { url: process.env.DEV_URL || 'http://localhost:14510/' });
   await wait('window.kaleidoEngine && document.querySelector(".start-screen")', 'application ready');
-  await menu('Close');
-  assert.ok(await evaluate('!!document.querySelector(".start-screen")'), 'close disabled without a file');
+  await menu('Close Project');
+  assert.ok(await evaluate('!!document.querySelector(".start-screen")'), 'close disabled without a project');
   await openNew();
-  await menu('Close');
+  await menu('Close Project');
   await wait('!!document.querySelector(".start-screen")', 'clean scene closes');
   assert.equal(await evaluate('document.querySelectorAll("[role=alertdialog]").length'), 0);
   console.log('PASS clean close returns to start without prompting');
@@ -111,7 +111,7 @@ try {
       assert.equal(await evaluate('window.__saved'), 1);
     } else {
       await wait('!document.querySelector("[role=alertdialog]")');
-      if (mode === 'fail') await wait('document.body.textContent.includes("Could not save the file")');
+      if (mode === 'fail') await wait('document.body.textContent.includes("Could not save the project")');
       await sleep(200);
       assert.equal(await evaluate('!!document.querySelector(".start-screen")'), false);
       assert.equal(await evaluate('window.kaleidoEngine.params.cameraHeight.value'), -.37);
@@ -123,7 +123,7 @@ try {
   await clickText('Add effect');
   await clickText('Blur', '[aria-label="Add effect"] button');
   await wait('!!document.querySelector(".panel-group-toggle")');
-  await menu('Save');
+  await menu('Save Project');
   await wait('window.__saved === 2 && !document.querySelector(".titlebar-dirty")');
   await evaluate(`const e=window.kaleidoEngine; const original=e.renderer.render.bind(e.renderer); e.renderer.render=(frame)=>{window.__frame=frame;original(frame)};`);
   await wait('window.__frame?.blur > 0');

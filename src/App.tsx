@@ -56,7 +56,7 @@ import { settingButtons } from "./lib/settingButtons";
 import { sliceAt, type ScheduledSlice } from "./engine/showSchedule";
 import { helpSettings } from "./lib/helpSettings";
 import { RANGE_ON_EVENT } from "./lib/pointerEvents";
-import { FILE_EXTENSION, fileFingerprint, isFileCopy, isShow, openKaleidoFile, readFileSummary, readManifest, saveKaleidoFile, type FileAudio } from "./lib/kaleidoFile";
+import { FILE_EXTENSION, fileFingerprint, isFileCopy, openKaleidoFile, readManifest, saveKaleidoFile, type FileAudio } from "./lib/kaleidoFile";
 import { revealMainWindow } from "./lib/splash";
 import { isVideoPath, isVideoType, loadVideoBlob, loadVideoFile, stageVideoBlob, type VideoFile } from "./lib/videos";
 import { checkForUpdate, getAppVersion, type UpdateInfo } from "./lib/updater";
@@ -184,8 +184,8 @@ async function writeSceneFile(path: string, params: Params, state: PlayState, [f
 interface OpenRequest {
   kind: OpenKind;
   slot: ImageSlot;
-  /** "driver": the picked video becomes the Driver effect's own video. */
-  target?: "driver";
+  /** "driver": the picked video becomes the Driver effect's own video. "import": the picked projects' scenes go into the open project. */
+  target?: "driver" | "import";
 }
 
 export type ImageSlot = 0 | 1;
@@ -1028,10 +1028,10 @@ export default function App() {
     }
     const current = scenePathRef.current;
     const name = current ? fileNameOf(current) : `${docFileName(null, docsRef.current.find((doc) => doc.id === activeIdRef.current)?.untitled ?? 1)}.${FILE_EXTENSION}`;
-    const path = await saveDialog({ defaultPath: name, filters: [{ name: "Kaleido Sage file", extensions: [FILE_EXTENSION] }] });
+    const path = await saveDialog({ defaultPath: name, filters: [{ name: "Kaleido Sage project", extensions: [FILE_EXTENSION] }] });
     if (!path) return false;
     if (samePath(path, filePathRef.current)) {
-      showError(`${fileNameOf(path)} is the open file. Export the scene with another name.`);
+      showError(`${fileNameOf(path)} is the open project. Export the scene with another name.`);
       return false;
     }
     try {
@@ -1049,10 +1049,16 @@ export default function App() {
     }
   }, [engine, fileAudio, showError, showSaved, showStatus]);
 
-  /* One Open dialog opens every Kaleido Sage file: a show in place of the open file, a single scene into it (see openPicked). */
+  /* Open Project: the Open dialog, for a project in place of the open one (see openProject). */
   const openFile = useCallback(() => {
     if (!engine || !isTauri()) return;
     setOpenRequest({ kind: "scene", slot: 0 });
+  }, [engine]);
+
+  /* Import Scene(s): the Open dialog, for projects whose scenes go into the open project (see importScenes). */
+  const openImport = useCallback(() => {
+    if (!engine || !isTauri() || docsRef.current.length === 0) return;
+    setOpenRequest({ kind: "scene", slot: 0, target: "import" });
   }, [engine]);
 
   /**
@@ -1510,8 +1516,8 @@ export default function App() {
    */
   const newScene = useCallback(() => {
     if (!engine) return;
-    const newFile = docsRef.current.length === 0;
-    if (newFile) {
+    const fresh = docsRef.current.length === 0;
+    if (fresh) {
       /* The first scene of each run, with the pointers on, shows the welcome card first; Show Me Around then shows the panels' tips. */
       if (!welcomeShownRef.current && helpSettings.get().pointers) {
         welcomeShownRef.current = true;
@@ -1527,7 +1533,7 @@ export default function App() {
     blankScene();
     addDoc();
     setStartScreen(false);
-    if (newFile) markFileClean(null);
+    if (fresh) markFileClean(null);
   }, [addDoc, blankScene, engine, markFileClean, stashActive]);
 
   /** Set below, once closeFile exists: the last scene's Remove Scene closes the file. */
@@ -1570,11 +1576,11 @@ export default function App() {
     const firstName = docFileName(first.id === activeIdRef.current ? scenePathRef.current : first.path, first.untitled).replace(/\.ksage$/i, "");
     const path = !saveAs && current
       ? current
-      : await saveDialog({ defaultPath: current ?? `${firstName}.${FILE_EXTENSION}`, filters: [{ name: "Kaleido Sage file", extensions: [FILE_EXTENSION] }] });
+      : await saveDialog({ defaultPath: current ?? `${firstName}.${FILE_EXTENSION}`, filters: [{ name: "Kaleido Sage project", extensions: [FILE_EXTENSION] }] });
     if (!path) return false;
     try {
       if (audioInput.settings.kind !== "tracks") tracks.clear();
-      showStatus(tracks.list.length ? "Saving the file and its scenes and audio files…" : "Saving the file and its scenes…", 0);
+      showStatus(tracks.list.length ? "Saving the project and its scenes and audio files…" : "Saving the project and its scenes…", 0);
       /**
        * Each scene goes in as it is now, from the engine or from its tab's
        * stored copy. A scene's file on disk never changes: a scene that is
@@ -1619,7 +1625,7 @@ export default function App() {
         songFollow: songFollow.enabled
       }, scenes, tracks.list.map((track) => track.path), tracks.list.map((track) => songFollow.analysisText(track.path)));
     } catch (error) {
-      showError(`Could not save the file. ${String(error)}`);
+      showError(`Could not save the project. ${String(error)}`);
       return false;
     }
     markFileClean(path);
@@ -1632,7 +1638,7 @@ export default function App() {
   askToSaveFileRef.current = (reason: string) => new Promise<boolean>((resolve) => {
     const path = filePathRef.current;
     if (!fileUnsaved()) resolve(true);
-    else setSaveQuestion({ reason, answer: resolve, name: path ? fileNameOf(path) : "Untitled", save: () => saveFile() });
+    else setSaveQuestion({ reason, answer: resolve, name: path ? fileNameOf(path) : "Untitled Project", save: () => saveFile() });
   });
 
   /** Takes every scene and track out of the app, with no question: for Close, New and a show that opens. The start screen does not show. */
@@ -1657,8 +1663,8 @@ export default function App() {
    */
   const closeFile = useCallback(async () => {
     if (!engine || docsRef.current.length === 0) return;
-    const name = filePathRef.current ? fileNameOf(filePathRef.current) : "Untitled";
-    if (!(await askToSaveFileRef.current("Closing the file closes its scenes and its audio files."))) return;
+    const name = filePathRef.current ? fileNameOf(filePathRef.current) : "Untitled Project";
+    if (!(await askToSaveFileRef.current("Closing the project closes its scenes and its audio files."))) return;
     if (fullscreen) await exitFullscreen();
     await clearFile();
     quietInput();
@@ -1668,10 +1674,10 @@ export default function App() {
   }, [clearFile, engine, exitFullscreen, fullscreen, showStatus]);
   closeFileRef.current = closeFile;
 
-  /** New: asks "Save changes?" for the open file, then starts a new, untitled file with one blank scene (see newScene). */
+  /** New Project: asks "Save changes?" for the open project, then starts a new, untitled project with one blank scene (see newScene). */
   const newFile = useCallback(async () => {
     if (!engine) return;
-    if (!(await askToSaveAll("A new file closes the open file."))) return;
+    if (!(await askToSaveAll("A new project closes the open project."))) return;
     await clearFile();
     newScene();
   }, [askToSaveAll, clearFile, engine, newScene]);
@@ -1687,7 +1693,7 @@ export default function App() {
     const name = fileNameOf(path);
     const title = `Opening ${name}`;
     try {
-      setLoading({ title, detail: "Unpacking the file…", progress: null });
+      setLoading({ title, detail: "Unpacking the project…", progress: null });
       const opened = await openKaleidoFile(path);
       const manifest = readManifest(opened.manifest);
       tracks.pause();
@@ -1721,48 +1727,38 @@ export default function App() {
     }
   }, [clearFile, engine, markFileClean, openScenePath, showError, showStatus, startShow]);
 
+  /** Open Project: asks "Save changes?" for the open project, then opens the picked one in its place (see openFilePath). */
+  const openProject = useCallback(async (path: string) => {
+    if (!engine) return;
+    if (docsRef.current.length > 0 && !(await askToSaveAll("Opening a project closes the open project."))) return;
+    await openFilePath(path);
+  }, [askToSaveAll, engine, openFilePath]);
+
   /**
-   * Opens the files picked in the Open dialog (see docs/ONE-FILE.md). On the
-   * start screen, one file opens as the open file. With a file open, a show
-   * (see isShow) opens in its place, after "Save changes?", and a single
-   * scene goes into the open file as a new tab; its own file on disk does
-   * not change. Of several files, a show opens alone; else each single
-   * scene goes in, and on the start screen they make a new, untitled file.
+   * Import Scene(s): every scene of each picked project goes into the open
+   * project, in order, after its scenes, each in a new tab. The picked
+   * projects' audio files and audio settings do not come in, and their
+   * files on disk do not change. The open project counts as changed.
    */
-  const openPicked = useCallback(async (paths: string[]) => {
-    if (!engine || paths.length === 0) return;
-    let shows: boolean[];
-    try {
-      shows = (await Promise.all(paths.map((path) => readFileSummary(path)))).map(isShow);
-    } catch (error) {
-      showError(`Could not open the file. ${error instanceof Error ? error.message : String(error)}`);
-      return;
-    }
-    const show = paths.find((_, index) => shows[index]);
-    const fresh = docsRef.current.length === 0;
-    if (show !== undefined || (fresh && paths.length === 1)) {
-      if (!fresh && !(await askToSaveAll("Opening a show closes the open file."))) return;
-      await openFilePath(show ?? paths[0]);
-      return;
-    }
-    if (fresh) {
-      quietInput();
-      markFileClean(null);
-    }
-    const title = paths.length === 1 ? `Opening ${fileNameOf(paths[0])}` : `Opening ${paths.length} scenes`;
+  const importScenes = useCallback(async (paths: string[]) => {
+    if (!engine || paths.length === 0 || docsRef.current.length === 0) return;
+    const title = paths.length === 1 ? `Importing ${fileNameOf(paths[0])}` : `Importing ${paths.length} projects`;
     try {
       for (const [index, path] of paths.entries()) {
-        setLoading({ title, detail: `Scene ${index + 1} of ${paths.length}: ${fileNameOf(path)}`, progress: index / paths.length });
-        /* The open file's unpacked scenes and tracks stay (see openKaleidoFile). */
+        setLoading({ title, detail: `Unpacking ${fileNameOf(path)}…`, progress: index / paths.length });
+        /* The open project's unpacked scenes and tracks stay (see openKaleidoFile). */
         const opened = await openKaleidoFile(path, { keepOthers: true });
-        if (opened.scenes[0]) await openScenePath(opened.scenes[0]);
+        for (const [number, scene] of opened.scenes.entries()) {
+          setLoading({ title, detail: `${fileNameOf(path)}: scene ${number + 1} of ${opened.scenes.length}`, progress: (index + number / opened.scenes.length) / paths.length });
+          await openScenePath(scene);
+        }
       }
     } catch (error) {
-      showError(`Could not open the scene. ${error instanceof Error ? error.message : String(error)}`);
+      showError(`Could not import the scenes. ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setLoading(null);
     }
-  }, [askToSaveAll, engine, markFileClean, openFilePath, openScenePath, showError]);
+  }, [engine, openScenePath, showError]);
 
   /** Puts the tabs in a new order (a drag in the tab bar). The scenes play in tab order, and the file keeps it. */
   const reorderDocs = useCallback((ids: number[]) => {
@@ -2096,7 +2092,7 @@ export default function App() {
        */
       if (startScreen) {
         const startAction = event.ctrlKey
-          ? { o: openFile, n: newScene }[event.key.toLowerCase()]
+          ? { o: openFile, n: newFile }[event.key.toLowerCase()]
           : ["escape", "f11"].includes(event.key.toLowerCase()) ? exitFullscreen : undefined;
         if (startAction) {
           event.preventDefault();
@@ -2122,7 +2118,7 @@ export default function App() {
           switchByStep(tabStep);
           return;
         }
-        /* Ctrl+S saves the open file with all of its scenes, and Ctrl+Shift+S saves it with a new name. */
+        /* Ctrl+S saves the open project with all of its scenes, and Ctrl+Shift+S saves it with a new name. Ctrl+N adds a blank scene. */
         const sceneAction = { s: () => saveFile(event.shiftKey), o: openFile, n: newScene, w: closeScene }[key];
         if (sceneAction) {
           event.preventDefault();
@@ -2173,7 +2169,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [aboutOpen, shortcutsOpen, welcome, closeScene, crossfadeToDoc, engine, exitFullscreen, newScene, openImage, openRequest, videoDialogOpen, searchSlot, openFile, randomize, redo, saveFile, startScreen, stop, switchByStep, toggleAudioPanel, toggleFullscreen, toggleMidiPanel, togglePause, undo]);
+  }, [aboutOpen, shortcutsOpen, welcome, closeScene, crossfadeToDoc, engine, exitFullscreen, newFile, newScene, openImage, openRequest, videoDialogOpen, searchSlot, openFile, randomize, redo, saveFile, startScreen, stop, switchByStep, toggleAudioPanel, toggleFullscreen, toggleMidiPanel, togglePause, undo]);
 
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
@@ -2204,20 +2200,22 @@ export default function App() {
       id: "file",
       label: "File",
       /**
-       * The Kaleido Sage file (every open scene, and the tracks), then its
-       * scenes (a scene is the file's: Export Scene As writes a copy to a
-       * file of its own, and Remove Scene takes it out of the file), then
-       * the picture's own commands (an image or video in, a PNG or video out).
+       * The project (a Kaleido Sage file: every open scene, and the tracks),
+       * then its scenes (Import Scene(s) adds another project's scenes,
+       * Export Scene writes a copy to a project of its own, and Remove Scene
+       * takes a scene out), then the picture's own commands (an image or
+       * video in, a PNG or video out).
        */
       items: [
-        { label: "New", icon: <FilePlus size={15} />, run: () => void newFile() },
-        { label: "Open…", icon: <FolderOpen size={15} />, shortcut: "Ctrl+O", run: () => void openFile() },
-        { label: "Save", disabled: startScreen, icon: <FloppyDisk size={15} />, shortcut: "Ctrl+S", run: () => void saveFile() },
-        { label: "Save As…", disabled: startScreen, icon: <FloppyDisk size={15} />, shortcut: "Ctrl+Shift+S", run: () => void saveFile(true) },
-        { label: "Close", icon: <X size={15} />, disabled: startScreen, run: () => void closeFile() },
+        { label: "New Project", icon: <FilePlus size={15} />, run: () => void newFile() },
+        { label: "Open Project…", icon: <FolderOpen size={15} />, shortcut: "Ctrl+O", run: () => void openFile() },
+        { label: "Save Project", disabled: startScreen, icon: <FloppyDisk size={15} />, shortcut: "Ctrl+S", run: () => void saveFile() },
+        { label: "Save Project As…", disabled: startScreen, icon: <FloppyDisk size={15} />, shortcut: "Ctrl+Shift+S", run: () => void saveFile(true) },
+        { label: "Close Project", icon: <X size={15} />, disabled: startScreen, run: () => void closeFile() },
         "separator",
-        { label: "New Scene", icon: <Plus size={15} />, shortcut: "Ctrl+N", run: newScene },
-        { label: "Export Scene As…", disabled: startScreen, icon: <Export size={15} />, run: () => void exportScene() },
+        { label: "Add Blank Scene", icon: <Plus size={15} />, shortcut: "Ctrl+N", disabled: startScreen, run: newScene },
+        { label: "Import Scene(s)…", icon: <FolderOpen size={15} />, disabled: startScreen, run: openImport },
+        { label: "Export Scene…", disabled: startScreen, icon: <Export size={15} />, run: () => void exportScene() },
         { label: "Remove Scene", icon: <Trash size={15} />, shortcut: "Ctrl+W", disabled: startScreen, run: () => void closeScene() },
         "separator",
         { label: "Open Image or Video…", icon: <ColorFolder size={18} />, shortcut: "O", run: () => void openImage() },
@@ -2297,7 +2295,7 @@ export default function App() {
           <TitleBar
             updateAvailable={Boolean(startupUpdate)}
             onAbout={() => setAboutOpen(true)}
-            fileName={startScreen ? null : filePath ? fileNameOf(filePath) : "Untitled"}
+            fileName={startScreen ? null : filePath ? fileNameOf(filePath) : "Untitled Project"}
             dirty={fileDirty}
             sceneName={startScreen ? null : sceneFileName.replace(/.ksage$/i, "")}
           />
@@ -2306,7 +2304,7 @@ export default function App() {
       )}
       <div className="workspace">
         {loading && <LoadingOverlay loading={loading} />}
-        {startScreen && <StartScreen version={appVersion} onNew={newScene} onOpen={openFile} />}
+        {startScreen && <StartScreen version={appVersion} onNew={() => void newFile()} onOpen={openFile} />}
         {/**
           * The left side. With Files as the input, it is
           * one panel of columns: the audio files (Files only), the scenes (a
@@ -2497,19 +2495,21 @@ export default function App() {
       {openRequest && (
         <OpenDialog
           kind={openRequest.kind}
-          title={openRequest.target === "driver" ? "Open Video for the Driver" : openRequest.kind === "scene" ? "Open" : openRequest.kind === "audio" ? "Add Audio Files" : openRequest.slot === 1 ? "Open Image or Video for Source B" : "Open Image or Video"}
+          title={openRequest.target === "driver" ? "Open Video for the Driver" : openRequest.target === "import" ? "Import Scene(s)" : openRequest.kind === "scene" ? "Open Project" : openRequest.kind === "audio" ? "Add Audio Files" : openRequest.slot === 1 ? "Open Image or Video for Source B" : "Open Image or Video"}
+          hint={openRequest.target === "import" ? "Choose one or more Kaleido Sage projects (.ksage). All of their scenes go into the open project, without their audio files." : undefined}
           onCancel={() => setOpenRequest(null)}
           onOpen={(path) => {
             setOpenRequest(null);
             if (openRequest.target === "driver") void openDriverVideo(path);
-            else if (openRequest.kind === "scene") void openPicked([path]);
+            else if (openRequest.target === "import") void importScenes([path]);
+            else if (openRequest.kind === "scene") void openProject(path);
             else if (openRequest.kind === "audio") addTracks([path]);
             else void openImagePath(path, openRequest.slot);
           }}
-          /* Several files: a show among them opens alone; else each single scene goes into the open file (see openPicked). Several audio files go to the tracks. */
-          onOpenMany={openRequest.kind === "scene" ? (paths) => {
+          /* Import Scene(s) takes several projects; Open Project takes one. Several audio files go to the tracks. */
+          onOpenMany={openRequest.target === "import" ? (paths) => {
             setOpenRequest(null);
-            void openPicked(paths);
+            void importScenes(paths);
           } : openRequest.kind === "audio" ? (paths) => {
             setOpenRequest(null);
             addTracks(paths);

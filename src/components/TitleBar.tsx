@@ -7,15 +7,15 @@ import { help } from "../help/topics";
 interface Props {
   updateAvailable: boolean;
   onAbout: () => void;
-  /** The open file's name, "Untitled" for a file that was never saved, or null when no file is open (the start screen). */
+  /** The open project's file name, "Untitled Project" for a project that was never saved, or null when none is open (the start screen). */
   fileName: string | null;
-  /** True when the file has changes that are not saved; a red asterisk shows. */
+  /** True when the project has changes that are not saved; a red asterisk shows. */
   dirty: boolean;
   /** The selected scene's name, after the file's name. */
   sceneName: string | null;
 }
 
-/** The window's title bar: the app name, the open file and its scene, the update button when an update is ready, and the window controls. */
+/** The window's title bar: the app name, the open project and its scene, the update button when an update is ready, and the window controls. */
 export function TitleBar({ updateAvailable, onAbout, fileName, dirty, sceneName }: Props) {
   return (
     <header
@@ -27,10 +27,10 @@ export function TitleBar({ updateAvailable, onAbout, fileName, dirty, sceneName 
         <img src="/icon.ico" alt="" />
         <span>Kaleido Sage</span>
       </div>
-      {/* One centered group: the open file, with its asterisk, then the selected scene. */}
+      {/* One centered group: the open project, with its asterisk, then the selected scene. */}
       {fileName !== null && (
         <div className="titlebar-file" data-tauri-drag-region>
-          <span className="titlebar-part" data-tip={dirty ? "This file has changes that are not saved" : "The open file"} {...help("file")}>
+          <span className="titlebar-part" data-tip={dirty ? "This project has changes that are not saved" : "The open project"} {...help("file")}>
             <span className="titlebar-file-name">{fileName}</span>
             {dirty && <span className="titlebar-dirty">*</span>}
           </span>

@@ -50,7 +50,7 @@ export function DocumentTabs({ tabs, activeId, onSelect, onClose, onReorder }: P
               className="document-tab-close"
               onPointerDown={(event) => event.stopPropagation()}
               onClick={() => onClose(tab.id)}
-              data-tip={active ? "Remove the scene from the file `Ctrl+w`" : "Remove the scene from the file"}
+              data-tip={active ? "Remove the scene from the project `Ctrl+w`" : "Remove the scene from the project"}
               aria-label={`Remove ${tab.fileName}`}
             >
               <X size={13} weight="bold" />
