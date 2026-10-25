@@ -53,7 +53,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - The menu bar has four menus: File, Edit, View and Help.
 - While a menu is open, pointing at another menu opens it.
 - A click outside, Esc or a loss of focus closes a menu.
-- File has New Project, Open Project, Save Project, Save Project As and Close Project; Add Blank Scene, Import Scene(s), Export Scene and Remove Scene; Open Image or Video, Save PNG and Export Video; and Exit.
+- File has New Project, Open Project, Save Project, Save Project As and Close Project; Add Blank Scene, Import Scene(s), Export Scene and Remove Scene; Save PNG and Export Video; and Exit.
 - The scene items are off on the start screen.
 - Exit closes the window, so the unsaved-changes question can show.
 - Edit has Undo and Redo.

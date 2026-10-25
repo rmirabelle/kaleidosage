@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { AboutDialog } from "./components/AboutDialog";
 import { ShortcutsDialog } from "./components/ShortcutsDialog";
 import { HelpLine } from "./components/HelpLine";
-import { ColorFolder } from "./components/ColorFolder";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ControlPanel } from "./components/ControlPanel";
 import { ExportVideoDialog } from "./components/ExportVideoDialog";
@@ -2209,8 +2208,9 @@ export default function App() {
        * The project (a Kaleido Sage file: every open scene, and the tracks),
        * then its scenes (Import Scene(s) adds another project's scenes,
        * Export Scene writes a copy to a project of its own, and Remove Scene
-       * takes a scene out), then the picture's own commands (an image or
-       * video in, a PNG or video out).
+       * takes a scene out), then the picture's own commands (a PNG or a
+       * video out). An image or video comes in through the Source card's
+       * slots or the O key.
        */
       items: [
         { label: "New Project", icon: <FilePlus size={15} />, run: () => void newFile() },
@@ -2224,7 +2224,6 @@ export default function App() {
         { label: "Export Scene…", disabled: startScreen, icon: <Export size={15} />, run: () => void exportScene() },
         { label: "Remove Scene", icon: <Trash size={15} />, shortcut: "Ctrl+W", disabled: startScreen, run: () => void closeScene() },
         "separator",
-        { label: "Open Image or Video…", icon: <ColorFolder size={18} />, shortcut: "O", run: () => void openImage() },
         { label: "Save PNG", disabled: startScreen, icon: <Camera size={15} />, run: () => void savePng() },
         { label: "Export Video…", icon: <FilmStrip size={15} />, run: openVideoDialog },
         "separator",
