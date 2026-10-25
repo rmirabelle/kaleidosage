@@ -17,6 +17,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
+use tauri::Manager;
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
 
 /** The temp folders that open files unpack into start with this. */
@@ -233,11 +234,17 @@ pub async fn save_file(path: String, manifest: String, scenes: Vec<String>, trac
         .map_err(|e| e.to_string())?
 }
 
-/** Opens a file. The temp folders of files opened before go first: their scenes are closed by then. */
+/**
+ * Opens a file. The temp folders of files opened before go first: their
+ * scenes are closed by then. With "keep_others" they stay, for a single
+ * scene that goes into the open file, whose scenes and tracks are there.
+ */
 #[tauri::command]
-pub async fn open_file(path: String) -> Result<OpenedFile, String> {
+pub async fn open_file(path: String, keep_others: Option<bool>) -> Result<OpenedFile, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        clean_unpacked(None);
+        if !keep_others.unwrap_or(false) {
+            clean_unpacked(None);
+        }
         open(Path::new(&path))
     })
     .await
@@ -266,6 +273,34 @@ pub fn scene_copy_path(name: String) -> Result<String, String> {
     }
     let folder = tempfile::Builder::new().prefix(UNPACK_PREFIX).tempdir().map_err(|e| e.to_string())?.keep();
     Ok(folder.join(name).to_string_lossy().into_owned())
+}
+
+/** Where the scene at "index" is stored in the file: its start and its length. A scene entry must be stored, not compressed, so it can be read in place. */
+fn scene_part(path: &Path, index: usize) -> Result<(u64, u64), String> {
+    let (mut archive, manifest) = read_archive(path)?;
+    let name = manifest["scenes"][index].as_str().ok_or("The file has no scene there.")?;
+    let entry = archive.by_name(name).map_err(|_| format!("The file has no {name}."))?;
+    if entry.compression() != CompressionMethod::Stored || entry.compressed_size() != entry.size() {
+        return Err("The scene must use uncompressed archive storage.".into());
+    }
+    Ok((entry.data_start().ok_or("The scene's place in the file is invalid.")?, entry.size()))
+}
+
+/**
+ * Reads one scene of a file in place, with nothing unpacked, as read_scene
+ * reads a scene file: for the Open dialog's preview. Its videos stream
+ * from inside the file.
+ */
+#[tauri::command]
+pub async fn read_file_scene(app: tauri::AppHandle, path: String, index: usize) -> Result<tauri::ipc::Response, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = Path::new(&path);
+        let (start, len) = scene_part(path, index)?;
+        crate::scene_archive::read_part(path, start, len, &app.state::<crate::video_stream::Videos>())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map(tauri::ipc::Response::new)
 }
 
 /** At the app's start: nothing is open, so every old temp folder goes. */
@@ -358,6 +393,40 @@ mod tests {
         assert!(save(Path::new("show.txt"), "{}", &[], &[], &[]).is_err());
         assert!(save(Path::new("show.ksplaylist"), "{}", &[], &[], &[]).is_err());
         assert!(open(Path::new("show.txt")).is_err());
+    }
+
+    #[test]
+    fn reads_a_scene_and_its_video_in_place() {
+        use crate::video_stream::{VideoSource, Videos};
+        use std::io::Read;
+        let folder = tempfile::tempdir().unwrap();
+        /* A scene with an embedded video (a ZIP of its own), stored inside the file after a JSON scene. */
+        let video = folder.path().join("clip.mp4");
+        std::fs::write(&video, b"video-bytes-inside").unwrap();
+        let videos = Videos::default();
+        let info = videos.add(VideoSource::open(&video).unwrap()).unwrap();
+        let with_video = folder.path().join("Clip.ksage");
+        let contents = serde_json::to_vec(&serde_json::json!({ "app": "KaleidoSage", "image": { "type": "video/mp4", "video": info.id } })).unwrap();
+        crate::scene_archive::tests_save(&with_video, &contents, &videos);
+        let plain = folder.path().join("Night.ksage");
+        std::fs::write(&plain, b"{\"app\":\"KaleidoSage\"}").unwrap();
+        let file = folder.path().join("Show.ksage");
+        let scenes = vec![plain.to_string_lossy().into_owned(), with_video.to_string_lossy().into_owned()];
+        save(&file, r#"{"app":"KaleidoSage","kind":"file","version":1}"#, &scenes, &[], &[]).unwrap();
+        drop(videos);
+        std::fs::remove_file(&video).unwrap();
+        std::fs::remove_file(&with_video).unwrap();
+
+        let videos = Videos::default();
+        let (start, len) = scene_part(&file, 0).unwrap();
+        assert_eq!(crate::scene_archive::read_part(&file, start, len, &videos).unwrap(), b"{\"app\":\"KaleidoSage\"}");
+        let (start, len) = scene_part(&file, 1).unwrap();
+        let scene: serde_json::Value = serde_json::from_slice(&crate::scene_archive::read_part(&file, start, len, &videos).unwrap()).unwrap();
+        let source = videos.get(scene["image"]["video"].as_str().unwrap()).unwrap();
+        let mut bytes = Vec::new();
+        source.reader().read_to_end(&mut bytes).unwrap();
+        assert_eq!(bytes, b"video-bytes-inside");
+        assert!(scene_part(&file, 2).is_err());
     }
 
     #[test]

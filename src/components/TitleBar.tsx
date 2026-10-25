@@ -7,17 +7,16 @@ import { help } from "../help/topics";
 interface Props {
   updateAvailable: boolean;
   onAbout: () => void;
-  /** The scene file's name, "Untitled Scene" for a scene that was never saved, or null when no scene is open (the start screen). */
+  /** The open file's name, "Untitled" for a file that was never saved, or null when no file is open (the start screen). */
   fileName: string | null;
-  /** True when the scene has changes that are not saved; a red asterisk shows. */
+  /** True when the file has changes that are not saved; a red asterisk shows. */
   dirty: boolean;
-  /** The open playlist file's name, or null; it shows before the scene, with its own asterisk. */
-  playlistName: string | null;
-  playlistDirty: boolean;
+  /** The selected scene's name, after the file's name. */
+  sceneName: string | null;
 }
 
-/** The window's title bar: the app name, the scene file name, the update button when an update is ready, and the window controls. */
-export function TitleBar({ updateAvailable, onAbout, fileName, dirty, playlistName, playlistDirty }: Props) {
+/** The window's title bar: the app name, the open file and its scene, the update button when an update is ready, and the window controls. */
+export function TitleBar({ updateAvailable, onAbout, fileName, dirty, sceneName }: Props) {
   return (
     <header
       className="titlebar"
@@ -28,21 +27,20 @@ export function TitleBar({ updateAvailable, onAbout, fileName, dirty, playlistNa
         <img src="/icon.ico" alt="" />
         <span>Kaleido Sage</span>
       </div>
-      {/* One centered group: the open playlist (if any), then the scene, each with its own asterisk. */}
-      {(playlistName !== null || fileName !== null) && (
+      {/* One centered group: the open file, with its asterisk, then the selected scene. */}
+      {fileName !== null && (
         <div className="titlebar-file" data-tauri-drag-region>
-          {playlistName !== null && (
-            <span className="titlebar-part" data-tip={playlistDirty ? "This playlist has changes that are not saved" : "The open playlist"} {...help("playlist")}>
-              <span className="titlebar-file-name">{playlistName}</span>
-              {playlistDirty && <span className="titlebar-dirty">*</span>}
-            </span>
-          )}
-          {playlistName !== null && fileName !== null && <span className="titlebar-separator" aria-hidden="true">›</span>}
-          {fileName !== null && (
-            <span className="titlebar-part" data-tip={dirty ? "This scene has changes that are not saved" : undefined}>
-              <span className="titlebar-file-name">{fileName}</span>
-              {dirty && <span className="titlebar-dirty">*</span>}
-            </span>
+          <span className="titlebar-part" data-tip={dirty ? "This file has changes that are not saved" : "The open file"} {...help("file")}>
+            <span className="titlebar-file-name">{fileName}</span>
+            {dirty && <span className="titlebar-dirty">*</span>}
+          </span>
+          {sceneName !== null && (
+            <>
+              <span className="titlebar-separator" aria-hidden="true">›</span>
+              <span className="titlebar-part">
+                <span className="titlebar-file-name">{sceneName}</span>
+              </span>
+            </>
           )}
         </div>
       )}

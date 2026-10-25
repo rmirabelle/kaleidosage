@@ -1,14 +1,14 @@
 import { convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
 import type { VideoFile } from "./videos";
-import { isPlaylistCopy } from "./playlistFile";
+import { isFileCopy } from "./kaleidoFile";
 
 /**
  * The tracks (see docs/AUDIO.md, part 7): audio files that the app plays
  * itself, through the speakers, one after the other, and round again. The
  * same sound goes to the analysis: an AudioWorklet tap mixes it to mono
- * and posts it in blocks to "onSamples". Only a playlist file keeps
- * tracks (see playlistFile.ts): outside a playlist, the list starts empty
- * at each start of the app, and a new or opened scene empties it.
+ * and posts it in blocks to "onSamples". A Kaleido Sage file keeps the
+ * tracks while Files is the input (see kaleidoFile.ts): the list starts
+ * empty at each start of the app, and a new or closed file empties it.
  */
 
 export interface Track {
@@ -148,7 +148,7 @@ class TrackList {
     return length === undefined || Number.isNaN(length) ? null : length;
   }
 
-  /** Lengths that a playlist kept (see playlistFile.ts), in track order, so they need not be read again. */
+  /** Lengths that a file kept (see kaleidoFile.ts), in track order, so they need not be read again. */
   setLengths(seconds: readonly (number | null)[]) {
     this.list.forEach((track, index) => {
       const length = seconds[index];
@@ -346,15 +346,15 @@ class TrackList {
   /** Adds files at the end of the track list; a file that is in it already is not added twice. */
   /**
    * A file that is in the list already is left out, and with nothing new
-   * nothing changes. A track of an opened playlist is a copy in the temp
-   * folder (see isPlaylistCopy), so there a file with the same name counts
+   * nothing changes. A track of an opened file is a copy in the temp
+   * folder (see isFileCopy), so there a file with the same name counts
    * as the same file too.
    */
   add(paths: string[]) {
     /* Windows paths: case and the kind of slash do not matter. */
     const key = (path: string) => path.replace(/\//g, "\\").toLowerCase();
     const known = new Set(this.list.map((track) => key(track.path)));
-    const copies = new Set(this.list.filter((track) => isPlaylistCopy(track.path)).map((track) => track.name.toLowerCase()));
+    const copies = new Set(this.list.filter((track) => isFileCopy(track.path)).map((track) => track.name.toLowerCase()));
     const added = paths.filter((path) => {
       if (known.has(key(path)) || copies.has(nameOf(path).toLowerCase())) return false;
       known.add(key(path));
@@ -390,7 +390,7 @@ class TrackList {
     this.changed();
   }
 
-  /** Puts these files in the place of every track, stopped at the first one: for a playlist that opens. */
+  /** Puts these files in the place of every track, stopped at the first one: for a file that opens. */
   replace(paths: string[]) {
     this.pause();
     this.list = paths.map((path) => ({ path, name: nameOf(path) }));

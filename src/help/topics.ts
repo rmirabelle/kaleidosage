@@ -41,10 +41,10 @@ export const HELP_TOPICS = {
       "Keys 1 to 9 select the tab with that number, also in full screen.",
       "Ctrl + Tab selects the next tab.",
       "Ctrl + Shift + Tab selects the tab before.",
-      "The {x} on a tab closes it.",
-      "A middle click on a tab closes it.",
+      "The {x} on a tab takes the scene out of the file.",
+      "A middle click on a tab takes the scene out of the file.",
       "Drag a tab to move it; the scenes play in tab order.",
-      "In a playlist or with Files as the input, the scenes are a list at the left, not tabs."
+      "With Files as the input, the scenes are a list at the left, not tabs."
     ],
     keywords: ["scene", "tab", "crossfade", "switch", "document", "new scene", "open scene"]
   },
@@ -127,7 +127,7 @@ export const HELP_TOPICS = {
     text: "Audio files that the app plays itself, one after the other, and round again. While Files is the input, the toolbar at the bottom of the Playlist card plays the music, and the show moves to the next scene tab at the end of each scene's loop and at each new file.",
     tips: [
       "Click a file to play it; drag it to move it in the list.",
-      "Drag the line at the list's right edge to make it wider; a playlist keeps the width.",
+      "Drag the line at the list's right edge to make it wider; the file keeps the width.",
       "The {x} removes a file from the list.",
       "Your changes turn Hold on, so the scene stays. Click Hold, save or pick a tab to go on.",
       "Play, Pause and Stop at the bottom run the music only; the bar seeks in the file.",
@@ -175,16 +175,17 @@ export const HELP_TOPICS = {
     ],
     keywords: ["play", "pause", "stop", "full screen", "fullscreen", "space"]
   },
-  playlist: {
-    title: "Playlists",
-    text: "A playlist file holds a whole show: copies of the open scenes in tab order, the audio files, and the audio settings. It plays the same on another PC.",
+  file: {
+    title: "Kaleido Sage files",
+    text: "A Kaleido Sage file (.ksage) holds the open scenes in tab order and the audio settings. While Files is the input, it holds the audio files too. It plays the same on another PC.",
     tips: [
-      "In an open playlist, Ctrl + S saves the playlist.",
-      "Saving a playlist does not change the scene files on disk.",
-      "Export Scene As writes a copy of the selected scene to a file of its own.",
-      "Opening a playlist closes the open scenes; the app asks about changes first."
+      "Ctrl + S saves the file with all of its scenes.",
+      "A show (two or more scenes, or audio files) opens in place of the open file.",
+      "A file with one scene and no audio files goes into the open file as a new scene.",
+      "With an input other than Files, Save takes the audio files out of the file.",
+      "Export Scene As writes the selected scene to a file of its own."
     ],
-    keywords: ["playlist", "show", "set list", "ksplaylist", "save playlist", "open playlist", "export scene"]
+    keywords: ["file", "ksage", "show", "playlist", "set list", "save", "open", "export scene"]
   },
   export: {
     title: "Pictures and videos",

@@ -2,7 +2,8 @@
 //! Media is read directly from the archive; no external paths are saved.
 use crate::video_stream::{VideoSource, Videos};
 use std::{
-    io::{Read, Seek, Write},
+    fs::File,
+    io::{Read, Seek, SeekFrom, Write},
     path::Path,
     sync::Arc,
 };
@@ -91,10 +92,46 @@ pub(crate) fn persist_file(temp: tempfile::NamedTempFile, path: &Path) -> Result
     Ok(())
 }
 
-fn read(path: &Path, videos: &Videos) -> Result<Vec<u8>, String> {
-    if !crate::files::is_scene_path(path) {
-        return Err("This is not a .ksage file.".into());
+/**
+ * A part of a file (its start and length) that reads as a file of its own:
+ * a scene stored inside a Kaleido Sage file (see file_archive), or a whole
+ * scene file (start 0).
+ */
+struct Window {
+    file: File,
+    start: u64,
+    len: u64,
+    pos: u64,
+}
+
+impl Read for Window {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let count = (buf.len() as u64).min(self.len.saturating_sub(self.pos)) as usize;
+        if count == 0 {
+            return Ok(0);
+        }
+        self.file.seek(SeekFrom::Start(self.start + self.pos))?;
+        let read = self.file.read(&mut buf[..count])?;
+        self.pos += read as u64;
+        Ok(read)
     }
+}
+
+impl Seek for Window {
+    fn seek(&mut self, to: SeekFrom) -> std::io::Result<u64> {
+        let pos = match to {
+            SeekFrom::Start(offset) => Some(offset),
+            SeekFrom::End(offset) => self.len.checked_add_signed(offset),
+            SeekFrom::Current(offset) => self.pos.checked_add_signed(offset),
+        }
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "A seek before the start of the scene"))?;
+        self.pos = pos;
+        Ok(pos)
+    }
+}
+
+/** Opens "path" to read; other readers, and a save that replaces the file, can still use it. */
+fn open_shared(path: &Path) -> Result<File, String> {
     let mut options = std::fs::OpenOptions::new();
     options.read(true);
     #[cfg(windows)]
@@ -102,7 +139,28 @@ fn read(path: &Path, videos: &Videos) -> Result<Vec<u8>, String> {
         use std::os::windows::fs::OpenOptionsExt;
         options.share_mode(7);
     }
-    let mut file = options.open(path).map_err(|e| e.to_string())?;
+    options.open(path).map_err(|e| e.to_string())
+}
+
+fn read(path: &Path, videos: &Videos) -> Result<Vec<u8>, String> {
+    if !crate::files::is_scene_path(path) {
+        return Err("This is not a .ksage file.".into());
+    }
+    let file = open_shared(path)?;
+    let len = file.metadata().map_err(|e| e.to_string())?.len();
+    read_window(Window { file, start: 0, len, pos: 0 }, videos)
+}
+
+/**
+ * Reads the scene stored at "start" in "path", "len" bytes long (an entry
+ * of a Kaleido Sage file, see file_archive): its videos stream from inside
+ * that file, as from a scene file of their own.
+ */
+pub(crate) fn read_part(path: &Path, start: u64, len: u64, videos: &Videos) -> Result<Vec<u8>, String> {
+    read_window(Window { file: open_shared(path)?, start, len, pos: 0 }, videos)
+}
+
+fn read_window(mut file: Window, videos: &Videos) -> Result<Vec<u8>, String> {
     let mut magic = [0; 4];
     let count = file.read(&mut magic).map_err(|e| e.to_string())?;
     file.rewind().map_err(|e| e.to_string())?;
@@ -111,7 +169,7 @@ fn read(path: &Path, videos: &Videos) -> Result<Vec<u8>, String> {
         file.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
         return Ok(bytes); // Original JSON scenes remain supported.
     }
-    let file_len = file.metadata().map_err(|e| e.to_string())?.len();
+    let file_len = file.len;
     let mut archive = ZipArchive::new(file).map_err(|e| e.to_string())?;
     let mut scene: serde_json::Value = {
         let entry = archive.by_name("scene.json").map_err(|e| e.to_string())?;
@@ -145,11 +203,14 @@ fn read(path: &Path, videos: &Videos) -> Result<Vec<u8>, String> {
             media.push((slot, offset, len));
         }
     }
-    let file = Arc::new(archive.into_inner());
+    /* The offsets are in the window: the video's place in the file adds the window's start. */
+    let window = archive.into_inner();
+    let start = window.start;
+    let file = Arc::new(window.file);
     for (slot, offset, len) in media {
         let info = videos.add(VideoSource {
             file: file.clone(),
-            offset,
+            offset: start + offset,
             len,
             mime: scene[slot]["type"].as_str().unwrap().into(),
         })?;
@@ -185,10 +246,15 @@ pub async fn save_scene(app: tauri::AppHandle, request: Request<'_>) -> Result<(
     .map_err(|e| e.to_string())?
 }
 
+/** For the tests of other modules: saves a scene as Save does. */
+#[cfg(test)]
+pub(crate) fn tests_save(path: &Path, contents: &[u8], videos: &Videos) {
+    save(path, contents, videos).unwrap();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
     #[test]
     fn embedded_videos_survive_moving_deleting_sources_and_resaving() {
         let dir = tempfile::tempdir().unwrap();

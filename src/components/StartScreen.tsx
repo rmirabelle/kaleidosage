@@ -1,21 +1,22 @@
-import { FolderOpen, Plus } from "@phosphor-icons/react";
+import { FilePlus, FolderOpen } from "@phosphor-icons/react";
 
 interface Props {
   /** The app's version, after the author ("" until it is known). */
   version: string;
-  onNewScene: () => void;
-  /** Opens the Open dialog, which lists scenes and playlists. */
+  /** Starts a new, untitled file with one blank scene. */
+  onNew: () => void;
+  /** Opens the Open dialog, which lists Kaleido Sage files. */
   onOpen: () => void;
 }
 
 /**
  * The first screen after start-up, styled like the Image Sage start screen.
- * It covers the work area until the user starts a new scene, or opens a
- * scene or a playlist. The author and the version are on one quiet line
+ * It covers the work area until the user starts a new file, or opens a
+ * Kaleido Sage file. The author and the version are on one quiet line
  * under the tagline, above the buttons. The credits for the models of Song
  * follow are in the About dialog.
  */
-export function StartScreen({ version, onNewScene, onOpen }: Props) {
+export function StartScreen({ version, onNew, onOpen }: Props) {
   return (
     <section className="start-screen">
       <div className="start-above">
@@ -29,11 +30,11 @@ export function StartScreen({ version, onNewScene, onOpen }: Props) {
           {version && <span>Version {version}</span>}
         </div>
         <div className="start-actions">
-          <button className="button primary large" onClick={onNewScene}>
-            <Plus size={19} weight="bold" /> New Scene
+          <button className="button primary large" onClick={onNew}>
+            <FilePlus size={19} weight="bold" /> New
           </button>
           <button className="button secondary large" onClick={onOpen}>
-            <FolderOpen size={19} weight="bold" /> Open Scene/Playlist
+            <FolderOpen size={19} weight="bold" /> Open
           </button>
         </div>
       </div>

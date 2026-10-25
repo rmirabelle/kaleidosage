@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openFileDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { ArrowClockwise, ArrowCounterClockwise, ArrowsIn, ArrowsOut, Camera, FilmStrip, FloppyDisk, FolderOpen, Gauge, HandPointing, Info, Playlist, Keyboard, Plus, SignOut, SlidersHorizontal, SpeakerSimpleHigh, X } from "@phosphor-icons/react";
+import { ArrowClockwise, ArrowCounterClockwise, ArrowsIn, ArrowsOut, Camera, Export, FilePlus, FilmStrip, FloppyDisk, FolderOpen, Gauge, HandPointing, Info, Playlist, Keyboard, Plus, SignOut, SlidersHorizontal, SpeakerSimpleHigh, Trash, X } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { AboutDialog } from "./components/AboutDialog";
 import { ShortcutsDialog } from "./components/ShortcutsDialog";
@@ -50,14 +50,13 @@ import { PATTERNS, drawPattern, type Pattern } from "./lib/patterns";
 import { midi } from "./lib/midi";
 import { audioInput, type InputKind } from "./lib/audioInput";
 import { panelLayout } from "./lib/panelLayout";
-import { isPlaylistCopy } from "./lib/playlistFile";
 import { tracks } from "./lib/tracks";
 import { songFollow } from "./lib/songFollow";
 import { settingButtons } from "./lib/settingButtons";
 import { sliceAt, type ScheduledSlice } from "./engine/showSchedule";
 import { helpSettings } from "./lib/helpSettings";
 import { RANGE_ON_EVENT } from "./lib/pointerEvents";
-import { PLAYLIST_EXTENSION, isPlaylistFile, openPlaylistFile, playlistFingerprint, readManifest, savePlaylistFile, type PlaylistAudio } from "./lib/playlistFile";
+import { FILE_EXTENSION, fileFingerprint, isFileCopy, isShow, openKaleidoFile, readFileSummary, readManifest, saveKaleidoFile, type FileAudio } from "./lib/kaleidoFile";
 import { revealMainWindow } from "./lib/splash";
 import { isVideoPath, isVideoType, loadVideoBlob, loadVideoFile, stageVideoBlob, type VideoFile } from "./lib/videos";
 import { checkForUpdate, getAppVersion, type UpdateInfo } from "./lib/updater";
@@ -457,52 +456,57 @@ export default function App() {
   /** The scenes whose tabs are not selected (see StoredScene). */
   const storedRef = useRef(new Map<number, StoredScene>());
   /**
-   * The open playlist file (see playlistFile.ts), or null, and its
-   * fingerprint as saved: it has its own unsaved mark, apart from each
-   * scene's (a new track, a new tab order, an audio setting).
+   * The open Kaleido Sage file (see kaleidoFile.ts), or null while it was
+   * never saved, and its fingerprint as saved. Every open scene is the
+   * file's (see docs/ONE-FILE.md). The file has one unsaved mark: its own
+   * changes (a new track, a new tab order, an audio setting) and each
+   * scene's.
    */
-  const [playlistPath, setPlaylistPath] = useState<string | null>(null);
-  const playlistPathRef = useRef<string | null>(null);
-  playlistPathRef.current = playlistPath;
-  const playlistSavedRef = useRef("");
-  const [playlistDirty, setPlaylistDirty] = useState(false);
-  /** The scene files in tab order, the tracks and the audio settings: what a playlist file keeps. */
-  const playlistScenes = useCallback(() => docsRef.current
+  const [filePath, setFilePath] = useState<string | null>(null);
+  const filePathRef = useRef<string | null>(null);
+  filePathRef.current = filePath;
+  const fileSavedRef = useRef("");
+  const [fileDirty, setFileDirty] = useState(false);
+  /** The scene files in tab order, the tracks and the audio settings: what a Kaleido Sage file keeps. */
+  const fileScenes = useCallback(() => docsRef.current
     .map((doc) => doc.id === activeIdRef.current ? scenePathRef.current : doc.path)
     .filter((path): path is string => path !== null), []);
-  const playlistAudio = useCallback((): PlaylistAudio => {
+  const fileAudio = useCallback((): FileAudio => {
     const { kind, device, gainDb, thresholdDb } = audioInput.settings;
     return { kind, device, gainDb, thresholdDb };
   }, []);
-  /* A new song analysis, an edit of a song map, or Song follow turned on or off is a change too: Save Playlist keeps it (see songFollow.ts). */
-  const playlistNow = useCallback(() => {
-    const paths = tracks.list.map((track) => track.path);
-    return `${playlistFingerprint(playlistScenes(), paths, playlistAudio(), panelLayout.filesWidth)} ${songFollow.analyzedCount(paths)} ${songFollow.edits} ${songFollow.enabled}`;
-  }, [playlistAudio, playlistScenes]);
-  const playlistChanged = useCallback(() => playlistPathRef.current !== null && playlistNow() !== playlistSavedRef.current, [playlistNow]);
-  /** The playlist as it is now counts as saved. */
-  const markPlaylistClean = useCallback((path: string | null) => {
-    playlistPathRef.current = path;
-    setPlaylistPath(path);
-    playlistSavedRef.current = playlistNow();
-    setPlaylistDirty(false);
-  }, [playlistNow]);
-  /** Set below, once savePlaylist exists: asks "Save changes?" for the playlist. */
-  const askToSavePlaylistRef = useRef<(reason: string) => Promise<boolean>>(async () => true);
+  /**
+   * A new song analysis, an edit of a song map, or Song follow turned on or
+   * off is a change too: Save keeps it (see songFollow.ts). The tracks count
+   * only while Files is the input, as Save keeps them only then.
+   */
+  const fileNow = useCallback(() => {
+    const paths = audioInput.settings.kind === "tracks" ? tracks.list.map((track) => track.path) : [];
+    return `${fileFingerprint(fileScenes(), paths, fileAudio(), panelLayout.filesWidth)} ${songFollow.analyzedCount(paths)} ${songFollow.edits} ${songFollow.enabled}`;
+  }, [fileAudio, fileScenes]);
+  const fileChanged = useCallback(() => docsRef.current.length > 0 && fileNow() !== fileSavedRef.current, [fileNow]);
+  /** The file as it is now counts as saved, at "path" (null for a file that was never saved). */
+  const markFileClean = useCallback((path: string | null) => {
+    filePathRef.current = path;
+    setFilePath(path);
+    fileSavedRef.current = fileNow();
+    setFileDirty(false);
+  }, [fileNow]);
+  /** Set below, once saveFile exists: asks "Save changes?" for the file. */
+  const askToSaveFileRef = useRef<(reason: string) => Promise<boolean>>(async () => true);
   /** The selected scene's Undo history; each scene has its own. */
   const historyRef = useRef<SettingsHistory | null>(null);
   const [resetAsked, setResetAsked] = useState(false);
   /**
    * The open "Save changes?" question before an action that replaces the
-   * scene (opening a scene, installing an update): its title, the reason,
-   * and the answer, true to go on with the action.
+   * file (opening a show, installing an update): the reason, the answer
+   * (true to go on with the action), the file's name, and how Save saves it.
    */
   const [saveQuestion, setSaveQuestion] = useState<{
     reason: string;
     answer: (go: boolean) => void;
-    /** What has the changes, when it is not the selected scene (the playlist), and how Save saves it. */
-    name?: string;
-    save?: () => Promise<boolean>;
+    name: string;
+    save: () => Promise<boolean>;
   } | null>(null);
   const [appVersion, setAppVersion] = useState("");
   const [startupUpdate, setStartupUpdate] = useState<UpdateInfo | null>(null);
@@ -826,18 +830,12 @@ export default function App() {
   }, []);
 
   /**
-   * The open playlist's unsaved changes: its own (a tab, a track, an audio
-   * setting) and every scene's, because each scene in a playlist is the
-   * playlist's (see savePlaylist).
+   * The open file's unsaved changes: its own (a tab, a track, an audio
+   * setting) and every scene's, because each scene is the file's (see
+   * saveFile).
    */
-  const playlistUnsaved = useCallback(() => playlistPathRef.current !== null && (playlistChanged()
-    || docsRef.current.some((doc) => doc.id === activeIdRef.current ? fingerprint() !== savedFingerprintRef.current : doc.dirty)), [fingerprint, playlistChanged]);
-
-  /** Read current settings here; the title bar's dirty indicator updates on a timer. */
-  const askToSave = useCallback((reason: string) => new Promise<boolean>((resolve) => {
-    if (fingerprint() === savedFingerprintRef.current) resolve(true);
-    else setSaveQuestion({ reason, answer: resolve });
-  }), [fingerprint]);
+  const fileUnsaved = useCallback(() => fileChanged()
+    || docsRef.current.some((doc) => doc.id === activeIdRef.current ? fingerprint() !== savedFingerprintRef.current : doc.dirty), [fingerprint, fileChanged]);
 
   /** The scene as it is now counts as saved: the asterisk goes away until the next change. */
   const markClean = useCallback(() => {
@@ -852,10 +850,10 @@ export default function App() {
     if (!engine) return;
     const id = window.setInterval(() => {
       setDirty(fingerprint() !== savedFingerprintRef.current);
-      setPlaylistDirty(playlistUnsaved());
+      setFileDirty(fileUnsaved());
     }, 500);
     return () => window.clearInterval(id);
-  }, [engine, fingerprint, playlistUnsaved]);
+  }, [engine, fingerprint, fileUnsaved]);
 
   /**
    * Keeps the selected scene in its tab (see StoredScene), so another scene
@@ -1011,71 +1009,48 @@ export default function App() {
     void crossfadeToDoc(list[(index + step + list.length) % list.length].id, auto, fade);
   }, [crossfadeToDoc]);
 
-  /** True when any open scene, or the open playlist, has changes that are not saved. */
-  const anyDirty = useCallback(() => playlistChanged() || docsRef.current.some((doc) => doc.id === activeIdRef.current
-    ? fingerprint() !== savedFingerprintRef.current
-    : doc.dirty), [fingerprint, playlistChanged]);
+  /** True when the open file has changes that are not saved (see fileUnsaved). */
+  const anyDirty = fileUnsaved;
+
+  /** Asks "Save changes?" once, for the open file and all of its scenes. Returns false when the user cancels. */
+  const askToSaveAll = useCallback((reason: string) => askToSaveFileRef.current(reason), []);
 
   /**
-   * Asks "Save changes?" for each scene with unsaved changes, the selected
-   * one first, each in its own tab. Returns false when the user cancels.
+   * Export Scene As: writes the selected scene to a Kaleido Sage file of its
+   * own, with no tracks. The scene stays the open file's, as it was.
+   * Returns true when the file was written.
    */
-  const askToSaveAll = useCallback(async (reason: string) => {
-    /* In a playlist the scenes are the playlist's: one question for all of them. */
-    if (playlistPathRef.current) return askToSavePlaylistRef.current(reason);
-    const activeFirst = [...docsRef.current].sort((a, b) => Number(b.id === activeIdRef.current) - Number(a.id === activeIdRef.current));
-    for (const doc of activeFirst) {
-      if (doc.id !== activeIdRef.current) {
-        if (!doc.dirty) continue;
-        switchToDoc(doc.id);
-      }
-      if (!(await askToSave(reason))) return false;
-    }
-    return askToSavePlaylistRef.current(reason);
-  }, [askToSave, switchToDoc]);
-
-  /**
-   * Save writes to the open scene file without asking; Save As (or a scene
-   * that was never saved) asks for a file name first. Returns true when the
-   * scene was saved.
-   */
-  const saveScene = useCallback(async (saveAs = false, { copy = false }: { copy?: boolean } = {}): Promise<boolean> => {
+  const exportScene = useCallback(async (): Promise<boolean> => {
     if (!engine || !isTauri()) return false;
     if (!imagesRef.current[0]) {
       showError("There is no source image or video to save in the scene.");
       return false;
     }
     const current = scenePathRef.current;
-    const path = !saveAs && !copy && current
-      ? current
-      : await saveDialog({ defaultPath: copy && current ? fileNameOf(current) : current ?? "Scene.ksage", filters: [{ name: "Kaleido Sage scene", extensions: [SCENE_EXTENSION] }] });
+    const name = current ? fileNameOf(current) : `${docFileName(null, docsRef.current.find((doc) => doc.id === activeIdRef.current)?.untitled ?? 1)}.${FILE_EXTENSION}`;
+    const path = await saveDialog({ defaultPath: name, filters: [{ name: "Kaleido Sage file", extensions: [FILE_EXTENSION] }] });
     if (!path) return false;
-    if (docsRef.current.some((doc) => doc.id !== activeIdRef.current && samePath(doc.path, path))) {
-      showError(`${fileNameOf(path)} is open in another tab. Close that tab first, or save with another name.`);
+    if (samePath(path, filePathRef.current)) {
+      showError(`${fileNameOf(path)} is the open file. Export the scene with another name.`);
       return false;
     }
     try {
-      /* The fingerprint is taken before the file is written, so a change made while it writes still shows as unsaved. */
-      const saved = fingerprint();
-      showStatus("Saving scene and embedding media…", 0);
-      await writeSceneFile(path, engine.params, engine.state, imagesRef.current, driverRef.current);
-      /* A copy (Export Scene As, for a scene in a playlist) leaves the scene as it was: the playlist's. */
-      if (!copy) {
-        savedFingerprintRef.current = saved;
-        setDirty(fingerprint() !== saved);
-        setActivePath(path);
-        holdScene(false);
-      }
-      showStatus(`Saved ${fileNameOf(path)}`);
+      showStatus("Exporting the scene and embedding media…", 0);
+      const copy = await invoke<string>("scene_copy_path", { name: fileNameOf(path) });
+      await writeSceneFile(copy, engine.params, engine.state, imagesRef.current, driverRef.current);
+      /* A scene alone has no tracks, so Files as the input would open with an empty list: it keeps no input then. */
+      const audio = fileAudio();
+      await saveKaleidoFile(path, { audio: audio.kind === "tracks" ? { ...audio, kind: "none" } : audio, activeScene: 0 }, [copy], []);
+      showSaved(path, 5000);
       return true;
     } catch (error) {
-      showError(`Could not save the scene. ${String(error)}`);
+      showError(`Could not export the scene. ${String(error)}`);
       return false;
     }
-  }, [engine, fingerprint, holdScene, setActivePath, showError, showStatus]);
+  }, [engine, fileAudio, showError, showSaved, showStatus]);
 
-  /* Open Scene and Open Playlist share one dialog, which lists scenes and playlists. A scene opens in a new tab, so the scenes that are open stay as they are. */
-  const openScene = useCallback(() => {
+  /* One Open dialog opens every Kaleido Sage file: a show in place of the open file, a single scene into it (see openPicked). */
+  const openFile = useCallback(() => {
     if (!engine || !isTauri()) return;
     setOpenRequest({ kind: "scene", slot: 0 });
   }, [engine]);
@@ -1397,7 +1372,7 @@ export default function App() {
       window.clearInterval(timer);
       for (const name of events) window.removeEventListener(name, input, true);
     };
-  }, [engine, fingerprint, holdScene, holdUseful, playlistPath, showStatus, tracksActive]);
+  }, [engine, fingerprint, holdScene, holdUseful, filePath, showStatus, tracksActive]);
 
   /**
    * Opening an effect, or any press in the Source and FX column (but its
@@ -1518,28 +1493,32 @@ export default function App() {
   }, [engine, markClean, setDriver, setSlotImage]);
 
   /**
-   * Outside a playlist, a new or opened scene starts quiet: the app stops
-   * listening (Input Nothing), so the Playlist and Scenes columns of Files
-   * mode go too, and the track list empties (only a playlist keeps tracks).
-   * In a playlist the playlist's input and tracks stay.
+   * A new file, or a closed one, starts quiet: the app stops listening
+   * (Input Nothing), so the Files and Scenes columns go too, and the track
+   * list empties. A file that opens brings its own input and tracks.
    */
-  const quietOutsidePlaylist = () => {
-    if (playlistPathRef.current !== null) return;
+  const quietInput = () => {
     if (audioInput.settings.kind !== "none") audioInput.setSource("none", null);
     tracks.clear();
   };
 
-  /** Starts a new, untitled scene in a new tab. The scene that was shown stays in its own tab. The app stops listening outside a playlist (see quietOutsidePlaylist). */
+  /**
+   * New Scene: a new, untitled scene in a new tab of the open file. The
+   * scene that was shown stays in its own tab, and the input and the tracks
+   * stay. On the start screen, it starts a new, untitled file with this
+   * scene, quiet (see quietInput).
+   */
   const newScene = useCallback(() => {
     if (!engine) return;
-    if (docsRef.current.length === 0) {
+    const newFile = docsRef.current.length === 0;
+    if (newFile) {
       /* The first scene of each run, with the pointers on, shows the welcome card first; Show Me Around then shows the panels' tips. */
       if (!welcomeShownRef.current && helpSettings.get().pointers) {
         welcomeShownRef.current = true;
         setWelcome(true);
       } else setPanelTips(ALL_PANEL_TIPS);
+      quietInput();
     }
-    quietOutsidePlaylist();
     /* With no input, the new scene starts with the settings' audio buttons hidden. */
     if (audioInput.settings.kind === "none") settingButtons.set("audio", false);
     sceneGenerationRef.current++;
@@ -1548,87 +1527,77 @@ export default function App() {
     blankScene();
     addDoc();
     setStartScreen(false);
-  }, [addDoc, blankScene, engine, stashActive]);
+    if (newFile) markFileClean(null);
+  }, [addDoc, blankScene, engine, markFileClean, stashActive]);
 
+  /** Set below, once closeFile exists: the last scene's Remove Scene closes the file. */
+  const closeFileRef = useRef<() => Promise<void>>(async () => {});
 
   /**
-   * Closes the selected scene's tab, after Save or Don't save for unsaved
-   * changes. The tab next to it is then selected; after the last tab, the
-   * start screen shows.
+   * Remove Scene: takes the selected scene out of the open file, with no
+   * question (the file on disk keeps it until the next Save). The tab next
+   * to it is then selected. The last scene closes the file (see closeFile),
+   * which asks first.
    */
-  const closingSceneRef = useRef(false);
   const closeScene = useCallback(async () => {
-    if (!engine || startScreen || closingSceneRef.current) return;
-    closingSceneRef.current = true;
-    try {
-      const closing = activeIdRef.current;
-      const rest = docsRef.current.filter((doc) => doc.id !== closing);
-      const reason = rest.length ? "Closing the scene closes its tab." : "Closing returns to the start screen.";
-      /* A scene in a playlist closes without a question: the playlist (Save Playlist) keeps it as it was saved. */
-      if (!playlistPathRef.current && !(await askToSave(reason))) return;
-      sceneGenerationRef.current++;
-      setSceneGeneration(sceneGenerationRef.current);
-      if (rest.length) {
-        const index = docsRef.current.findIndex((doc) => doc.id === closing);
-        writeDocs(rest);
-        restoreDoc(rest[Math.min(Math.max(index, 0), rest.length - 1)].id);
-        return;
-      }
-      if (fullscreen) await exitFullscreen();
-      engine.stop();
-      blankScene();
-      writeDocs([]);
-      selectDocId(null);
-      historyRef.current = null;
-      setStatus(null);
-      setStartScreen(true);
-    } catch (error) {
-      showError(`Could not close the scene. ${String(error)}`);
-    } finally {
-      closingSceneRef.current = false;
+    if (!engine || startScreen) return;
+    const closing = activeIdRef.current;
+    const rest = docsRef.current.filter((doc) => doc.id !== closing);
+    if (!rest.length) {
+      await closeFileRef.current();
+      return;
     }
-  }, [askToSave, blankScene, engine, exitFullscreen, fullscreen, restoreDoc, selectDocId, showError, startScreen, writeDocs]);
+    sceneGenerationRef.current++;
+    setSceneGeneration(sceneGenerationRef.current);
+    const index = docsRef.current.findIndex((doc) => doc.id === closing);
+    writeDocs(rest);
+    restoreDoc(rest[Math.min(Math.max(index, 0), rest.length - 1)].id);
+  }, [engine, restoreDoc, startScreen, writeDocs]);
 
   /**
-   * Save Playlist: writes the playlist file (see playlistFile.ts) with a
-   * copy of each scene file, in tab order, and of each track, so the file
-   * can move to another PC. Each scene goes in as its file: a scene that
-   * was never saved is saved first (an empty new scene is left out), and
-   * for unsaved changes the user picks Save or Don't save. Save As (or a
-   * playlist never saved) asks for a file name first. Returns true when
-   * the playlist was saved.
+   * Save: writes the open file (see kaleidoFile.ts) with a copy of each
+   * scene, in tab order, and, while Files is the input, of each track, so
+   * the file can move to another PC. With any other input, the track list
+   * empties first, so tracks from an earlier Files input never go into the
+   * file. A new blank scene with no changes is left out, unless it is the
+   * only one. Save As (or a file never saved) asks for a file name first.
+   * Returns true when the file was saved.
    */
-  const savePlaylist = useCallback(async (saveAs = false): Promise<boolean> => {
-    if (!engine || !isTauri()) return false;
-    const current = playlistPathRef.current;
+  const saveFile = useCallback(async (saveAs = false): Promise<boolean> => {
+    if (!engine || !isTauri() || docsRef.current.length === 0) return false;
+    const current = filePathRef.current;
+    const first = docsRef.current[0];
+    const firstName = docFileName(first.id === activeIdRef.current ? scenePathRef.current : first.path, first.untitled).replace(/\.ksage$/i, "");
     const path = !saveAs && current
       ? current
-      : await saveDialog({ defaultPath: current ?? `Playlist.${PLAYLIST_EXTENSION}`, filters: [{ name: "Kaleido Sage playlist", extensions: [PLAYLIST_EXTENSION] }] });
+      : await saveDialog({ defaultPath: current ?? `${firstName}.${FILE_EXTENSION}`, filters: [{ name: "Kaleido Sage file", extensions: [FILE_EXTENSION] }] });
     if (!path) return false;
     try {
-      showStatus("Saving the playlist and its scenes and audio files…", 0);
+      if (audioInput.settings.kind !== "tracks") tracks.clear();
+      showStatus(tracks.list.length ? "Saving the file and its scenes and audio files…" : "Saving the file and its scenes…", 0);
       /**
        * Each scene goes in as it is now, from the engine or from its tab's
-       * stored copy. Its own file on disk never changes: a scene that is
-       * not yet the playlist's copy gets one first, and from then on it is
-       * the playlist's (Ctrl+S saves the playlist). An empty new scene is
-       * left out.
+       * stored copy. A scene's file on disk never changes: a scene that is
+       * not yet the open file's copy gets one first (see isFileCopy).
        */
+      const docPath = (doc: SceneDoc) => doc.id === activeIdRef.current ? scenePathRef.current : doc.path;
+      const docDirty = (doc: SceneDoc) => doc.id === activeIdRef.current ? fingerprint() !== savedFingerprintRef.current : doc.dirty;
+      const keepBlank = !docsRef.current.some((doc) => docPath(doc) !== null || docDirty(doc));
       const scenes: string[] = [];
       let activeScene = 0;
       for (const doc of [...docsRef.current]) {
         const active = doc.id === activeIdRef.current;
         const stored = active ? null : storedRef.current.get(doc.id);
-        const docPath = active ? scenePathRef.current : doc.path;
-        const docDirty = active ? fingerprint() !== savedFingerprintRef.current : doc.dirty;
-        if (docPath === null && !docDirty) continue;
+        const scenePath = docPath(doc);
+        const dirtyNow = docDirty(doc);
+        if (scenePath === null && !dirtyNow && !keepBlank) continue;
         if (active) activeScene = scenes.length;
-        if (isPlaylistCopy(docPath) && !docDirty) {
-          scenes.push(docPath!);
+        if (isFileCopy(scenePath) && !dirtyNow) {
+          scenes.push(scenePath!);
           continue;
         }
-        const name = docPath ? fileNameOf(docPath) : `${docFileName(null, doc.untitled)}.${SCENE_EXTENSION}`;
-        const target = isPlaylistCopy(docPath) ? docPath! : await invoke<string>("scene_copy_path", { name });
+        const name = scenePath ? fileNameOf(scenePath) : `${docFileName(null, doc.untitled)}.${SCENE_EXTENSION}`;
+        const target = isFileCopy(scenePath) ? scenePath! : await invoke<string>("scene_copy_path", { name });
         if (active) {
           const saved = fingerprint();
           await writeSceneFile(target, engine.params, engine.state, imagesRef.current, driverRef.current);
@@ -1642,94 +1611,97 @@ export default function App() {
         }
         scenes.push(target);
       }
-      await savePlaylistFile(path, {
-        audio: playlistAudio(),
+      await saveKaleidoFile(path, {
+        audio: fileAudio(),
         activeScene,
         filesWidth: panelLayout.filesWidth,
         trackSeconds: tracks.list.map((track) => tracks.lengthOf(track.path)),
         songFollow: songFollow.enabled
       }, scenes, tracks.list.map((track) => track.path), tracks.list.map((track) => songFollow.analysisText(track.path)));
     } catch (error) {
-      showError(`Could not save the playlist. ${String(error)}`);
+      showError(`Could not save the file. ${String(error)}`);
       return false;
     }
-    markPlaylistClean(path);
-    /* A save of the playlist saves the shown scene too, so Hold goes off, as after a save of the scene. */
+    markFileClean(path);
+    /* A save of the file saves the shown scene too, so Hold goes off. */
     holdScene(false);
     showStatus(`Saved ${fileNameOf(path)}`);
     return true;
-  }, [engine, fingerprint, holdScene, markPlaylistClean, playlistAudio, setActivePath, showError, showStatus, writeDocs]);
+  }, [engine, fingerprint, holdScene, markFileClean, fileAudio, setActivePath, showError, showStatus, writeDocs]);
 
-  askToSavePlaylistRef.current = (reason: string) => new Promise<boolean>((resolve) => {
-    const path = playlistPathRef.current;
-    if (!path || !playlistUnsaved()) resolve(true);
-    else setSaveQuestion({ reason, answer: resolve, name: fileNameOf(path), save: () => savePlaylist() });
+  askToSaveFileRef.current = (reason: string) => new Promise<boolean>((resolve) => {
+    const path = filePathRef.current;
+    if (!fileUnsaved()) resolve(true);
+    else setSaveQuestion({ reason, answer: resolve, name: path ? fileNameOf(path) : "Untitled", save: () => saveFile() });
   });
 
-  /* Open Playlist opens the one Open dialog, which lists scenes and playlists (see openScene). */
-  const openPlaylist = useCallback(async () => {
-    if (!engine || !isTauri()) return;
-    setOpenRequest({ kind: "scene", slot: 0 });
-  }, [engine]);
-
-  /**
-   * Close Playlist: asks "Save changes?" for the playlist when it has
-   * changes (its scenes are the playlist's, so they need no question of
-   * their own), then closes its scenes, and the Files list empties (only a
-   * playlist keeps tracks). The start screen shows. The audio settings stay as
-   * they are.
-   */
-  const closePlaylist = useCallback(async () => {
-    const path = playlistPathRef.current;
-    if (!engine || !path) return;
-    if (!(await askToSavePlaylistRef.current("Closing the playlist closes its scenes and its files."))) return;
+  /** Takes every scene and track out of the app, with no question: for Close, New and a show that opens. The start screen does not show. */
+  const clearFile = useCallback(async () => {
+    if (!engine) return;
     holdScene(false);
     tracks.clear();
-    if (fullscreen) await exitFullscreen();
     sceneGenerationRef.current++;
     setSceneGeneration(sceneGenerationRef.current);
-    engine.stop();
     blankScene();
     writeDocs([]);
     storedRef.current.clear();
     selectDocId(null);
     historyRef.current = null;
-    markPlaylistClean(null);
-    setStartScreen(true);
-    showStatus(`Closed ${fileNameOf(path)}`);
-  }, [blankScene, engine, exitFullscreen, fullscreen, holdScene, markPlaylistClean, selectDocId, showStatus, writeDocs]);
+    markFileClean(null);
+  }, [blankScene, engine, holdScene, markFileClean, selectDocId, writeDocs]);
 
   /**
-   * Opens the playlist picked in the Open dialog: the open scenes close
-   * (their changes were asked about), then the playlist's scenes open in
-   * its tab order, its tracks come in stopped at the first one, and its
-   * audio settings apply. The tab that was selected at its save shows.
+   * Close: asks "Save changes?" for the file when it has changes, then
+   * closes its scenes, and the app goes quiet (see quietInput). The start
+   * screen shows.
    */
-  const openPlaylistPath = useCallback(async (path: string) => {
+  const closeFile = useCallback(async () => {
+    if (!engine || docsRef.current.length === 0) return;
+    const name = filePathRef.current ? fileNameOf(filePathRef.current) : "Untitled";
+    if (!(await askToSaveFileRef.current("Closing the file closes its scenes and its audio files."))) return;
+    if (fullscreen) await exitFullscreen();
+    await clearFile();
+    quietInput();
+    engine.stop();
+    setStartScreen(true);
+    showStatus(`Closed ${name}`);
+  }, [clearFile, engine, exitFullscreen, fullscreen, showStatus]);
+  closeFileRef.current = closeFile;
+
+  /** New: asks "Save changes?" for the open file, then starts a new, untitled file with one blank scene (see newScene). */
+  const newFile = useCallback(async () => {
+    if (!engine) return;
+    if (!(await askToSaveAll("A new file closes the open file."))) return;
+    await clearFile();
+    newScene();
+  }, [askToSaveAll, clearFile, engine, newScene]);
+
+  /**
+   * Opens a file in place of the open one (whose changes were asked about):
+   * its scenes open in its tab order, its tracks come in stopped at the
+   * first one, and its audio settings apply. The show starts at its first
+   * scene.
+   */
+  const openFilePath = useCallback(async (path: string) => {
     if (!engine) return;
     const name = fileNameOf(path);
     const title = `Opening ${name}`;
     try {
-      setLoading({ title, detail: "Unpacking the playlist…", progress: null });
-      const opened = await openPlaylistFile(path);
+      setLoading({ title, detail: "Unpacking the file…", progress: null });
+      const opened = await openKaleidoFile(path);
       const manifest = readManifest(opened.manifest);
       tracks.pause();
-      writeDocs([]);
-      storedRef.current.clear();
-      selectDocId(null);
-      historyRef.current = null;
-      blankScene();
+      await clearFile();
       for (const [index, scene] of opened.scenes.entries()) {
         setLoading({ title, detail: `Scene ${index + 1} of ${opened.scenes.length}: ${fileNameOf(scene)}`, progress: index / opened.scenes.length });
         await openScenePath(scene);
       }
       setLoading({ title, detail: "Audio files and settings…", progress: 1 });
-      /* The song analyses the playlist kept go first, so Song follow needs none for these tracks. */
+      /* The song analyses the file kept go first, so Song follow needs none for these tracks. */
       opened.analyses?.forEach((text, index) => { if (text && opened.tracks[index]) songFollow.preload(opened.tracks[index], text); });
       tracks.replace(opened.tracks);
-      /* The lengths the playlist kept, so the Files footer has its play time at once. */
+      /* The lengths the file kept, so the Files footer has its play time at once. */
       if (manifest.trackSeconds) tracks.setLengths(manifest.trackSeconds);
-      /* Song follow as it was at the save; an older playlist leaves it as it is. */
       if (manifest.songFollow !== undefined) songFollow.setEnabled(manifest.songFollow);
       await audioInput.applySettings(manifest.audio);
       if (manifest.filesWidth) panelLayout.setFilesWidth(manifest.filesWidth);
@@ -1740,31 +1712,68 @@ export default function App() {
       const target = docsRef.current[0];
       if (target) startShow();
       else setStartScreen(true);
-      markPlaylistClean(path);
+      markFileClean(target ? path : null);
       showStatus(`Opened ${name}`);
     } catch (error) {
-      showError(`Could not open the playlist. ${error instanceof Error ? error.message : String(error)}`);
+      showError(`Could not open ${name}. ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setLoading(null);
     }
-  }, [blankScene, engine, markPlaylistClean, openScenePath, selectDocId, showError, showStatus, startShow, writeDocs]);
+  }, [clearFile, engine, markFileClean, openScenePath, showError, showStatus, startShow]);
 
-  /* A playlist picked in the Open dialog closes the open scenes, so their changes, and the playlist's, are saved or given up first. */
-  const openPickedPlaylist = useCallback(async (path: string) => {
-    if (!(await askToSaveAll("Opening a playlist closes the open scenes."))) return;
-    await openPlaylistPath(path);
-  }, [askToSaveAll, openPlaylistPath]);
+  /**
+   * Opens the files picked in the Open dialog (see docs/ONE-FILE.md). On the
+   * start screen, one file opens as the open file. With a file open, a show
+   * (see isShow) opens in its place, after "Save changes?", and a single
+   * scene goes into the open file as a new tab; its own file on disk does
+   * not change. Of several files, a show opens alone; else each single
+   * scene goes in, and on the start screen they make a new, untitled file.
+   */
+  const openPicked = useCallback(async (paths: string[]) => {
+    if (!engine || paths.length === 0) return;
+    let shows: boolean[];
+    try {
+      shows = (await Promise.all(paths.map((path) => readFileSummary(path)))).map(isShow);
+    } catch (error) {
+      showError(`Could not open the file. ${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
+    const show = paths.find((_, index) => shows[index]);
+    const fresh = docsRef.current.length === 0;
+    if (show !== undefined || (fresh && paths.length === 1)) {
+      if (!fresh && !(await askToSaveAll("Opening a show closes the open file."))) return;
+      await openFilePath(show ?? paths[0]);
+      return;
+    }
+    if (fresh) {
+      quietInput();
+      markFileClean(null);
+    }
+    const title = paths.length === 1 ? `Opening ${fileNameOf(paths[0])}` : `Opening ${paths.length} scenes`;
+    try {
+      for (const [index, path] of paths.entries()) {
+        setLoading({ title, detail: `Scene ${index + 1} of ${paths.length}: ${fileNameOf(path)}`, progress: index / paths.length });
+        /* The open file's unpacked scenes and tracks stay (see openKaleidoFile). */
+        const opened = await openKaleidoFile(path, { keepOthers: true });
+        if (opened.scenes[0]) await openScenePath(opened.scenes[0]);
+      }
+    } catch (error) {
+      showError(`Could not open the scene. ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setLoading(null);
+    }
+  }, [askToSaveAll, engine, markFileClean, openFilePath, openScenePath, showError]);
 
-  /** Puts the tabs in a new order (a drag in the tab bar). The scenes play in tab order, and a playlist keeps it. */
+  /** Puts the tabs in a new order (a drag in the tab bar). The scenes play in tab order, and the file keeps it. */
   const reorderDocs = useCallback((ids: number[]) => {
     const byId = new Map(docsRef.current.map((doc) => [doc.id, doc]));
     writeDocs(ids.flatMap((id) => byId.get(id) ?? []));
   }, [writeDocs]);
 
   /**
-   * Rename (the scene list's right-click menu): gives the scene's file a new
-   * name in its folder. In a playlist the file is the playlist's copy, so
-   * the playlist counts as changed, and its next save keeps the new name.
+   * Rename (the scene list's right-click menu): gives the scene's copy a new
+   * name in its temp folder. The file counts as changed, and its next save
+   * keeps the new name.
    */
   const renameDoc = useCallback(async (id: number, name: string) => {
     const path = id === activeIdRef.current ? scenePathRef.current : docsRef.current.find((doc) => doc.id === id)?.path ?? null;
@@ -1774,26 +1783,22 @@ export default function App() {
       const newPath = await invoke<string>("rename_browse_entry", { path, newName });
       if (id === activeIdRef.current) setActivePath(newPath);
       else writeDocs(docsRef.current.map((doc) => doc.id === id ? { ...doc, path: newPath } : doc));
-      showStatus(`Renamed to ${fileNameOf(newPath)}`);
+      showStatus(`Renamed to ${fileNameOf(newPath).replace(/\.ksage$/i, "")}`);
     } catch (error) {
       showError(`Could not rename the scene. ${String(error)}`);
     }
   }, [setActivePath, showError, showStatus, writeDocs]);
 
-  /** Closes any tab. A tab with unsaved changes is selected first, so its "Save changes?" question shows over it. */
+  /** Removes any tab's scene from the file, with no question (see closeScene). */
   const closeTab = useCallback((id: number) => {
     if (id !== activeIdRef.current) {
-      const doc = docsRef.current.find((candidate) => candidate.id === id);
-      if (!doc) return;
-      if (!doc.dirty) {
-        storedRef.current.delete(id);
-        writeDocs(docsRef.current.filter((candidate) => candidate.id !== id));
-        return;
-      }
-      switchToDoc(id);
+      if (!docsRef.current.some((candidate) => candidate.id === id)) return;
+      storedRef.current.delete(id);
+      writeDocs(docsRef.current.filter((candidate) => candidate.id !== id));
+      return;
     }
     void closeScene();
-  }, [closeScene, switchToDoc, writeDocs]);
+  }, [closeScene, writeDocs]);
 
   /**
    * Start the engine with a placeholder pattern, then load a random photo.
@@ -1842,6 +1847,7 @@ export default function App() {
     /** Dev only: the open tabs as the reload keeper keeps them (see reloadKeeper.ts). */
     const takeKept = (): Kept => ({
       activeId: activeIdRef.current,
+      file: { path: filePathRef.current, saved: fileSavedRef.current, tracks: tracks.list.map((track) => track.path) },
       docs: docsRef.current.flatMap((doc) => {
         if (doc.id === activeIdRef.current) {
           const driver = driverRef.current;
@@ -1938,6 +1944,13 @@ export default function App() {
       nextDocId = Math.max(nextDocId, ...loaded.map((entry) => entry.doc.id + 1));
       const active = loaded.find((entry) => entry.doc.id === kept.activeId) ?? loaded[0];
       restoreDoc(active.doc.id);
+      /* The open file comes back too: its name, its unsaved mark and its tracks (stopped). */
+      if (kept.file) {
+        if (kept.file.tracks.length) tracks.replace(kept.file.tracks);
+        filePathRef.current = kept.file.path;
+        setFilePath(kept.file.path);
+        fileSavedRef.current = kept.file.saved;
+      }
       setStartScreen(false);
       showStatus(loaded.length === 1 ? "Reopened the scene after the reload" : `Reopened ${loaded.length} scenes after the reload`);
     };
@@ -2083,7 +2096,7 @@ export default function App() {
        */
       if (startScreen) {
         const startAction = event.ctrlKey
-          ? { o: openScene, n: newScene }[event.key.toLowerCase()]
+          ? { o: openFile, n: newScene }[event.key.toLowerCase()]
           : ["escape", "f11"].includes(event.key.toLowerCase()) ? exitFullscreen : undefined;
         if (startAction) {
           event.preventDefault();
@@ -2109,9 +2122,8 @@ export default function App() {
           switchByStep(tabStep);
           return;
         }
-        /* In a playlist, Ctrl+S saves the playlist (its scenes are the playlist's), and Ctrl+Shift+S exports the scene as a copy. */
-        const save = () => playlistPathRef.current ? (event.shiftKey ? saveScene(false, { copy: true }) : savePlaylist()) : saveScene(event.shiftKey);
-        const sceneAction = { s: save, o: openScene, n: newScene, w: closeScene }[key];
+        /* Ctrl+S saves the open file with all of its scenes, and Ctrl+Shift+S saves it with a new name. */
+        const sceneAction = { s: () => saveFile(event.shiftKey), o: openFile, n: newScene, w: closeScene }[key];
         if (sceneAction) {
           event.preventDefault();
           void sceneAction();
@@ -2161,7 +2173,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [aboutOpen, shortcutsOpen, welcome, closeScene, crossfadeToDoc, engine, exitFullscreen, newScene, openImage, openRequest, videoDialogOpen, searchSlot, openScene, randomize, redo, savePlaylist, saveScene, startScreen, stop, switchByStep, toggleAudioPanel, toggleFullscreen, toggleMidiPanel, togglePause, undo]);
+  }, [aboutOpen, shortcutsOpen, welcome, closeScene, crossfadeToDoc, engine, exitFullscreen, newScene, openImage, openRequest, videoDialogOpen, searchSlot, openFile, randomize, redo, saveFile, startScreen, stop, switchByStep, toggleAudioPanel, toggleFullscreen, toggleMidiPanel, togglePause, undo]);
 
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
@@ -2191,8 +2203,14 @@ export default function App() {
     {
       id: "file",
       label: "File",
-      /* The picture's own commands (an image or video in, a PNG or video out); the scene and playlist commands have menus of their own. */
+      /* The Kaleido Sage file (every open scene, and the tracks), then the picture's own commands (an image or video in, a PNG or video out). */
       items: [
+        { label: "New", icon: <FilePlus size={15} />, run: () => void newFile() },
+        { label: "Open…", icon: <FolderOpen size={15} />, shortcut: "Ctrl+O", run: () => void openFile() },
+        { label: "Save", disabled: startScreen, icon: <FloppyDisk size={15} />, shortcut: "Ctrl+S", run: () => void saveFile() },
+        { label: "Save As…", disabled: startScreen, icon: <FloppyDisk size={15} />, shortcut: "Ctrl+Shift+S", run: () => void saveFile(true) },
+        { label: "Close", icon: <X size={15} />, disabled: startScreen, run: () => void closeFile() },
+        "separator",
         { label: "Open Image or Video…", icon: <ColorFolder size={18} />, shortcut: "O", run: () => void openImage() },
         { label: "Save PNG", disabled: startScreen, icon: <Camera size={15} />, run: () => void savePng() },
         { label: "Export Video…", icon: <FilmStrip size={15} />, run: openVideoDialog },
@@ -2201,31 +2219,14 @@ export default function App() {
       ]
     },
     {
-      id: "playlist",
-      label: "Playlist",
-      items: [
-        { label: "Open Playlist…", icon: <FolderOpen size={15} />, run: () => void openPlaylist() },
-        { label: "Save Playlist", disabled: startScreen, icon: <FloppyDisk size={15} />, shortcut: playlistPath ? "Ctrl+S" : undefined, run: () => void savePlaylist() },
-        { label: "Save Playlist As…", disabled: startScreen, icon: <FloppyDisk size={15} />, run: () => void savePlaylist(true) },
-        "separator",
-        { label: "Close Playlist", icon: <X size={15} />, disabled: !playlistPath, run: () => void closePlaylist() }
-      ]
-    },
-    {
       id: "scene",
       label: "Scene",
+      /* A scene is the open file's: Export Scene As writes a copy to a file of its own, and Remove Scene takes it out of the file. */
       items: [
         { label: "New Scene", icon: <Plus size={15} />, shortcut: "Ctrl+N", run: newScene },
-        { label: "Open Scene…", icon: <FolderOpen size={15} />, shortcut: "Ctrl+O", run: () => void openScene() },
-        /* In a playlist, a scene is the playlist's: Save Scene gives way to Export Scene As, which writes a copy. */
-        ...(playlistPath
-          ? [{ label: "Export Scene As…", disabled: startScreen, icon: <FloppyDisk size={15} />, shortcut: "Ctrl+Shift+S", run: () => void saveScene(false, { copy: true }) }]
-          : [
-            { label: "Save Scene", disabled: startScreen, icon: <FloppyDisk size={15} />, shortcut: "Ctrl+S", run: () => void saveScene() },
-            { label: "Save Scene As…", disabled: startScreen, icon: <FloppyDisk size={15} />, shortcut: "Ctrl+Shift+S", run: () => void saveScene(true) }
-          ]),
+        { label: "Export Scene As…", disabled: startScreen, icon: <Export size={15} />, run: () => void exportScene() },
         "separator",
-        { label: "Close Scene", icon: <X size={15} />, shortcut: "Ctrl+W", disabled: startScreen, run: () => void closeScene() }
+        { label: "Remove Scene", icon: <Trash size={15} />, shortcut: "Ctrl+W", disabled: startScreen, run: () => void closeScene() }
       ]
     },
     {
@@ -2265,8 +2266,8 @@ export default function App() {
   /** A tab's label: the scene file's name, or "Untitled Scene", with a number after the first. */
   const docFileName = (path: string | null, untitled: number) =>
     path?.split(/[\\/]/).pop() ?? (untitled > 1 ? `Untitled Scene ${untitled}` : "Untitled Scene");
-  /* The scenes are a list at the left, not tabs, in a playlist or with Files as the input: a show has many scenes. Hide Panels (H) hides the list with the rest of the left side. */
-  const sceneListMode = tracksActive || playlistPath !== null;
+  /* The scenes are a list at the left, not tabs, while Files is the input: a show has many scenes. Hide Panels (H) hides the list with the rest of the left side. */
+  const sceneListMode = tracksActive;
   const sceneListShown = !fullscreen && !startScreen && sceneListMode && panelOpen;
   /**
    * The audio Input menu: above the Playlist's play controls while Files is
@@ -2275,8 +2276,8 @@ export default function App() {
   const inputInPlaylist = sceneListShown && tracksActive && !filesCollapsed;
   const inputMenu = <AudioInputMenu tip={inputTip} onTipDone={() => setInputTip(false)} onPick={pickInput} />;
   const tabs: DocumentTabInfo[] = docs.map((doc) => doc.id === activeId
-    ? { id: doc.id, fileName: docFileName(scenePath, doc.untitled), path: scenePath, dirty }
-    : { id: doc.id, fileName: docFileName(doc.path, doc.untitled), path: doc.path, dirty: doc.dirty });
+    ? { id: doc.id, fileName: docFileName(scenePath, doc.untitled), path: scenePath }
+    : { id: doc.id, fileName: docFileName(doc.path, doc.untitled), path: doc.path });
   const sceneFileName = tabs.find((tab) => tab.id === activeId)?.fileName ?? "Untitled Scene";
 
   return (
@@ -2298,19 +2299,18 @@ export default function App() {
           <TitleBar
             updateAvailable={Boolean(startupUpdate)}
             onAbout={() => setAboutOpen(true)}
-            fileName={startScreen ? null : sceneFileName}
-            dirty={dirty}
-            playlistName={playlistPath ? fileNameOf(playlistPath) : null}
-            playlistDirty={playlistDirty}
+            fileName={startScreen ? null : filePath ? fileNameOf(filePath) : "Untitled"}
+            dirty={fileDirty}
+            sceneName={startScreen ? null : sceneFileName.replace(/.ksage$/i, "")}
           />
           <MenuBar menus={menus} />
         </>
       )}
       <div className="workspace">
         {loading && <LoadingOverlay loading={loading} />}
-        {startScreen && <StartScreen version={appVersion} onNewScene={newScene} onOpen={openScene} />}
+        {startScreen && <StartScreen version={appVersion} onNew={newScene} onOpen={openFile} />}
         {/**
-          * The left side. With a playlist open, or Files as the input, it is
+          * The left side. With Files as the input, it is
           * one panel of columns: the audio files (Files only), the scenes (a
           * list in place of the tabs), then the left panel. While the
           * picture follows the songs, the Song Map sits under the scenes and
@@ -2321,7 +2321,7 @@ export default function App() {
           {sceneListShown && tracksActive && <FilesCard onAddTracks={() => void pickTracks()} input={inputInPlaylist ? inputMenu : null} addTip={filesTip} onAddTipDone={endFilesTip} />}
           <div className="sidebar-stack">
             <div className="sidebar-columns">
-              {sceneListShown && <SceneList tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} inPlaylist={playlistPath !== null} onPick={(id) => songFollow.pickScene(docsRef.current.findIndex((doc) => doc.id === id))} />}
+              {sceneListShown && <SceneList tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} onPick={(id) => songFollow.pickScene(docsRef.current.findIndex((doc) => doc.id === id))} />}
               {/* The left panel: the Source section, then the Designer (the effects). */}
               {engine && !startScreen && panelOpen && (
                 <ControlPanel
@@ -2499,48 +2499,19 @@ export default function App() {
       {openRequest && (
         <OpenDialog
           kind={openRequest.kind}
-          title={openRequest.target === "driver" ? "Open Video for the Driver" : openRequest.kind === "scene" ? "Open Scene or Playlist" : openRequest.kind === "audio" ? "Add Audio Files" : openRequest.slot === 1 ? "Open Image or Video for Source B" : "Open Image or Video"}
+          title={openRequest.target === "driver" ? "Open Video for the Driver" : openRequest.kind === "scene" ? "Open" : openRequest.kind === "audio" ? "Add Audio Files" : openRequest.slot === 1 ? "Open Image or Video for Source B" : "Open Image or Video"}
           onCancel={() => setOpenRequest(null)}
           onOpen={(path) => {
             setOpenRequest(null);
             if (openRequest.target === "driver") void openDriverVideo(path);
-            else if (openRequest.kind === "scene" && isPlaylistFile(path)) void openPickedPlaylist(path);
-            else if (openRequest.kind === "scene") {
-              quietOutsidePlaylist();
-              /* One scene opens behind the loader too: its media can take a moment. */
-              void (async () => {
-                setLoading({ title: `Opening ${fileNameOf(path)}`, detail: "Reading the scene and its images…", progress: null });
-                try {
-                  await openScenePath(path);
-                } finally {
-                  setLoading(null);
-                }
-              })();
-            }
+            else if (openRequest.kind === "scene") void openPicked([path]);
             else if (openRequest.kind === "audio") addTracks([path]);
             else void openImagePath(path, openRequest.slot);
           }}
-          /* Several scenes open one after the other, each in its own tab; the last one shows. A playlist among them opens alone, in place of the scenes. Several audio files go to the tracks. */
+          /* Several files: a show among them opens alone; else each single scene goes into the open file (see openPicked). Several audio files go to the tracks. */
           onOpenMany={openRequest.kind === "scene" ? (paths) => {
             setOpenRequest(null);
-            const playlist = paths.find(isPlaylistFile);
-            if (playlist) {
-              void openPickedPlaylist(playlist);
-              return;
-            }
-            quietOutsidePlaylist();
-            void (async () => {
-              /* Several scenes open behind the overlay, so they do not flash by one after the other. */
-              const title = `Opening ${paths.length} scenes`;
-              try {
-                for (const [index, path] of paths.entries()) {
-                  setLoading({ title, detail: `Scene ${index + 1} of ${paths.length}: ${fileNameOf(path)}`, progress: index / paths.length });
-                  await openScenePath(path);
-                }
-              } finally {
-                setLoading(null);
-              }
-            })();
+            void openPicked(paths);
           } : openRequest.kind === "audio" ? (paths) => {
             setOpenRequest(null);
             addTracks(paths);
@@ -2607,14 +2578,14 @@ export default function App() {
       {saveQuestion && (
         <ConfirmDialog
           title="Save Changes?"
-          message={`${saveQuestion.name ?? sceneFileName} has changes that are not saved. ${saveQuestion.reason}`}
+          message={`${saveQuestion.name} has changes that are not saved. ${saveQuestion.reason}`}
           confirmLabel="Save"
           confirmIcon={<FloppyDisk size={16} weight="bold" />}
           otherLabel="Don't save"
           onConfirm={() => {
             const { answer, save } = saveQuestion;
             setSaveQuestion(null);
-            void (save ?? (() => saveScene()))().then(answer);
+            void save().then(answer);
           }}
           onOther={() => {
             saveQuestion.answer(true);

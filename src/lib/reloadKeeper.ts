@@ -34,9 +34,18 @@ export interface KeptDoc {
   openGroup: string | null;
 }
 
+/** The open Kaleido Sage file: its path (null while never saved), its saved fingerprint, and its tracks (the open file's copies in the temp folder, which outlive the reload). */
+export interface KeptFile {
+  path: string | null;
+  saved: string;
+  tracks: string[];
+}
+
 export interface Kept {
   docs: KeptDoc[];
   activeId: number | null;
+  /** Missing in a snapshot from before the one file type. */
+  file?: KeptFile;
 }
 
 /** An image as App keeps it: what the keeper needs to store its bytes. */

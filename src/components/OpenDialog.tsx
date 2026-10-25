@@ -7,13 +7,12 @@ import { sourceSize, type ImageSource } from "../engine/renderer";
 import { applyScene } from "../engine/scene";
 import { loadImageFile } from "../lib/images";
 import { isVideoPath, loadVideoFile } from "../lib/videos";
-import { loadSceneMedia, readScene } from "../lib/scenes";
-import { readPlaylistSummary, type PlaylistSummary } from "../lib/playlistFile";
+import { loadSceneMedia } from "../lib/scenes";
+import { isShow, readFileScene, readFileSummary, type FileSummary } from "../lib/kaleidoFile";
 import { formatPlayTime } from "../lib/tracks";
 import { ColorFolder } from "./ColorFolder";
 
-/** The kind of file the dialog opens: an image (or a video), a scene (.ksage), or an audio file for the tracks. */
-/** What the dialog opens; "scene" also lists playlists, which it previews and opens too. */
+/** The kind of file the dialog opens: an image (or a video), a Kaleido Sage file (.ksage: a show or a single scene), or an audio file for the tracks. */
 export type OpenKind = "image" | "scene" | "audio";
 
 interface Props {
@@ -30,7 +29,7 @@ interface Props {
   onOpenMany?: (paths: string[]) => void;
 }
 
-type EntryKind = "folder" | OpenKind | "playlist";
+type EntryKind = "folder" | OpenKind;
 type PlaceKind = "home" | "desktop" | "documents" | "pictures" | "downloads" | "drive";
 type SortKey = "name" | "type" | "modified" | "size";
 type SortDirection = "asc" | "desc";
@@ -101,13 +100,13 @@ interface VideoPreviewData {
   height: number;
 }
 
-/** A playlist's summary, for the dashboard in the preview column (see PlaylistDashboard). */
-interface PlaylistPreviewData {
-  kind: "playlist";
-  summary: PlaylistSummary;
+/** A show's summary, for the dashboard in the preview column (see ShowDashboard). */
+interface ShowPreviewData {
+  kind: "show";
+  summary: FileSummary;
 }
 
-type PreviewData = ImagePreviewData | ScenePreviewData | VideoPreviewData | PlaylistPreviewData;
+type PreviewData = ImagePreviewData | ScenePreviewData | VideoPreviewData | ShowPreviewData;
 
 type PreviewState =
   | { status: "idle" }
@@ -156,7 +155,7 @@ const IMAGE_TYPES: Record<string, string> = {
 
 const TEXT: Record<OpenKind, { hint: string; empty: string; startPlace: PlaceKind }> = {
   image: { hint: "Choose a PNG, JPEG, WebP, GIF, BMP or AVIF image, or an MP4, M4V, WebM, MOV or AVI video.", empty: "This folder has no images or videos.", startPlace: "pictures" },
-  scene: { hint: "Choose a Kaleido Sage scene (.ksage) or playlist (.ksplaylist). A playlist opens its scenes, audio files and audio settings together.", empty: "This folder has no scenes or playlists.", startPlace: "documents" },
+  scene: { hint: "Choose a Kaleido Sage file (.ksage). A show (two or more scenes, or audio files) opens in place of the open file; a single scene goes into the open file.", empty: "This folder has no Kaleido Sage files.", startPlace: "documents" },
   audio: { hint: "Choose MP3, WAV, FLAC, OGG, Opus, M4A or AAC audio files for the Files list.", empty: "This folder has no audio files.", startPlace: "home" }
 };
 
@@ -206,11 +205,10 @@ const isSort = (value: unknown): value is SortState => {
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
-/** A file's type in a word, for the Type column: Scene, Playlist, Audio, or an image's or video's extension (JPG, MP4). */
+/** A file's type in a word, for the Type column: Kaleido, Audio, or an image's or video's extension (JPG, MP4). */
 const shortType = (entry: BrowseEntry) => {
   if (entry.kind === "folder") return "Folder";
-  if (entry.kind === "scene") return "Scene";
-  if (entry.kind === "playlist") return "Playlist";
+  if (entry.kind === "scene") return "Kaleido";
   if (entry.kind === "audio") return "Audio";
   return (entry.name.split(".").pop() ?? "").toUpperCase();
 };
@@ -307,9 +305,8 @@ const formatSize = (bytes: number) => {
 
 const typeLabel = (entry: BrowseEntry) => {
   if (entry.kind === "folder") return "Folder";
-  if (entry.kind === "scene") return "Kaleido Sage scene";
+  if (entry.kind === "scene") return "Kaleido Sage file";
   if (entry.kind === "audio") return "Audio file";
-  if (entry.kind === "playlist") return "Kaleido Sage playlist";
   return IMAGE_TYPES[entry.name.split(".").pop()?.toLowerCase() ?? ""] ?? "Image";
 };
 
@@ -345,9 +342,9 @@ async function buildImagePreview(path: string): Promise<ImagePreviewData | Video
   };
 }
 
-/** Reads a scene the same way Open Scene does, into fresh settings that only the preview uses. */
+/** Reads a single scene's file in place (see readFileScene) into fresh settings that only the preview uses. */
 async function buildScenePreview(path: string): Promise<ScenePreviewData> {
-  const text = await readScene(path);
+  const text = await readFileScene(path, 0);
   const params = createParams();
   const state = createPlayState();
   const images = applyScene(text, params, state);
@@ -368,21 +365,25 @@ async function buildScenePreview(path: string): Promise<ScenePreviewData> {
   };
 }
 
-const buildPreview = async (entry: BrowseEntry): Promise<PreviewData> =>
-  entry.kind === "scene" ? buildScenePreview(entry.path)
-    : entry.kind === "playlist" ? { kind: "playlist", summary: await readPlaylistSummary(entry.path) }
-    : buildImagePreview(entry.path);
+/** A show's preview is its dashboard; a single scene plays. */
+async function buildFilePreview(path: string): Promise<PreviewData> {
+  const summary = await readFileSummary(path);
+  return isShow(summary) ? { kind: "show", summary } : buildScenePreview(path);
+}
+
+const buildPreview = (entry: BrowseEntry): Promise<PreviewData> =>
+  entry.kind === "scene" ? buildFilePreview(entry.path) : buildImagePreview(entry.path);
 
 const INPUT_NAMES: Record<string, string> = { tracks: "Files", output: "PC sound", input: "Microphone", none: "None" };
 
-/** One card of the playlist dashboard: a heading with an icon and a blue count badge, then the files, numbered, in a list that scrolls by itself. */
-function PlaylistCard({ title, icon, files, empty, strip, times }: {
+/** One card of the show dashboard: a heading with an icon and a blue count badge, then the files, numbered, in a list that scrolls by itself. */
+function ShowCard({ title, icon, files, empty, strip, times }: {
   title: string;
   icon: ReactNode;
-  files: PlaylistSummary["scenes"];
+  files: FileSummary["scenes"];
   empty: string;
   strip?: RegExp;
-  /** Show each file's length instead of its size, with the total in a footer (the tracks, when the playlist kept their lengths). */
+  /** Show each file's length instead of its size, with the total in a footer (the tracks, when the file kept their lengths). */
   times?: boolean;
 }) {
   const known = files.filter((file) => file.seconds !== null);
@@ -412,12 +413,12 @@ function PlaylistCard({ title, icon, files, empty, strip, times }: {
 }
 
 /**
- * The Open Playlist dialog's preview: a dashboard of the selected playlist.
+ * A show's preview in the Open dialog: a dashboard of the selected file.
  * The audio settings, then two cards of the same height, the tracks and
  * the scenes, each of which scrolls by itself. The file's size and date
  * are in the details under the preview.
  */
-function PlaylistDashboard({ summary }: { summary: PlaylistSummary }) {
+function ShowDashboard({ summary }: { summary: FileSummary }) {
   const audio = summary.audio ?? {};
   return (
     <div className="playlist-dashboard">
@@ -426,8 +427,8 @@ function PlaylistDashboard({ summary }: { summary: PlaylistSummary }) {
         {audio.gainDb !== undefined && <span>Gain <b>{audio.gainDb} dB</b></span>}
         {audio.thresholdDb !== undefined && <span>Threshold <b>{audio.thresholdDb} dB</b></span>}
       </div>
-      <PlaylistCard title="Tracks" icon={<MusicNotes size={15} weight="fill" />} files={summary.tracks} empty="No tracks" times={summary.tracks.some((track) => track.seconds !== null)} />
-      <PlaylistCard title="Scenes" icon={<FilmSlate size={15} weight="fill" />} files={summary.scenes} empty="No scenes" strip={/\.ksage$/i} />
+      <ShowCard title="Tracks" icon={<MusicNotes size={15} weight="fill" />} files={summary.tracks} empty="No tracks" times={summary.tracks.some((track) => track.seconds !== null)} />
+      <ShowCard title="Scenes" icon={<FilmSlate size={15} weight="fill" />} files={summary.scenes} empty="No scenes" strip={/\.ksage$/i} />
     </div>
   );
 }
@@ -512,7 +513,6 @@ const entryIcon = (entry: BrowseEntry) => {
   if (entry.kind === "folder") return <Folder size={17} weight="fill" className="open-entry-icon folder" />;
   if (entry.kind === "scene") return <img className="open-entry-icon" src="/icon.ico" alt="" />;
   if (entry.kind === "audio") return <MusicNote size={17} weight="duotone" className="open-entry-icon image" />;
-  if (entry.kind === "playlist") return <MusicNotes size={17} weight="duotone" className="open-entry-icon image" />;
   if (isVideoPath(entry.path)) return <FilmSlate size={17} weight="duotone" className="open-entry-icon image" />;
   return <FileImage size={17} weight="duotone" className="open-entry-icon image" />;
 };
@@ -876,7 +876,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen, onOpenMany }: Props)
     const needle = search.trim().toLowerCase();
     return listing.entries
       .filter((entry) =>
-        (entry.kind === "folder" || entry.kind === kind || (kind === "scene" && entry.kind === "playlist"))
+        (entry.kind === "folder" || entry.kind === kind)
         && (needle === "" || entry.name.toLowerCase().includes(needle)))
       .sort((a, b) => compareEntries(a, b, sort));
   }, [kind, listing, search, sort]);
@@ -932,7 +932,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen, onOpenMany }: Props)
   const pickedPaths = visibleEntries.filter((entry) => picked.has(entry.path)).map((entry) => entry.path);
 
   useEffect(() => {
-    /* Audio files have no preview; a playlist's is its dashboard (see PlaylistDashboard). */
+    /* Audio files have no preview; a show's is its dashboard (see ShowDashboard). */
     if (!selected || selected.kind === "folder" || selected.kind === "audio") {
       previewRequest.current++;
       setPreview({ status: "idle" });
@@ -1310,7 +1310,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen, onOpenMany }: Props)
           />
 
           <aside className="open-preview" aria-label="Preview">
-            <div className={`open-preview-frame ${ready?.kind === "playlist" ? "playlist" : ""}`}>
+            <div className={`open-preview-frame ${ready?.kind === "show" ? "playlist" : ""}`}>
               {preview.status === "idle" && (
                 <div className="open-preview-placeholder">
                   {kind === "scene" ? <FilmSlate size={34} weight="duotone" /> : kind === "audio" ? <MusicNotes size={34} weight="duotone" /> : <FileImage size={34} weight="duotone" />}
@@ -1327,7 +1327,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen, onOpenMany }: Props)
                 <img src={ready.imageUrl} alt={selected ? `Preview of ${selected.name}` : "Preview"} />
               )}
               {ready?.kind === "video" && <VideoPreview video={ready} />}
-              {ready?.kind === "playlist" && selected && <PlaylistDashboard summary={ready.summary} />}
+              {ready?.kind === "show" && selected && <ShowDashboard summary={ready.summary} />}
               <ScenePreview scene={playingScene} />
             </div>
             {selected && (
@@ -1336,7 +1336,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen, onOpenMany }: Props)
                 <dd className="open-preview-name" data-tip={selected.name}>{selected.name}</dd>
                 <dt>Type</dt>
                 <dd>{typeLabel(selected)}</dd>
-                {ready && ready.kind !== "playlist" && (
+                {ready && ready.kind !== "show" && (
                   <>
                     <dt>{ready.kind === "scene" ? "Image size" : "Dimensions"}</dt>
                     <dd>{ready.width} × {ready.height} px</dd>
@@ -1388,14 +1388,14 @@ export function OpenDialog({ kind, title, onCancel, onOpen, onOpenMany }: Props)
         )}
 
         <footer className="open-dialog-actions">
-          {multiple && <span className="open-dialog-hint">Ctrl + click or Shift + click to pick several. {kind === "scene" ? "Each opens in its own tab." : "They go to the end of the Files list."}</span>}
+          {multiple && <span className="open-dialog-hint">Ctrl + click or Shift + click to pick several. {kind === "scene" ? "Single scenes go into the open file." : "They go to the end of the Files list."}</span>}
           <button className="button secondary" onClick={onCancel}>Cancel</button>
           <button
             className="button primary"
             disabled={!selected && pickedPaths.length === 0}
             onClick={openPicked}
           >
-            <ColorFolder size={19} /> {pickedPaths.length > 1 ? `Open ${pickedPaths.length} ${kind === "scene" ? "scenes" : "files"}` : "Open"}
+            <ColorFolder size={19} /> {pickedPaths.length > 1 ? `Open ${pickedPaths.length} files` : "Open"}
           </button>
         </footer>
       </div>

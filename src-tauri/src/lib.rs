@@ -103,6 +103,7 @@ pub fn run() {
             file_archive::open_file,
             file_archive::read_file_summary,
             file_archive::scene_copy_path,
+            file_archive::read_file_scene,
             files::reveal_file,
             files::cursor_position,
             screen::screen_color_at_cursor,
