@@ -1628,7 +1628,7 @@ export default function App() {
           continue;
         }
         const name = docPath ? fileNameOf(docPath) : `${docFileName(null, doc.untitled)}.${SCENE_EXTENSION}`;
-        const target = isPlaylistCopy(docPath) ? docPath! : await invoke<string>("playlist_scene_path", { name });
+        const target = isPlaylistCopy(docPath) ? docPath! : await invoke<string>("scene_copy_path", { name });
         if (active) {
           const saved = fingerprint();
           await writeSceneFile(target, engine.params, engine.state, imagesRef.current, driverRef.current);

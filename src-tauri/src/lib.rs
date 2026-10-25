@@ -1,7 +1,7 @@
 mod browse;
 mod export_stream;
 mod files;
-mod playlist_archive;
+mod file_archive;
 mod sound_capture;
 mod screen;
 pub mod song_analysis;
@@ -76,7 +76,7 @@ pub fn run() {
         )
         .setup(|app| {
             end_splash_after_time_limit(app.handle().clone());
-            playlist_archive::clean_at_start();
+            file_archive::clean_at_start();
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -99,10 +99,10 @@ pub fn run() {
             files::default_export_folder,
             scene_archive::save_scene,
             scene_archive::read_scene,
-            playlist_archive::save_playlist,
-            playlist_archive::open_playlist,
-            playlist_archive::read_playlist_summary,
-            playlist_archive::playlist_scene_path,
+            file_archive::save_file,
+            file_archive::open_file,
+            file_archive::read_file_summary,
+            file_archive::scene_copy_path,
             files::reveal_file,
             files::cursor_position,
             screen::screen_color_at_cursor,

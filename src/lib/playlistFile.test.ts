@@ -9,10 +9,10 @@ describe("playlist files", () => {
   });
 
   it("leave out broken audio settings, and refuse other files", () => {
-    const text = JSON.stringify({ app: "KaleidoSage", kind: "playlist", audio: { kind: "radio", gainDb: "loud", thresholdDb: -30 }, activeScene: -1 });
+    const text = JSON.stringify({ app: "KaleidoSage", kind: "file", audio: { kind: "radio", gainDb: "loud", thresholdDb: -30 }, activeScene: -1 });
     expect(readManifest(text)).toEqual({ audio: { thresholdDb: -30 }, activeScene: 0 });
-    expect(() => readManifest("{}")).toThrow("not a Kaleido Sage playlist");
-    expect(() => readManifest("not json")).toThrow("not a Kaleido Sage playlist");
+    expect(() => readManifest("{}")).toThrow("not a Kaleido Sage file");
+    expect(() => readManifest("not json")).toThrow("not a Kaleido Sage file");
   });
 
   it("read back Song follow, and leave it out of older playlists", () => {

@@ -62,7 +62,7 @@ fn save(path: &Path, contents: &[u8], videos: &Videos) -> Result<(), String> {
     Ok(())
 }
 
-/** Puts a complete temp file in the place of "path": for scenes, and for playlists (see playlist_archive). */
+/** Puts a complete temp file in the place of "path": for scenes, and for Kaleido Sage files (see file_archive). */
 pub(crate) fn persist_file(temp: tempfile::NamedTempFile, path: &Path) -> Result<(), String> {
     // Close the writable handle before Windows opens the replacement file.
     let temp = temp.into_temp_path();

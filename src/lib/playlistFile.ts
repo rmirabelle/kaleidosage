@@ -5,22 +5,22 @@ import type { AudioSettings } from "./audioInput";
  * A playlist file (.ksplaylist) holds a whole show, so it can move to
  * another PC as one file (see docs/AUDIO.md, part 8): the open scenes in
  * tab order, the tracks, and the audio settings. The scene and audio files
- * go inside it (Rust: src-tauri/src/playlist_archive.rs); this is the part
+ * go inside it (Rust: src-tauri/src/file_archive.rs); this is the part
  * the app writes and reads, playlist.json.
  */
 
-export const PLAYLIST_EXTENSION = "ksplaylist";
+export const PLAYLIST_EXTENSION = "ksage";
 
 /** True for a playlist file's path (by its extension). */
 export const isPlaylistFile = (path: string) => path.toLowerCase().endsWith(`.${PLAYLIST_EXTENSION}`);
 
 /**
  * True for a file that is the open playlist's own copy: in a folder that
- * the app made in the temp folder (see playlist_archive.rs). Save Playlist
+ * the app made in the temp folder (see file_archive.rs). Save Playlist
  * writes such a scene copy in place; any other scene gets a new copy
  * first, so its own file on disk never changes.
  */
-export const isPlaylistCopy = (path: string | null) => path !== null && /[\\/]kaleidosage-playlist-[^\\/]+[\\/]/i.test(path);
+export const isPlaylistCopy = (path: string | null) => path !== null && /[\\/]kaleidosage-file-[^\\/]+[\\/]/i.test(path);
 const PLAYLIST_VERSION = 1;
 
 /** The audio settings that a playlist keeps: what the app listens to and how. */
@@ -40,7 +40,7 @@ export interface PlaylistManifest {
 
 /** playlist.json, without the scene and track entries, which the Rust side adds. */
 export function writeManifest({ audio, activeScene, filesWidth, trackSeconds, songFollow }: PlaylistManifest): string {
-  return JSON.stringify({ app: "KaleidoSage", kind: "playlist", version: PLAYLIST_VERSION, audio, activeScene, ...(filesWidth ? { layout: { filesWidth } } : {}), ...(trackSeconds ? { trackSeconds } : {}), ...(songFollow !== undefined ? { songFollow } : {}) });
+  return JSON.stringify({ app: "KaleidoSage", kind: "file", version: PLAYLIST_VERSION, audio, activeScene, ...(filesWidth ? { layout: { filesWidth } } : {}), ...(trackSeconds ? { trackSeconds } : {}), ...(songFollow !== undefined ? { songFollow } : {}) });
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -55,9 +55,9 @@ export function readManifest(text: string): { audio: Partial<PlaylistAudio>; act
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw new Error("The file is not a Kaleido Sage playlist.");
+    throw new Error("The file is not a Kaleido Sage file.");
   }
-  if (!isRecord(parsed) || parsed.app !== "KaleidoSage" || parsed.kind !== "playlist") throw new Error("The file is not a Kaleido Sage playlist.");
+  if (!isRecord(parsed) || parsed.app !== "KaleidoSage" || parsed.kind !== "file") throw new Error("The file is not a Kaleido Sage file.");
   const saved = isRecord(parsed.audio) ? parsed.audio : {};
   const audio: Partial<PlaylistAudio> = {};
   if (saved.kind === "output" || saved.kind === "input" || saved.kind === "tracks" || saved.kind === "none") audio.kind = saved.kind;
@@ -98,9 +98,9 @@ export function playlistFingerprint(scenes: readonly string[], tracks: readonly 
  * songFollow.ts), in track order.
  */
 export const savePlaylistFile = (path: string, manifest: PlaylistManifest, scenes: string[], tracks: string[], analyses: (string | null)[] = []) =>
-  invoke("save_playlist", { path, manifest: writeManifest(manifest), scenes, tracks, analyses });
+  invoke("save_file", { path, manifest: writeManifest(manifest), scenes, tracks, analyses });
 
-/** What the Open Playlist dialog shows of a playlist, read without unpacking it (Rust: read_playlist_summary). */
+/** What the Open Playlist dialog shows of a playlist, read without unpacking it (Rust: read_file_summary). */
 export interface PlaylistSummary {
   /** The audio settings, as playlist.json has them (see readManifest). */
   audio: Partial<PlaylistAudio> | null;
@@ -109,8 +109,8 @@ export interface PlaylistSummary {
   tracks: { name: string; bytes: number; seconds: number | null }[];
 }
 
-export const readPlaylistSummary = (path: string) => invoke<PlaylistSummary>("read_playlist_summary", { path });
+export const readPlaylistSummary = (path: string) => invoke<PlaylistSummary>("read_file_summary", { path });
 
 /** Unpacks a playlist file into a temp folder: its manifest, the unpacked scene and audio files, and each track's song analysis (JSON, or null). */
 export const openPlaylistFile = (path: string) =>
-  invoke<{ manifest: string; scenes: string[]; tracks: string[]; analyses: (string | null)[] }>("open_playlist", { path });
+  invoke<{ manifest: string; scenes: string[]; tracks: string[]; analyses: (string | null)[] }>("open_file", { path });

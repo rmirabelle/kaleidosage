@@ -340,7 +340,7 @@ files in it is "Tracks" (part 7), so one word means one thing.
   now, in the playlist, and never writes over the scene's own file on
   disk, so a scene can change in one playlist and stay as it was in the
   others. The first Save Playlist gives each scene a copy of its own in
-  the temp folder (playlist_scene_path); from then on Ctrl+S saves the
+  the temp folder (scene_copy_path); from then on Ctrl+S saves the
   playlist, Save Scene gives way to Export Scene As (a copy on disk), a
   tab closes with no question, and the playlist's unsaved mark counts
   every scene's changes too. Closing the window asks once, for the

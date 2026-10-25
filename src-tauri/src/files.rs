@@ -31,13 +31,6 @@ pub(crate) fn is_audio_path(path: &Path) -> bool {
         .is_some_and(|extension| AUDIO_EXTENSIONS.contains(&extension.to_ascii_lowercase().as_str()))
 }
 
-/// A playlist file (see playlist_archive): the scenes, the tracks and the audio settings of a show.
-pub(crate) fn is_playlist_path(path: &Path) -> bool {
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("ksplaylist"))
-}
-
 pub(crate) fn is_scene_path(path: &Path) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
