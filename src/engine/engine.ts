@@ -1125,7 +1125,6 @@ export class Engine {
       mandelFadeDepth: this.live("mandelDepth") + (divePart - 1) * diveLength,
       mandelNextDepth: this.state.mapMode === 9 && this.live("mapSpeed") !== 0 ? this.live("mandelDepth") - diveFade * diveLength : NaN,
       mandelBands: this.live("mandelBands"),
-      mandelGrowth: this.live("mandelGrowth"),
       mandelEdge: this.live("mandelEdge"),
       mandelEdgeWidth: this.live("mandelEdgeWidth"),
       mandelTerraces: this.live("mandelTerraces"),

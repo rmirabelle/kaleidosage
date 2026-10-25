@@ -174,8 +174,7 @@ void main() {
   float r = pow(10.0, u_stripOrigin - g / u_stripRows);
   float a = TAU * floor(gl_FragCoord.x) / float(u_stripWidth);
   float depth = clamp(log(1.5 / r) * 0.4342944819 + 1.5, 0.0, 10.0);
-  /* 1.5 times: enough for Growth at its most (see u_mandelLimit). */
-  int rounds = int(1.5 * (250.0 + 100.0 * depth + 40.0 * depth * depth) + 0.5);
+  int rounds = int(250.0 + 100.0 * depth + 40.0 * depth * depth + 0.5);
   vec2 m;
   vec2 slope;
   float escaped = mandelRun(r * vec2(cos(a), sin(a)), r, rounds, m, slope);
@@ -597,9 +596,19 @@ float mandelShade = 1.0;
 /* Edge light's mask: 1 at the set's edge, falling to 0 in the open areas (see u_mandelEdge). */
 float mandelEdgeLight = 1.0;
 float mandelStretch = 1.0;
-/* The distance to the set's edge (screen heights), and how far past the view's round limit the point is (1: black). */
-float mandelEdgeDistance = 1.0;
+/**
+ * How far past the view's round limit the point is (1: black), and the
+ * shade busy areas take, from the distance to the set's edge (see
+ * mandelLook and the busy areas in shapeColor).
+ */
 float mandelBeyond = 0.0;
+float mandelBusyShade = 1.0;
+/**
+ * The screen pixel's size in the map's units (set by shapeColor), and
+ * whether this pixel took extra samples (see mandelLook's use in complexMap).
+ */
+float mandelPixel = 0.0;
+bool mandelSampled = false;
 /**
  * The Mandelbrot map's second picture point near the rings where the escape
  * count changes, and its weight (see Softness in complexMap).
@@ -612,10 +621,10 @@ uniform float u_mandelDepth;
 uniform int u_mandelRounds;
 /**
  * The view's round limit: points that escape later are black, as if they
- * had not escaped, over a short fade. It rises with the view's depth (times
- * Growth), so as a dive goes deeper, the slow points at the edge of the
- * black turn to color one by one: the branches grow out of it. The strip
- * holds counts past it, so the limit, not the strip, sets the black edge.
+ * had not escaped, over a short fade. It rises with the view's depth, so as
+ * a dive goes deeper, the slow points at the edge of the black turn to
+ * color one by one. The strip holds counts past it (it runs the rounds of
+ * deeper views), so the limit, not the strip, sets the black edge.
  */
 uniform float u_mandelLimit;
 ${MANDEL_GLSL}
@@ -692,6 +701,33 @@ uniform float u_mandelEdgeWidth;
 uniform float u_mandelFlow;
 uniform float u_mandelLight;
 uniform vec2 u_mandelLightDir;
+
+/**
+ * The Mandelbrot map's look at one sample, from its raw values: its shade
+ * (light and terraces), Edge light's mask, how far past the view's round
+ * limit it is (1: black, then the shade is 0), and the shade busy areas
+ * take: from the distance to the set's edge in pixels, in powers of ten,
+ * bright at 1/100 pixel or nearer (the pixel is full of filaments), dark at
+ * 5 pixels or farther. Several samples of one pixel can be averaged (see
+ * complexMap).
+ */
+vec4 mandelLook(float count, float normalAngle, float edgeDistance) {
+  float beyond = count < 0.0 ? 1.0 : smoothstep(u_mandelLimit - max(2.0, 0.03 * u_mandelLimit), u_mandelLimit, count);
+  if (beyond >= 1.0) return vec4(0.0, 1.0, 1.0, 0.0);
+  float nearEdge = 1.0 - smoothstep(-2.0, 0.7, log(max(edgeDistance / max(mandelPixel * u_mapScale, 1e-9), 1e-6)) * 0.4342944819);
+  /* Band flow's remainder for the terraces is one band (see the picture's below). */
+  float terraceBand = count / max(u_mandelBands, 0.01) + fract(u_mandelFlow);
+  /* The distance to the set's edge needs nothing but this sample, so the light moves smoothly as the view dives or Edge width moves. */
+  float fall = edgeDistance / u_mandelEdgeWidth;
+  float edgeLight = mix(1.0, exp(-fall * fall), clamp(u_mandelEdge, 0.0, 1.0));
+  vec2 normal = vec2(cos(PI * normalAngle), sin(PI * normalAngle));
+  float lit = clamp((dot(normal, u_mandelLightDir) + 1.5) / 2.5, 0.0, 1.0);
+  float edge = 0.5 * clamp(u_mandelSoftness, 0.0, 1.0) + 1e-4;
+  float t = fract(terraceBand);
+  float rise = min(t / (1.0 - edge), (1.0 - t) / edge);
+  float step_ = 0.45 + 0.55 * mix(rise, smoothstep(0.0, 1.0, rise), clamp(u_mandelSoftness, 0.0, 1.0));
+  return vec4(mix(1.0, lit, u_mandelLight) * mix(1.0, step_, u_mandelTerraces), edgeLight, beyond, mix(0.3, 1.3, nearEdge * nearEdge));
+}
 
 vec2 complexMap(vec2 p) {
   depthDistance = 1e9;
@@ -832,7 +868,8 @@ vec2 complexMap(vec2 p) {
     float escapeAngle;
     float normalAngle;
     float edgeDistance;
-    if (!mandelFromStrip(dc, span, count, escapeAngle, normalAngle, edgeDistance)) {
+    bool fromStrip = mandelFromStrip(dc, span, count, escapeAngle, normalAngle, edgeDistance);
+    if (!fromStrip) {
       vec2 m;
       vec2 slope;
       float escaped = mandelRun(dc, span, u_mandelRounds, m, slope);
@@ -846,25 +883,50 @@ vec2 complexMap(vec2 p) {
         edgeDistance = 0.5 * size * log(size) / max(length(slope), 1e-30);
       }
     }
-    float beyond = count < 0.0 ? 1.0 : smoothstep(u_mandelLimit - max(2.0, 0.03 * u_mandelLimit), u_mandelLimit, count);
-    if (beyond >= 1.0) {
-      mandelShade = 0.0;
+    /**
+     * Extra samples where the pixel holds the set's edge (within 4 pixels of
+     * it by the distance estimate, or inside, next to it) or the black edge
+     * of the round limit (past 70% of it; the distance estimate measures to
+     * the set, not to that edge): four more points
+     * in the pixel (a turned grid), their looks averaged with this one's, so
+     * the light, terraces and black edge do not sparkle as the view moves.
+     * Only from the strip, where a sample is a few texture reads; the loop
+     * would cost four times the rounds.
+     */
+    vec4 look = mandelLook(count, normalAngle, edgeDistance);
+    mandelSampled = false;
+    if (fromStrip && (count < 0.0 || count > 0.7 * u_mandelLimit || edgeDistance < 4.0 * mandelPixel)) {
+      vec2 offsets[4] = vec2[4](vec2(0.125, 0.375), vec2(-0.375, 0.125), vec2(0.375, -0.125), vec2(-0.125, -0.375));
+      float samples = 1.0;
+      /* A count known only at run time, so the compiler keeps one copy of the strip read (see the step loop in shapeColor). */
+      for (int k = 0; k < u_stripOn * 4; k++) {
+        float sampleCount;
+        float sampleEscape;
+        float sampleNormal;
+        float sampleEdge;
+        if (mandelFromStrip((onAxis + offsets[k] * mandelPixel) * span, span, sampleCount, sampleEscape, sampleNormal, sampleEdge)) {
+          look += mandelLook(sampleCount, sampleNormal, sampleEdge);
+          samples += 1.0;
+        }
+      }
+      look /= samples;
+      mandelSampled = samples > 1.0;
+    }
+    mandelShade = look.x;
+    mandelEdgeLight = look.y;
+    mandelBeyond = look.z;
+    mandelBusyShade = look.w;
+    if (count < 0.0 || look.z >= 1.0) {
       mandelStretch = 1.0;
-      mandelEdgeLight = 1.0;
       w = vec2(0.0);
     } else {
       /**
        * Band flow moves the bands. It is kept small with a remainder, which
        * must be a whole repeat of what it moves, or it jumps: two picture
        * widths for the picture (it is mirrored; a width is aspect picture
-       * heights, the band unit), one band for the terraces.
+       * heights, the band unit), one band for the terraces (in mandelLook).
        */
-      float band = count / max(u_mandelBands, 0.01);
-      float terraceBand = band + fract(u_mandelFlow);
-      band += mod(u_mandelFlow, 2.0 * u_imgRes.x / u_imgRes.y);
-      /* The distance to the set's edge needs nothing but this pixel, so the light moves smoothly as the view dives or Edge width moves. */
-      float fall = edgeDistance / u_mandelEdgeWidth;
-      mandelEdgeLight = mix(1.0, exp(-fall * fall), clamp(u_mandelEdge, 0.0, 1.0));
+      float band = count / max(u_mandelBands, 0.01) + mod(u_mandelFlow, 2.0 * u_imgRes.x / u_imgRes.y);
       w = vec2(band, escapeAngle);
       /**
        * Across a ring where the escape count changes, the angle doubles: a
@@ -877,15 +939,6 @@ vec2 complexMap(vec2 p) {
       float soft = clamp(u_mandelSoftness, 0.0, 1.0);
       mandelAlt = vec2(band, mod(2.0 * escapeAngle + 1.0, 2.0) - 1.0);
       mandelAltWeight = soft > 0.0 ? 1.0 - smoothstep(0.0, soft, through) : 0.0;
-      vec2 normal = vec2(cos(PI * normalAngle), sin(PI * normalAngle));
-      float lit = clamp((dot(normal, u_mandelLightDir) + 1.5) / 2.5, 0.0, 1.0);
-      float edge = 0.5 * clamp(u_mandelSoftness, 0.0, 1.0) + 1e-4;
-      float t = fract(terraceBand);
-      float rise = min(t / (1.0 - edge), (1.0 - t) / edge);
-      float step_ = 0.45 + 0.55 * mix(rise, smoothstep(0.0, 1.0, rise), clamp(u_mandelSoftness, 0.0, 1.0));
-      mandelShade = mix(1.0, lit, u_mandelLight) * mix(1.0, step_, u_mandelTerraces);
-      mandelEdgeDistance = edgeDistance;
-      mandelBeyond = beyond;
       /**
        * How fast the picture moves per screen unit, for its blur: across the
        * bands, the count's change, |dz/d(screen)| / (|z| ln|z|) = 1 / (2 edge
@@ -1095,6 +1148,8 @@ ${BLEND_COVER_GLSL}
  */
 vec4 shapeColor(vec2 screen, int skip, float g0) {
   vec2 p = screen;
+  /* The pixel in the Mandelbrot map's units, for its extra samples (as if the map came first). */
+  mandelPixel = g0 / max(u_mapScale, 1e-4);
   vec2 beforeFold = screen;
   bool folded = false;
   bool mapped = false;
@@ -1272,17 +1327,13 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
    * The Mandelbrot map's light and terraces, and its black set. Where one
    * pixel holds more than about one band (mapDetail, see mandelStretch),
    * the light and terraces would sparkle, so they give way to a shade from
-   * the pixel's distance to the set's edge, in pixels, which is smooth from
-   * one pixel to the next: bright at a hundredth of a pixel or nearer (the
-   * pixel is full of filaments), dark at five pixels or farther, evenly in
-   * powers of ten between. The picture already
+   * the distance to the set's edge (see mandelLook). The picture already
    * blurs there. Then the points past the view's round limit fade to black.
    */
   if (mapped && u_mapMode == 9) {
-    float busy = mandelShade > 0.0 ? smoothstep(0.3, 1.2, mapDetail) : 0.0;
-    float nearEdge = 1.0 - smoothstep(-2.0, 0.7, log(max(mandelEdgeDistance / max(g0, 1e-9), 1e-6)) * 0.4342944819);
-    float busyShade = mix(0.3, 1.3, nearEdge * nearEdge);
-    color.rgb *= mix(1.0, mix(mandelShade, busyShade, busy) * mandelEdgeLight * (1.0 - mandelBeyond), u_mapMix);
+    /* A pixel with extra samples sparkles less, so it keeps its light to about twice the band density. */
+    float busy = mandelShade > 0.0 ? (mandelSampled ? smoothstep(0.6, 2.4, mapDetail) : smoothstep(0.3, 1.2, mapDetail)) : 0.0;
+    color.rgb *= mix(1.0, mix(mandelShade, mandelBusyShade, busy) * mandelEdgeLight * (1.0 - mandelBeyond), u_mapMix);
   }
   return color;
 }

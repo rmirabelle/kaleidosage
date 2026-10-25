@@ -143,8 +143,6 @@ export interface FrameValues {
   /** The Mandelbrot map (map mode 9): depth in powers of ten, band width, terraces, their softness, light, and the light's angle (radians). */
   mandelDepth: number;
   mandelBands: number;
-  /** Growth: the view's round limit times this (see u_mandelLimit). */
-  mandelGrowth: number;
   /** Edge light: how much the open areas away from the set's edge fade to black, and how far from the edge (in screen heights) the light reaches. */
   mandelEdge: number;
   mandelEdgeWidth: number;
@@ -1170,7 +1168,7 @@ export class KaleidoRenderer {
     gl.uniform1i(k.uniforms.u_mapSteps, Math.round(v.mapSteps));
     const mandelDepth = (depth: number, pass: number) => {
       gl.uniform1f(k.uniforms.u_mandelDepth, depth);
-      const limit = mandelLimit(depth) * Math.min(1.5, Math.max(0.1, v.mandelGrowth));
+      const limit = mandelLimit(depth);
       gl.uniform1f(k.uniforms.u_mandelLimit, limit);
       gl.uniform1i(k.uniforms.u_mandelRounds, Math.ceil(limit));
       /* The strip this pass reads (see updateMandelStrips), in slots 3 and 4. */
@@ -1192,7 +1190,7 @@ export class KaleidoRenderer {
     mandelDepth(v.mandelDepth, 0);
     if (v.mapMode === 9) {
       /* The deep zoom's exact path (see mandelPath), in slot 2; the source images use 0 and 1. */
-      const path = this.mandelPath(v.mapPointX, v.mapPointY, Math.ceil(1.5 * mandelLimit(Infinity)));
+      const path = this.mandelPath(v.mapPointX, v.mapPointY, mandelRounds(Infinity));
       gl.activeTexture(gl.TEXTURE2);
       gl.bindTexture(gl.TEXTURE_2D, path.texture);
       gl.uniform1i(k.uniforms.u_mandelPath, 2);
@@ -1930,7 +1928,7 @@ export class KaleidoRenderer {
   private drawStripRows(v: FrameValues, strip: MandelStrip, first: number, last: number) {
     const gl = this.gl;
     const program = this.stripProgram!;
-    const path = this.mandelPath(v.mapPointX, v.mapPointY, Math.ceil(1.5 * mandelLimit(Infinity)));
+    const path = this.mandelPath(v.mapPointX, v.mapPointY, mandelRounds(Infinity));
     gl.useProgram(program.program);
     gl.bindFramebuffer(gl.FRAMEBUFFER, strip.framebuffer);
     gl.activeTexture(gl.TEXTURE2);

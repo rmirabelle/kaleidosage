@@ -332,3 +332,26 @@ Sources: [Optimizing zoom animations again (mathr)](https://mathr.co.uk/blog/202
 [zoomasm](https://mathr.co.uk/zoomasm/),
 [Reprojection temporal anti-aliasing](https://brashandplucky.com/2023/05/06/reprojection-temporal-antialiasing.html),
 [A Survey of Temporal Antialiasing Techniques](http://behindthepixels.io/assets/files/TemporalAA.pdf).
+
+## Step 7 (built 2026-10-24): extra samples near the edge
+
+From research notes 2. The Growth slider is removed (the user: it did not
+work well); the black edge comes from the view's round limit alone, which
+rises with depth, as before the strip.
+
+- `mandelLook` (shaders.ts) turns one sample's raw values into its look:
+  shade (light, terraces), Edge light's mask, how far past the round limit
+  it is, and the busy-area shade (from the distance to the edge in pixels).
+- Where the strip serves the pixel and it holds an edge (within 4 pixels of
+  the set by the distance estimate, inside it, or past 70% of the round
+  limit), four more samples in the pixel (a turned grid) are read from the
+  strip and the five looks averaged. The picture itself still comes from
+  the middle sample, blurred as before. A sampled pixel keeps its light to
+  about twice the band density before the busy shade takes over.
+- Flicker test: two frames 0.7% of a zoom apart, the first scaled to match,
+  pixels that differ by more than 40 of 255: Seahorse valley at depth 8
+  4703 -> 373, Spiral at 9 7249 -> 338, Branches at 7 8530 -> 3601 (most
+  left is its black edge, which moves as the round limit rises, as meant).
+  Averaging only the light, not the busy shade, changed almost nothing:
+  the busy shade was the noise.
+- Cost at 1920 by 1080 on an RTX 5090: 0.9 to 1.6 ms a frame (0.8 to 1.3).
