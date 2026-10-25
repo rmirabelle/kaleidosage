@@ -1173,6 +1173,17 @@ export class KaleidoRenderer {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     }
     gl.uniform1i(k.uniforms.u_img, 0);
+    /**
+     * The Mandelbrot map's samplers (its path and strips) read unit 1, the
+     * second image, until the Mandelbrot map points them at its own units
+     * below. A program keeps its sampler units, so after a Mandelbrot scene
+     * they pointed at units 2 to 4, and another pass (Particles) could leave
+     * this pass's own target there. WebGL refuses a draw that reads its
+     * target, so the shapes stopped (found 2026-10-25).
+     */
+    gl.uniform1i(k.uniforms.u_mandelPath, 1);
+    gl.uniform1i(k.uniforms.u_stripCount, 1);
+    gl.uniform1i(k.uniforms.u_stripData, 1);
     gl.uniform1i(k.uniforms.u_picture, picture ? 1 : 0);
     gl.uniform2f(k.uniforms.u_res, width, height);
     gl.uniform1f(k.uniforms.u_pad, picture ? 0 : pad);

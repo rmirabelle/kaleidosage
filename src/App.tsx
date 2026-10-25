@@ -50,7 +50,6 @@ import { midi } from "./lib/midi";
 import { audioInput, type InputKind } from "./lib/audioInput";
 import { panelLayout } from "./lib/panelLayout";
 import { tracks } from "./lib/tracks";
-import { startFrameProbe } from "./lib/frameProbe";
 import { songFollow } from "./lib/songFollow";
 import { settingButtons } from "./lib/settingButtons";
 import { sliceAt, type ScheduledSlice } from "./engine/showSchedule";
@@ -2015,6 +2014,8 @@ export default function App() {
         if (kept.file.tracks.length) tracks.replace(kept.file.tracks);
         if (kept.file.songFollow !== undefined) songFollow.setEnabled(kept.file.songFollow);
         if (kept.file.followEdits !== undefined) songFollow.edits = kept.file.followEdits;
+        /* Dev only, for a bug hunt (2026-10-25): how many analyses the keeper had and how many Song follow took. */
+        console.warn(`reload: ${kept.file.tracks.length} tracks, ${Object.keys(kept.file.analyses ?? {}).length} analyses kept, ${songFollow.analyzedCount(kept.file.tracks)} taken`);
         filePathRef.current = kept.file.path;
         setFilePath(kept.file.path);
         fileSavedRef.current = kept.file.saved;
@@ -2034,13 +2035,7 @@ export default function App() {
     if (!engine) return;
     const follow = () => { engine.audio = audioInput.analyzer; };
     follow();
-    const stopFollow = audioInput.subscribe(follow);
-    /* Dev only, for a bug hunt: the engine's state goes to the dev log every 2 seconds (see frameProbe.ts). */
-    const stopProbe = import.meta.env.DEV ? startFrameProbe(engine) : () => {};
-    return () => {
-      stopFollow();
-      stopProbe();
-    };
+    return audioInput.subscribe(follow);
   }, [engine]);
 
   /** Stop in the playlist starts the show again: the first scene, ready to play (see startShow). While Hold is on, the scene and Hold stay. */
