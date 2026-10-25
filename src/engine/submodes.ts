@@ -63,25 +63,27 @@ export const MAP_KEYS: Record<MapMode, ParamKey[]> = {
 export const MAP_MODES = [[8, "Droste spiral"], [2, "Möbius"], [3, "Julia"], [9, "Mandelbrot"], [4, "Log spiral"], [5, "Sine"], [6, "Tunnel"], [7, "Seamless spiral"], [1, "Power (z^n)"]] as const;
 
 /**
- * The Mandelbrot map's places to dive into. Each is the center of a small
- * copy of the set (found with Newton's method; its size in brackets), so a
- * dive toward it passes changing shapes and ends at the copy, which fills
- * the view at about the depth given. Exact to the 16 digits a double holds.
+ * The Mandelbrot map's places to dive into. Each is the center of a deep
+ * small copy of the set with a long loop (found with Newton's method; its
+ * loop length, size and depth in brackets). A dive toward it passes layer
+ * after layer of shapes that change, about halfway (in depth) to the copy,
+ * then three quarters, and so on, so the shapes evolve from depth 6 or so
+ * on. Exact to the 16 digits a double holds.
  */
 export const MANDEL_PLACES = [[0, "Seahorse valley"], [1, "Spiral"], [5, "Branches"], [2, "Dendrite"], [3, "Mini copies"], [4, "Elephant valley"]] as const;
 export const MANDEL_CENTERS: Record<MandelPlace, [number, number]> = {
-  /* The well-known deep-zoom point of Seahorse valley. */
+  /* The well-known deep-zoom point of Seahorse valley (loop 998, 6.3e-16, depth 15.4). */
   0: [-0.7436438870371587, 0.1318259042053120],
-  /* Period 24 (2.7e-7, depth 6.6), beside a spiral that turns at every depth. */
-  1: [-0.10134265531062828, 0.9535288813158137],
-  /* Period 90 (4.5e-8, depth 7.3), among fine dendrites. */
-  2: [-0.04523274152718031, 0.9868049055248623],
-  /* Period 16 (5.2e-7, depth 6.3), with small copies around it. */
-  3: [-1.396005502675374, 0.10596677976502941],
-  /* Period 36 (6.9e-8, depth 7.2), among the elephants. */
-  4: [0.28919966896234955, 0.013330618692790173],
-  /* Period 36 (1e-6, depth 6), on star-shaped branches. */
-  5: [-0.23573964353818475, 0.8300194093890503]
+  /* Loop 1080 (2.5e-14, depth 13.8), beside a spiral. */
+  1: [-0.10134262871148131, 0.9535287700009097],
+  /* Loop 455 (2.8e-13, depth 12.7), among fine dendrites. */
+  2: [-0.04523284781423843, 0.9868047161954946],
+  /* Loop 976 (1.8e-14, depth 13.9), with small copies around it. */
+  3: [-1.396005521446242, 0.10596699543784054],
+  /* Loop 1008 (4.5e-14, depth 13.5), among the elephants. */
+  4: [0.2891996512212723, 0.013330587744320848],
+  /* Loop 1692 (2.9e-13, depth 12.7), on star-shaped branches. */
+  5: [-0.23573987601938484, 0.8300187774133859]
 };
 
 /** The sliders each time smear pattern uses; Angle only turns the Linear and Sweep patterns. */

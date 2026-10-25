@@ -42,8 +42,17 @@ export type SmearShape = 0 | 1 | 2 | 3 | 4;
 const SHAPE_CODES: Record<ShapeStep, number> = { warp: 0, map: 1, kaleidoscope: 2 };
 /** The Mandelbrot path texture's row length (see mandelPath). */
 const MANDEL_ROW = 1024;
-/** The Mandelbrot map's rounds: deeper views need more before their points escape (at most 1250, which keeps the cost down). */
-export const mandelRounds = (depth: number) => Math.round(Math.min(1250, Math.max(250, 250 + 100 * depth)));
+/**
+ * The Mandelbrot map's rounds: deeper views need more before their points
+ * escape. At depth 10 (5250 rounds) 98 to 100% of the outside points of the
+ * deep places escape (1250 left up to 60% black). Points inside the set stop
+ * early (see the inside tests in the shader), so most of the cost is the
+ * outside points near the edge.
+ */
+export const mandelRounds = (depth: number) => {
+  const d = Math.min(10, Math.max(0, depth));
+  return Math.round(250 + 100 * d + 40 * d * d);
+};
 /** 0 normal, 1 screen, 2 multiply, 3 overlay, 4 difference, 5 lighten, 6 darken, 7 add. */
 export type LayerBlend = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 /** How the camera's land goes on past the picture: 0 mirrored, 1 repeated as it is, 2 not at all (sky around the picture). */
@@ -1724,7 +1733,7 @@ export class KaleidoRenderer {
    * docs/MANDELBROT.md): z = z^2 + c from 0, worked out here with 64-bit
    * numbers, until it escapes or for "rounds" rounds (always the most, so
    * the dive's two depths share it). The graphics card reads it from a
-   * two-channel float texture, 1024 values a row, and works only with each
+   * four-channel float texture (each value in two 32-bit parts), 1024 values a row, and works only with each
    * pixel's small difference from it. It is made again only when the place
    * changes.
    */
@@ -1736,13 +1745,16 @@ export class KaleidoRenderer {
     if (this.mandel?.key === key) return this.mandel;
     const gl = this.gl;
     const rows = Math.ceil((rounds + 1) / MANDEL_ROW);
-    const data = new Float32Array(MANDEL_ROW * rows * 2);
+    const data = new Float32Array(MANDEL_ROW * rows * 4);
     let x = 0;
     let y = 0;
     let length = 0;
     for (let n = 0; n <= rounds; n++) {
-      data[2 * n] = x;
-      data[2 * n + 1] = y;
+      /* Each value as its nearest 32-bit number and what that leaves out (see mandelAt in the shader). */
+      data[4 * n] = x;
+      data[4 * n + 1] = y;
+      data[4 * n + 2] = x - Math.fround(x);
+      data[4 * n + 3] = y - Math.fround(y);
       length = n + 1;
       if (x * x + y * y > 4) break;
       const next = x * x - y * y + cx;
@@ -1754,7 +1766,7 @@ export class KaleidoRenderer {
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, MANDEL_ROW, rows, 0, gl.RG, gl.FLOAT, data);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, MANDEL_ROW, rows, 0, gl.RGBA, gl.FLOAT, data);
     gl.activeTexture(gl.TEXTURE0);
     this.mandel = { texture, key, length };
     return this.mandel;

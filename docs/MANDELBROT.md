@@ -212,3 +212,34 @@ Sources: [Exponential Map (Munafo)](https://mrob.com/pub/muency/exponentialmap.h
 [Perturbation Methods (Munafo)](https://mrob.com/pub/muency/perturbationmethods.html),
 [Triangle Inequality Average (Ultra Fractal)](https://www.ultrafractal.com/help/coloring/standard/triangleinequalityaverage.html),
 [Smooth iteration count (Quilez)](https://iquilezles.org/articles/msetsmooth).
+
+## Step 5 (built 2026-10-24): deeper places
+
+From the research: the evolving look comes from deep copies with long
+loops. The places are now copies at depth 12.7 to 13.9 with loops of 455
+to 1692 rounds (plus the Seahorse valley point: loop 998, depth 15.4),
+found by sampling slow-escaping points near each old place, then Newton's
+method from each one's nearest loop length. A dive passes their layers of
+changing shapes at about half and three quarters of that depth (6 to 10).
+Default End is 8.
+
+- Rounds: 250 + 100 d + 40 d^2 (5250 at depth 10). At depth 10, 1250 left
+  up to 60% of the outside points black; 5000 let 98 to 100% escape.
+- A new inside test that works deep: the product of 2z over the rounds
+  shrinks toward 0 for a point caught by a loop in the set (from the second
+  round, as every path starts at 0). It changed no pixel in 24 test views.
+- The saved-point test is off below a span of 1e-4: there its tolerance is
+  tiny, and paths that pass very near 0 twice looked caught, which drew
+  black arcs (a 64-bit direct render of the same view had none).
+- The path is stored as two 32-bit parts per value (nearest 32-bit number
+  and what it leaves out), used for the full z where the pixel goes on from
+  it.
+- Band flow wrapped by 2 bands, which jumps unless the picture is square;
+  it now wraps by two picture widths for the picture and one band for the
+  terraces.
+- Cost on an RTX 5090 at 1920 by 1080: 7 to 11 ms a frame at depth 8 to 10
+  (about four times that at 4K, twice during a crossfade). The log-polar
+  strip (research idea 2) would remove most of it.
+- Known look: at depth 8 and deeper, the bands are so dense that many
+  pixels hold several, so the picture blurs and the light evens out there
+  (the busy fade), which shows as flat areas.

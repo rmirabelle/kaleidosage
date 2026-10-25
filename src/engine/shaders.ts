@@ -473,7 +473,8 @@ uniform float u_mandelDepth;
 uniform sampler2D u_mandelPath;
 uniform int u_mandelLength;
 uniform int u_mandelRounds;
-vec2 mandelAt(int n) { return texelFetch(u_mandelPath, ivec2(n & 1023, n >> 10), 0).xy; }
+/* A path value as two 32-bit parts: the nearest 32-bit number (xy) and what it leaves out (zw). */
+vec4 mandelAt(int n) { return texelFetch(u_mandelPath, ivec2(n & 1023, n >> 10), 0); }
 uniform float u_mandelBands;
 uniform float u_mandelTerraces;
 uniform float u_mandelSoftness;
@@ -644,14 +645,34 @@ vec2 complexMap(vec2 p) {
     bool inside = q * (q + qx) < 0.245 * c.y * c.y || (c.x + 1.0) * (c.x + 1.0) + c.y * c.y < 0.06125;
     vec2 saved = vec2(1e9);
     int saveAt = 8;
-    float near = 1e-3 * span;
+    /* Off in deep views (span below 1e-4): there its tolerance is so small that paths passing very near 0 twice look caught. */
+    float near = span > 1e-4 ? 1e-3 * span : 0.0;
+    /**
+     * The path's own stretch, the product of 2z over the rounds: a point
+     * caught by a loop in the set has it shrink toward 0 (the loop pulls
+     * nearby paths in), at any depth, as it uses z itself, not the pixel's
+     * tiny difference (the saved-point test above stops working deep, where
+     * that difference is below what 32-bit numbers hold). Kept from growing
+     * past what they hold.
+     */
+    vec2 pull = vec2(1.0, 0.0);
     for (int i = 0; i < (inside ? 0 : u_mandelRounds); i++) {
-      vec2 big = mandelAt(ref);
+      vec2 big = mandelAt(ref).xy;
+      vec2 z = big + d;
+      /* From the second round: every path starts at z = 0. */
+      if (i > 0) pull = 2.0 * cmul(z, pull);
+      if (dot(pull, pull) > 1e20) pull *= 1e-10;
       /* The slope per screen unit (dz/dc times the span), so it stays far from the largest 32-bit number at any depth. */
-      slope = 2.0 * cmul(big + d, slope) + vec2(span, 0.0);
+      slope = 2.0 * cmul(z, slope) + vec2(span, 0.0);
       d = 2.0 * cmul(big, d) + cmul(d, d) + dc;
       ref++;
-      m = mandelAt(ref) + d;
+      /**
+       * The full z with the path's left-out part too: where z comes near 0
+       * the pixel goes on from it (just below), and the path's 32-bit
+       * rounding alone would grow into black arcs in deep views.
+       */
+      vec4 next = mandelAt(ref);
+      m = (next.xy + d) + next.zw;
       if (dot(m, m) > 65536.0) {
         escaped = float(i);
         break;
@@ -663,7 +684,7 @@ vec2 complexMap(vec2 p) {
       if (i == saveAt) {
         saved = m;
         saveAt *= 2;
-      } else if (dot(m - saved, m - saved) < near * near) {
+      } else if (dot(m - saved, m - saved) < near * near || dot(pull, pull) < 1e-24) {
         break;
       }
     }
@@ -675,7 +696,15 @@ vec2 complexMap(vec2 p) {
     } else {
       float r = length(m);
       float count = escaped + 1.0 - log2(log(r));
-      float band = count / max(u_mandelBands, 0.01) + mod(u_mandelFlow, 2.0);
+      /**
+       * Band flow moves the bands. It is kept small with a remainder, which
+       * must be a whole repeat of what it moves, or it jumps: two picture
+       * widths for the picture (it is mirrored; a width is aspect picture
+       * heights, the band unit), one band for the terraces.
+       */
+      float band = count / max(u_mandelBands, 0.01);
+      float terraceBand = band + fract(u_mandelFlow);
+      band += mod(u_mandelFlow, 2.0 * u_imgRes.x / u_imgRes.y);
       /**
        * The distance to the set's edge, in screen heights: the usual
        * distance estimate, |z| ln|z| / |dz/dc|, with the slope already per
@@ -701,7 +730,7 @@ vec2 complexMap(vec2 p) {
       vec2 normal = normalize(cdiv(m, slope));
       float lit = clamp((dot(normal, u_mandelLightDir) + 1.5) / 2.5, 0.0, 1.0);
       float edge = 0.5 * clamp(u_mandelSoftness, 0.0, 1.0) + 1e-4;
-      float t = fract(band);
+      float t = fract(terraceBand);
       float rise = min(t / (1.0 - edge), (1.0 - t) / edge);
       float step_ = 0.45 + 0.55 * mix(rise, smoothstep(0.0, 1.0, rise), clamp(u_mandelSoftness, 0.0, 1.0));
       mandelShade = mix(1.0, lit, u_mandelLight) * mix(1.0, step_, u_mandelTerraces);
