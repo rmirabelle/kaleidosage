@@ -29,7 +29,8 @@ interface Props {
   onOpenMany?: (paths: string[]) => void;
 }
 
-type EntryKind = "folder" | OpenKind;
+/** "scene" in a listing is a file with one scene; "playlist" is a show (two or more scenes, or audio files, see isShow). The "scene" dialog lists both. */
+type EntryKind = "folder" | OpenKind | "playlist";
 type PlaceKind = "home" | "desktop" | "documents" | "pictures" | "downloads" | "drive";
 type SortKey = "name" | "type" | "modified" | "size";
 type SortDirection = "asc" | "desc";
@@ -205,10 +206,11 @@ const isSort = (value: unknown): value is SortState => {
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
-/** A file's type in a word, for the Type column: Kaleido, Audio, or an image's or video's extension (JPG, MP4). */
+/** A file's type in a word or two, for the Type column: KS Scene, KS Playlist, Audio, or an image's or video's extension (JPG, MP4). */
 const shortType = (entry: BrowseEntry) => {
   if (entry.kind === "folder") return "Folder";
-  if (entry.kind === "scene") return "Kaleido";
+  if (entry.kind === "scene") return "KS Scene";
+  if (entry.kind === "playlist") return "KS Playlist";
   if (entry.kind === "audio") return "Audio";
   return (entry.name.split(".").pop() ?? "").toUpperCase();
 };
@@ -305,7 +307,8 @@ const formatSize = (bytes: number) => {
 
 const typeLabel = (entry: BrowseEntry) => {
   if (entry.kind === "folder") return "Folder";
-  if (entry.kind === "scene") return "Kaleido Sage file";
+  if (entry.kind === "scene") return "Kaleido Sage scene";
+  if (entry.kind === "playlist") return "Kaleido Sage playlist";
   if (entry.kind === "audio") return "Audio file";
   return IMAGE_TYPES[entry.name.split(".").pop()?.toLowerCase() ?? ""] ?? "Image";
 };
@@ -372,7 +375,7 @@ async function buildFilePreview(path: string): Promise<PreviewData> {
 }
 
 const buildPreview = (entry: BrowseEntry): Promise<PreviewData> =>
-  entry.kind === "scene" ? buildFilePreview(entry.path) : buildImagePreview(entry.path);
+  entry.kind === "scene" || entry.kind === "playlist" ? buildFilePreview(entry.path) : buildImagePreview(entry.path);
 
 const INPUT_NAMES: Record<string, string> = { tracks: "Files", output: "PC sound", input: "Microphone", none: "None" };
 
@@ -512,6 +515,7 @@ const placeIcon = (kind: PlaceKind) => {
 const entryIcon = (entry: BrowseEntry) => {
   if (entry.kind === "folder") return <Folder size={17} weight="fill" className="open-entry-icon folder" />;
   if (entry.kind === "scene") return <img className="open-entry-icon" src="/icon.ico" alt="" />;
+  if (entry.kind === "playlist") return <MusicNotes size={17} weight="duotone" className="open-entry-icon image" />;
   if (entry.kind === "audio") return <MusicNote size={17} weight="duotone" className="open-entry-icon image" />;
   if (isVideoPath(entry.path)) return <FilmSlate size={17} weight="duotone" className="open-entry-icon image" />;
   return <FileImage size={17} weight="duotone" className="open-entry-icon image" />;
@@ -876,7 +880,7 @@ export function OpenDialog({ kind, title, onCancel, onOpen, onOpenMany }: Props)
     const needle = search.trim().toLowerCase();
     return listing.entries
       .filter((entry) =>
-        (entry.kind === "folder" || entry.kind === kind)
+        (entry.kind === "folder" || entry.kind === kind || (kind === "scene" && entry.kind === "playlist"))
         && (needle === "" || entry.name.toLowerCase().includes(needle)))
       .sort((a, b) => compareEntries(a, b, sort));
   }, [kind, listing, search, sort]);

@@ -101,6 +101,17 @@ fn summary(path: &Path) -> Result<FileSummary, String> {
     Ok(FileSummary { audio: manifest["audio"].clone(), scenes, tracks })
 }
 
+/**
+ * True for a show (see isShow in kaleidoFile.ts): a file with two or more
+ * scenes, or with audio files. Only its manifest is read. A file that
+ * cannot be read counts as a single scene; opening it gives the reason.
+ */
+pub(crate) fn is_show(path: &Path) -> bool {
+    let Ok((_, manifest)) = read_archive(path) else { return false };
+    let count = |list: &str| manifest[list].as_array().map_or(0, Vec::len);
+    count("scenes") >= 2 || count("tracks") > 0
+}
+
 /** The file name of "path", for the entry name; the entry keeps it, so the tab and the track show it again. */
 fn file_name(path: &Path) -> Result<String, String> {
     path.file_name()
@@ -378,6 +389,7 @@ mod tests {
         let files = |path: &Path| vec![path.to_string_lossy().into_owned()];
         save(&file, manifest, &files(&scene), &files(&track), &[]).unwrap();
 
+        assert!(is_show(&file), "a file with a track is a show");
         let summary = summary(&file).unwrap();
         assert_eq!(summary.audio["kind"], "tracks");
         assert_eq!(summary.scenes[0].name, "Night.ksage");
@@ -418,6 +430,7 @@ mod tests {
         std::fs::remove_file(&with_video).unwrap();
 
         let videos = Videos::default();
+        assert!(is_show(&file), "a file with two scenes is a show");
         let (start, len) = scene_part(&file, 0).unwrap();
         assert_eq!(crate::scene_archive::read_part(&file, start, len, &videos).unwrap(), b"{\"app\":\"KaleidoSage\"}");
         let (start, len) = scene_part(&file, 1).unwrap();
@@ -427,6 +440,17 @@ mod tests {
         source.reader().read_to_end(&mut bytes).unwrap();
         assert_eq!(bytes, b"video-bytes-inside");
         assert!(scene_part(&file, 2).is_err());
+    }
+
+    #[test]
+    fn a_file_with_one_scene_and_no_tracks_is_no_show() {
+        let folder = tempfile::tempdir().unwrap();
+        let scene = folder.path().join("Night.ksage");
+        std::fs::write(&scene, b"{\"app\":\"KaleidoSage\"}").unwrap();
+        let file = folder.path().join("Single.ksage");
+        save(&file, r#"{"app":"KaleidoSage","kind":"file","version":1}"#, &[scene.to_string_lossy().into_owned()], &[], &[]).unwrap();
+        assert!(!is_show(&file));
+        assert!(!is_show(&scene), "an unreadable file counts as a single scene");
     }
 
     #[test]

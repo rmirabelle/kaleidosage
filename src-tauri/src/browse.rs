@@ -15,7 +15,7 @@ use crate::files::{is_audio_path, is_image_path, is_scene_path, is_video_path};
 pub struct BrowseEntry {
     name: String,
     path: String,
-    /// One of "folder", "scene" (a .ksage file), "image" (an image or a video) or "audio".
+    /// One of "folder", "scene" (a .ksage file with one scene), "playlist" (a .ksage show: two or more scenes, or audio files), "image" (an image or a video) or "audio".
     kind: &'static str,
     size: u64,
     modified_ms: Option<u64>,
@@ -44,7 +44,7 @@ fn display_path(path: &Path) -> String {
 
 fn file_kind(path: &Path) -> Option<&'static str> {
     if is_scene_path(path) {
-        Some("scene")
+        Some(if crate::file_archive::is_show(path) { "playlist" } else { "scene" })
     } else if is_image_path(path) || is_video_path(path) {
         // Videos are listed as images: the Open Image dialog opens both.
         Some("image")
