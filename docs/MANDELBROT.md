@@ -409,3 +409,11 @@ reads the picture at its coarsest level, near its average color.
 - Invert (0 to 1) flips the colors (with their cover), so the set turns
   bright and the outside dark.
 - Shader build: 28 s in all on the RTX 5090 (the shape shader 18 s).
+
+Changed the same day: Palette per depth is the only coloring (the user:
+the others are not needed; it costs nothing extra). The Coloring menu is
+gone, and so is the old picture-on-bands code: Softness's second picture
+point at the escape rings (the palette changes too slowly for the rings to
+show), which went through the later steps as its own point. That brought
+the shader build from 28 s to 23 s (the shape shader 18 s -> 11.6 s).
+Softness now shapes only the terraces; Band width sets the terraces' bands.

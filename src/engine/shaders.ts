@@ -611,12 +611,6 @@ float mandelSparkle = 1.0;
  */
 float mandelPixel = 0.0;
 bool mandelSampled = false;
-/**
- * The Mandelbrot map's second picture point near the rings where the escape
- * count changes, and its weight (see Softness in complexMap).
- */
-vec2 mandelAlt;
-float mandelAltWeight = 0.0;
 /* Depth in powers of ten (0 to 10), band width, terraces, light, and the light's direction. */
 uniform float u_mandelDepth;
 /* The rounds to run where the strip is not ready (see mandelFromStrip). */
@@ -701,12 +695,7 @@ uniform float u_mandelEdge;
 uniform float u_mandelEdgeWidth;
 /* The bands moved by Band flow. */
 uniform float u_mandelFlow;
-/**
- * Coloring (0 picture, 1 palette, 2 palette per depth; see MANDEL_COLORINGS
- * in submodes.ts), the palette's spread (repeats per doubling of the round
- * count), and Invert (0 to 1).
- */
-uniform int u_mandelColoring;
+/* The palette's spread (repeats per doubling of the round count), and Invert (0 to 1). */
 uniform float u_mandelSpread;
 uniform float u_mandelInvert;
 uniform float u_mandelLight;
@@ -856,20 +845,17 @@ vec2 complexMap(vec2 p) {
     /**
      * Mandelbrot: the place (u_mapPoint) plus the screen point, 1.5 /
      * 10^Depth across, through the loop in MANDEL_GLSL (or read from the
-     * strip). A point that escapes gets the usual smooth escape count; the
-     * picture lies across the bands (one band is one picture height across,
-     * Band width rounds) and up by the angle it escaped at, so the picture
-     * shows inside each band. The light comes from the formula's own slope
+     * strip). A point that escapes gets the usual smooth escape count,
+     * which picks its color from a palette read from the picture (see below);
+     * Band width sets the terraces' bands. The light comes from the formula's own slope
      * (z over its derivative, the usual normal map of a Mandelbrot), and
      * Terraces darkens each band toward one edge, which looks like stacked
      * steps. Softness turns each step's sharp edge into a slope (at 1, the
-     * bands rise and fall evenly, with no edge), and blends the picture
-     * across the rings where the escape count changes. Points that never
-     * escape are in the set: black. Deeper views need more rounds.
+     * bands rise and fall evenly, with no edge). Points that never escape
+     * are in the set: black. Deeper views need more rounds.
      */
     float span = 1.5 * pow(10.0, -clamp(u_mandelDepth, 0.0, 10.0));
     vec2 dc = onAxis * span;
-    mandelAltWeight = 0.0;
     /**
      * The raw map at this point: from the strip where it is ready (see
      * mandelFromStrip), else from the loop (see MANDEL_GLSL).
@@ -932,58 +918,33 @@ vec2 complexMap(vec2 p) {
       w = vec2(0.0);
     } else {
       /**
-       * Band flow moves the bands. It is kept small with a remainder, which
-       * must be a whole repeat of what it moves, or it jumps: two picture
-       * widths for the picture (it is mirrored; a width is aspect picture
-       * heights, the band unit), one band for the terraces (in mandelLook).
+       * The palette: the picture read along its diagonal (bottom left to top
+       * right, and back, as it is mirrored), by the log of the round count
+       * times the spread, so a color lasts while the count doubles and the
+       * colors stay strong at any depth (the picture laid across the dense
+       * bands of a deep view blurred to its average color). Band flow moves
+       * it (repeats a second, kept small with a remainder of a whole
+       * repeat), and it moves on 0.2 repeats a power of ten as the view goes
+       * deeper, so each depth has its own colors. Its blur follows its own
+       * change: the count's, |dcount| / (count ln 2), times the spread and
+       * the diagonal's length.
        */
-      float band = count / max(u_mandelBands, 0.01) + mod(u_mandelFlow, 2.0 * u_imgRes.x / u_imgRes.y);
-      w = vec2(band, escapeAngle);
+      float acrossBands = 0.5 / max(edgeDistance, 1e-30) / max(u_mandelBands, 0.01);
+      float aspect = u_imgRes.x / u_imgRes.y;
+      float t = log2(max(count, 1.0)) * u_mandelSpread + mod(u_mandelFlow, 2.0) + 0.2 * u_mandelDepth;
+      float along = 1.0 - abs(1.0 - mod(t, 2.0));
+      w = vec2((along - 0.5) * aspect, along - 0.5);
+      mandelStretch = u_mandelSpread * 0.5 / max(edgeDistance, 1e-30) / (max(count, 1.0) * 0.6931471806) * sqrt(aspect * aspect + 1.0) / max(u_mapScale, 1e-4);
       /**
-       * Across a ring where the escape count changes, the angle doubles: a
-       * point just past the escape size (256) touches points that escaped
-       * one round later, at twice its angle. Softness blends the picture at
-       * twice the angle in, from all of it at the ring to none at this far
-       * through the ring (at 1, the whole ring), so the ring has no seam.
+       * Where the light and terraces would sparkle: across the bands, the
+       * count's change, |dz/d(screen)| / (|z| ln|z|) = 1 / (2 edge distance),
+       * over the band width; and the light's normal turns as fast as the
+       * escape angle, |dz/d(screen)| / (|z| PI) = ln|z| / (2 PI edge
+       * distance), 5 to 10 times faster.
        */
       float through = 1.0 - fract(count + 2.4712336270551026);
-      float soft = clamp(u_mandelSoftness, 0.0, 1.0);
-      mandelAlt = vec2(band, mod(2.0 * escapeAngle + 1.0, 2.0) - 1.0);
-      mandelAltWeight = soft > 0.0 ? 1.0 - smoothstep(0.0, soft, through) : 0.0;
-      /**
-       * How fast the picture moves per screen unit, for its blur: across the
-       * bands, the count's change, |dz/d(screen)| / (|z| ln|z|) = 1 / (2 edge
-       * distance), over the band width; up, the escape angle's change,
-       * |dz/d(screen)| / (|z| PI) = ln|z| / (2 PI edge distance), which is 5 to
-       * 10 times faster. Blurring for the bands alone left the angle to
-       * alias into moving noise near the set.
-       */
       float logSize = exp2(2.4712336270551026 + through);
-      float acrossBands = 0.5 / max(edgeDistance, 1e-30) / max(u_mandelBands, 0.01);
-      float upAngle = logSize / (TAU * max(edgeDistance, 1e-30));
-      mandelStretch = max(acrossBands, upAngle) / max(u_mapScale, 1e-4);
-      mandelSparkle = mandelStretch;
-      if (u_mandelColoring != 0) {
-        /**
-         * The palette: the picture read along its diagonal (bottom left to
-         * top right, and back, as it is mirrored), by the log of the round
-         * count times the spread, so a color lasts while the count doubles
-         * and the colors stay strong at any depth (the picture across dense
-         * bands blurs to its average color). Band flow moves it (repeats a
-         * second); per depth, it also moves on 0.2 repeats a power of ten as
-         * the view goes deeper. It changes too slowly for the escape rings
-         * to show, so Softness's second point is not needed. Its blur
-         * follows its own change: the count's, |dcount| / (count ln 2), times
-         * the spread and the diagonal's length.
-         */
-        float aspect = u_imgRes.x / u_imgRes.y;
-        float t = log2(max(count, 1.0)) * u_mandelSpread + mod(u_mandelFlow, 2.0);
-        if (u_mandelColoring == 2) t += 0.2 * u_mandelDepth;
-        float along = 1.0 - abs(1.0 - mod(t, 2.0));
-        w = vec2((along - 0.5) * aspect, along - 0.5);
-        mandelAltWeight = 0.0;
-        mandelStretch = u_mandelSpread * acrossBands * max(u_mandelBands, 0.01) / (max(count, 1.0) * 0.6931471806) * sqrt(aspect * aspect + 1.0) / max(u_mapScale, 1e-4);
-      }
+      mandelSparkle = max(acrossBands, logSize / (TAU * max(edgeDistance, 1e-30))) / max(u_mapScale, 1e-4);
     }
   } else if (u_mapMode == 5) {
     w = csin(onAxis * PI) / PI;
@@ -1012,7 +973,6 @@ vec2 complexMap(vec2 p) {
   /* Roll and twist for the maps with no seam to keep (see mapRoll). */
   if (u_mapMode == 1 || u_mapMode == 3 || u_mapMode == 5) w = turn(w, u_mapRoll + u_mapCurl * length(w));
   if (u_mapMode == 8) drosteAlt = mix(p, drosteAlt, u_mapMix);
-  if (u_mapMode == 9) mandelAlt = mix(p, mandelAlt, u_mapMix);
   return mix(p, w, u_mapMix);
 }
 
@@ -1199,9 +1159,6 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
   /* The Möbius or Julia map's exact stretch, as texture detail (see mobiusStretch and juliaStretch). */
   float mapDetail = 0.0;
   float farDistance = 1e9;
-  /* The Mandelbrot map's second point (see mandelAlt), which goes through the later steps too. */
-  vec2 mandelP = p;
-  float mandelWeight = 0.0;
   /**
    * The spiral's own jump would show in the measured detail as a thin blur
    * line, so the detail is measured on the point before the spiral, then
@@ -1240,7 +1197,6 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
       if (u_warpMode != 0) {
         p += warpOffset(p);
         if (fading) p2 += warpOffset(p2);
-        if (mandelWeight > 0.0) mandelP += warpOffset(mandelP);
       }
     } else if (shapeStep == 1) {
       if (spiralLast && !spiralStep) continue;
@@ -1259,8 +1215,6 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
           if (u_mapMode == 3) mapDetail = g0 * mix(1.0, juliaStretch, u_mapMix);
           if (u_mapMode == 9) {
             mapDetail = g0 * mix(1.0, mandelStretch, u_mapMix);
-            mandelP = mandelAlt;
-            mandelWeight = mandelAltWeight;
           }
           if (spiralStep && u_mapMode == 8) {
             drosteP = drosteAlt;
@@ -1288,8 +1242,6 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
       mapped = true;
     } else {
       beforeFold = p;
-      /* Before the main fold, which sets the radial crossfade's point. */
-      if (mandelWeight > 0.0) mandelP = fold(mandelP);
       p = fold(p);
       folded = true;
       if (foldAltWeight > 0.0) {
@@ -1311,28 +1263,25 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
   float g = max(detail * stretch, mapDetail) / (folded ? u_zoom : 1.0);
   /**
    * The picture reads, each with its point, detail and share: the point,
-   * the Mandelbrot map's point at twice the angle (twice the detail), the
-   * radial crossfade's point, the Droste copy one size smaller (its detail
+   * the radial crossfade's point, the Droste copy one size smaller (its detail
    * smaller by the copy size), and the higher spiral count's point with its
    * own copy. The shares are the old chain of mixes multiplied out. One
    * call in a loop of run-time length (see the step loop).
    */
   float copySize = clamp(u_drosteSize, 0.05, 0.95);
   float g2 = max(detail * spiralStretch, mapDetail) / (folded ? u_zoom : 1.0);
-  float mandelShare = mandelWeight > 0.0 ? mandelWeight : 0.0;
   float fadeShare = fading ? fade : 0.0;
   float drosteShare = drosteWeight > 0.0 ? drosteWeight : 0.0;
   float altShare = spiralAltWeight > 0.0 ? spiralAltWeight : 0.0;
-  vec2 readAt[6] = vec2[6](p, mandelP, p2, drosteP, spiralP, spiralAlt);
-  float readDetail[6] = float[6](g, g * 2.0, g, g * copySize, g2, g2 * copySize);
-  float readShare[6] = float[6](
-    (1.0 - mandelShare) * (1.0 - fadeShare) * (1.0 - drosteShare) * (1.0 - spiralFade),
-    mandelShare * (1.0 - fadeShare) * (1.0 - drosteShare) * (1.0 - spiralFade),
+  vec2 readAt[5] = vec2[5](p, p2, drosteP, spiralP, spiralAlt);
+  float readDetail[5] = float[5](g, g, g * copySize, g2, g2 * copySize);
+  float readShare[5] = float[5](
+    (1.0 - fadeShare) * (1.0 - drosteShare) * (1.0 - spiralFade),
     fadeShare * (1.0 - drosteShare) * (1.0 - spiralFade),
     drosteShare * (1.0 - spiralFade),
     (1.0 - altShare) * spiralFade,
     altShare * spiralFade);
-  int reads = spiralFade > 0.0 ? 6 : 4;
+  int reads = spiralFade > 0.0 ? 5 : 3;
   vec4 color = sourceColor(p, g);
   if (readShare[0] < 1.0) {
     color *= readShare[0];
