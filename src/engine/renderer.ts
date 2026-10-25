@@ -67,9 +67,11 @@ type MandelStrip = { count: WebGLTexture; data: WebGLTexture; framebuffer: WebGL
  * early (see the inside tests in the shader), so most of the cost is the
  * outside points near the edge.
  */
-export const mandelRounds = (depth: number) => {
+export const mandelRounds = (depth: number) => Math.round(mandelLimit(depth));
+/** The rounds before rounding, so the view's limit (u_mandelLimit) rises smoothly with depth. */
+const mandelLimit = (depth: number) => {
   const d = Math.min(10, Math.max(0, depth));
-  return Math.round(250 + 100 * d + 40 * d * d);
+  return 250 + 100 * d + 40 * d * d;
 };
 /** 0 normal, 1 screen, 2 multiply, 3 overlay, 4 difference, 5 lighten, 6 darken, 7 add. */
 export type LayerBlend = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
@@ -141,6 +143,8 @@ export interface FrameValues {
   /** The Mandelbrot map (map mode 9): depth in powers of ten, band width, terraces, their softness, light, and the light's angle (radians). */
   mandelDepth: number;
   mandelBands: number;
+  /** Growth: the view's round limit times this (see u_mandelLimit). */
+  mandelGrowth: number;
   /** Edge light: how much the open areas away from the set's edge fade to black, and how far from the edge (in screen heights) the light reaches. */
   mandelEdge: number;
   mandelEdgeWidth: number;
@@ -1166,7 +1170,9 @@ export class KaleidoRenderer {
     gl.uniform1i(k.uniforms.u_mapSteps, Math.round(v.mapSteps));
     const mandelDepth = (depth: number, pass: number) => {
       gl.uniform1f(k.uniforms.u_mandelDepth, depth);
-      gl.uniform1i(k.uniforms.u_mandelRounds, mandelRounds(depth));
+      const limit = mandelLimit(depth) * Math.min(1.5, Math.max(0.1, v.mandelGrowth));
+      gl.uniform1f(k.uniforms.u_mandelLimit, limit);
+      gl.uniform1i(k.uniforms.u_mandelRounds, Math.ceil(limit));
       /* The strip this pass reads (see updateMandelStrips), in slots 3 and 4. */
       const strip = v.mapMode === 9 ? this.stripPass[pass] : null;
       gl.uniform1i(k.uniforms.u_stripOn, strip && strip.last > strip.first ? 1 : 0);
@@ -1186,7 +1192,7 @@ export class KaleidoRenderer {
     mandelDepth(v.mandelDepth, 0);
     if (v.mapMode === 9) {
       /* The deep zoom's exact path (see mandelPath), in slot 2; the source images use 0 and 1. */
-      const path = this.mandelPath(v.mapPointX, v.mapPointY, mandelRounds(Infinity));
+      const path = this.mandelPath(v.mapPointX, v.mapPointY, Math.ceil(1.5 * mandelLimit(Infinity)));
       gl.activeTexture(gl.TEXTURE2);
       gl.bindTexture(gl.TEXTURE_2D, path.texture);
       gl.uniform1i(k.uniforms.u_mandelPath, 2);
@@ -1924,7 +1930,7 @@ export class KaleidoRenderer {
   private drawStripRows(v: FrameValues, strip: MandelStrip, first: number, last: number) {
     const gl = this.gl;
     const program = this.stripProgram!;
-    const path = this.mandelPath(v.mapPointX, v.mapPointY, mandelRounds(Infinity));
+    const path = this.mandelPath(v.mapPointX, v.mapPointY, Math.ceil(1.5 * mandelLimit(Infinity)));
     gl.useProgram(program.program);
     gl.bindFramebuffer(gl.FRAMEBUFFER, strip.framebuffer);
     gl.activeTexture(gl.TEXTURE2);

@@ -174,7 +174,8 @@ void main() {
   float r = pow(10.0, u_stripOrigin - g / u_stripRows);
   float a = TAU * floor(gl_FragCoord.x) / float(u_stripWidth);
   float depth = clamp(log(1.5 / r) * 0.4342944819 + 1.5, 0.0, 10.0);
-  int rounds = int(250.0 + 100.0 * depth + 40.0 * depth * depth + 0.5);
+  /* 1.5 times: enough for Growth at its most (see u_mandelLimit). */
+  int rounds = int(1.5 * (250.0 + 100.0 * depth + 40.0 * depth * depth) + 0.5);
   vec2 m;
   vec2 slope;
   float escaped = mandelRun(r * vec2(cos(a), sin(a)), r, rounds, m, slope);
@@ -596,6 +597,9 @@ float mandelShade = 1.0;
 /* Edge light's mask: 1 at the set's edge, falling to 0 in the open areas (see u_mandelEdge). */
 float mandelEdgeLight = 1.0;
 float mandelStretch = 1.0;
+/* The distance to the set's edge (screen heights), and how far past the view's round limit the point is (1: black). */
+float mandelEdgeDistance = 1.0;
+float mandelBeyond = 0.0;
 /**
  * The Mandelbrot map's second picture point near the rings where the escape
  * count changes, and its weight (see Softness in complexMap).
@@ -606,6 +610,14 @@ float mandelAltWeight = 0.0;
 uniform float u_mandelDepth;
 /* The rounds to run where the strip is not ready (see mandelFromStrip). */
 uniform int u_mandelRounds;
+/**
+ * The view's round limit: points that escape later are black, as if they
+ * had not escaped, over a short fade. It rises with the view's depth (times
+ * Growth), so as a dive goes deeper, the slow points at the edge of the
+ * black turn to color one by one: the branches grow out of it. The strip
+ * holds counts past it, so the limit, not the strip, sets the black edge.
+ */
+uniform float u_mandelLimit;
 ${MANDEL_GLSL}
 /**
  * The strip this pass reads (see MANDEL_STRIP_SHADER): on or off, its two
@@ -834,7 +846,8 @@ vec2 complexMap(vec2 p) {
         edgeDistance = 0.5 * size * log(size) / max(length(slope), 1e-30);
       }
     }
-    if (count < 0.0) {
+    float beyond = count < 0.0 ? 1.0 : smoothstep(u_mandelLimit - max(2.0, 0.03 * u_mandelLimit), u_mandelLimit, count);
+    if (beyond >= 1.0) {
       mandelShade = 0.0;
       mandelStretch = 1.0;
       mandelEdgeLight = 1.0;
@@ -871,8 +884,20 @@ vec2 complexMap(vec2 p) {
       float rise = min(t / (1.0 - edge), (1.0 - t) / edge);
       float step_ = 0.45 + 0.55 * mix(rise, smoothstep(0.0, 1.0, rise), clamp(u_mandelSoftness, 0.0, 1.0));
       mandelShade = mix(1.0, lit, u_mandelLight) * mix(1.0, step_, u_mandelTerraces);
-      /* The band count's change per screen unit: |dz/d(screen)| / (|z| ln|z|) = 1 / (2 edge distance), over the band width. */
-      mandelStretch = 0.5 / max(edgeDistance, 1e-30) / max(u_mandelBands, 0.01) / max(u_mapScale, 1e-4);
+      mandelEdgeDistance = edgeDistance;
+      mandelBeyond = beyond;
+      /**
+       * How fast the picture moves per screen unit, for its blur: across the
+       * bands, the count's change, |dz/d(screen)| / (|z| ln|z|) = 1 / (2 edge
+       * distance), over the band width; up, the escape angle's change,
+       * |dz/d(screen)| / (|z| PI) = ln|z| / (2 PI edge distance), which is 5 to
+       * 10 times faster. Blurring for the bands alone left the angle to
+       * alias into moving noise near the set.
+       */
+      float logSize = exp2(2.4712336270551026 + through);
+      float acrossBands = 0.5 / max(edgeDistance, 1e-30) / max(u_mandelBands, 0.01);
+      float upAngle = logSize / (TAU * max(edgeDistance, 1e-30));
+      mandelStretch = max(acrossBands, upAngle) / max(u_mapScale, 1e-4);
     }
   } else if (u_mapMode == 5) {
     w = csin(onAxis * PI) / PI;
@@ -1246,12 +1271,18 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
   /**
    * The Mandelbrot map's light and terraces, and its black set. Where one
    * pixel holds more than about one band (mapDetail, see mandelStretch),
-   * the light and terraces would sparkle, so they fade to an even shade
-   * there, as the picture already blurs.
+   * the light and terraces would sparkle, so they give way to a shade from
+   * the pixel's distance to the set's edge, in pixels, which is smooth from
+   * one pixel to the next: bright at a hundredth of a pixel or nearer (the
+   * pixel is full of filaments), dark at five pixels or farther, evenly in
+   * powers of ten between. The picture already
+   * blurs there. Then the points past the view's round limit fade to black.
    */
   if (mapped && u_mapMode == 9) {
     float busy = mandelShade > 0.0 ? smoothstep(0.3, 1.2, mapDetail) : 0.0;
-    color.rgb *= mix(1.0, mix(mandelShade, 0.62, busy) * mandelEdgeLight, u_mapMix);
+    float nearEdge = 1.0 - smoothstep(-2.0, 0.7, log(max(mandelEdgeDistance / max(g0, 1e-9), 1e-6)) * 0.4342944819);
+    float busyShade = mix(0.3, 1.3, nearEdge * nearEdge);
+    color.rgb *= mix(1.0, mix(mandelShade, busyShade, busy) * mandelEdgeLight * (1.0 - mandelBeyond), u_mapMix);
   }
   return color;
 }

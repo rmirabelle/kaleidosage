@@ -278,3 +278,23 @@ read by each frame, instead of running the loop for every pixel.
   from the view's middle, so the corners of a large screen are a little
   softer; a Speed faster than about 1.7 powers a second outruns 32 rows a
   frame, and the loop fills in.
+
+Fixes the same day (from the user's picture: noise near the set, and black
+areas that never grew):
+
+- The picture's height follows the escape angle, which changes ln|z| / PI
+  times faster than the bands' count (5 to 10 times); the blur allowed only
+  for the bands, so the angle aliased into noise, and the strip's nearest
+  angle reads made it move. The stretch is now the larger of the two.
+- Busy areas (a pixel holds more than about a band) took an even 0.62
+  shade, which made flat shores around the set. They now take a shade from
+  the pixel's distance to the edge in pixels, in powers of ten: bright at
+  1/100 pixel or nearer, dark at 5 pixels or farther, so the filaments show
+  and nothing sparkles.
+- Growth again: before the strip, the round limit rose with the view's
+  depth, so slow points at the edge of the black turned to color as a dive
+  went on (the growth the user liked). The strip fixed the rounds for each
+  distance. Now the view has its own limit (`u_mandelLimit`, the rounds for
+  its depth, before rounding, times Growth 0.1 to 1.5), and points past it
+  fade to black over 3% of the limit; the strip runs 1.5 times the rounds,
+  enough for Growth at its most.
