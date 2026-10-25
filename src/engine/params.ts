@@ -1126,13 +1126,22 @@ export function formatValue(param: Param, value: number): string {
 export const NUDGE = 0.025;
 
 /**
- * Nudge: moves every value of the unlocked groups a little, up or down at
- * random: NUDGE of its slider's full range, kept inside the slider and on
- * its steps. A range moves both handles, each on its own way; a whole-circle
- * turn keeps its full range, and other angles wrap around the circle. A
- * value at 0 stays 0, so an effect that is off stays off. As with
- * Randomize, the scene length, the image blend and the layer opacities stay;
- * menus and colors do not change.
+ * The way each value went at its last nudge (1 up, -1 down), for the value
+ * and each range handle. The next nudge goes on the same way: with a new
+ * coin toss each time, about half the values would be back where they were
+ * two nudges ago, so Nudge would seem to start from the first values.
+ */
+const nudgeWays = new WeakMap<Param, Partial<Record<"value" | "low" | "high", number>>>();
+
+/**
+ * Nudge: moves every value of the unlocked groups a little: NUDGE of its
+ * slider's full range, kept inside the slider and on its steps. The first
+ * nudge picks up or down at random; later nudges go on the same way, and a
+ * value turns back at the end of its slider. A range moves both handles,
+ * each on its own way; a whole-circle turn keeps its full range, and other
+ * angles wrap around the circle. A value at 0 stays 0, so an effect that
+ * is off stays off. As with Randomize, the scene length, the image blend
+ * and the layer opacities stay; menus and colors do not change.
  */
 export function nudgeParams(params: Params, state: PlayState, random = Math.random) {
   for (const group of Object.keys(GROUP_PARAMS) as GroupKey[]) {
@@ -1141,22 +1150,32 @@ export function nudgeParams(params: Params, state: PlayState, random = Math.rand
       if (OPACITY_KEYS.includes(key)) continue;
       const param = params[key];
       const circle = param.drift === "spin" && param.min === 0 && param.max === 360;
-      const nudge = (value: number) => {
+      const ways = nudgeWays.get(param) ?? {};
+      nudgeWays.set(param, ways);
+      const nudge = (value: number, part: "value" | "low" | "high") => {
         if (value === 0) return 0;
+        let way = ways[part] ?? (random() < 0.5 ? -1 : 1);
         /* A log slider moves the same part of its length. */
-        if (param.scale === "log") return fromSlider(param, toSlider(param, value) + (random() < 0.5 ? -1 : 1) * SLIDER_STEPS * NUDGE);
-        const moved = value + (random() < 0.5 ? -1 : 1) * (param.max - param.min) * NUDGE;
+        const log = param.scale === "log";
+        const from = log ? toSlider(param, value) : value;
+        const size = log ? SLIDER_STEPS * NUDGE : (param.max - param.min) * NUDGE;
+        const [min, max] = log ? [0, SLIDER_STEPS] : [param.min, param.max];
+        /* At the end of the slider, the value turns back. */
+        if (!circle && (from + way * size > max + 1e-9 || from + way * size < min - 1e-9)) way = -way;
+        ways[part] = way;
+        const moved = from + way * size;
+        if (log) return fromSlider(param, clamp(moved, min, max));
         const inside = circle ? ((moved % 360) + 360) % 360 : clamp(moved, param.min, param.max);
         const stepped = param.min + Math.round((inside - param.min) / param.step) * param.step;
         return Number(clamp(stepped, param.min, param.max).toFixed(6));
       };
-      param.value = nudge(param.value);
+      param.value = nudge(param.value, "value");
       if (!param.drift || !param.on) continue;
       const low = param.low ?? param.min;
       const high = param.high ?? param.max;
       if (circle && Math.min(low, high) <= param.min && Math.max(low, high) >= param.max) continue;
-      param.low = nudge(low);
-      param.high = nudge(high);
+      param.low = nudge(low, "low");
+      param.high = nudge(high, "high");
     }
   }
 }

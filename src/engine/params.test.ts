@@ -407,9 +407,21 @@ describe("nudgeParams", () => {
     /* The result lands on the slider's step. */
     const trailTarget = before.trail + (params.trailAmount.max - params.trailAmount.min) * NUDGE;
     expect(Math.abs(params.trailAmount.value - trailTarget)).toBeLessThanOrEqual(params.trailAmount.step / 2 + 1e-9);
+    /* At the end of its slider, the value turns back. */
     params.mapPower.value = params.mapPower.max;
     nudgeParams(params, state, () => 0.9);
-    expect(params.mapPower.value).toBe(params.mapPower.max);
+    expect(Math.abs(params.mapPower.value - (params.mapPower.max - (params.mapPower.max - params.mapPower.min) * NUDGE))).toBeLessThanOrEqual(params.mapPower.step / 2 + 1e-9);
+  });
+
+  it("goes on the same way at each next nudge, so it never just goes back", () => {
+    const params = createParams();
+    const state = createPlayState();
+    params.trailAmount.value = 0.5;
+    const step = (params.trailAmount.max - params.trailAmount.min) * NUDGE;
+    /* The first nudge goes up; the next coin toss would say down, but the value goes on up. */
+    nudgeParams(params, state, () => 0.9);
+    nudgeParams(params, state, () => 0.1);
+    expect(Math.abs(params.trailAmount.value - (0.5 + 2 * step))).toBeLessThanOrEqual(params.trailAmount.step + 1e-9);
   });
 
   it("leaves locked groups, values at 0, the scene length and whole-circle turns alone", () => {
