@@ -203,7 +203,7 @@ function PatternMenu({ letter, selected, onPattern }: {
     setPosition({ left: rect.left, top: rect.bottom + 4 });
   };
 
-  const groups = ["Repeating", "Not repeating"] as const;
+  const groups = ["Templates", "Repeating", "Not repeating"] as const;
   return (
     <>
       <button

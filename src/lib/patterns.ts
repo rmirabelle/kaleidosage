@@ -17,7 +17,7 @@ type Draw = (context: CanvasRenderingContext2D, width: number, height: number) =
 export interface Pattern {
   id: string;
   label: string;
-  group: "Repeating" | "Not repeating";
+  group: "Templates" | "Repeating" | "Not repeating";
   draw: Draw;
 }
 
@@ -153,7 +153,30 @@ function centerLine(part: number): Draw {
   };
 }
 
+/**
+ * Dark Stage: not a test pattern but a plain background to build on, for
+ * lasers or light rays. A top-to-bottom gradient in the app's own dark
+ * colors, with a little noise so the slow gradient shows no bands.
+ */
+const darkStage: Draw = (context, width, height) => {
+  const gradient = context.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, "#2c303b");
+  gradient.addColorStop(0.55, "#1d2029");
+  gradient.addColorStop(1, "#14161c");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, width, height);
+  const pixels = context.getImageData(0, 0, width, height);
+  for (let index = 0; index < pixels.data.length; index += 4) {
+    const noise = Math.round(Math.random() * 2 - 1);
+    pixels.data[index] += noise;
+    pixels.data[index + 1] += noise;
+    pixels.data[index + 2] += noise;
+  }
+  context.putImageData(pixels, 0, 0);
+};
+
 export const PATTERNS: Pattern[] = [
+  { id: "dark-stage", label: "Dark Stage", group: "Templates", draw: darkStage },
   { id: "checker-large", label: "Checkerboard, large", group: "Repeating", draw: checkerboard(120) },
   { id: "checker-fine", label: "Checkerboard, fine", group: "Repeating", draw: checkerboard(24) },
   { id: "dots", label: "Dot grid", group: "Repeating", draw: dotGrid(120) },
