@@ -34,11 +34,20 @@ export interface KeptDoc {
   openGroup: string | null;
 }
 
-/** The open Kaleido Sage file: its path (null while never saved), its saved fingerprint, and its tracks (the open file's copies in the temp folder, which outlive the reload). */
+/**
+ * The open Kaleido Sage file: its path (null while never saved), its saved
+ * fingerprint, and its tracks (the open file's copies in the temp folder,
+ * which outlive the reload). Song follow comes back too: on or off, the
+ * count of song map edits, and each track's analysis (with its song map
+ * and slice picks), whose text is in IndexedDB by key (see keepAnalyses).
+ */
 export interface KeptFile {
   path: string | null;
   saved: string;
   tracks: string[];
+  songFollow?: boolean;
+  followEdits?: number;
+  analyses?: Record<string, string>;
 }
 
 export interface Kept {
@@ -131,6 +140,41 @@ export async function keptImageBytes(key: string): Promise<Blob | null> {
   }
 }
 
+/** Each track's stored analysis: the analysis and its song map as they were stored, and the key of their text. */
+const analysisKeys = new Map<string, { analysis: object; edits: unknown; key: string }>();
+
+/**
+ * Each track's song analysis for the snapshot: its key in IndexedDB, by
+ * path. An analysis can be megabytes, so its text is made and stored again
+ * only when the analysis or its song map (mapEdits, which a map edit or a
+ * slice pick replaces) is another one. The key of the text it replaces is
+ * let go, so pruning can remove it.
+ */
+export function keepAnalyses(paths: readonly string[], analysisOf: (path: string) => { mapEdits?: unknown } | undefined): Record<string, string> {
+  const keys: Record<string, string> = {};
+  for (const path of paths) {
+    const analysis = analysisOf(path);
+    if (!analysis) continue;
+    let kept = analysisKeys.get(path);
+    if (!kept || kept.analysis !== analysis || kept.edits !== analysis.mapEdits) {
+      if (kept) keysHere.delete(kept.key);
+      const key = crypto.randomUUID();
+      keysHere.add(key);
+      void blobStore("readwrite", (store) => store.put(new Blob([JSON.stringify(analysis)], { type: "application/json" }), key)).catch(() => {});
+      kept = { analysis, edits: analysis.mapEdits, key };
+      analysisKeys.set(path, kept);
+    }
+    keys[path] = kept.key;
+  }
+  return keys;
+}
+
+/** The text of a kept analysis, or null when it never made it to IndexedDB. */
+export async function keptAnalysisText(key: string): Promise<string | null> {
+  const blob = await keptImageBytes(key);
+  return blob ? blob.text() : null;
+}
+
 /** The snapshot left by the page before this one, or null. */
 export function readKept(): Kept | null {
   if (!enabled) return null;
@@ -173,7 +217,7 @@ export function keepScenes(take: () => Kept | null) {
 /** Removes the stored bytes that neither the latest snapshot nor this page uses (those of a page before this one). */
 async function pruneImages() {
   const kept = readKept();
-  const used = new Set([...keysHere, ...(kept?.docs ?? []).flatMap((doc) => doc.images.map((image) => image?.key))].filter(Boolean));
+  const used = new Set([...keysHere, ...(kept?.docs ?? []).flatMap((doc) => doc.images.map((image) => image?.key)), ...Object.values(kept?.file?.analyses ?? {})].filter(Boolean));
   try {
     const keys = await blobStore<IDBValidKey[]>("readonly", (store) => store.getAllKeys());
     for (const key of keys) if (typeof key === "string" && !used.has(key)) await blobStore("readwrite", (store) => store.delete(key));

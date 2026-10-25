@@ -34,7 +34,7 @@ import { SettingsHistory } from "./engine/history";
 import { scenePosition } from "./engine/loop";
 import { SCENE_EXTENSION, applyScene, blobToSceneImage, sceneFingerprint, serializeScene, type SceneImage } from "./engine/scene";
 import { loadSceneMedia, loadSceneSource, readScene, writeScene } from "./lib/scenes";
-import { adoptImage, keepImage, keepScenes, keptImageBytes, readKept, type Kept, type KeptImage } from "./lib/reloadKeeper";
+import { adoptImage, keepAnalyses, keepImage, keepScenes, keptAnalysisText, keptImageBytes, readKept, type Kept, type KeptImage } from "./lib/reloadKeeper";
 import type { ImageSource } from "./engine/renderer";
 import {
   makeThumbnail,
@@ -50,6 +50,7 @@ import { midi } from "./lib/midi";
 import { audioInput, type InputKind } from "./lib/audioInput";
 import { panelLayout } from "./lib/panelLayout";
 import { tracks } from "./lib/tracks";
+import { startFrameProbe } from "./lib/frameProbe";
 import { songFollow } from "./lib/songFollow";
 import { settingButtons } from "./lib/settingButtons";
 import { sliceAt, type ScheduledSlice } from "./engine/showSchedule";
@@ -1895,7 +1896,14 @@ export default function App() {
     /** Dev only: the open tabs as the reload keeper keeps them (see reloadKeeper.ts). */
     const takeKept = (): Kept => ({
       activeId: activeIdRef.current,
-      file: { path: filePathRef.current, saved: fileSavedRef.current, tracks: tracks.list.map((track) => track.path) },
+      file: {
+        path: filePathRef.current,
+        saved: fileSavedRef.current,
+        tracks: tracks.list.map((track) => track.path),
+        songFollow: songFollow.enabled,
+        followEdits: songFollow.edits,
+        analyses: keepAnalyses(tracks.list.map((track) => track.path), (path) => songFollow.analysisFor(path))
+      },
       docs: docsRef.current.flatMap((doc) => {
         if (doc.id === activeIdRef.current) {
           const driver = driverRef.current;
@@ -1994,7 +2002,19 @@ export default function App() {
       restoreDoc(active.doc.id);
       /* The open file comes back too: its name, its unsaved mark and its tracks (stopped). */
       if (kept.file) {
+        /**
+         * The song analyses (with their song maps and slice picks) go first,
+         * so Song follow needs none for these tracks; then the tracks,
+         * Song follow on or off, and the count of map edits, so the unsaved
+         * mark is as it was.
+         */
+        for (const [path, key] of Object.entries(kept.file.analyses ?? {})) {
+          const text = await keptAnalysisText(key).catch(() => null);
+          if (text) songFollow.preload(path, text);
+        }
         if (kept.file.tracks.length) tracks.replace(kept.file.tracks);
+        if (kept.file.songFollow !== undefined) songFollow.setEnabled(kept.file.songFollow);
+        if (kept.file.followEdits !== undefined) songFollow.edits = kept.file.followEdits;
         filePathRef.current = kept.file.path;
         setFilePath(kept.file.path);
         fileSavedRef.current = kept.file.saved;
@@ -2014,7 +2034,13 @@ export default function App() {
     if (!engine) return;
     const follow = () => { engine.audio = audioInput.analyzer; };
     follow();
-    return audioInput.subscribe(follow);
+    const stopFollow = audioInput.subscribe(follow);
+    /* Dev only, for a bug hunt: the engine's state goes to the dev log every 2 seconds (see frameProbe.ts). */
+    const stopProbe = import.meta.env.DEV ? startFrameProbe(engine) : () => {};
+    return () => {
+      stopFollow();
+      stopProbe();
+    };
   }, [engine]);
 
   /** Stop in the playlist starts the show again: the first scene, ready to play (see startShow). While Hold is on, the scene and Hold stay. */
