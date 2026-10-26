@@ -63,6 +63,7 @@ import { revealMainWindow } from "./lib/splash";
 import { isVideoPath, isVideoType, loadVideoBlob, loadVideoFile, stageVideoBlob, type VideoFile } from "./lib/videos";
 import { checkForUpdate, getAppVersion, type UpdateInfo } from "./lib/updater";
 import { encodeVideo, videoDimensions, videoSize, type VideoOptions } from "./lib/videoExport";
+import { attachCameraDrag } from "./lib/cameraDrag";
 
 const MIDI_PANEL_HEIGHT_KEY = "kaleidosage.midi-panel-height";
 /** The MIDI panel's height limits, in pixels; it opens at its last height, or DEFAULT. */
@@ -1276,6 +1277,15 @@ export default function App() {
       window.removeEventListener("pointercancel", up, true);
       window.removeEventListener("blur", up);
     };
+  }, [engine]);
+
+  /** The mouse moves the Camera effect on the canvas (see attachCameraDrag), not on the start screen. */
+  const startScreenRef = useRef(startScreen);
+  startScreenRef.current = startScreen;
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!engine || !canvas) return;
+    return attachCameraDrag(canvas, engine, () => !startScreenRef.current);
   }, [engine]);
 
   /** MIDI knobs move the engine's sliders; learn mode tells which knob it mapped. */
