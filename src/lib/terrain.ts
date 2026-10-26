@@ -13,8 +13,8 @@ const PICTURE_LAYERS = ["Landsat_WELD_CorrectedReflectance_TrueColor_Global_Annu
 const EARTH_RADIUS = 6378137;
 /** Meters per tile pixel at zoom 0 at the equator. */
 const METERS_PER_PIXEL = (2 * Math.PI * EARTH_RADIUS) / 256;
-/** About how many heights across the area: the zoom is picked for this many tile pixels. */
-const GRID = 1024;
+/** About how many heights across the area (about a screen's width): the zoom is picked for this many tile pixels. */
+const GRID = 2048;
 const MAX_ZOOM = 15;
 
 let nextTerrainId = 1;
@@ -71,16 +71,21 @@ export async function loadTerrain({ place, longitude, latitude, areaKm, aspect, 
 
   const pixels = context.getImageData(0, 0, width, height).data;
   const meters = new Float32Array(width * height);
-  let lowest = Infinity;
   let highest = -Infinity;
   for (let i = 0; i < meters.length; i++) {
     const value = Math.max(0, pixels[i * 4] * 256 + pixels[i * 4 + 1] + pixels[i * 4 + 2] / 256 - 32768);
     meters[i] = value;
-    if (value < lowest) lowest = value;
     if (value > highest) highest = value;
   }
+  /**
+   * The lowest land is the height that 0.5% of the area is under, not the
+   * lowest point: the tiles have rare holes (0 m in high mountains), which
+   * would make the land's range far too large. The holes take that height.
+   */
+  const sample = meters.filter((_, index) => index % 7 === 0).sort();
+  const lowest = sample[Math.floor(sample.length * 0.005)] ?? 0;
   const range = Math.max(1, highest - lowest);
-  const heights = meters.map((value) => (value - lowest) / range);
+  const heights = meters.map((value) => Math.max(0, value - lowest) / range);
   /* The area's north-south size in meters, for the true-scale relief. */
   const northSouth = (height * METERS_PER_PIXEL * shrink) / 2 ** zoom;
 

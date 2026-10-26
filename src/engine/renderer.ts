@@ -1583,13 +1583,12 @@ export class KaleidoRenderer {
     gl.uniform1f(f.uniforms.u_roughness, Math.min(0.9, Math.max(0.1, v.cameraRoughness ?? 0.5)));
     gl.uniform1f(f.uniforms.u_ridges, Math.min(1, Math.max(0, v.cameraRidges ?? 0.6)));
     gl.uniform1f(f.uniforms.u_seed, Math.round(v.cameraSeed ?? 0));
-    /* Real terrain: Height 0.25 shows the land at twice its true height. With no land loaded, it is flat; the picture stands in for the texture (never the field itself, which this pass draws). */
+    /* Real terrain (with no land loaded, the picture stands in for its texture: never the field itself, which this pass draws). */
     const terrain = v.cameraHeightSource === 2 && this.terrainHeights !== null;
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.terrainHeights ?? source);
     gl.uniform1i(f.uniforms.u_terrain, 1);
     gl.activeTexture(gl.TEXTURE0);
-    gl.uniform1f(f.uniforms.u_relief, terrain ? this.terrainRelief * 8 : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     const m = this.maxPass;
@@ -1632,7 +1631,8 @@ export class KaleidoRenderer {
     gl.uniform1f(c.uniforms.u_amount, Math.min(1, Math.max(0, v.camera)));
     gl.uniform1i(c.uniforms.u_blend, v.cameraBlend);
     gl.uniform1i(c.uniforms.u_repeat, v.cameraRepeat);
-    gl.uniform1f(c.uniforms.u_height, v.cameraHeight);
+    /* Real terrain's heights are 0 to 1 over its lowest to highest land; its relief scales Height, so Height 0.25 shows it at twice its true height. With no land loaded, it is flat. */
+    gl.uniform1f(c.uniforms.u_height, v.cameraHeight * (v.cameraHeightSource !== 2 ? 1 : terrain ? this.terrainRelief * 8 : 0));
     gl.uniform1f(c.uniforms.u_tilt, v.cameraTilt);
     gl.uniform1f(c.uniforms.u_turn, v.cameraTurn);
     gl.uniform2f(c.uniforms.u_offset, v.cameraX, v.cameraY);
@@ -1653,8 +1653,6 @@ export class KaleidoRenderer {
     gl.bindTexture(gl.TEXTURE_2D, this.terrainPicture ?? source);
     gl.uniform1i(c.uniforms.u_terrainPicture, 3);
     gl.activeTexture(gl.TEXTURE0);
-    /* Height colors run from the lowest land to the highest: real terrain's heights go up to its relief, the others to 1. */
-    gl.uniform1f(c.uniforms.u_relief, v.cameraHeightSource === 2 && this.terrainHeights !== null ? Math.max(1e-4, this.terrainRelief * 8) : 1);
     if (v.cameraStopAt) {
       gl.uniform1i(c.uniforms.u_stopCount, v.cameraStopAt.length);
       gl.uniform1fv(c.uniforms["u_stopAt[0]"], v.cameraStopAt);

@@ -1878,8 +1878,6 @@ uniform float u_smooth;
 /* The land's colors: 0 the picture, 1 the gradient by height (u_stopAt, u_stopColor), 2 the real terrain's picture (u_terrainPicture; see docs/TERRAIN.md). */
 uniform int u_colors;
 uniform sampler2D u_terrainPicture;
-/* The real terrain's height scale (see CAMERA_FIELD_SHADER), so Height colors run from its lowest land to its highest. */
-uniform float u_relief;
 uniform int u_stopCount;
 uniform float u_stopAt[8];
 uniform vec3 u_stopColor[8];
@@ -1961,7 +1959,7 @@ vec3 heightColor(float h) {
 vec3 colorAt(vec2 p, float t) {
   vec2 q, flip;
   wrapPixels(pixelsAt(p), q, flip);
-  if (u_colors == 1) return heightColor(textureLod(u_fine, q / u_res, 0.0).r / max(u_relief, 1e-4));
+  if (u_colors == 1) return heightColor(textureLod(u_fine, q / u_res, 0.0).r);
   if (u_colors == 2) return textureLod(u_terrainPicture, q / u_res, max(0.0, log2(t * 2.0 * tan(u_lens * 0.5)))).rgb;
   float lod = max(0.0, log2(t * 2.0 * tan(u_lens * 0.5)));
   return textureLod(u_tex, q / u_res, lod).rgb;
@@ -2147,9 +2145,10 @@ void main() {
  * itself with no seam. u_seed picks another land. Smooth (u_smooth) takes
  * away the finest layers: 9 layers at 0, one fewer for each step, with the
  * last one faded in by the part after the whole number.
- * 2 Real terrain: the loaded heights (u_terrain, 0 to 1), blurred by half
- * of Smooth, times u_relief: twice the land's true-scale height at Height
- * 0.25 (see drawCamera).
+ * 2 Real terrain: the loaded heights (u_terrain, 0 to 1), blurred a little
+ * past Smooth 1.5. The land's real relief scales the camera's Height
+ * instead (see drawCamera), so the heights stay 0 to 1: the camera starts
+ * each ray at the top of that range, so a higher height would be cut flat.
  * u_sign below 0 turns the heights over, so dark areas (or valleys) rise.
  */
 export const CAMERA_FIELD_SHADER = `#version 300 es
@@ -2166,7 +2165,6 @@ uniform float u_roughness;
 uniform float u_ridges;
 uniform float u_seed;
 uniform sampler2D u_terrain;
-uniform float u_relief;
 
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 ${CUBIC_GLSL}
@@ -2230,9 +2228,7 @@ void main() {
   if (u_source == 1) {
     h = mountains(v_uv);
   } else if (u_source == 2) {
-    h = textureLod(u_terrain, v_uv, u_smooth * 0.5).r * u_relief;
-    o = vec4(u_sign < 0.0 ? max(u_relief - h, 0.0) : h, 0.0, 0.0, 1.0);
-    return;
+    h = textureLod(u_terrain, v_uv, max(0.0, u_smooth - 1.5) * 0.5).r;
   } else {
     int level = int(floor(u_smooth));
     float between = u_smooth - float(level);
