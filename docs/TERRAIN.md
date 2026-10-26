@@ -99,6 +99,10 @@ the user tries it.
 
 - The tile zoom is the one at which the area is at most 2048 tile pixels
   wide, so the heights are about 1000 to 2048 samples across.
+- The finest zoom is 12 (about 30 m per pixel, the data's own detail; it is
+  about 90 m in parts of Asia). Finer zooms blew the heights up in hard
+  steps, which showed as blocks. A small area now has fewer heights, and
+  the field shader reads them with smooth cubic curves.
 - The lowest land is the height under 0.5% of the area, so rare holes in
   the tiles (0 m in high mountains) do not stretch the range.
 - The height field stays 0 to 1 (the camera starts each ray at the top of

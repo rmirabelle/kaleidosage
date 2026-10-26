@@ -15,7 +15,12 @@ const EARTH_RADIUS = 6378137;
 const METERS_PER_PIXEL = (2 * Math.PI * EARTH_RADIUS) / 256;
 /** About how many heights across the area (about a screen's width): the zoom is picked for this many tile pixels. */
 const GRID = 2048;
-const MAX_ZOOM = 15;
+/**
+ * The finest zoom to load: about 30 m per tile pixel, the data's own
+ * detail (about 90 m in parts of Asia). Finer zooms only blow the data up
+ * in hard steps; the camera draws between the heights with smooth curves.
+ */
+const MAX_ZOOM = 12;
 
 let nextTerrainId = 1;
 

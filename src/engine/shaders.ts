@@ -2145,8 +2145,10 @@ void main() {
  * itself with no seam. u_seed picks another land. Smooth (u_smooth) takes
  * away the finest layers: 9 layers at 0, one fewer for each step, with the
  * last one faded in by the part after the whole number.
- * 2 Real terrain: the loaded heights (u_terrain, 0 to 1), blurred a little
- * past Smooth 1.5. The land's real relief scales the camera's Height
+ * 2 Real terrain: the loaded heights (u_terrain, 0 to 1), read with smooth
+ * cubic curves, so heights coarser than the screen (the data has about
+ * 30 m detail) make smooth slopes, not steps; blurred a little past Smooth
+ * 1.5. The land's real relief scales the camera's Height
  * instead (see drawCamera), so the heights stay 0 to 1: the camera starts
  * each ray at the top of that range, so a higher height would be cut flat.
  * u_sign below 0 turns the heights over, so dark areas (or valleys) rise.
@@ -2168,6 +2170,27 @@ uniform sampler2D u_terrain;
 
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 ${CUBIC_GLSL}
+
+/* Cubic B-spline sampling of one level of the real terrain's heights (as cubicAt). */
+float terrainAt(vec2 uv, int level) {
+  vec2 size = vec2(textureSize(u_terrain, level));
+  vec2 p = uv * size - 0.5;
+  vec2 f = fract(p);
+  p -= f;
+  vec4 xc = bspline(f.x);
+  vec4 yc = bspline(f.y);
+  vec4 c = p.xxyy + vec2(-0.5, 1.5).xyxy;
+  vec4 s = vec4(xc.xz + xc.yw, yc.xz + yc.yw);
+  vec4 offset = (c + vec4(xc.yw, yc.yw) / s) / size.xxyy;
+  float lod = float(level);
+  float a = textureLod(u_terrain, offset.xz, lod).r;
+  float b = textureLod(u_terrain, offset.yz, lod).r;
+  float d = textureLod(u_terrain, offset.xw, lod).r;
+  float e = textureLod(u_terrain, offset.yw, lod).r;
+  float sx = s.x / (s.x + s.y);
+  float sy = s.z / (s.z + s.w);
+  return mix(mix(e, d, sx), mix(b, a, sx), sy);
+}
 
 /* A random direction for each lattice point (and the seed). */
 vec2 latticeDirection(vec2 cell) {
@@ -2228,7 +2251,9 @@ void main() {
   if (u_source == 1) {
     h = mountains(v_uv);
   } else if (u_source == 2) {
-    h = textureLod(u_terrain, v_uv, max(0.0, u_smooth - 1.5) * 0.5).r;
+    float blur = max(0.0, u_smooth - 1.5) * 0.5;
+    int level = int(floor(blur));
+    h = mix(terrainAt(v_uv, level), terrainAt(v_uv, level + 1), blur - float(level));
   } else {
     int level = int(floor(u_smooth));
     float between = u_smooth - float(level);
