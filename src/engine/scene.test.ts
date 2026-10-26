@@ -6,6 +6,24 @@ const IMAGE = { type: "image/png", data: "iVBORw0KGgo=" };
 const IMAGE2 = { type: "image/jpeg", data: "/9j/4AAQ" };
 
 describe("scene files", () => {
+  it("keep the layers, and open a scene from before layers as the Image layer alone", () => {
+    const state = createPlayState();
+    state.layers = [{ kind: "image", name: "Back", visible: false, blend: 2, opacity: 0.4 }];
+    const loaded = createPlayState();
+    applyScene(serializeScene(createParams(), state, { image: IMAGE }), createParams(), loaded);
+    expect(loaded.layers).toEqual(state.layers);
+    expect(sceneFingerprint(createParams(), loaded, [])).toBe(sceneFingerprint(createParams(), state, []));
+    loaded.layers[0].opacity = 0.5;
+    expect(sceneFingerprint(createParams(), loaded, [])).not.toBe(sceneFingerprint(createParams(), state, []));
+    const old = JSON.stringify({ app: "KaleidoSage", version: 3, params: {}, state: {}, image: IMAGE });
+    applyScene(old, createParams(), loaded);
+    expect(loaded.layers).toEqual([{ kind: "image", name: "Image", visible: true, blend: 0, opacity: 1 }]);
+    /* A kind this version does not know, a second Image layer and a value out of its limits. */
+    const odd = JSON.stringify({ app: "KaleidoSage", version: 3, params: {}, image: IMAGE, state: { layers: [{ kind: "laser" }, { kind: "image", opacity: 3, blend: 9 }, { kind: "image", name: "Two" }] } });
+    applyScene(odd, createParams(), loaded);
+    expect(loaded.layers).toEqual([{ kind: "image", name: "Image", visible: true, blend: 0, opacity: 1 }]);
+  });
+
   it("keep the particles' gradient stops, and drop stops that do not read", () => {
     const state = createPlayState();
     state.particleStops = [{ at: 0, color: "#112233" }, { at: 0.4, color: "#ffffff" }, { at: 1, color: "#000000" }];

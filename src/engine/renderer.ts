@@ -1,7 +1,7 @@
 import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, LAYER_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 
 /** The blur mask: circle with a sharp or a blurred center, gradient, bright areas, dark areas, noise. */
 export type BlurMask = 0 | 1 | 2 | 3 | 4 | 5;
@@ -87,6 +87,17 @@ export type SortOrder = 0 | 1;
 export type ParticleBlend = 0 | 1;
 /** How the Overlay effect's image or video goes over the picture: 0 normal (over, by its own cover), 1 screen, 2 add. */
 export type PictureBlend = 0 | 1 | 2;
+/** How a layer goes over the layers under it (see LAYER_SHADER): 0 normal, 1 screen, 2 add, 3 multiply. */
+export type StackBlend = 0 | 1 | 2 | 3;
+/** A layer's source (see docs/LAYERS.md): the source images, a 3D Object, or an image or video of its own. */
+export type LayerKind = "image" | "solid" | "media";
+/** One layer of the scene's stack, as the renderer needs it: its source, whether it shows, its blend and its opacity. */
+export interface LayerValues {
+  kind: LayerKind;
+  visible: boolean;
+  blend: StackBlend;
+  opacity: number;
+}
 /** How the light cycles move: 0 on grid lanes with right-angle turns, 1 in free curves. */
 export type CycleMove = 0 | 1;
 /**
@@ -117,6 +128,8 @@ export interface FrameValues {
   /** Each shape step's opacity, and how its result combines with the picture without it (see LayerBlend). */
   shapeOpacity: Record<ShapeStep, number>;
   layerBlend: Record<ShapeStep, LayerBlend>;
+  /** The scene's layers, the bottom one first (see docs/LAYERS.md). */
+  layers: LayerValues[];
   segments: number;
   foldMode: FoldMode;
   /** The tile size in tile modes, in screen heights between neighbor cell centers. */
@@ -687,6 +700,15 @@ export class KaleidoRenderer {
   private readonly raysMix: Program;
   private readonly lasers: Program;
   private readonly pictureProgram: Program;
+  private readonly layerProgram: Program;
+  /**
+   * Where the steps draw what would go to the screen: the screen (null), or
+   * the Image layer's own picture while the layers are put together (see
+   * render).
+   */
+  private output: WebGLFramebuffer | null = null;
+  /** The Image layer's own picture, made on first use (see layerTarget). */
+  private layerPicture: { target: Target; size: [number, number] } | null = null;
   /** Two half-size pictures for the light rays; the ray passes go back and forth between them. */
   private readonly raysTargets: [Target, Target];
   private readonly bloomBright: Program;
@@ -787,6 +809,7 @@ export class KaleidoRenderer {
     this.raysMix = this.createProgram(RAYS_MIX_SHADER);
     this.lasers = this.createProgram(LASER_SHADER);
     this.pictureProgram = this.createProgram(PICTURE_SHADER);
+    this.layerProgram = this.createProgram(LAYER_SHADER);
     this.bloomUp = this.createProgram(BLOOM_UP_SHADER);
     this.bloomMix = this.createProgram(BLOOM_SHADER);
 
@@ -990,6 +1013,23 @@ export class KaleidoRenderer {
     const [width, height] = this.frameSize;
     if (width === 0 || height === 0) return;
 
+    /**
+     * The layers (see docs/LAYERS.md). The Image layer draws onto the screen
+     * as before layers while it shows alone, whole and by Normal. Else it
+     * draws into a picture of its own, and LAYER_SHADER puts it over black
+     * (see the end of this function). A hidden layer draws nothing.
+     */
+    const image = v.layers.find((layer) => layer.kind === "image");
+    if (!image || !image.visible || image.opacity <= 0) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, width, height);
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      return;
+    }
+    const alone = v.layers.length === 1 && image.opacity >= 1 && image.blend === 0;
+    this.output = alone ? null : this.layerTarget(width, height).framebuffer;
+
     const opacity = (step: ShapeStep) => Math.min(1, Math.max(0, v.shapeOpacity[step]));
     /**
      * The picture steps that do something. A shape step that is off does
@@ -1089,7 +1129,7 @@ export class KaleidoRenderer {
       padded = true;
     } else {
       const target = passes.length > 0 ? this.current : null;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
       gl.viewport(0, 0, width, height);
       this.timer.begin("fold");
       this.drawShapes(v, first, null, width, height, 0);
@@ -1113,7 +1153,7 @@ export class KaleidoRenderer {
       if (Array.isArray(step)) {
         /* Shape steps after a picture step move the picture made so far. */
         const target = last ? null : scratchFor(source);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
         gl.viewport(0, 0, width, height);
         this.timer.begin("refold");
         this.drawShapes(v, step, source, width, height);
@@ -1156,6 +1196,10 @@ export class KaleidoRenderer {
       this.timer.begin("solid");
       this.drawSolid(v, source, null, width, height, this.keptTarget(width, height).texture);
       this.timer.end();
+    }
+    if (this.output) {
+      this.output = null;
+      this.drawLayer(this.layerTarget(width, height).texture, image, width, height);
     }
     this.trailsWereOn = active.trails;
     this.contoursWereOn = active.contours;
@@ -1344,7 +1388,7 @@ export class KaleidoRenderer {
       gl.generateMipmap(gl.TEXTURE_2D);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     }
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
     gl.viewport(0, 0, width, height);
     gl.useProgram(b.program);
     gl.uniform1i(b.uniforms.u_tex, 0);
@@ -1371,7 +1415,7 @@ export class KaleidoRenderer {
   private drawDriver(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
     const gl = this.gl;
     const d = this.driver;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
     gl.viewport(0, 0, width, height);
     gl.useProgram(d.program);
     gl.activeTexture(gl.TEXTURE0);
@@ -1435,7 +1479,7 @@ export class KaleidoRenderer {
   private drawRelief(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
     const gl = this.gl;
     const r = this.relief;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
     gl.viewport(0, 0, width, height);
     gl.useProgram(r.program);
     gl.activeTexture(gl.TEXTURE0);
@@ -1499,7 +1543,7 @@ export class KaleidoRenderer {
     }
 
     const c = this.camera;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
     gl.viewport(0, 0, width, height);
     gl.useProgram(c.program);
     gl.activeTexture(gl.TEXTURE0);
@@ -1607,7 +1651,7 @@ export class KaleidoRenderer {
     this.fieldIndex = 1 - this.fieldIndex;
 
     const c = this.contours;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
     gl.viewport(0, 0, width, height);
     gl.useProgram(c.program);
     gl.activeTexture(gl.TEXTURE0);
@@ -1662,7 +1706,7 @@ export class KaleidoRenderer {
       history.since = 0;
     }
     const s = this.smear;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
     gl.viewport(0, 0, width, height);
     gl.useProgram(s.program);
     gl.activeTexture(gl.TEXTURE0);
@@ -1735,7 +1779,7 @@ export class KaleidoRenderer {
       this.particleIndex = 1 - this.particleIndex;
     }
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
     gl.viewport(0, 0, width, height);
     gl.useProgram(this.copy.program);
     gl.activeTexture(gl.TEXTURE0);
@@ -1784,7 +1828,7 @@ export class KaleidoRenderer {
   private drawSolid(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture) {
     const gl = this.gl;
     const s = this.solidProgram;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
     gl.viewport(0, 0, width, height);
     gl.useProgram(s.program);
     gl.activeTexture(gl.TEXTURE0);
@@ -2048,6 +2092,31 @@ export class KaleidoRenderer {
 
   /** Freeze background's picture behind the 3D Object (see render), made at the screen's size when first needed. */
   private kept: { target: Target; size: [number, number] } | null = null;
+  /** The Image layer's own picture, the size of the screen (see render). */
+  private layerTarget(width: number, height: number) {
+    this.layerPicture ??= { target: this.createTarget(), size: [0, 0] };
+    if (this.layerPicture.size[0] !== width || this.layerPicture.size[1] !== height) {
+      this.allocate(this.layerPicture.target, width, height);
+      this.layerPicture.size = [width, height];
+    }
+    return this.layerPicture.target;
+  }
+
+  /** Puts a layer's picture onto the screen over black, by its blend and opacity (LAYER_SHADER). */
+  private drawLayer(texture: WebGLTexture, layer: LayerValues, width: number, height: number) {
+    const gl = this.gl;
+    const p = this.layerProgram;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(p.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.uniform1i(p.uniforms.u_layer, 0);
+    gl.uniform1i(p.uniforms.u_blend, layer.blend);
+    gl.uniform1f(p.uniforms.u_opacity, Math.min(1, Math.max(0, layer.opacity)));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
   private keptTarget(width: number, height: number) {
     this.kept ??= { target: this.createTarget(), size: [0, 0] };
     if (this.kept.size[0] !== width || this.kept.size[1] !== height) {
@@ -2120,7 +2189,7 @@ export class KaleidoRenderer {
       gl.bindVertexArray(null);
     }
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
     gl.viewport(0, 0, width, height);
     const m = this.cycleMix;
     gl.useProgram(m.program);
@@ -2252,7 +2321,7 @@ export class KaleidoRenderer {
     const low = Math.min(v.sortLow, v.sortHigh);
     const high = Math.max(v.sortLow, v.sortHigh);
     const run = (program: Program, to: Target | null, textures: [string, WebGLTexture][], uniforms: () => void = () => {}) => {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, to ? to.framebuffer : null);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, to ? to.framebuffer : this.output);
       gl.useProgram(program.program);
       textures.forEach(([name, texture], unit) => {
         gl.activeTexture(gl.TEXTURE0 + unit);
@@ -2359,7 +2428,7 @@ export class KaleidoRenderer {
     const rays = passes.length % 2 === 1 ? second : first;
 
     const m = this.raysMix;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
     gl.viewport(0, 0, width, height);
     gl.useProgram(m.program);
     gl.bindTexture(gl.TEXTURE_2D, rays.texture);
@@ -2425,7 +2494,7 @@ export class KaleidoRenderer {
       this.pictureSize = [video.videoWidth, video.videoHeight];
     }
     const p = this.pictureProgram;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
     gl.viewport(0, 0, width, height);
     gl.useProgram(p.program);
     gl.activeTexture(gl.TEXTURE1);
@@ -2450,7 +2519,7 @@ export class KaleidoRenderer {
   private drawLasers(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
     const gl = this.gl;
     const l = this.lasers;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
     gl.viewport(0, 0, width, height);
     gl.useProgram(l.program);
     gl.activeTexture(gl.TEXTURE0);
@@ -2535,7 +2604,7 @@ export class KaleidoRenderer {
 
     const m = this.bloomMix;
     const first = this.bloomSize(0, width, height);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
     gl.viewport(0, 0, width, height);
     gl.useProgram(m.program);
     gl.bindTexture(gl.TEXTURE_2D, this.bloomChain[0].texture);
@@ -2775,7 +2844,7 @@ export class KaleidoRenderer {
   private drawFinish(v: FrameValues, parts: readonly FinishPart[], source: WebGLTexture, target: Target | null, width: number, height: number) {
     const gl = this.gl;
     const f = this.finish;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
     gl.viewport(0, 0, width, height);
     gl.useProgram(f.program);
     gl.activeTexture(gl.TEXTURE0);
@@ -2796,7 +2865,7 @@ export class KaleidoRenderer {
   private drawCopy(source: WebGLTexture, target: Target | null = null) {
     const gl = this.gl;
     const c = this.copy;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
     gl.useProgram(c.program);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, source);

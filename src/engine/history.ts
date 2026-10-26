@@ -7,7 +7,7 @@ const LIMIT = 200;
 
 type SavedParam = Pick<Param, "value" | "low" | "high" | "on" | "ease" | "custom" | "seconds" | "startTime">;
 type SavedState = Pick<PlayState, "groups" | "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode"
-  | "overlayColor" | "colorBlend" | "trailColor" | "smearShape" | "contourTone" | "contourBlend" | "cameraBlend" | "skyColor" | "cameraRepeat" | "videoCrossfade" | "fxOrder" | "layerBlend" | "sound" | "particleStops" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "cyclesStops" | "solidShape" | "solidMap" | "solidBlend" | "solidKeep" | "mandelPlace">;
+  | "overlayColor" | "colorBlend" | "trailColor" | "smearShape" | "contourTone" | "contourBlend" | "cameraBlend" | "skyColor" | "cameraRepeat" | "videoCrossfade" | "fxOrder" | "layerBlend" | "layers" | "sound" | "particleStops" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "cyclesStops" | "solidShape" | "solidMap" | "solidBlend" | "solidKeep" | "mandelPlace">;
 
 /** The settings at one step, and their fingerprint, to tell whether two steps differ. */
 interface Snapshot {
@@ -45,6 +45,7 @@ function take(params: Params, state: PlayState): Snapshot {
       videoCrossfade: state.videoCrossfade,
       fxOrder: [...state.fxOrder],
       layerBlend: { ...state.layerBlend },
+      layers: state.layers.map((layer) => ({ ...layer })),
       sound: Object.fromEntries(soundList(state.sound).map((key) => [key, true])),
       particleStops: state.particleStops.map((stop) => ({ ...stop })),
       cyclesMove: state.cyclesMove,
@@ -126,9 +127,9 @@ export class SettingsHistory {
 
   private restore(step: Snapshot) {
     for (const key of PARAM_KEYS) Object.assign(this.params[key], step.params[key]);
-    const { groups, layerBlend, fxOrder, sound, particleStops, cyclesStops, ...modes } = step.state;
+    const { groups, layerBlend, layers, fxOrder, sound, particleStops, cyclesStops, ...modes } = step.state;
     Object.assign(this.state, modes, {
-      fxOrder: [...fxOrder], sound: { ...sound },
+      fxOrder: [...fxOrder], layers: layers.map((layer) => ({ ...layer })), sound: { ...sound },
       particleStops: particleStops.map((stop) => ({ ...stop })), cyclesStops: cyclesStops.map((stop) => ({ ...stop }))
     });
     Object.assign(this.state.groups, groups);

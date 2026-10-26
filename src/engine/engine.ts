@@ -1379,6 +1379,7 @@ export class Engine {
       laserX: this.live("laserX"),
       laserY: this.live("laserY"),
       picture: on.picture ? this.live("pictureAmount") : 0,
+      layers: this.state.layers.map(({ kind, visible, blend, opacity }) => ({ kind, visible, blend, opacity })),
       pictureBlend: this.state.pictureBlend,
       pictureSize: this.live("pictureSize"),
       pictureX: this.live("pictureX"),
