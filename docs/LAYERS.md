@@ -131,3 +131,101 @@ Talked about 2026-10-24; none of these is planned yet.
   cannot change it.
 - **Masks**, **video export with clear parts**, and **effect copies with a
   layers panel** (phases 3 and 4) are the other ideas from the same talk.
+
+## Layers before effect copies (decided 2026-10-25)
+
+The user works like in Photoshop: each layer has its own effects, and the
+layers go together from the bottom up. Freeze background (phase 2) and
+the Overlay effect gave one FX list two meanings, which was hard to
+follow: after the 3D Object, every effect changed only the object, so an
+Overlay there showed only on the object. So the layers come first, before
+effect copies (phase 3), with one limit.
+
+### The limit: each effect is in one layer only
+
+- Each effect is still at most once per scene, whatever layer it is in.
+  So each setting keeps its bare name (`kaleidoscope`, `foldCount`), and
+  MIDI mappings, audio links, song maps, Randomize and saved scenes stay
+  as they are.
+- For the same reason, each kind of layer is at most once per scene: one
+  Image layer (the source slots A and B), one 3D Object layer, one Image or
+  Video layer. A scene has 1 to 3 layers.
+- Effect copies (phase 3) lift both limits later: then each layer has its
+  own copies, and a scene can have more layers of a kind.
+
+### The model
+
+- A scene is a stack of layers. Each layer has a kind (its source), a name,
+  an eye switch (show or hide), a blend (Normal, Screen, Add, Multiply), an
+  opacity, and its own FX list, which acts on that layer only.
+- The renderer draws each layer that shows into a picture of its own, with
+  its cover (rule 1), and puts the pictures together from the bottom up,
+  each by its blend and opacity. The screen gets the result over black.
+- Sources:
+  - **Image:** the source slots A and B, as today. Always opaque.
+  - **3D Object:** the shape, with its settings (today's 3D Object effect).
+    It is clear around the shape. Its Paint setting takes the place of
+    Freeze background: "Layer below" paints it with the layers under it,
+    put together (the Wrap, Project and Mirror modes read that picture),
+    or "Slot A" paints it with the source image.
+  - **Image or Video:** its own file (today's Overlay effect), with Size, X,
+    Y and Turn. A PNG keeps its clear parts.
+- The 3D Object and Overlay effects leave the FX list: they become these
+  layer kinds.
+- Effects with memory (Trails, Smear, Particles, Light cycles, Sort) keep
+  their memory as today, in the one layer that has them.
+
+### The interface
+
+- **Layers card**, at the top of the left panel, above Source. Its header
+  keeps what belongs to the whole scene: the scene's name and Length. One
+  row per layer, the top layer first: the eye switch, a small thumbnail,
+  the name, the blend menu and the opacity. A drag moves a layer. "+ Layer"
+  adds a kind that the scene does not have yet. A right-click menu
+  renames or deletes a layer.
+- A click selects a layer. The **Source** and **FX** cards then show that
+  layer: its source settings, and its own FX list ("+ New" adds to it).
+- In the "+ New" menu, an effect that is in another layer is dimmed, with
+  that layer's name; a click moves it here, after a question.
+- An effect moves to another layer by a drag of its header onto that
+  layer's row, or by "Move to layer" in the effect header's right-click
+  menu. Its settings stay.
+- The canvas always shows the full result, whatever layer is selected.
+
+### Old scenes
+
+- A scene from before layers opens as one Image layer with its FX list.
+- With Freeze background on, it opens as two layers: the Image layer with
+  the effects before the 3D Object, and above it the 3D Object layer, with
+  Paint "Layer below" and the effects after the 3D Object.
+- With the Overlay effect, it opens with an Image or Video layer on top,
+  with the Overlay's file, blend and opacity. Effects that were after the
+  Overlay stay in the Image layer, so such a scene can look a little
+  different.
+- A scene file gets a new version with the layers. The app then saves only
+  the new form.
+
+### Order of work
+
+Each step is a commit, with the old scenes still giving the same pictures
+(tools/test-layers.mjs) where the step says so.
+
+1. **Data and renderer:** the layers in the play state, the scene file
+   (with the old scenes' conversion), Undo and the unsaved-change check.
+   Each layer draws into its own picture, and the pictures go together.
+   With one Image layer, every old scene gives the same picture.
+2. **Layers card:** rows, eye, blend, opacity, order, select; the Source
+   and FX cards show the selected layer; "+ New" adds to it.
+3. **3D Object layer:** the 3D Object leaves the FX list; Paint "Layer
+   below" or "Slot A"; Freeze background goes.
+4. **Image or Video layer:** the Overlay effect leaves the FX list.
+5. **Moving effects:** drag and drop onto a layer row, and "Move to layer".
+6. Docs and help (RULES.md, the help topics), and the texture memory
+   estimate counts one picture per layer.
+
+### Open points
+
+- Masks (a layer that shows only where another layer is) are not in this
+  plan.
+- Multiply needs a rule for clear parts: there, the layer below shows as it
+  is.
