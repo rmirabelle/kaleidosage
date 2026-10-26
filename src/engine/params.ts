@@ -16,7 +16,7 @@ export const PARAM_KEYS = [
   "contourHue", "contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady",
   "reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine",
   "driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast",
-  "cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth", "cameraTerrainScale", "cameraRoughness", "cameraRidges", "cameraSeed", "cameraDetail", "cameraDetailSize",
+  "cameraAmount", "cameraHeight", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth", "cameraTerrainScale", "cameraRoughness", "cameraRidges", "cameraSeed", "cameraDetail", "cameraDetailSize",
   "sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness",
   "particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost", "particleRingRadius",
   "cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead",
@@ -639,19 +639,22 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   /**
    * Camera (see CAMERA_SHADER): how much the raised land shows over the
    * same camera's view of the flat picture, the land's height at white (below 0, dark areas rise), the
-   * camera's tilt from straight down and its turn around the center, its
-   * speed over the land (screen heights per second, the way it looks;
-   * below 0 flies backward), its distance (screen heights) and lens angle, the sun's direction and
+   * free camera, as on a film set: Pan (the way it looks, 0 along +x,
+   * counterclockwise), Tilt (up from level; below 0 looks down), Pedestal
+   * (its height, screen heights), Dolly and Truck (its speeds forward and
+   * to its right, screen heights per second; it holds still at 0), and
+   * its lens angle, the sun's direction and
    * height, the shadows' darkness, the fog, how much the sky and fog take
    * state.skyColor (0 = the picture's mean color), the shine of the land,
    * and how blurred the height is.
    */
   cameraAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
   cameraHeight: { label: "Height", min: -1, max: 1, step: 0.01, value: 0.25, drift: "wave", low: 0.1, high: 0.4, on: false },
-  cameraTilt: { label: "Tilt", min: 0, max: 85, step: 1, value: 50, unit: "°", drift: "wave", low: 20, high: 70, on: false },
-  cameraTurn: { label: "Turn", min: 0, max: 360, step: 1, value: 270, unit: "°", drift: "spin", low: 0, high: 360, on: false },
-  cameraSpeed: { label: "Speed", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: 0.1, high: 0.5, on: false },
-  cameraDistance: { label: "Distance", min: 0.3, max: 5, step: 0.01, value: 1.6, drift: "wave", low: 1, high: 3, on: false },
+  cameraPan: { label: "Pan", min: 0, max: 360, step: 1, value: 90, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  cameraTilt: { label: "Tilt", min: -90, max: 60, step: 1, value: -40, unit: "°", drift: "wave", low: -60, high: -20, on: false },
+  cameraPedestal: { label: "Pedestal", min: 0.02, max: 5, step: 0.01, value: 1, drift: "wave", low: 0.6, high: 1.6, on: false },
+  cameraDolly: { label: "Dolly", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: 0.1, high: 0.5, on: false },
+  cameraTruck: { label: "Truck", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -0.3, high: 0.3, on: false },
   cameraLens: { label: "Lens", min: 20, max: 120, step: 1, value: 60, unit: "°", drift: "wave", low: 40, high: 90, on: false },
   cameraLightTurn: { label: "Sun angle", min: 0, max: 360, step: 1, value: 135, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   cameraLightHeight: { label: "Sun height", min: 5, max: 90, step: 1, value: 40, unit: "°", drift: "wave", low: 15, high: 60, on: false },
@@ -929,7 +932,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
  * handles snap to it, and Ctrl + drag on a range handle mirrors around it.
  */
 export const NO_EFFECT: Partial<Record<ParamKey, number>> = {
-  warpCenterX: 0, warpCenterY: 0, cameraHeight: 0, cameraSpeed: 0,
+  warpCenterX: 0, warpCenterY: 0, cameraHeight: 0, cameraDolly: 0, cameraTruck: 0,
   mapScale: 1, juliaZoom: 1, mapPower: 1, mapArms: 0, mapTwist: 0, mapSpeed: 0, tunnelTwist: 0, mapPanX: 0, mapPanY: 0,
   mobiusPanX: 0, mobiusPanY: 0,
   centerX: 0, centerY: 0, zoom: 1, panX: 0, panY: 0, twirl: 0,
@@ -1413,7 +1416,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   contours: ["contourHue", "contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady"],
   relief: ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"],
   driver: ["driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast"],
-  camera: ["cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth", "cameraTerrainScale", "cameraRoughness", "cameraRidges", "cameraSeed", "cameraDetail", "cameraDetailSize"],
+  camera: ["cameraAmount", "cameraHeight", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth", "cameraTerrainScale", "cameraRoughness", "cameraRidges", "cameraSeed", "cameraDetail", "cameraDetailSize"],
   solid: ["solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY"],
   sort: ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"],
   particles: ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost", "particleRingRadius"],
@@ -1626,10 +1629,11 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("shine", Math.random() < 0.5 ? 0 : rand(0.1, 0.6), rand(0, 0.2));
   set("cameraAmount", 1, rand(0, 0.1));
   set("cameraHeight", (Math.random() < 0.8 ? 1 : -1) * rand(0.1, 0.5), rand(0.02, 0.15));
-  set("cameraTilt", rand(20, 75), rand(5, 20));
-  setAngle("cameraTurn", 0.6);
-  set("cameraSpeed", Math.random() < 0.5 ? 0 : (Math.random() < 0.8 ? 1 : -1) * rand(0.1, 0.6), rand(0, 0.3));
-  set("cameraDistance", rand(0.8, 3), rand(0.1, 0.8));
+  /* The same random draws as the orbit camera's before it, so the effects after it keep their random values. */
+  set("cameraTilt", rand(20, 75) - 90, rand(5, 20));
+  setAngle("cameraPan", 0.6);
+  set("cameraDolly", Math.random() < 0.5 ? 0 : (Math.random() < 0.8 ? 1 : -1) * rand(0.1, 0.6), rand(0, 0.3));
+  set("cameraPedestal", rand(0.5, 1.8), rand(0.05, 0.4));
   set("cameraLens", rand(40, 100), rand(0, 20));
   setAngle("cameraLightTurn", 0.3);
   set("cameraLightHeight", rand(15, 70), rand(0, 20));
@@ -1724,7 +1728,7 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("overlayOpacity", Math.random() < 0.75 ? 0 : rand(0.1, 0.4), rand(0, 0.15));
   set("blackLevel", Math.random() < 0.6 ? 0 : rand(0.02, 0.25), rand(0, 0.1));
   /** Every range starts off; Randomize turns on the ones that move the picture most. */
-  const moving: ParamKey[] = ["warpAmount", "warpMarble", "mapPower", "juliaShape", "mobiusPoint", "mapTwist", "mapSpeed", "lightAngle", "cameraTurn",
+  const moving: ParamKey[] = ["warpAmount", "warpMarble", "mapPower", "juliaShape", "mobiusPoint", "mapTwist", "mapSpeed", "lightAngle", "cameraPan",
     "centerX", "centerY", "rotation", "zoom", "panX", "panY"];
   for (const key of PARAM_KEYS) {
     const userOwned = GROUP_PARAMS.source.includes(key) || GROUP_PARAMS.animation.includes(key) || OPACITY_KEYS.includes(key);

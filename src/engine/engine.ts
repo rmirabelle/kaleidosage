@@ -1056,11 +1056,12 @@ export class Engine {
     } else {
       this.state.mapTravel += animated * (this.state.mapMode === 8 ? mapSpeed / drosteCopy(this.live("drosteSize")) : mapSpeed);
     }
-    /* Camera speed too: the aim point flies over the land the way the camera looks (see CAMERA_SHADER: the eye is on the Turn side of the aim point). */
-    const heading = this.live("cameraTurn") * DEGREES;
-    const flight = animated * this.live("cameraSpeed");
-    this.state.cameraX -= Math.cos(heading) * flight;
-    this.state.cameraY -= Math.sin(heading) * flight;
+    /* The camera's Dolly (forward, the way it pans) and Truck (to its right) are speeds too: its place on the land moves by them. */
+    const heading = this.live("cameraPan") * DEGREES;
+    const dolly = animated * this.live("cameraDolly");
+    const truck = animated * this.live("cameraTruck");
+    this.state.cameraX += Math.cos(heading) * dolly + Math.sin(heading) * truck;
+    this.state.cameraY += Math.sin(heading) * dolly - Math.cos(heading) * truck;
     return animated;
   }
 
@@ -1308,10 +1309,10 @@ export class Engine {
       camera: this.live("cameraAmount"),
       cameraHeight: this.live("cameraHeight"),
       cameraTilt: this.live("cameraTilt") * DEGREES,
-      cameraTurn: this.live("cameraTurn") * DEGREES,
+      cameraPan: this.live("cameraPan") * DEGREES,
       cameraX: this.state.cameraX,
       cameraY: this.state.cameraY,
-      cameraDistance: this.live("cameraDistance"),
+      cameraPedestal: this.live("cameraPedestal"),
       cameraLens: this.live("cameraLens") * DEGREES,
       cameraLightTurn: this.live("cameraLightTurn") * DEGREES,
       cameraLightHeight: this.live("cameraLightHeight") * DEGREES,

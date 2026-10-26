@@ -94,7 +94,7 @@ export function needsSeamFade(params: Params, state: PlayState) {
   const wandering = PARAM_KEYS.some((key) => inUse(key, state) && moving(params[key]) && WANDER.has(easeOf(params[key])));
   const warp = state.groups.warp && WARP_PERIODS[state.warpType] === null && everNonZero(params.warpFlow);
   const tunnel = state.groups.map && state.mapMode === 6 && everNonZero(params.mapSpeed);
-  const camera = state.groups.camera && everNonZero(params.cameraSpeed);
+  const camera = state.groups.camera && (everNonZero(params.cameraDolly) || everNonZero(params.cameraTruck));
   return wandering || warp || tunnel || camera;
 }
 

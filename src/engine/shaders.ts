@@ -1821,10 +1821,11 @@ vec3 cubicAt(vec2 uv, int level) {
  * and smoothed by the renderer (see drawCamera), in the picture's pixels.
  * Past the picture's edge the land goes on by u_repeat: mirrored (seamless
  * for every picture), repeated as it is, or not at all, so the picture
- * stands alone with sky around it. The camera circles its aim point, at u_offset from the
- * picture's center (the engine flies it over the land): u_tilt from
- * straight down, u_turn around it, u_distance away, with a lens of u_lens
- * vertical angle.
+ * stands alone with sky around it. The camera is a free camera, as on a
+ * film set: at u_offset on the land (from the picture's center; the engine
+ * moves it by Dolly and Truck), u_pedestal high (kept above the land under
+ * it), looking toward u_pan (0 along +x, counterclockwise) and u_tilt up
+ * from level (below 0 looks down), with a lens of u_lens vertical angle.
  *
  * Each pixel's ray walks over the land with the help of u_max: a pyramid
  * of the land's highest point in ever larger squares of pixels (see
@@ -1862,9 +1863,9 @@ uniform int u_blend;
 uniform int u_repeat;
 uniform float u_height;
 uniform float u_tilt;
-uniform float u_turn;
+uniform float u_pan;
 uniform vec2 u_offset;
-uniform float u_distance;
+uniform float u_pedestal;
 uniform float u_lens;
 uniform float u_lightTurn;
 uniform float u_lightHeight;
@@ -2077,13 +2078,11 @@ bool march(vec3 eye, vec3 dir, float t, int visits, bool giveUp, out float tHit)
 void main() {
   aspect = u_res.x / u_res.y;
   float top = abs(u_height);
-  /* The camera: on a circle around its aim point, looking at it. */
-  vec3 aim = vec3(u_offset, top * 0.5);
-  vec3 eye = aim + u_distance * vec3(sin(u_tilt) * cos(u_turn), sin(u_tilt) * sin(u_turn), cos(u_tilt));
-  eye.z = max(eye.z, top + 0.02);
-  vec3 forward = normalize(aim - eye);
-  /* The orbit angle also defines right when Tilt is zero (forward is vertical). */
-  vec3 right = vec3(-sin(u_turn), cos(u_turn), 0.0);
+  /* The camera: at its place and height (never inside the land), looking by Pan and Tilt. Right stays level, so there is no roll, even looking straight down. */
+  vec3 eye = vec3(u_offset, u_pedestal);
+  eye.z = max(eye.z, heightAt(eye.xy) + 0.02);
+  vec3 forward = vec3(cos(u_tilt) * cos(u_pan), cos(u_tilt) * sin(u_pan), sin(u_tilt));
+  vec3 right = vec3(sin(u_pan), -cos(u_pan), 0.0);
   vec3 up = cross(right, forward);
   vec2 screen = (v_uv - 0.5) * vec2(2.0 * aspect, 2.0);
   vec3 dir = normalize(forward + tan(u_lens * 0.5) * (screen.x * right + screen.y * up));
@@ -2103,10 +2102,15 @@ void main() {
     }
   }
 
-  /* The land: the walk starts where the ray first comes under the highest possible land. */
+  /**
+   * The land: the walk starts where the ray first comes under the highest
+   * possible land. A camera lower than that (in a valley) starts at once,
+   * and its rays that look up can meet the land too.
+   */
   vec3 color = sky;
   float t;
-  if (dir.z < 0.0 && march(eye, dir, (eye.z - top) / -dir.z, u_visits, true, t)) {
+  bool low = eye.z < top;
+  if ((dir.z < 0.0 || low) && march(eye, dir, low ? 0.0 : (eye.z - top) / -dir.z, u_visits, true, t)) {
     vec3 p = eye + dir * t;
     float e = 1.0 / u_res.y;
     vec3 normal = normalize(vec3(heightAt(p.xy - vec2(e, 0.0)) - heightAt(p.xy + vec2(e, 0.0)), heightAt(p.xy - vec2(0.0, e)) - heightAt(p.xy + vec2(0.0, e)), 2.0 * e));

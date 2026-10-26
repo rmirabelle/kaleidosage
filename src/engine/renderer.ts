@@ -328,12 +328,12 @@ export interface FrameValues {
   cameraStopColor: Float32Array;
   camera: number;
   cameraHeight: number;
+  /** The free camera (see CAMERA_SHADER): its tilt up from level and its pan (radians), its place on the land and its height (screen heights). */
   cameraTilt: number;
-  cameraTurn: number;
-  /** Where the aim point is on the land (screen heights). */
+  cameraPan: number;
   cameraX: number;
   cameraY: number;
-  cameraDistance: number;
+  cameraPedestal: number;
   cameraLens: number;
   cameraLightTurn: number;
   cameraLightHeight: number;
@@ -1641,9 +1641,9 @@ export class KaleidoRenderer {
     /* Real terrain's heights are 0 to 1 over its lowest to highest land; its relief scales Height, so Height 0.25 shows it at twice its true height. With no land loaded, it is flat. */
     gl.uniform1f(c.uniforms.u_height, v.cameraHeight * (v.cameraHeightSource !== 2 ? 1 : terrain ? this.terrainRelief * 8 : 0));
     gl.uniform1f(c.uniforms.u_tilt, v.cameraTilt);
-    gl.uniform1f(c.uniforms.u_turn, v.cameraTurn);
+    gl.uniform1f(c.uniforms.u_pan, v.cameraPan);
     gl.uniform2f(c.uniforms.u_offset, v.cameraX, v.cameraY);
-    gl.uniform1f(c.uniforms.u_distance, Math.max(0.1, v.cameraDistance));
+    gl.uniform1f(c.uniforms.u_pedestal, Math.max(0.01, v.cameraPedestal));
     gl.uniform1f(c.uniforms.u_lens, v.cameraLens);
     gl.uniform1f(c.uniforms.u_lightTurn, v.cameraLightTurn);
     gl.uniform1f(c.uniforms.u_lightHeight, v.cameraLightHeight);

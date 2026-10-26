@@ -88,6 +88,49 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
  * speed: a wave made "rate" out-and-back trips per second; an angle turned
  * "rate" degrees per second (a whole circle is one full turn).
  */
+/**
+ * A scene from before the free camera: its camera circled an aim point
+ * (cameraX, cameraY) by Turn, at Tilt from straight down and Distance away,
+ * and flew by Speed. The free camera takes the same place and view: its
+ * place and height are the old eye's, Pan looks the old way (Turn + 180°),
+ * Tilt is the old tilt less 90°, and Dolly is the old Speed. A turning
+ * orbit becomes a turning pan in place.
+ */
+function freeCameraOf(savedParams: Record<string, unknown>, params: Params, state: PlayState) {
+  const old = (key: string) => (isRecord(savedParams[key]) ? savedParams[key] : undefined) as Record<string, unknown> | undefined;
+  if (!old("cameraDistance") && !old("cameraTurn")) return;
+  const value = (key: string, fallback: number) => isNumber(old(key)?.value) ? old(key)!.value as number : fallback;
+  const toRadians = Math.PI / 180;
+  const turn = value("cameraTurn", 270);
+  const tilt = value("cameraTilt", 50);
+  const distance = value("cameraDistance", 1.6);
+  const top = Math.abs(params.cameraHeight.value);
+  const away = distance * Math.sin(tilt * toRadians);
+  state.cameraX += away * Math.cos(turn * toRadians);
+  state.cameraY += away * Math.sin(turn * toRadians);
+  /* Copies an old setting's range and timing into a new one, with its values mapped. */
+  const take = (key: string, param: Param, map: (value: number) => number) => {
+    const entry = old(key);
+    param.value = clamp(map(value(key, param.value)), param.min, param.max);
+    if (!entry || !param.drift) return;
+    if (isNumber(entry.low)) param.low = clamp(map(entry.low), param.min, param.max);
+    if (isNumber(entry.high)) param.high = clamp(map(entry.high), param.min, param.max);
+    param.on = entry.on === true;
+    param.ease = EASES.some(([kind]) => kind === entry.ease) ? entry.ease as Ease : undefined;
+    param.custom = entry.custom === true && isNumber(entry.seconds);
+    if (param.custom) param.seconds = clamp(entry.seconds as number, 1, MAX_CUSTOM_SECONDS);
+    if (isNumber(entry.startTime)) param.startTime = entry.startTime;
+  };
+  /* A full-turn pan range stays 0 to 360°; a partial one moves half a turn. */
+  const fullTurn = isNumber(old("cameraTurn")?.low) && isNumber(old("cameraTurn")?.high) && (old("cameraTurn")!.high as number) - (old("cameraTurn")!.low as number) >= 359;
+  take("cameraTurn", params.cameraPan, (angle) => ((angle + 180) % 360 + 360) % 360);
+  if (fullTurn) Object.assign(params.cameraPan, { low: 0, high: 360 });
+  take("cameraTilt", params.cameraTilt, (angle) => angle - 90);
+  take("cameraSpeed", params.cameraDolly, (speed) => speed);
+  params.cameraPedestal.value = clamp(Math.max(top * 0.5 + distance * Math.cos(tilt * toRadians), top + 0.02), params.cameraPedestal.min, params.cameraPedestal.max);
+  params.cameraPedestal.on = false;
+}
+
 function oldRateSeconds(param: Param, rate: number) {
   const width = Math.abs((param.high ?? param.max) - (param.low ?? param.min));
   if (param.drift === "spin") return (width >= param.max - param.min ? 360 : width) / Math.abs(rate);
@@ -254,6 +297,7 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   if (isNumber(saved.mapTravel)) state.mapTravel = saved.mapTravel;
   if (isNumber(saved.cameraX)) state.cameraX = saved.cameraX;
   if (isNumber(saved.cameraY)) state.cameraY = saved.cameraY;
+  freeCameraOf(savedParams, params, state);
   if (typeof saved.overlayColor === "string" && /^#[0-9a-f]{6}$/i.test(saved.overlayColor)) state.overlayColor = saved.overlayColor;
   /* Scenes from before the color blend covered the picture with the color (Normal). */
   state.colorBlend = mode(saved.colorBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? 0;
