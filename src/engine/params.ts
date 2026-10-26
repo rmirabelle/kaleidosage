@@ -519,7 +519,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   /** Tunnel, Log spiral and Seamless spiral: forward speed into the far end (backward below 0). */
   mapSpeed: { label: "Speed", min: -2, max: 2, step: 0.01, value: 0.15, drift: "wave", low: 0.1, high: 0.5, on: false },
   /** Tunnel only: how far the wall turns per tube length, so the tube becomes a spiral. Log spiral keeps its own wider twist. */
-  tunnelTwist: { label: "Twist", min: -9, max: 9, step: 0.01, value: 0, unit: "°", drift: "wave", low: -5, high: 5, on: false },
+  tunnelTwist: { label: "Twist", min: -2, max: 2, step: 0.001, value: 0, unit: "°", drift: "wave", low: -0.5, high: 0.5, on: false },
   /** Moves the map's center on the screen, for every map but Möbius (which has its own pan). */
   mapPanX: { label: "Pan X", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -0.35, high: 0.35, on: false },
   mapPanY: { label: "Pan Y", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -0.35, high: 0.35, on: false },
@@ -1529,7 +1529,7 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("juliaFog", rand(0.3, 0.8), rand(0, 0.15));
   set("juliaFogSoftness", rand(0.3, 0.7), rand(0, 0.1));
   set("mobiusFogSoftness", rand(0.3, 0.7), rand(0, 0.1));
-  set("tunnelTwist", Math.random() < 0.4 ? 0 : rand(-8, 8), rand(1, 4));
+  set("tunnelTwist", Math.random() < 0.4 ? 0 : rand(-1.5, 1.5), rand(0.1, 0.5));
   set("mapPanX", Math.random() < 0.5 ? 0 : rand(-0.4, 0.4), rand(0.05, 0.25));
   set("mapPanY", Math.random() < 0.5 ? 0 : rand(-0.4, 0.4), rand(0.05, 0.25));
   setAngle("mapRoll", 0.5);
