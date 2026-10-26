@@ -1866,6 +1866,16 @@ uniform float u_tilt;
 uniform float u_pan;
 uniform vec2 u_offset;
 uniform float u_pedestal;
+/**
+ * The camera's floor (see cameraFloor). u_floorPass 1 draws only the wide
+ * floor at the camera's place into one pixel, as 16 bits in red and green
+ * (0 to 16 screen heights), for the engine to read back. u_floorMode 1
+ * uses u_floor, the engine's floor eased over time, so the camera rises
+ * and sinks smoothly; 0 (no read back yet) finds the floor here.
+ */
+uniform int u_floorPass;
+uniform int u_floorMode;
+uniform float u_floor;
 uniform float u_lens;
 uniform float u_lightTurn;
 uniform float u_lightHeight;
@@ -1945,6 +1955,23 @@ float heightAt(vec2 p) {
  * hardly move it, and it rises early before a peak. A peak between the
  * points is caught by the camera's own height check (see main).
  */
+/**
+ * The same, wider and with more points (0.25 screen heights, 49 points),
+ * for the one-pixel floor pass that the engine reads back and eases over
+ * time (see u_floorPass).
+ */
+float cameraFloorWide(vec2 at) {
+  float highest = heightAt(at);
+  for (int ring = 1; ring <= 4; ring++) {
+    float radius = 0.0625 * float(ring);
+    for (int k = 0; k < 12; k++) {
+      float a = 6.2831853 * (float(k) + 0.5 * float(ring)) / 12.0;
+      highest = max(highest, heightAt(at + radius * vec2(cos(a), sin(a))));
+    }
+  }
+  return highest + 0.03;
+}
+
 float cameraFloor(vec2 at) {
   float highest = heightAt(at);
   for (int ring = 1; ring <= 2; ring++) {
@@ -2098,8 +2125,13 @@ void main() {
   aspect = u_res.x / u_res.y;
   float top = abs(u_height);
   /* The camera: at its place and height (never inside the land, see cameraFloor), looking by Pan and Tilt. Right stays level, so there is no roll, even looking straight down. */
+  if (u_floorPass == 1) {
+    float packed = floor(clamp(cameraFloorWide(u_offset) / 16.0, 0.0, 1.0) * 65535.0 + 0.5);
+    o = vec4(floor(packed / 256.0) / 255.0, mod(packed, 256.0) / 255.0, 0.0, 1.0);
+    return;
+  }
   vec3 eye = vec3(u_offset, u_pedestal);
-  float floorHeight = cameraFloor(eye.xy);
+  float floorHeight = u_floorMode == 1 ? u_floor : cameraFloor(eye.xy);
   /* A smooth blend of the Pedestal and the floor, so the camera eases up as the land rises under it. */
   float gap = u_pedestal - floorHeight;
   eye.z = 0.5 * (u_pedestal + floorHeight + sqrt(gap * gap + 0.05 * 0.05));

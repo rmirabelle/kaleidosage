@@ -344,7 +344,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - One frame moves the clock by 0.1 s at most.
 - Warp flow, driver, map and camera speeds add up over time.
 - The camera is a free camera: Pan (the way it looks), Tilt (up from level; below 0 looks down), Pedestal (its height), and Dolly and Truck (its speeds forward and to its right; 0 holds still). There is no roll.
-- The camera stays above the land: a little above the highest land in a circle around it, blended softly into its Pedestal, so small bumps hardly move it. A camera lower than the highest land sees the land around and above it.
+- The camera stays above the land: a little above the highest land in a circle around it, read back from the GPU and eased over time (up in about 0.25 s, down in about 0.8 s), blended softly into its Pedestal, so it rises and sinks smoothly. A camera lower than the highest land sees the land around and above it.
 - A scene from before the free camera opens with the same view: its old eye's place and height, Pan from Turn, Tilt from Tilt, Dolly from Speed. A turning orbit becomes a turning pan in place.
 - A single value glides to a new slider value in about 0.03 s.
 - Glide also works while paused.

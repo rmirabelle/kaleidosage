@@ -1025,6 +1025,7 @@ export class Engine {
    * paused). Returns the animation time that passed.
    */
   step(elapsed: number) {
+    this.easeCameraFloor(elapsed);
     const still = this.state.paused || this.gated;
     if (!still) this.state.clock += elapsed;
     /* With a song script, "elapsed" is song time (see frame), and animation time runs at the music's speed. */
@@ -1136,6 +1137,28 @@ export class Engine {
   /** Draws the picture for the current time. "animated" and "elapsed" are the times since the last frame (see step). */
   draw(animated: number, elapsed: number) {
     this.renderer.render(this.frameValues(animated, elapsed));
+  }
+
+  /** The camera's floor, eased over time (NaN until the renderer has read one back). */
+  private cameraFloor = NaN;
+
+  /**
+   * Eases the camera's floor toward the land's floor under it, read back
+   * from the renderer (see cameraFloorSample): up in about 0.25 seconds, so
+   * the camera clears a rise in time, and down in about 0.8 seconds, so it
+   * glides over a dip. A jump of more than half a screen height (a new
+   * scene, a new place) is taken at once.
+   */
+  private easeCameraFloor(elapsed: number) {
+    const sample = this.renderer.cameraFloorSample;
+    if (sample === null) return;
+    if (!Number.isFinite(this.cameraFloor) || Math.abs(sample - this.cameraFloor) > 0.5) {
+      this.cameraFloor = sample;
+      return;
+    }
+    const seconds = sample > this.cameraFloor ? 0.25 : 0.8;
+    this.cameraFloor += (sample - this.cameraFloor) * (1 - Math.exp(-Math.max(0, elapsed) / seconds));
+    if (Math.abs(sample - this.cameraFloor) > 1e-4) this.wake();
   }
 
   /** Everything the renderer needs for one frame (see draw). */
@@ -1313,6 +1336,7 @@ export class Engine {
       cameraX: this.state.cameraX,
       cameraY: this.state.cameraY,
       cameraPedestal: this.live("cameraPedestal"),
+      cameraFloor: this.cameraFloor,
       cameraLens: this.live("cameraLens") * DEGREES,
       cameraLightTurn: this.live("cameraLightTurn") * DEGREES,
       cameraLightHeight: this.live("cameraLightHeight") * DEGREES,

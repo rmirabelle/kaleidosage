@@ -334,6 +334,8 @@ export interface FrameValues {
   cameraX: number;
   cameraY: number;
   cameraPedestal: number;
+  /** The camera's floor, eased over time by the engine (see cameraFloorSample), or NaN before the first read back. */
+  cameraFloor: number;
   cameraLens: number;
   cameraLightTurn: number;
   cameraLightHeight: number;
@@ -1665,6 +1667,15 @@ export class KaleidoRenderer {
       gl.uniform1fv(c.uniforms["u_stopAt[0]"], v.cameraStopAt);
       gl.uniform3fv(c.uniforms["u_stopColor[0]"], v.cameraStopColor);
     }
+    this.readCameraFloor();
+    if (!this.floorRead?.fence) {
+      this.startCameraFloor();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
+      gl.viewport(0, 0, width, height);
+    }
+    const eased = Number.isFinite(v.cameraFloor);
+    gl.uniform1i(c.uniforms.u_floorMode, eased ? 1 : 0);
+    gl.uniform1f(c.uniforms.u_floor, eased ? v.cameraFloor : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, source);
@@ -2420,6 +2431,55 @@ export class KaleidoRenderer {
     gl.readPixels(0, 0, size[0], size[1], gl.RGBA, gl.UNSIGNED_BYTE, 0);
     gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
     read.fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+  }
+
+  /** The land's floor under the camera (screen heights; see cameraFloorWide), read back a frame or two late, or null before the first. The engine eases toward it. */
+  cameraFloorSample: number | null = null;
+  private floorRead: { texture: WebGLTexture; framebuffer: WebGLFramebuffer; buffer: WebGLBuffer; fence: WebGLSync | null } | null = null;
+  private readonly floorBytes = new Uint8Array(4);
+
+  /** Draws the camera's floor into one pixel (the camera program, set up for this frame) and starts reading it back without waiting. */
+  private startCameraFloor() {
+    const gl = this.gl;
+    if (!this.floorRead) {
+      const texture = gl.createTexture()!;
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, 1, 1);
+      const framebuffer = gl.createFramebuffer()!;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+      const buffer = gl.createBuffer()!;
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buffer);
+      gl.bufferData(gl.PIXEL_PACK_BUFFER, 4, gl.STREAM_READ);
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+      this.floorRead = { texture, framebuffer, buffer, fence: null };
+    }
+    const read = this.floorRead;
+    const c = this.camera;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, read.framebuffer);
+    gl.viewport(0, 0, 1, 1);
+    gl.uniform1i(c.uniforms.u_floorPass, 1);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.uniform1i(c.uniforms.u_floorPass, 0);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, read.buffer);
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+    read.fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+  }
+
+  /** Takes the floor into cameraFloorSample when the GPU has finished it (see startCameraFloor). */
+  private readCameraFloor() {
+    const gl = this.gl;
+    const read = this.floorRead;
+    if (!read?.fence) return;
+    const status = gl.clientWaitSync(read.fence, 0, 0);
+    if (status !== gl.ALREADY_SIGNALED && status !== gl.CONDITION_SATISFIED) return;
+    gl.deleteSync(read.fence);
+    read.fence = null;
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, read.buffer);
+    gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, this.floorBytes);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+    this.cameraFloorSample = ((this.floorBytes[0] * 256 + this.floorBytes[1]) / 65535) * 16;
   }
 
   /** Takes the small copy of the picture into memory when the GPU has finished it (see startCyclePicture). */
