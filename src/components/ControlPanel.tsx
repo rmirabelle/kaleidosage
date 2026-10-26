@@ -1240,12 +1240,13 @@ const CAMERA_TERRAIN_KEYS: ParamKey[] = ["cameraTerrainScale", "cameraRoughness"
 /**
  * The camera's settings: the Heights and Colors menus (with the height
  * gradient under Colors for Height colors), then the sliders. Generated's
- * own settings show after Height only for Generated heights.
+ * own settings show after Height only for Generated heights, and Detail
+ * only for Real terrain.
  */
 function CameraSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
   const [source, setSource] = useState<CameraHeightSource>(engine.state.cameraHeightSource);
   const [colors, setColors] = useState<CameraColors>(engine.state.cameraColors);
-  const keys = CAMERA_KEYS.flatMap((key): ParamKey[] => key === "cameraHeight" && source === 1 ? [key, ...CAMERA_TERRAIN_KEYS] : [key]);
+  const keys = CAMERA_KEYS.flatMap((key): ParamKey[] => key !== "cameraHeight" ? [key] : source === 1 ? [key, ...CAMERA_TERRAIN_KEYS] : source === 2 ? [key, "cameraDetail"] : [key]);
   return (
     <>
       <ModeSelect engine={engine} stateKey="cameraHeightSource" options={CAMERA_HEIGHT_SOURCES} name="Heights" onChange={setSource} />

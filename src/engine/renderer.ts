@@ -318,6 +318,8 @@ export interface FrameValues {
   cameraRoughness: number;
   cameraRidges: number;
   cameraSeed: number;
+  /** Real terrain: how much made-up fine detail to add where the data is coarser than the screen (0 = none). */
+  cameraDetail: number;
   /** The land's colors, and the height gradient's stops (Height colors). */
   cameraColors: CameraColors;
   cameraStopAt: Float32Array;
@@ -1588,6 +1590,8 @@ export class KaleidoRenderer {
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.terrainHeights ?? source);
     gl.uniform1i(f.uniforms.u_terrain, 1);
+    gl.uniform2f(f.uniforms.u_terrainSize, this.terrainSize[0], this.terrainSize[1]);
+    gl.uniform1f(f.uniforms.u_detail, terrain ? Math.max(0, v.cameraDetail ?? 0) : 0);
     gl.activeTexture(gl.TEXTURE0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
@@ -2192,6 +2196,7 @@ export class KaleidoRenderer {
   private terrainHeights: WebGLTexture | null = null;
   private terrainPicture: WebGLTexture | null = null;
   private terrainRelief = 0;
+  private terrainSize: [number, number] = [1, 1];
 
   /**
    * The camera's real terrain, or none (see docs/TERRAIN.md). The heights
@@ -2229,6 +2234,7 @@ export class KaleidoRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     this.terrainHeights = heights;
     this.terrainRelief = terrain.relief;
+    this.terrainSize = [terrain.width, terrain.height];
     if (terrain.picture) {
       const picture = gl.createTexture()!;
       gl.bindTexture(gl.TEXTURE_2D, picture);

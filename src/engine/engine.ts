@@ -1300,6 +1300,7 @@ export class Engine {
       cameraRoughness: this.live("cameraRoughness"),
       cameraRidges: this.live("cameraRidges"),
       cameraSeed: this.live("cameraSeed"),
+      cameraDetail: this.live("cameraDetail"),
       cameraColors: this.state.cameraColors,
       cameraStopAt: new Float32Array(this.state.cameraStops.map((stop) => stop.at)),
       cameraStopColor: new Float32Array(this.state.cameraStops.flatMap((stop) => hexToRgb(stop.color))),
