@@ -82,6 +82,8 @@ const LAYER_BLENDS = [
 ] as const;
 const TRAIL_MODES = [[1, "Mix (smoky)"], [2, "Lighten (glowing)"]] as const;
 const PARTICLE_BLENDS = [[0, "Glow (add)"], [1, "Normal"]] as const;
+/** How each particle looks; an Image copy shows Source A. */
+const PARTICLE_SHAPES = [[0, "Dot"], [1, "Line"], [2, "Ring"], [3, "Image copy"]] as const;
 /* Screen and Add: the overlay's black adds nothing, so a video on black needs no clear parts. */
 const PICTURE_BLENDS = [[0, "Normal"], [1, "Screen"], [2, "Add"]] as const;
 const SORT_ORDERS = [[0, "Dark to bright"], [1, "Bright to dark"]] as const;
@@ -378,6 +380,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     ),
     particles: (grip) => (
       <Group engine={engine} group="particles" title="Particles" grip={grip} {...accordion("particles")}>
+        <ModeSelect engine={engine} stateKey="particleShape" options={PARTICLE_SHAPES} name="Shape" />
         {/* The life gradient's colors, under its Gradient slider, in the same row block (no line between them). */}
         <SplitRows
           keys={[...PARTICLE_KEYS, "particleAmount"]}
@@ -862,7 +865,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange }: {

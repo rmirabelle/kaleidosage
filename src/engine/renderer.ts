@@ -1,7 +1,7 @@
 import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 
 /** The blur mask: circle with a sharp or a blurred center, gradient, bright areas, dark areas, noise. */
 export type BlurMask = 0 | 1 | 2 | 3 | 4 | 5;
@@ -85,6 +85,8 @@ export type DriverMode = 0 | 1 | 2;
 export type SortOrder = 0 | 1;
 /** How the particles combine with the picture: 0 glow (they add their light), 1 normal (they cover it). */
 export type ParticleBlend = 0 | 1;
+/** How each particle looks: 0 a soft dot, 1 a line along its motion, 2 a ring, 3 a copy of Source A (see PARTICLE_QUAD_SHADER). */
+export type ParticleShape = 0 | 1 | 2 | 3;
 /** How the Image or Video effect's image or video goes over the picture: 0 normal (over, by its own cover), 1 screen, 2 add. */
 export type PictureBlend = 0 | 1 | 2;
 /** How the light cycles move: 0 on grid lanes with right-angle turns, 1 in free curves. */
@@ -380,6 +382,7 @@ export interface FrameValues {
    */
   particles: number;
   particleBlend: ParticleBlend;
+  particleShape: ParticleShape;
   /** The opacity of the picture under the particles: 1 shows it whole, 0 leaves only the particles, on black. */
   particleBackground: number;
   particleCount: number;
@@ -658,6 +661,8 @@ export class KaleidoRenderer {
   private smearWasOn = false;
   private readonly particleStep: Program;
   private readonly particleDraw: Program;
+  /** The particles as lines, rings or image copies: one small rectangle each (see PARTICLE_QUAD_SHADER). */
+  private readonly particleShapes: Program;
   /** The particle state of the last frame and of this frame; they change roles each frame. Made on first use. */
   private particleStates: [ParticleState, ParticleState] | null = null;
   private particleIndex = 0;
@@ -786,6 +791,7 @@ export class KaleidoRenderer {
     this.smear = this.createProgram(SMEAR_SHADER);
     this.particleStep = this.createProgram(PARTICLE_STEP_SHADER);
     this.particleDraw = this.createProgram(PARTICLE_SHADER, PARTICLE_VERTEX_SHADER);
+    this.particleShapes = this.createProgram(PARTICLE_SHAPE_SHADER, PARTICLE_QUAD_SHADER);
     this.particleVertices = gl.createVertexArray()!;
     this.cycleSample = this.createProgram(CYCLE_SAMPLE_SHADER);
     this.cycleDraw = this.createProgram(CYCLE_SHADER, CYCLE_VERTEX_SHADER);
@@ -1733,7 +1739,8 @@ export class KaleidoRenderer {
    * Particles, in two steps: first PARTICLE_STEP_SHADER moves them one
    * frame on (and gives each particle that is born its place and color from
    * the picture), then the picture is copied and the particles are drawn
-   * over it as soft dots (PARTICLE_VERTEX_SHADER and PARTICLE_SHADER), with
+   * over it as soft dots (PARTICLE_VERTEX_SHADER and PARTICLE_SHADER), or as
+   * lines, rings or image copies (PARTICLE_QUAD_SHADER), with
    * glow (add) or normal blending. The copy is dimmed toward black by the
    * background opacity; the particles still read the whole picture. While
    * paused, they stand still.
@@ -1793,10 +1800,20 @@ export class KaleidoRenderer {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.disable(gl.BLEND);
 
-    const d = this.particleDraw;
+    /* A Dot is a point; the other shapes are a small rectangle each, which can turn and stretch. */
+    const shape = v.particleShape ?? 0;
+    const d = shape === 0 ? this.particleDraw : this.particleShapes;
     gl.useProgram(d.program);
     this.bindParticleState(d, states[this.particleIndex]);
     gl.uniform1i(d.uniforms.u_side, PARTICLE_SIDE);
+    if (shape !== 0) {
+      gl.uniform2f(d.uniforms.u_res, width, height);
+      gl.uniform1i(d.uniforms.u_shape, shape);
+      gl.uniform1f(d.uniforms.u_imageAspect, this.imageSizes[0][1] > 0 ? this.imageSizes[0][0] / this.imageSizes[0][1] : 1);
+      gl.activeTexture(gl.TEXTURE3);
+      gl.bindTexture(gl.TEXTURE_2D, this.imageTextures[0]);
+      gl.uniform1i(d.uniforms.u_image, 3);
+    }
     gl.uniform1f(d.uniforms.u_size, v.particleSize * height / 1080);
     gl.uniform1f(d.uniforms.u_maxSize, this.maxPointSize);
     gl.uniform1f(d.uniforms.u_opacity, Math.min(1, Math.max(0, v.particles)));
@@ -1809,7 +1826,9 @@ export class KaleidoRenderer {
     gl.enable(gl.BLEND);
     /* Glow adds the particles' light; either way their cover goes over the picture's, so it stays at most 1 (see COVER_GLSL). */
     gl.blendFuncSeparate(gl.ONE, v.particleBlend === 0 ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    gl.drawArrays(gl.POINTS, 0, Math.round(Math.min(PARTICLE_SIDE * PARTICLE_SIDE, Math.max(0, v.particleCount))));
+    const count = Math.round(Math.min(PARTICLE_SIDE * PARTICLE_SIDE, Math.max(0, v.particleCount)));
+    if (shape === 0) gl.drawArrays(gl.POINTS, 0, count);
+    else gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, count);
     gl.disable(gl.BLEND);
     gl.bindVertexArray(null);
   }
@@ -1825,7 +1844,6 @@ export class KaleidoRenderer {
    * picture, or with Freeze background the picture kept at the 3D Object's
    * place, see render).
    */
-  /** "layer": the 3D Object layer's shape on a clear picture, with no background and no blend of its own (the layer has them). */
   private drawSolid(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture) {
     const gl = this.gl;
     const s = this.solidProgram;

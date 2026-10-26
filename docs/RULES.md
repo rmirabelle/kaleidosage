@@ -395,6 +395,11 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Time smear keeps 32 frames and 320 MB at most.
 - The app draws at most 1,048,576 particles.
 - Particles stand still while paused.
+- Particle Shape is Dot (the default), Line, Ring or Image copy. A scene saved before Shape opens with Dot.
+- A Line lies along the particle's motion and gets longer as the particle moves faster.
+- A Ring is a circle line; its band is a fifth of its radius.
+- An Image copy shows Source A upright, in its own colors; its longer side is the particle size.
+- Particle Size goes up to 160 px.
 - While paused, drawing stops when nothing changes for 1 second (6 with Time smear).
 - Trails, a crossfade, a snapshot or a new image or video frame always draw.
 

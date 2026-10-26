@@ -3021,16 +3021,11 @@ void main() {
 }`;
 
 /**
- * Particles, step 2: draws each living particle as one point at its place
- * (gl_VertexID picks its texel). It fades in over the first tenth of its
- * life and out over the last two fifths. Its fixed random number makes it
- * 0.6 to 1.4 times u_size. A particle smaller than a pixel is drawn one
- * pixel wide but fainter, so small sizes still look smaller.
+ * Particles, step 2: what each particle's look shares (see the two drawing
+ * shaders below): its state, its size and color settings, and the life
+ * gradient.
  */
-export const PARTICLE_VERTEX_SHADER = `#version 300 es
-precision highp float;
-precision highp int;
-uniform highp sampler2D u_motion;
+const PARTICLE_LOOK_GLSL = `uniform highp sampler2D u_motion;
 uniform highp sampler2D u_life;
 uniform highp sampler2D u_color;
 uniform int u_side;
@@ -3062,6 +3057,19 @@ vec3 lifeColor(float t) {
   }
   return u_stopColor[clamp(u_stopCount - 1, 0, 7)];
 }
+`;
+
+/**
+ * Particles, step 2, Dot: draws each living particle as one point at its
+ * place (gl_VertexID picks its texel). It fades in over the first tenth of
+ * its life and out over the last two fifths. Its fixed random number makes
+ * it 0.6 to 1.4 times u_size. A particle smaller than a pixel is drawn one
+ * pixel wide but fainter, so small sizes still look smaller.
+ */
+export const PARTICLE_VERTEX_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+${PARTICLE_LOOK_GLSL}
 void main() {
   ivec2 cell = ivec2(gl_VertexID % u_side, gl_VertexID / u_side);
   vec4 life = texelFetch(u_life, cell, 0);
@@ -3083,6 +3091,60 @@ void main() {
    * about two thirds of the light. Over the whole life, the last color
    * would show only as the particle goes dark.
    */
+  float sweep = clamp((t - 0.05) / 0.7, 0.0, 1.0);
+  vec3 color = mix(texelFetch(u_color, cell, 0).rgb, lifeColor(sweep), u_gradient);
+  v_color = vec4(color, fade * u_opacity * min(1.0, size * size));
+}`;
+
+/**
+ * Particles, step 2, the other shapes (see PARTICLE_SHAPE_SHADER): each
+ * living particle is a small rectangle (an instance; gl_InstanceID picks
+ * its texel), with the same fade, size and color as a Dot. A Line lies
+ * along the particle's motion, and longer the faster it moves: 2 sizes
+ * plus the way it goes in 60 ms. A Ring is a size wide. An Image copy's
+ * longer side is a size, upright. v_px is the place in the rectangle in
+ * pixels from its center, along and across it; v_half is the shape's half
+ * size. The rectangle is 1 pixel larger on each side, for the soft edge.
+ */
+export const PARTICLE_QUAD_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+${PARTICLE_LOOK_GLSL}
+uniform vec2 u_res;
+uniform int u_shape;
+uniform float u_imageAspect;
+out vec2 v_px;
+out vec2 v_half;
+void main() {
+  ivec2 cell = ivec2(gl_InstanceID % u_side, gl_InstanceID / u_side);
+  vec4 life = texelFetch(u_life, cell, 0);
+  float t = life.x / life.y;
+  v_px = vec2(0.0);
+  v_half = vec2(1.0);
+  if (life.x < 0.0 || t >= 1.0) {
+    gl_Position = vec4(-10.0, -10.0, 0.0, 1.0);
+    v_color = vec4(0.0);
+    return;
+  }
+  vec4 motion = texelFetch(u_motion, cell, 0);
+  float fade = smoothstep(0.0, 0.1, t) * (1.0 - smoothstep(0.6, 1.0, t));
+  float size = u_size * (0.6 + 0.8 * life.z);
+  /* The velocity is in screen heights a second on both axes, so it is a direction in pixels as it is. */
+  vec2 dir = vec2(1.0, 0.0);
+  if (u_shape == 1) {
+    float speed = length(motion.zw);
+    float spin = 6.2831853 * life.z;
+    dir = speed > 1e-5 ? motion.zw / speed : vec2(cos(spin), sin(spin));
+    v_half = 0.5 * vec2(max(1.0, size * 2.0 + speed * u_res.y * 0.06), max(1.0, size * 0.25));
+  } else if (u_shape == 3) {
+    v_half = 0.5 * max(size, 1.0) * (u_imageAspect >= 1.0 ? vec2(1.0, 1.0 / u_imageAspect) : vec2(u_imageAspect, 1.0));
+  } else {
+    v_half = vec2(0.5 * max(size, 1.0));
+  }
+  vec2 corner = vec2(float(gl_VertexID & 1), float(gl_VertexID >> 1)) * 2.0 - 1.0;
+  v_px = corner * (v_half + 1.0);
+  vec2 offset = dir * v_px.x + vec2(-dir.y, dir.x) * v_px.y;
+  gl_Position = vec4(motion.xy * 2.0 - 1.0 + offset * 2.0 / u_res, 0.0, 1.0);
   float sweep = clamp((t - 0.05) / 0.7, 0.0, 1.0);
   vec3 color = mix(texelFetch(u_color, cell, 0).rgb, lifeColor(sweep), u_gradient);
   v_color = vec4(color, fade * u_opacity * min(1.0, size * size));
@@ -3111,6 +3173,47 @@ void main() {
   float peak = max(max(v_color.r, v_color.g), v_color.b);
   vec3 color = v_color.rgb * min(boost, 1.0 / max(peak, 1e-3));
   o = vec4(color * a, a);
+}`;
+
+/**
+ * Particles, the other shapes (see PARTICLE_QUAD_SHADER), with premultiplied
+ * alpha and a soft edge 1 pixel wide. A Line is brighter at its head than at
+ * its tail. A Ring's band is a fifth of its radius (at least 1 pixel). An
+ * Image copy shows Source A (u_image) with its own colors. Boost works as on
+ * a Dot: more cover, and a brighter color up to the full channel.
+ */
+export const PARTICLE_SHAPE_SHADER = `#version 300 es
+precision highp float;
+/* The same int precision as PARTICLE_QUAD_SHADER, which shares u_shape. */
+precision highp int;
+in vec4 v_color;
+in vec2 v_px;
+in vec2 v_half;
+uniform int u_shape;
+uniform float u_boost;
+uniform sampler2D u_image;
+out vec4 o;
+void main() {
+  float boost = max(u_boost, 1.0);
+  vec2 inside = clamp(v_half - abs(v_px) + 0.5, 0.0, 1.0);
+  float cover;
+  if (u_shape == 1) {
+    cover = inside.x * inside.y * mix(0.25, 1.0, clamp(0.5 + 0.5 * v_px.x / v_half.x, 0.0, 1.0));
+  } else if (u_shape == 2) {
+    float band = max(1.0, v_half.x * 0.2);
+    cover = clamp(0.5 - (abs(length(v_px) - (v_half.x - band * 0.5)) - band * 0.5), 0.0, 1.0);
+  } else {
+    cover = inside.x * inside.y;
+  }
+  float a = min(1.0, v_color.a * boost) * cover;
+  if (a <= 0.0) discard;
+  if (u_shape == 3) {
+    vec3 image = texture(u_image, clamp(v_px / v_half * 0.5 + 0.5, 0.0, 1.0)).rgb;
+    o = vec4(image * a, a);
+    return;
+  }
+  float peak = max(max(v_color.r, v_color.g), v_color.b);
+  o = vec4(v_color.rgb * min(boost, 1.0 / max(peak, 1e-3)) * a, a);
 }`;
 
 /**

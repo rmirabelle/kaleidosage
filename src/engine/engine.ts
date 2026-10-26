@@ -1327,6 +1327,7 @@ export class Engine {
       sortThickness: this.live("sortThickness"),
       particles: on.particles ? this.live("particleAmount") : 0,
       particleBlend: this.state.particleBlend,
+      particleShape: this.state.particleShape,
       particleBackground: this.live("particleBackground"),
       particleCount: this.live("particleCount"),
       particleLevel: this.live("particleLevel"),
