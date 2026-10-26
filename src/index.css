@@ -513,7 +513,9 @@ button { border: 0; }
 .layers-header { gap: 8px; }
 .layers-add { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; font-size: 12px; }
 .layers-strip { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #2b2f3a; }
-.layers-opacity { flex: 1; min-width: 0; }
+/* The blend menu has a width of its own: a panel menu fills its row, which left the opacity slider no width (its handle went, and a click set 0). */
+.layers-strip .dropdown-button { flex: none; width: 104px; }
+.layers-opacity { flex: 1; min-width: 60px; }
 .layers-opacity-value { width: 34px; color: #c3c7d0; font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
 .layers-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 6px; list-style: none; }
 .layers-row { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 3px 6px; border: 1px solid transparent; border-radius: 4px; color: #d9dce3; font-size: 12px; cursor: default; }
