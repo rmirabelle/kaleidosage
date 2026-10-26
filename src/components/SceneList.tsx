@@ -107,7 +107,7 @@ export function SceneList({ tabs, activeId, onSelect, onClose, onReorder, onRena
                     onBlur={commitRename}
                   />
                 ) : (
-                  <span className="scene-list-name">{baseName(tab)}</span>
+                  <span className="scene-list-name">{baseName(tab)}{tab.dirty && <span className="titlebar-dirty">*</span>}</span>
                 )}
                 <button
                   className="scene-list-close"

@@ -2425,8 +2425,8 @@ export default function App() {
   const inputInPlaylist = sceneListShown && tracksActive && !filesCollapsed;
   const inputMenu = <AudioInputMenu tip={inputTip} onTipDone={() => setInputTip(false)} onPick={pickInput} />;
   const tabs: DocumentTabInfo[] = docs.map((doc) => doc.id === activeId
-    ? { id: doc.id, fileName: docFileName(scenePath, doc.untitled), path: scenePath }
-    : { id: doc.id, fileName: docFileName(doc.path, doc.untitled), path: doc.path });
+    ? { id: doc.id, fileName: docFileName(scenePath, doc.untitled), path: scenePath, dirty }
+    : { id: doc.id, fileName: docFileName(doc.path, doc.untitled), path: doc.path, dirty: doc.dirty });
   const sceneFileName = tabs.find((tab) => tab.id === activeId)?.fileName ?? "Untitled Scene";
 
   return (
@@ -2500,6 +2500,7 @@ export default function App() {
                     <SourcePanel
                       engine={engine}
                       sceneName={sceneFileName.replace(/\.ksage$/i, "")}
+                      dirty={dirty}
                       images={images}
                       randomLoading={randomLoading}
                       onOpenImage={(slot) => void openImage(slot)}

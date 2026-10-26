@@ -40,10 +40,12 @@ const TILINGS: readonly (readonly [Tiling, string, ReactNode])[] = [
  * how the images go on past their edges. It is always open. The scene's play toolbar is at the
  * bottom of the column, under the FX card (see SceneTransport).
  */
-export function SourcePanel({ engine, sceneName, ...sources }: Omit<SourceImagesProps, "videoLoop" | "onVideoLoop"> & {
+export function SourcePanel({ engine, sceneName, dirty, ...sources }: Omit<SourceImagesProps, "videoLoop" | "onVideoLoop"> & {
   engine: Engine;
   /** The scene's file name (without .ksage), or "Untitled Scene": the card's title. */
   sceneName: string;
+  /** True when the scene has unsaved changes: a red asterisk shows after its name. */
+  dirty?: boolean;
 }) {
   const row = useParamRows(engine);
   const [blendMode, setBlendMode] = useState<BlendMode>(engine.state.blendMode);
@@ -54,7 +56,7 @@ export function SourcePanel({ engine, sceneName, ...sources }: Omit<SourceImages
   return (
     <section className="panel-card source-section" {...help("source")}>
       <div className="panel-header-bar">
-        <h2 className="side-panel-title source-title" data-tip={sceneName}><span>{sceneName}</span></h2>
+        <h2 className="side-panel-title source-title" data-tip={dirty ? `${sceneName}: this scene has changes that are not saved` : sceneName}><span>{sceneName}</span>{dirty && <span className="titlebar-dirty">*</span>}</h2>
       </div>
       <div className="panel-root-row source-length">
         {row("cycle")}

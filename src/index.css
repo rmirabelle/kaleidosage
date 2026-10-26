@@ -382,7 +382,8 @@ button { border: 0; }
 /* While Ctrl is held and a Song Map slice is selected, a click picks the scene for it (see SceneList): a pick cursor, and the scene under the pointer in the pick color. */
 .scene-list-items.picking .scene-list-item { cursor: copy; }
 .scene-list-items.picking .scene-list-item:hover { color: #1b1606; background: #f5ce69; }
-.scene-list-item.active .titlebar-dirty { color: #fff; }
+/* On the blue of the selected scene, a lighter red shows better. */
+.scene-list-item.active .titlebar-dirty { color: #ff9a9a; }
 .scene-list-item.dragging { opacity: .55; }
 .scene-list-number { flex: 0 0 18px; color: #6f7686; font-size: 11px; font-variant-numeric: tabular-nums; text-align: right; }
 .scene-list-item.active .scene-list-number { color: #c9d4ff; }
@@ -418,7 +419,8 @@ button { border: 0; }
 .document-tab-name { overflow: hidden; text-overflow: ellipsis; }
 /* The tab or track that is being dragged (see useDragReorder). */
 .document-tab.dragging { opacity: .55; }
-.document-tab.active .titlebar-dirty { color: #fff; }
+/* On the blue of the selected tab, a lighter red shows better. */
+.document-tab.active .titlebar-dirty { color: #ff9a9a; }
 /* The close button is half transparent until the pointer is on it. */
 .document-tab-close { flex: 0 0 auto; display: grid; place-items: center; width: 22px; height: 22px; margin-left: 7px; border-radius: 4px; color: inherit; background: transparent; opacity: .5; cursor: pointer; }
 .document-tab-close:hover { background: rgba(255,255,255,.2); opacity: 1; }

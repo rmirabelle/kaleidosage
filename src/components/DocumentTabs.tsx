@@ -8,6 +8,8 @@ export interface DocumentTabInfo {
   fileName: string;
   /** The scene's copy in the temp folder (see kaleidoFile.ts); null for a scene that was never saved. */
   path: string | null;
+  /** True when the scene has changes that are not saved; a red asterisk shows after its name. */
+  dirty?: boolean;
 }
 
 interface Props {
@@ -21,7 +23,7 @@ interface Props {
 
 /**
  * The open file's scenes as document tabs above the picture, each labeled
- * with the scene's name. The title bar has the file's one unsaved mark. More tabs than one row holds go on to more rows. A press
+ * with the scene's name, and a red asterisk while the scene has unsaved changes. The title bar has the file's unsaved mark. More tabs than one row holds go on to more rows. A press
  * selects a tab; a drag moves it to another place (see useDragReorder). A
  * middle click takes the scene out of the file.
  */
@@ -45,7 +47,7 @@ export function DocumentTabs({ tabs, activeId, onSelect, onClose, onReorder }: P
             }}
             onAuxClick={(event) => { if (event.button === 1) onClose(tab.id); }}
           >
-            <span className="document-tab-name">{tab.fileName.replace(/.ksage$/i, "")}</span>
+            <span className="document-tab-name">{tab.fileName.replace(/.ksage$/i, "")}{tab.dirty && <span className="titlebar-dirty">*</span>}</span>
             <button
               className="document-tab-close"
               onPointerDown={(event) => event.stopPropagation()}
