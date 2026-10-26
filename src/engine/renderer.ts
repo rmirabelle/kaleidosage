@@ -500,6 +500,8 @@ export interface FrameValues {
   pictureX: number;
   pictureY: number;
   pictureTurn: number;
+  /** The black key (0 = off): parts darker than this become clear. */
+  pictureKey: number;
   /**
    * Bloom (see BLOOM_SHADER): strength (0 = off), the brightness where the
    * glow starts and how gradually, and its size (a mip level at 1080p).
@@ -2572,6 +2574,7 @@ export class KaleidoRenderer {
     gl.uniform1f(p.uniforms.u_size, Math.max(0.01, v.pictureSize));
     gl.uniform2f(p.uniforms.u_offset, v.pictureX, v.pictureY);
     gl.uniform1f(p.uniforms.u_turn, v.pictureTurn);
+    gl.uniform1f(p.uniforms.u_key, Math.max(0, v.pictureKey ?? 0));
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 

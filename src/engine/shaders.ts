@@ -2647,6 +2647,9 @@ void main() {
  * over (Normal); 1 is Screen and 2 is Add, where black adds nothing, so a
  * video on black needs no clear parts. Its light adds cover as it adds
  * color (see COVER_GLSL), so it shows over what is under a clear layer.
+ * u_key (0 = off) is the black key: parts darker than u_key become clear,
+ * with a soft edge from half of u_key, so a video's black border goes away
+ * and the rest stays opaque.
  */
 export const PICTURE_SHADER = `#version 300 es
 precision highp float;
@@ -2661,6 +2664,7 @@ uniform float u_layerAspect;
 uniform float u_size;
 uniform vec2 u_offset;
 uniform float u_turn;
+uniform float u_key;
 ${COVER_GLSL}
 void main() {
   vec4 base = texture(u_tex, v_uv);
@@ -2674,7 +2678,12 @@ void main() {
   float h = max(1.0, aspect / u_layerAspect) * u_size;
   vec2 uv = p / vec2(h * u_layerAspect, h) + 0.5;
   bool inside = all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)));
-  vec4 layer = inside ? texture(u_layer, uv) * u_opacity : vec4(0.0);
+  vec4 layer = inside ? texture(u_layer, uv) : vec4(0.0);
+  if (u_key > 0.0) {
+    float bright = max(layer.r, max(layer.g, layer.b)) / max(layer.a, 1e-4);
+    layer *= smoothstep(u_key * 0.5, u_key, bright);
+  }
+  layer *= u_opacity;
   if (u_blend == 0) {
     o = layer + base * (1.0 - layer.a);
     return;

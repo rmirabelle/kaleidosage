@@ -1391,6 +1391,7 @@ export class Engine {
       pictureX: this.live("pictureX"),
       pictureY: this.live("pictureY"),
       pictureTurn: this.live("pictureTurn") * DEGREES,
+      pictureKey: this.live("pictureKey"),
       bloom: on.bloom ? this.live("bloomAmount") : 0,
       bloomThreshold: this.live("bloomThreshold"),
       bloomSoftness: this.live("bloomSoftness"),

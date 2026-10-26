@@ -24,7 +24,7 @@ export const PARAM_KEYS = [
   "solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY",
   "raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY",
   "laserAmount", "laserCount", "laserSpread", "laserSweep", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY",
-  "pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn",
+  "pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn", "pictureKey",
   "bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize",
   "sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel"
 ] as const;
@@ -883,6 +883,8 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   pictureX: { label: "X", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   pictureY: { label: "Y", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   pictureTurn: { label: "Turn", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "spin", low: -180, high: 180, on: false },
+  /** The black key (0 = off): parts darker than this become clear. */
+  pictureKey: { label: "Black key", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.3, on: false },
   /**
    * Bloom (see BLOOM_SHADER): the bright parts of the picture glow into the
    * parts around them. Strength is how much glow is added; Threshold is the
@@ -1388,7 +1390,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   particles: ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost"],
   cycles: ["cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead", "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY"],
   rays: ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"],
-  picture: ["pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn"],
+  picture: ["pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn", "pictureKey"],
   lasers: ["laserAmount", "laserCount", "laserSpread", "laserSweep", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"],
   bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
   sharpen: ["sharpen", "sharpenRadius"],
