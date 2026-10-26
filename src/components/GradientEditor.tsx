@@ -28,7 +28,7 @@ const cssGradient = (stops: readonly GradientStop[]) =>
  * During a drag the stops keep their list order, so the dragged one keeps
  * its index; the engine always gets them in order of place.
  */
-export function GradientEditor({ engine, stateKey = "particleStops" }: { engine: Engine; stateKey?: "particleStops" | "cyclesStops" | "outlineStops" }) {
+export function GradientEditor({ engine, stateKey = "particleStops" }: { engine: Engine; stateKey?: "particleStops" | "cyclesStops" | "outlineStops" | "cameraStops" }) {
   const [stops, setStops] = useState<GradientStop[]>(() => engine.state[stateKey].map((stop) => ({ ...stop })));
   /** The stop whose color picker is open. */
   const [picking, setPicking] = useState<number | null>(null);

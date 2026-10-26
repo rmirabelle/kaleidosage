@@ -79,6 +79,8 @@ export type LayerBlend = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export type CameraRepeat = 0 | 1 | 2;
 /** Where the camera's land heights come from (see docs/TERRAIN.md): 0 the picture's brightness, 1 generated mountains. */
 export type CameraHeightSource = 0 | 1;
+/** The camera's land colors: 0 the picture, 1 a gradient by height (see docs/TERRAIN.md). */
+export type CameraColors = 0 | 1;
 /** The Driver effect's driver: 0 caustics, 1 smoke, 2 ink, 3 fire, 4 rain ripples, 5 the user's video (see DRIVER_SHADER). */
 export type DriverSource = 0 | 1 | 2 | 3 | 4 | 5;
 /** What the driver does to the picture: 0 bends it, 1 reveals it through the driver, 2 lights it. */
@@ -315,6 +317,10 @@ export interface FrameValues {
   cameraRoughness: number;
   cameraRidges: number;
   cameraSeed: number;
+  /** The land's colors, and the height gradient's stops (Height colors). */
+  cameraColors: CameraColors;
+  cameraStopAt: Float32Array;
+  cameraStopColor: Float32Array;
   camera: number;
   cameraHeight: number;
   cameraTilt: number;
@@ -1632,6 +1638,12 @@ export class KaleidoRenderer {
     gl.uniform3f(c.uniforms.u_skyColor, ...v.skyColor);
     gl.uniform1f(c.uniforms.u_shine, Math.max(0, v.cameraShine));
     gl.uniform1f(c.uniforms.u_smooth, Math.max(0, v.cameraSmooth));
+    gl.uniform1i(c.uniforms.u_colors, v.cameraColors ?? 0);
+    if (v.cameraStopAt) {
+      gl.uniform1i(c.uniforms.u_stopCount, v.cameraStopAt.length);
+      gl.uniform1fv(c.uniforms["u_stopAt[0]"], v.cameraStopAt);
+      gl.uniform3fv(c.uniforms["u_stopColor[0]"], v.cameraStopColor);
+    }
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, source);

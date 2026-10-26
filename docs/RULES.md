@@ -223,6 +223,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Adding Lasers starts Sweep looping, so the fan tilts up and down and looks flat as it passes level.
 - Camera Heights: Picture (the picture's brightness, as before) or Generated (noise mountains with Scale, Roughness, Ridges and Seed). A scene saved before Heights opens with Picture.
 - Generated mountains repeat a whole number of times across the land, so Tile repeat shows no seam.
+- Camera Colors: Picture (as before) or Height colors, a gradient from the lowest land (left) to the highest (right): valley green, grass, rock, stone, snow by default.
 - Light shapes draws glowing outlines: a ring, a square, a triangle or a star (Points sets its points).
 - Light shapes Draw: Draw and erase draws the outline from the top, then erases it from the top; Chase sends a part of Length around it, brightest at its head; Whole shows it all.
 - Light shapes has Count copies, each smaller by Spacing and later in its draw by Delay. One draw takes Draw time seconds.

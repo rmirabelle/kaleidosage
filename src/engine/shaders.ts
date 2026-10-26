@@ -1875,6 +1875,11 @@ uniform vec3 u_skyColor;
 uniform float u_shine;
 /* The blur of the height (a mip level): how wide the slope of a sharp edge is. */
 uniform float u_smooth;
+/* The land's colors: 0 the picture, 1 the gradient by height (u_stopAt, u_stopColor; see docs/TERRAIN.md). */
+uniform int u_colors;
+uniform int u_stopCount;
+uniform float u_stopAt[8];
+uniform vec3 u_stopColor[8];
 
 /**
  * The most squares one ray may visit, from the renderer. A fixed count
@@ -1931,10 +1936,29 @@ float heightAt(vec2 p) {
   return textureLod(u_fine, q / u_res, 0.0).r * abs(u_height);
 }
 
-/* The picture's color at a point on the land seen from "t" away: the blur level comes from the distance, so a cliff's edge gets no dark line. */
+/* The height gradient at h (0 to 1), as gradientColorAt in params.ts. */
+vec3 heightColor(float h) {
+  if (h <= u_stopAt[0]) return u_stopColor[0];
+  for (int i = 1; i < 8; i++) {
+    if (i >= u_stopCount) break;
+    if (h <= u_stopAt[i]) {
+      float span = u_stopAt[i] - u_stopAt[i - 1];
+      return mix(u_stopColor[i - 1], u_stopColor[i], span > 0.0 ? (h - u_stopAt[i - 1]) / span : 1.0);
+    }
+  }
+  return u_stopColor[clamp(u_stopCount - 1, 0, 7)];
+}
+
+/**
+ * The land's color at a point seen from "t" away: the picture's (the blur
+ * level comes from the distance, so a cliff's edge gets no dark line), or
+ * with Height colors the gradient at the land's height there (0 at the
+ * lowest, 1 at the highest).
+ */
 vec3 colorAt(vec2 p, float t) {
   vec2 q, flip;
   wrapPixels(pixelsAt(p), q, flip);
+  if (u_colors == 1) return heightColor(textureLod(u_fine, q / u_res, 0.0).r);
   float lod = max(0.0, log2(t * 2.0 * tan(u_lens * 0.5)));
   return textureLod(u_tex, q / u_res, lod).rgb;
 }

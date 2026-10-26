@@ -1,4 +1,4 @@
-import type { BlendMode, BlurMask, CameraHeightSource, CameraRepeat, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidShape, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
+import type { BlendMode, BlurMask, CameraColors, CameraHeightSource, CameraRepeat, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidShape, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
 
 export const PARAM_KEYS = [
   "cycle",
@@ -325,6 +325,9 @@ export interface PlayState {
   cameraRepeat: CameraRepeat;
   /** Where the camera's land heights come from: the picture's brightness, or generated mountains (see docs/TERRAIN.md). */
   cameraHeightSource: CameraHeightSource;
+  /** The land's colors: the picture, or a gradient by height (cameraStops). */
+  cameraColors: CameraColors;
+  cameraStops: GradientStop[];
   /** The pixel sort's order along each run: dark to bright, or bright to dark. */
   sortOrder: SortOrder;
   /** How the particles combine with the picture under them: they add light (glow), or cover it. */
@@ -1006,7 +1009,7 @@ export function createPlayState(): PlayState {
     /* No effect is in the list at start-up, so every effect group is off. */
     groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false },
     locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 0, sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), outlineTime: 0, outlineFlowTime: 0, solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 0, cameraColors: 0, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), outlineTime: 0, outlineFlowTime: 0, solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1132,6 +1135,10 @@ export const defaultGradientStops = (): GradientStop[] => [{ at: 0, color: "#ff0
 
 /** The light cycles' gradient in a new scene: cyan to orange, the two colors of the film's cycles. */
 export const defaultCycleStops = (): GradientStop[] => [{ at: 0, color: "#18e0ff" }, { at: 1, color: "#ff7a1a" }];
+/** The camera's Height colors, from the lowest land to the highest: dark valley green, grass, rock brown, gray stone, snow. */
+export const defaultTerrainStops = (): GradientStop[] => [
+  { at: 0, color: "#2f4a24" }, { at: 0.28, color: "#5f8a3a" }, { at: 0.5, color: "#7d6748" }, { at: 0.68, color: "#8f8b85" }, { at: 0.8, color: "#f2f4f7" }
+];
 /** Light shapes' colors along the outline: the same color at both ends, so no seam shows at the top. */
 export const defaultOutlineStops = (): GradientStop[] => [{ at: 0, color: "#18e0ff" }, { at: 0.5, color: "#ff2bd6" }, { at: 1, color: "#18e0ff" }];
 
@@ -1343,6 +1350,8 @@ export function resetEffects(params: Params, state: PlayState) {
     state.skyColor = fresh.skyColor;
     state.cameraRepeat = fresh.cameraRepeat;
     state.cameraHeightSource = fresh.cameraHeightSource;
+    state.cameraColors = fresh.cameraColors;
+    state.cameraStops = fresh.cameraStops;
   }
   if (!state.locks.sort) state.sortOrder = fresh.sortOrder;
   if (!state.locks.picture) state.pictureBlend = fresh.pictureBlend;
@@ -1421,7 +1430,7 @@ const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   trails: ["trailColor"],
   smear: ["smearShape"],
   contours: ["contourTone", "contourBlend"],
-  camera: ["skyColor", "cameraBlend", "cameraRepeat", "cameraHeightSource"],
+  camera: ["skyColor", "cameraBlend", "cameraRepeat", "cameraHeightSource", "cameraColors"],
   sort: ["sortOrder"],
   particles: ["particleBlend", "particleShape"],
   outlines: ["outlineShape", "outlineDraw"],
