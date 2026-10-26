@@ -2639,7 +2639,7 @@ void main() {
  * The beams are added light (see addLight).
  */
 /**
- * Overlay: the Overlay effect's image or video (u_layer, premultiplied, with
+ * Image or Video: the effect's image or video (u_layer, premultiplied, with
  * its clear parts) over the picture made so far. Size 1 covers the screen
  * and keeps the layer's shape; u_offset moves its center (a part of the
  * screen size from the screen center), and u_turn turns it about that
@@ -2690,32 +2690,6 @@ void main() {
   }
   vec3 light = u_blend == 1 ? layer.rgb * (1.0 - clamp(base.rgb, 0.0, 1.0)) : layer.rgb;
   o = addLight(base, light);
-}`;
-
-/**
- * Layers (see docs/LAYERS.md): puts a layer's picture (premultiplied, with
- * its cover) over the layers under it (u_base: black under the bottom
- * layer), by its blend and opacity. Normal lays it over by its cover; Screen and Add
- * add its light; Multiply darkens by it, and where it is clear the picture
- * under it shows as it is.
- */
-export const LAYER_SHADER = `#version 300 es
-precision highp float;
-in vec2 v_uv;
-out vec4 o;
-uniform sampler2D u_layer;
-uniform sampler2D u_base;
-uniform int u_blend;
-uniform float u_opacity;
-void main() {
-  vec4 base = texture(u_base, v_uv);
-  vec4 layer = texture(u_layer, v_uv) * u_opacity;
-  vec3 color;
-  if (u_blend == 1) color = base.rgb + layer.rgb * (1.0 - base.rgb);
-  else if (u_blend == 2) color = base.rgb + layer.rgb;
-  else if (u_blend == 3) color = base.rgb * (1.0 - layer.a + layer.rgb);
-  else color = layer.rgb + base.rgb * (1.0 - layer.a);
-  o = vec4(clamp(color, 0.0, 1.0), 1.0);
 }`;
 
 export const LASER_SHADER = `#version 300 es

@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExt
 import { createPortal } from "react-dom";
 import { CaretRight, DiceFive, DotsSixVertical, Eye, EyeSlash, LockSimple, LockSimpleOpen, Play, SpeakerSimpleHigh, Trash, Wind, X } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
-import { GROUP_PARAMS, addEffect, applyRadialStart, createParams, effectLayer, layerFx, removeEffect, setLayerFx, type GroupKey, type ParamKey, type PlayState, type SceneLayer } from "../engine/params";
+import { GROUP_PARAMS, addEffect, applyRadialStart, createParams, removeEffect, type GroupKey, type ParamKey, type PlayState } from "../engine/params";
 import { midi } from "../lib/midi";
 import { audioInput } from "../lib/audioInput";
 import { settingButtons } from "../lib/settingButtons";
@@ -10,8 +10,7 @@ import { GradientEditor } from "./GradientEditor";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
 import { BLUR_KEYS, BLUR_MASKS, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
-import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, LayerKind, MapMode, ShapeStep, SmearShape, SolidMap, SolidPaint, SolidShape, WarpType } from "../engine/renderer";
-import { LayersCard } from "./LayersCard";
+import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ContextMenu } from "./ContextMenu";
@@ -39,15 +38,12 @@ interface Props {
   source: ReactNode;
   /** The scene's play toolbar (see SceneTransport), at the bottom of the panel, under the FX card. */
   transport: ReactNode;
-  /** The scene's name (without .ksage), for the Layers card's title, and each layer kind's thumbnail. */
-  sceneName: string;
-  thumbnails: Partial<Record<LayerKind, string>>;
   /** A press anywhere in the panel but the scene's play toolbar: the user works on the scene (it turns Hold on, see App). */
   onWork: () => void;
   /** The file name of the Driver effect's own video, or null, and the button that picks one. */
   driverVideoName: string | null;
   onPickDriverVideo: () => void;
-  /** The file name of the Overlay effect's image or video, or null, and the buttons that pick one and take it away. */
+  /** The file name of the Image or Video effect's image or video, or null, and the buttons that pick one and take it away. */
   pictureName: string | null;
   onPickPicture: () => void;
   onRemovePicture: () => void;
@@ -99,7 +95,7 @@ const CAMERA_REPEATS = [[0, "Mirror"], [1, "Tile"], [2, "None"]] as const;
 /** The controls of the left panel whose press is work on the scene (see onWork): buttons, fields, the sliders' parts, the gradient and the effect grips. */
 const WORK_CONTROLS = "button, input, select, textarea, a, label, [role=slider], [role=button], [role=option], [role=menuitem], [contenteditable=true], .range-grab, .range-low, .range-high, .gradient-bar, .gradient-stop, .panel-group-grip";
 
-export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, sceneName, thumbnails, transport, onWork, driverVideoName, onPickDriverVideo, pictureName, onPickPicture, onRemovePicture, onNeedAudioInput, linksTip, onLinksTipDone, nextTip, onNextTipDone, onFirstEffect }: Props) {
+export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, transport, onWork, driverVideoName, onPickDriverVideo, pictureName, onPickPicture, onRemovePicture, onNeedAudioInput, linksTip, onLinksTipDone, nextTip, onNextTipDone, onFirstEffect }: Props) {
   const holdOnly = useSceneHoldOnly();
   const row = useParamRows(engine);
   /** True while MIDI holds any range: the Effects header then shows a play button that plays them all again. */
@@ -264,62 +260,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
    * The effects in the list run in this order; dragging a group by its grip
    * moves it to any place in the list. Only added effects are in the list.
    */
-  /**
-   * The layers (see docs/LAYERS.md) and the selected one, whose source the
-   * Source card shows and whose own effects the FX card lists. Each layer
-   * has its own list; an effect is in one layer only.
-   */
-  const [stack, setStack] = useState(engine.state.layers);
-  const [selectedKind, setSelectedKind] = useState<LayerKind>("image");
-  const kind: LayerKind = stack.some((layer) => layer.kind === selectedKind) ? selectedKind : "image";
-  const [imageFx, setImageFx] = useState(engine.state.fxOrder);
-  const fxOrder = kind === "image" ? imageFx : stack.find((layer) => layer.kind === kind)?.fx ?? [];
-  /** After a change in the engine's state: the card's lists follow it. */
-  const sync = () => {
-    setImageFx(engine.state.fxOrder);
-    setStack(engine.state.layers);
-  };
-  const setFxOrder = (next: FxStep[]) => {
-    setLayerFx(engine.state, kind, next);
-    sync();
-  };
-  const writeLayers = (next: SceneLayer[]) => {
-    engine.state.layers = next;
-    engine.wake();
-    sync();
-  };
-  /** The other layers, by the effects in them: "+ New" shows where such an effect is, and a pick moves it here. */
-  const elsewhere: Partial<Record<FxStep, string>> = {};
-  for (const layer of stack) for (const step of layerFx(engine.state, layer.kind)) if (layer.kind !== kind) elsewhere[step] = layer.name;
-  /** Moves an effect to another layer (a drop on its row, or Move to in the effect's right-click menu); its settings stay. */
-  const moveEffect = (step: FxStep, to: LayerKind) => {
-    if (effectLayer(engine.state, step) === to) return;
-    addEffect(engine.state, step, to);
-    sync();
-    if (openGroup === step) onOpenGroup(null);
-  };
-  /** Adds a layer of a kind the scene does not have yet, at the top, and selects it. */
-  const addLayer = (added: LayerKind) => {
-    if (stack.some((layer) => layer.kind === added)) return;
-    const names: Record<LayerKind, string> = { image: "Image", solid: "3D Object", media: "Image or Video" };
-    const layer: SceneLayer = { kind: added, name: names[added], visible: true, blend: 0, opacity: 1, ...(added === "image" ? {} : { fx: [] }), ...(added === "solid" ? { paint: 0 as SolidPaint } : {}) };
-    /* A new 3D Object shows at once. */
-    if (added === "solid" && engine.params.solidAmount.value === 0 && !engine.params.solidAmount.on) engine.params.solidAmount.value = 1;
-    writeLayers([...stack, layer]);
-    setSelectedKind(added);
-    /* An Image or Video layer shows nothing until it has a file. */
-    if (added === "media" && !pictureName) onPickPicture();
-  };
-  /** Takes a layer out; its effects leave the scene (their settings stay). The Image layer stays. */
-  const deleteLayer = (deleted: LayerKind) => {
-    if (deleted === "image") return;
-    for (const step of layerFx(engine.state, deleted)) engine.state.groups[step] = false;
-    writeLayers(stack.filter((layer) => layer.kind !== deleted));
-    setSelectedKind("image");
-    if (deleted === "media") onRemovePicture();
-  };
-  /** The right-click menu of an effect in the list: Move to each other layer. */
-  const [moveMenu, setMoveMenu] = useState<{ left: number; top: number; step: FxStep } | null>(null);
+  const [fxOrder, setFxOrder] = useState(engine.state.fxOrder);
   /**
    * Adds an effect at the end of the list and opens it. It starts with
    * settings that show, the same as its power button gives, so adding it
@@ -358,14 +299,14 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       }
     };
     enable[step]?.();
-    if (layerFx(engine.state, kind).length === 0) onFirstEffect();
-    addEffect(engine.state, step, kind);
-    sync();
+    if (engine.state.fxOrder.length === 0) onFirstEffect();
+    addEffect(engine.state, step);
+    setFxOrder(engine.state.fxOrder);
     onOpenGroup(step);
   };
   const remove = (step: FxStep) => {
     removeEffect(engine.state, step);
-    sync();
+    setFxOrder(engine.state.fxOrder);
     if (openGroup === step) onOpenGroup(null);
   };
   const groups: Record<FxStep, (grip: Grip) => ReactNode> = {
@@ -456,7 +397,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       </Group>
     ),
     picture: (grip) => (
-      <Group engine={engine} group="picture" title="Overlay" grip={grip} {...accordion("picture")}>
+      <Group engine={engine} group="picture" title="Image or Video" grip={grip} {...accordion("picture")}>
         <div className="panel-select-row panel-select-named driver-video-row">
           <span className="panel-row-name">Media</span>
           <span className="driver-video-name" data-tip={pictureName ? `The overlay: ${pictureName}` : "No image or video yet"}>{pictureName ?? "None"}</span>
@@ -509,40 +450,8 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
         if (target.closest(WORK_CONTROLS) && !target.closest(".scene-transport, .panel-group-header")) onWork();
       }}
     >
-      {/* The Layers card (see LayersCard): the scene's name, its Length and its layers. */}
-      <LayersCard
-        engine={engine}
-        sceneName={sceneName}
-        thumbnails={thumbnails}
-        layers={stack}
-        selected={kind}
-        onSelect={setSelectedKind}
-        onChange={writeLayers}
-        onAdd={addLayer}
-        onDelete={deleteLayer}
-      />
-      {/* The selected layer's source: the image slots (see SourcePanel), the 3D Object or the Image or Video. */}
-      {kind === "image" ? source : kind === "solid" ? (
-        <section className="panel-card source-section layer-source" {...help("layers")}>
-          <div className="panel-header-bar"><h2 className="side-panel-title">3D Object</h2></div>
-          <div className="layer-source-body">
-            <SolidPaintRow engine={engine} layer={stack.find((layer) => layer.kind === "solid")!} onChange={(paint) => writeLayers(stack.map((layer) => layer.kind === "solid" ? { ...layer, paint } : layer))} />
-            <SolidSection engine={engine} row={row} layer />
-          </div>
-        </section>
-      ) : (
-        <section className="panel-card source-section layer-source" {...help("layers")}>
-          <div className="panel-header-bar"><h2 className="side-panel-title">Image or Video</h2></div>
-          <div className="layer-source-body">
-            <div className="panel-select-row panel-select-named driver-video-row">
-              <span className="panel-row-name">File</span>
-              <span className="driver-video-name" data-tip={pictureName ? `The layer's file: ${pictureName}` : "No image or video yet"}>{pictureName ?? "None"}</span>
-              <button className="button secondary small" onClick={onPickPicture} data-tip="Pick an image or a video. A PNG keeps its clear parts; the scene file keeps a copy.">Choose…</button>
-            </div>
-            {PICTURE_KEYS.filter((key) => key !== "pictureAmount").map(row)}
-          </div>
-        </section>
-      )}
+      {/* The scene's card (see SourcePanel): its name, its sources, its Length and its play controls. */}
+      {source}
       {/* The FX card: its title bar (Random all, Nudge, Clear all, then New), then the effect groups, which scroll. */}
       <section
         ref={fxCardRef}
@@ -593,7 +502,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
               <MidiIcon size={16} />
             </button>
           )}
-          <h2 className="side-panel-title" data-tip={`The effects of the ${stack.find((layer) => layer.kind === kind)?.name ?? "Image"} layer`}>FX{kind !== "image" && <span className="fx-layer-name"> · {stack.find((layer) => layer.kind === kind)?.name}</span>}</h2>
+          <h2 className="side-panel-title">FX</h2>
           {/* While MIDI holds any range: a play button that plays them all again (Esc does the same). */}
           {anyHeld && (
             <button
@@ -631,39 +540,29 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
               <Trash size={16} />
             </button>
           </div>
-          <AddEffectMenu taken={fxOrder} elsewhere={elsewhere} onAdd={add} />
+          <AddEffectMenu taken={fxOrder} onAdd={add} />
         </div>
 
         {/* Only the effect groups scroll; the scene length, the Source section and the FX title stay in view. */}
         <div className="panel-scroll">
           <StageList
             order={fxOrder}
-            onReorder={setFxOrder}
-            onRemove={remove}
-            onDropToLayer={moveEffect}
-            onItemMenu={(step, event) => {
-              event.preventDefault();
-              setMoveMenu({ left: event.clientX, top: event.clientY, step });
+            onReorder={(next) => {
+              engine.state.fxOrder = next;
+              setFxOrder(next);
             }}
+            onRemove={remove}
             render={(key, grip) => groups[key](grip)}
           />
-          {moveMenu && createPortal(
-            <ContextMenu
-              position={{ left: moveMenu.left, top: moveMenu.top }}
-              onClose={() => setMoveMenu(null)}
-              items={stack.filter((layer) => layer.kind !== kind).map((layer) => ({ label: `Move to ${layer.name}`, icon: <CaretRight size={14} />, run: () => moveEffect(moveMenu.step, layer.kind) }))}
-            />,
-            document.body
-          )}
           {fxOrder.length === 0 && (
             <EmptyState text="Add an effect to change the picture.">
-              <AddEffectMenu taken={fxOrder} elsewhere={elsewhere} onAdd={add} />
+              <AddEffectMenu taken={fxOrder} onAdd={add} />
             </EmptyState>
           )}
           {/* A copy of the title bar's New button, at the end of the list, while an effect group is open. */}
           {fxOrder.some((step) => step === openGroup) && (
             <div className="add-effect-end">
-              <AddEffectMenu taken={fxOrder} elsewhere={elsewhere} onAdd={add} />
+              <AddEffectMenu taken={fxOrder} onAdd={add} />
             </div>
           )}
         </div>
@@ -687,14 +586,10 @@ interface Grip {
  * while the mouse moves, the group takes the place whose middle the pointer
  * has passed, and the new order is sent at once, so the picture changes live.
  */
-function StageList<K extends string>({ order, onReorder, onRemove, onDropToLayer, onItemMenu, render }: {
+function StageList<K extends string>({ order, onReorder, onRemove, render }: {
   order: K[];
   onReorder: (order: K[]) => void;
   onRemove?: (key: K) => void;
-  /** A drag that ends over a layer's row (see LayersCard) moves the group to that layer. */
-  onDropToLayer?: (key: K, kind: LayerKind) => void;
-  /** A right-click on a group (its Move to menu). */
-  onItemMenu?: (key: K, event: React.MouseEvent) => void;
   render: (key: K, grip: Grip) => ReactNode;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
@@ -706,11 +601,7 @@ function StageList<K extends string>({ order, onReorder, onRemove, onDropToLayer
     if (event.button !== 0) return;
     event.preventDefault();
     setDragging(key);
-    let at = [event.clientX, event.clientY];
     const move = (moveEvent: PointerEvent) => {
-      at = [moveEvent.clientX, moveEvent.clientY];
-      /* Over a layer's row, the list keeps its order: the drop moves the group to that layer. */
-      if (document.elementFromPoint(at[0], at[1])?.closest("[data-layer-kind]")) return;
       /* The place is the number of other groups whose middle is above the pointer. */
       let place = 0;
       for (const item of listRef.current!.children as HTMLCollectionOf<HTMLElement>) {
@@ -728,8 +619,6 @@ function StageList<K extends string>({ order, onReorder, onRemove, onDropToLayer
     /* The window gets the moves, not the grip: React moves the group in the page as the order changes, and a moved element loses the mouse. */
     const end = () => {
       setDragging(null);
-      const row = document.elementFromPoint(at[0], at[1])?.closest<HTMLElement>("[data-layer-kind]");
-      if (row?.dataset.layerKind && onDropToLayer) onDropToLayer(key, row.dataset.layerKind as LayerKind);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", end);
       window.removeEventListener("pointercancel", end);
@@ -743,7 +632,7 @@ function StageList<K extends string>({ order, onReorder, onRemove, onDropToLayer
     <>
       <div ref={listRef} className="stage-list">
         {order.map((key) => (
-          <div key={key} data-key={key} className={`stage-item ${dragging === key ? "dragging" : ""}`} onContextMenu={onItemMenu && ((event) => onItemMenu(key, event))}>
+          <div key={key} data-key={key} className={`stage-item ${dragging === key ? "dragging" : ""}`}>
             {render(key, { onPointerDown: startDrag(key), dragging: dragging === key, onRemove: onRemove && (() => onRemove(key)) })}
           </div>
         ))}
@@ -1112,7 +1001,7 @@ function CyclesSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =
 }
 
 /** The 3D Object: its shape and map menus, then the sliders that the shape and the map use, then Blend and Opacity. */
-function SolidSection({ engine, row, layer = false }: { engine: Engine; row: (key: ParamKey) => ReactNode; layer?: boolean }) {
+function SolidSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
   const [shape, setShape] = useState<SolidShape>(engine.state.solidShape);
   const [map, setMap] = useState<SolidMap>(engine.state.solidMap);
   const shown = (key: ParamKey) => SOLID_SHAPE_ONLY.includes(key) ? SOLID_SHAPE_KEYS[shape].includes(key)
@@ -1121,26 +1010,9 @@ function SolidSection({ engine, row, layer = false }: { engine: Engine; row: (ke
     <>
       <ModeSelect engine={engine} stateKey="solidShape" options={SOLID_SHAPES} name="Shape" onChange={setShape} />
       <ModeSelect engine={engine} stateKey="solidMap" options={SOLID_MAPS} name="Map" onChange={setMap} />
-      {!layer && <KeepBackground engine={engine} />}
-      {layer
-        ? <SplitRows keys={SOLID_KEYS.filter(shown).filter((key) => key !== "solidBackground" && key !== "solidAmount")} row={row} />
-        : <SplitRows keys={SOLID_KEYS.filter(shown)} row={row} blend={<ModeSelect engine={engine} stateKey="solidBlend" options={LAYER_BLENDS} name="Blend" />} />}
+      <KeepBackground engine={engine} />
+      <SplitRows keys={SOLID_KEYS.filter(shown)} row={row} blend={<ModeSelect engine={engine} stateKey="solidBlend" options={LAYER_BLENDS} name="Blend" />} />
     </>
-  );
-}
-
-/** What the 3D Object layer is painted with: the layers below it, put together, or the Image layer. Its own effects change that paint. */
-function SolidPaintRow({ layer, onChange }: { engine: Engine; layer: SceneLayer; onChange: (paint: SolidPaint) => void }) {
-  return (
-    <div className="panel-select-row panel-layer-blend" data-tip="What the shape is painted with. The effects of this layer change that picture; the shape keeps its outline.">
-      <span className="panel-row-name">Paint</span>
-      <Dropdown
-        value={layer.paint ?? 0}
-        options={[[0, "Layers below"], [1, "Image layer"]] as const}
-        label="What the 3D Object is painted with"
-        onChange={onChange}
-      />
-    </div>
   );
 }
 
@@ -1150,7 +1022,7 @@ function KeepBackground({ engine }: { engine: Engine }) {
   return (
     <label
       className="panel-check-inline panel-keep-background"
-      data-tip="Freeze background: the effects after the 3D Object in the FX list change only the picture painted on the object, which is drawn last. The picture behind it stays as it is here."
+      data-tip="Freeze background: the effects after the 3D Object in the FX list change only the picture painted on the object, which keeps its outline. The picture behind it stays as it is here. An Image or Video effect after it, and the effects after that, change the whole picture again."
     >
       <input
         type="checkbox"

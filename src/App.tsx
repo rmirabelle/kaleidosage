@@ -131,7 +131,7 @@ interface StoredScene {
   state: PlayState;
   images: [SlotImage | null, SlotImage | null];
   driver: DriverVideo | null;
-  /** The Overlay effect's image or video (its label is the file name), or null. */
+  /** The Image or Video effect's image or video (its label is the file name), or null. */
   picture: SlotImage | null;
   savedFingerprint: string;
   history: SettingsHistory;
@@ -210,8 +210,8 @@ async function writeSceneFile(path: string, params: Params, state: PlayState, [f
    */
   const usesDriverVideo = state.fxOrder.includes("driver") && state.driverSource === 5;
   if (driver && usesDriverVideo) scene.driverVideo = { type: driver.videoFile.mime, video: driver.videoFile.id, name: driver.name };
-  /* The Image or Video layer's file goes in the same way: only while the scene has that layer. */
-  if (picture && state.layers.some((layer) => layer.kind === "media")) scene.picture = { ...(await sceneMedia(picture)), name: picture.label };
+  /* The overlay's image or video goes in the same way: only while the Image or Video effect is in the list. */
+  if (picture && state.fxOrder.includes("picture")) scene.picture = { ...(await sceneMedia(picture)), name: picture.label };
   await writeScene(path, JSON.stringify(scene));
 }
 
@@ -219,7 +219,7 @@ async function writeSceneFile(path: string, params: Params, state: PlayState, [f
 interface OpenRequest {
   kind: OpenKind;
   slot: ImageSlot;
-  /** "driver": the picked video becomes the Driver effect's own video. "picture": the picked image or video becomes the Overlay effect's. "import": the picked projects' scenes go into the open project. */
+  /** "driver": the picked video becomes the Driver effect's own video. "picture": the picked image or video becomes the Image or Video effect's. "import": the picked projects' scenes go into the open project. */
   target?: "driver" | "picture" | "import";
 }
 
@@ -247,7 +247,7 @@ export default function App() {
   /** The Driver effect's own video for the selected scene (the ref at once, the name for the panel). */
   const driverRef = useRef<DriverVideo | null>(null);
   const [driverVideoName, setDriverVideoName] = useState<string | null>(null);
-  /** The Overlay effect's image or video for the selected scene (the ref at once, the name for the panel). */
+  /** The Image or Video effect's image or video for the selected scene (the ref at once, the name for the panel). */
   const pictureRef = useRef<SlotImage | null>(null);
   const [pictureName, setPictureName] = useState<string | null>(null);
   const [engine, setEngine] = useState<Engine | null>(null);
@@ -1177,17 +1177,17 @@ export default function App() {
     }
   }, [addDoc, engine, fingerprint, markClean, removeSecondImage, setActivePath, setDriver, setImage, setPicture, showError, showStatus, stashActive, switchToDoc]);
 
-  /** Makes a picked image or video the Overlay effect's own (see setPicture). */
+  /** Makes a picked image or video the Image or Video effect's own (see setPicture). */
   const openPicturePath = useCallback(async (path: string) => {
     const generation = sceneGenerationRef.current;
-    const name = path.split(/[\\/]/).pop() ?? "Overlay";
+    const name = path.split(/[\\/]/).pop() ?? "Image or Video";
     try {
       const loaded = isVideoPath(path)
         ? await loadVideoFile(path).then(({ video, videoFile }) => ({ source: video as ImageSource, videoFile }))
         : await loadImageFile(path).then(({ image, blob }) => ({ source: image as ImageSource, blob }));
       if (generation !== sceneGenerationRef.current) return;
       setPicture({ ...loaded, label: name, thumbnail: makeThumbnail(loaded.source), id: nextImageId++ });
-      showStatus(`Overlay: ${name}`);
+      showStatus(`Image or Video: ${name}`);
     } catch (error) {
       showError(`Could not open the image or video. ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -2496,11 +2496,10 @@ export default function App() {
                   nextTip={nextTip}
                   onNextTipDone={endNextTip}
                   transport={<SceneTransport engine={engine} paused={paused} onTogglePause={togglePause} onStop={stop} show={holdUseful} autoNext={tracksActive && docs.length > 1} held={holdUseful && sceneHeld} onToggleHold={() => holdScene(!sceneHeldRef.current)} input={inputInPlaylist ? null : inputMenu} />}
-                  sceneName={sceneFileName.replace(/\.ksage$/i, "")}
-                  thumbnails={{ image: images[0]?.thumbnail, media: pictureRef.current?.thumbnail }}
                   source={(
                     <SourcePanel
                       engine={engine}
+                      sceneName={sceneFileName.replace(/\.ksage$/i, "")}
                       images={images}
                       randomLoading={randomLoading}
                       onOpenImage={(slot) => void openImage(slot)}
@@ -2594,7 +2593,7 @@ export default function App() {
           anchor={sceneCard}
           wide
           outline={sceneOutline}
-          text="This is the scene's LAYERS panel and, under it, the SOURCE panel of the selected layer. The top shows the scene name and its loop LENGTH. SLOT A holds a checkerboard pattern - good for testing FX. Hover over a slot to load a random image, search for a specific image, choose a pattern, or load your own image or video."
+          text="This is the scene SOURCE panel. It shows the scene name and controls the scene loop LENGTH. SLOT A holds a checkerboard pattern - good for testing FX. Hover over a slot to load a random image, search for a specific image, choose a pattern, or load your own image or video."
           onClose={() => setPanelTips((tips) => ({ ...tips, scene: false }))}
         />
       )}
@@ -2653,7 +2652,7 @@ export default function App() {
       {openRequest && (
         <OpenDialog
           kind={openRequest.kind}
-          title={openRequest.target === "driver" ? "Open Video for the Driver" : openRequest.target === "picture" ? "Open Image or Video for the Overlay" : openRequest.target === "import" ? "Import Scene(s)" : openRequest.kind === "scene" ? "Open Project" : openRequest.kind === "audio" ? "Add Audio Files" : openRequest.slot === 1 ? "Open Image or Video for Source B" : "Open Image or Video"}
+          title={openRequest.target === "driver" ? "Open Video for the Driver" : openRequest.target === "picture" ? "Open File for Image or Video" : openRequest.target === "import" ? "Import Scene(s)" : openRequest.kind === "scene" ? "Open Project" : openRequest.kind === "audio" ? "Add Audio Files" : openRequest.slot === 1 ? "Open Image or Video for Source B" : "Open Image or Video"}
           hint={openRequest.target === "import" ? "Choose one or more Kaleido Sage projects (.ksage). All of their scenes go into the open project, without their audio files." : undefined}
           onCancel={() => setOpenRequest(null)}
           onOpen={(path) => {

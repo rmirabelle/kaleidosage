@@ -15,7 +15,6 @@ const marks = Object.entries(sources).flatMap(([path, text]) =>
 const REQUIRED: readonly (readonly [string, string])[] = [
   ["../components/DocumentTabs.tsx", "scene.tabs"],
   ["../components/SourcePanel.tsx", "source"],
-  ["../components/LayersCard.tsx", "layers"],
   ["../components/ControlPanel.tsx", "fx"],
   ["../components/ControlPanel.tsx", "fx.group"],
   ["../components/useParamRows.tsx", "row"],

@@ -2,11 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus } from "@phosphor-icons/react";
 import type { FxStep } from "../engine/renderer";
-import { EFFECT_NAMES as ALL_EFFECT_NAMES } from "../engine/submodes";
-import { LAYER_STEPS } from "../engine/params";
-
-/* The 3D Object and the Image or Video are layers now (see docs/LAYERS.md): "+ Layer" adds them. */
-const EFFECT_NAMES = ALL_EFFECT_NAMES.filter(([step]) => !LAYER_STEPS.includes(step));
+import { EFFECT_NAMES } from "../engine/submodes";
 
 /** One short line on what each effect does, in its preview. */
 const EFFECT_NOTES: Record<FxStep, string> = {
@@ -57,11 +53,9 @@ const TYPE_MS = 1000;
  * menu. Keys: Up and Down move, Enter or Space picks, Esc closes. A click
  * outside closes it.
  */
-export function AddEffectMenu({ taken, elsewhere = {}, onAdd }: {
+export function AddEffectMenu({ taken, onAdd }: {
   /** The effects that are in the list already. */
   taken: readonly FxStep[];
-  /** The effects in another layer, by that layer's name: a pick moves one here. */
-  elsewhere?: Partial<Record<FxStep, string>>;
   onAdd: (step: FxStep) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -86,7 +80,6 @@ export function AddEffectMenu({ taken, elsewhere = {}, onAdd }: {
         <AddEffectList
           button={buttonRef.current!}
           taken={taken}
-          elsewhere={elsewhere}
           onPick={(step) => {
             setOpen(false);
             onAdd(step);
@@ -99,11 +92,10 @@ export function AddEffectMenu({ taken, elsewhere = {}, onAdd }: {
   );
 }
 
-function AddEffectList({ button, taken, elsewhere, onPick, onClose }: {
+function AddEffectList({ button, taken, onPick, onClose }: {
   /** The New button that opened the menu: the menu opens at its right. */
   button: HTMLButtonElement;
   taken: readonly FxStep[];
-  elsewhere: Partial<Record<FxStep, string>>;
   onPick: (step: FxStep) => void;
   onClose: () => void;
 }) {
@@ -229,7 +221,6 @@ function AddEffectList({ button, taken, elsewhere, onPick, onClose }: {
             >
               {name}
               {inList && <span className="add-effect-added">Added</span>}
-              {!inList && elsewhere[step] && <span className="add-effect-added" data-tip={`In the ${elsewhere[step]} layer: a click moves it here`}>In {elsewhere[step]}</span>}
             </button>
           );
         })}

@@ -237,3 +237,22 @@ Each step is a commit, with the old scenes still giving the same pictures
   plan.
 - Multiply needs a rule for clear parts: there, the layer below shows as it
   is.
+
+### Outcome (2026-10-26)
+
+The layers were built (steps 1 to 6) and then taken out of the UI: the
+user should not have to think in layers. The effects are the layers, and
+the FX list order is the only stack.
+
+- The Layers card is gone. The 3D Object and the Image or Video (the old
+  Overlay, renamed) are FX effects again.
+- Image or Video lays its file over the picture made so far, with Blend,
+  Opacity, Size, X, Y, Turn and a Black key. The effects after it change
+  the whole picture; the file has no effects of its own.
+- Freeze background stays. The engine splits the FX list (see
+  FrameValues.freeze): the steps before the 3D Object, the steps after it
+  up to an Image or Video (they change only the picture painted on the
+  object), and the rest (they change the whole picture). The renderer
+  draws these parts into pictures of their own, as the layers did.
+- No saved scene had layers, so the scene file has no layers field.
+- The 3D Object's background control is still open for discussion.

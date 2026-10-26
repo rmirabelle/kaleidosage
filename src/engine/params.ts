@@ -1,4 +1,4 @@
-import type { BlendMode, BlurMask, CameraRepeat, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidShape, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, ParticleBlend, PictureBlend, PictureStep, LayerKind, SolidPaint, StackBlend, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
+import type { BlendMode, BlurMask, CameraRepeat, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidShape, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, ParticleBlend, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
 
 export const PARAM_KEYS = [
   "cycle",
@@ -256,42 +256,6 @@ export type Params = Record<ParamKey, Param>;
 export type ContourTone = "hue" | "black" | "white";
 export const CONTOUR_TONES: readonly ContourTone[] = ["hue", "black", "white"];
 
-/** One layer of the scene's stack (see PlayState.layers): its source, its name, whether it shows, its blend and its opacity. */
-export interface SceneLayer {
-  kind: LayerKind;
-  name: string;
-  visible: boolean;
-  blend: StackBlend;
-  opacity: number;
-  /** The layer's own effects, in order; the Image layer's are fxOrder. Each effect is in one layer only. */
-  fx?: FxStep[];
-  /** The 3D Object layer's paint: 0 the layers below it, put together; 1 the Image layer. */
-  paint?: SolidPaint;
-}
-
-/** The 3D Object and the Image or Video are layers, not effects: they are never in an FX list. */
-export const LAYER_STEPS: readonly FxStep[] = ["solid", "picture"];
-
-/** A layer's own effects (the Image layer's are fxOrder). */
-export function layerFx(state: PlayState, kind: LayerKind): FxStep[] {
-  return kind === "image" ? state.fxOrder : state.layers.find((layer) => layer.kind === kind)?.fx ?? [];
-}
-
-/** Sets a layer's own effects. */
-export function setLayerFx(state: PlayState, kind: LayerKind, fx: FxStep[]) {
-  if (kind === "image") state.fxOrder = fx;
-  else state.layers = state.layers.map((layer) => layer.kind === kind ? { ...layer, fx } : layer);
-}
-
-/** The layer an effect is in, or null when it is in none. */
-export function effectLayer(state: PlayState, step: FxStep): LayerKind | null {
-  if (state.fxOrder.includes(step)) return "image";
-  return state.layers.find((layer) => layer.kind !== "image" && layer.fx?.includes(step))?.kind ?? null;
-}
-
-/** A new scene's stack: the Image layer alone, whole and by Normal, which looks as a scene before layers. */
-export const defaultLayers = (): SceneLayer[] => [{ kind: "image", name: "Image", visible: true, blend: 0, opacity: 1 }];
-
 export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "bloom" | "sharpen" | "color" | "levels" | "picture";
 
 export interface PlayState {
@@ -331,12 +295,6 @@ export interface PlayState {
   /** How each shape step's result combines with the picture without it. Randomize does not change it. */
   layerBlend: Record<ShapeStep, LayerBlend>;
   /**
-   * The scene's layers, the bottom one first (see docs/LAYERS.md). Each
-   * kind is in the stack at most once. The Image layer's effects are
-   * fxOrder; the other kinds come with lists of their own.
-   */
-  layers: SceneLayer[];
-  /**
    * The settings whose audio switch is on: they move with the sound (see
    * docs/AUDIO.md, part 3), from a song's plan or from the live sound. Part
    * of the scene: each scene reacts in its own way to the same sound.
@@ -368,7 +326,7 @@ export interface PlayState {
   sortOrder: SortOrder;
   /** How the particles combine with the picture under them: they add light (glow), or cover it. */
   particleBlend: ParticleBlend;
-  /** How the Overlay effect's image or video goes over the picture: 0 Normal (its clear parts show the picture), 1 Screen and 2 Add (its black adds nothing). */
+  /** How the Image or Video effect's image or video goes over the picture: 0 Normal (its clear parts show the picture), 1 Screen and 2 Add (its black adds nothing). */
   pictureBlend: PictureBlend;
   /**
    * The particles' life gradient (see particleGradient): its color stops,
@@ -872,7 +830,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   laserX: { label: "Source X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.3, high: 0.3, on: false },
   laserY: { label: "Source Y", min: -0.5, max: 0.5, step: 0.01, value: -0.5, drift: "wave", low: -0.5, high: -0.3, on: false },
   /**
-   * Overlay (see PICTURE_SHADER): an image or a video of the scene's own
+   * Image or Video (see PICTURE_SHADER): an image or a video of the scene's own
    * over the picture made so far, by its blend (pictureBlend). Size 1
    * covers the screen and keeps the media's shape; X and Y move its center,
    * as a part of the screen size from the screen center (0.5 is an edge);
@@ -950,18 +908,14 @@ export function withKindOrder(order: FxStep[], kindOrder: FxStep[]): FxStep[] {
 }
 
 /** Adds an effect at the end of the list and turns its group on. */
-export function addEffect(state: PlayState, step: FxStep, kind: LayerKind = "image") {
-  /* An effect is in one layer only: one in another layer moves here. */
-  const from = effectLayer(state, step);
-  if (from && from !== kind) setLayerFx(state, from, layerFx(state, from).filter((item) => item !== step));
-  if (!layerFx(state, kind).includes(step)) setLayerFx(state, kind, [...layerFx(state, kind), step]);
+export function addEffect(state: PlayState, step: FxStep) {
+  if (!state.fxOrder.includes(step)) state.fxOrder = [...state.fxOrder, step];
   state.groups[step] = true;
 }
 
 /** Takes an effect out of the list and turns its group off. Its settings stay, for when it is added again. */
 export function removeEffect(state: PlayState, step: FxStep) {
-  const from = effectLayer(state, step);
-  if (from) setLayerFx(state, from, layerFx(state, from).filter((item) => item !== step));
+  state.fxOrder = state.fxOrder.filter((item) => item !== step);
   state.groups[step] = false;
 }
 
@@ -1001,7 +955,7 @@ export function createPlayState(): PlayState {
     /* No effect is in the list at start-up, so every effect group is off. */
     groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false },
     locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, layers: defaultLayers(), sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, sortOrder: 0, particleBlend: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, sortOrder: 0, particleBlend: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1365,7 +1319,6 @@ export function resetEffects(params: Params, state: PlayState) {
   for (const step of ["warp", "map", "kaleidoscope"] as const) if (!state.locks[step]) state.layerBlend[step] = 0;
   /* The unlocked effects leave the list (their groups are off now); the locked ones stay, in their order. */
   state.fxOrder = state.fxOrder.filter((step) => state.locks[step]);
-  state.layers = state.layers.map((layer) => layer.fx ? { ...layer, fx: layer.fx.filter((step) => state.locks[step]) } : layer);
 }
 
 /** The parameters in each settings group, for locking. */
@@ -1433,7 +1386,7 @@ export function randomizeGroup(params: Params, state: PlayState, group: GroupKey
 
 /** The chance that Randomize puts each effect in the list. Blur looks the least good, so Randomize leaves it out. */
 const EFFECT_CHANCE: Record<FxStep, number> = {
-  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.25, relief: 0.4, driver: 0.3, camera: 0.3, solid: 0, sort: 0.2, particles: 0.25, cycles: 0.25, rays: 0.25, lasers: 0.15, bloom: 0.3, sharpen: 0.3, color: 0.15, levels: 0.25,
+  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.25, relief: 0.4, driver: 0.3, camera: 0.3, solid: 0.2, sort: 0.2, particles: 0.25, cycles: 0.25, rays: 0.25, lasers: 0.15, bloom: 0.3, sharpen: 0.3, color: 0.15, levels: 0.25,
   /* An overlay needs an image or a video that the user picks. */
   picture: 0
 };
@@ -1450,13 +1403,12 @@ function randomizeAll(params: Params, state?: PlayState) {
      * Each unlocked effect is in the new list by its chance, in a random
      * order. A locked effect keeps its place (or stays out of the list).
      */
-    /* An effect in another layer stays there; the random draws are the same, so a seed gives the same scene. */
-    const chosen = defaultFxOrder().filter((step) => !state.locks[step] && Math.random() < EFFECT_CHANCE[step] && (effectLayer(state, step) ?? "image") === "image");
+    const chosen = defaultFxOrder().filter((step) => !state.locks[step] && Math.random() < EFFECT_CHANCE[step]);
     for (let index = chosen.length - 1; index > 0; index--) {
       const other = Math.floor(Math.random() * (index + 1));
       [chosen[index], chosen[other]] = [chosen[other], chosen[index]];
     }
-    for (const step of defaultFxOrder()) if (!state.locks[step] && (effectLayer(state, step) ?? "image") === "image") state.groups[step] = chosen.includes(step);
+    for (const step of defaultFxOrder()) if (!state.locks[step]) state.groups[step] = chosen.includes(step);
     const next = [...chosen];
     state.fxOrder.forEach((step, index) => { if (state.locks[step]) next.splice(Math.min(index, next.length), 0, step); });
     state.fxOrder = next;

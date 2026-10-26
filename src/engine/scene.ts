@@ -1,5 +1,5 @@
-import { CONTOUR_TONES, EASES, MAX_CUSTOM_SECONDS, MAX_GRADIENT_STOPS, PARAM_KEYS, REFERENCE_CYCLE, LAYER_STEPS, defaultCycleStops, defaultFxOrder, defaultLayers, defaultGradientStops, defaultPictureOrder, defaultShapeOrder, effectShows, type ContourTone, type Ease, type GradientStop, type GroupKey, type Param, type Params, type PlayState, type SceneLayer } from "./params";
-import { isShapeStep, type FxStep, type LayerKind, type StackBlend } from "./renderer";
+import { CONTOUR_TONES, EASES, MAX_CUSTOM_SECONDS, MAX_GRADIENT_STOPS, PARAM_KEYS, REFERENCE_CYCLE, defaultCycleStops, defaultFxOrder, defaultGradientStops, defaultPictureOrder, defaultShapeOrder, effectShows, type ContourTone, type Ease, type GradientStop, type GroupKey, type Param, type Params, type PlayState } from "./params";
+import { isShapeStep, type FxStep } from "./renderer";
 import { readSound, soundList } from "./audio";
 
 export const SCENE_EXTENSION = "ksage";
@@ -21,7 +21,7 @@ export interface SceneImages {
   image2?: SceneImage;
   /** The Driver effect's own video, embedded like a source video, and its file name. */
   driverVideo?: { media: SceneImage; name: string };
-  /** The Overlay effect's own image or video (a video embedded like a source video), and its file name. */
+  /** The Image or Video effect's own image or video (a video embedded like a source video), and its file name. */
   picture?: { media: SceneImage; name: string };
 }
 
@@ -44,7 +44,7 @@ export function serializeScene(params: Params, state: PlayState, { image, image2
     const { value, low, high, on, ease, custom, seconds, startTime } = params[key];
     savedParams[key] = { value, low, high, on, ease, custom, seconds, startTime };
   }
-  const { groups, blendMode, tiling, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, particleBlend, pictureBlend, particleStops, cyclesMove, cyclesBlend, cyclesPaint, cyclesStops, solidShape, solidMap, solidBlend, solidKeep, mandelPlace, solidSpinTurns, solidTumbleTurns, driverSource, driverMode, videoCrossfade, time, clock, warpTime, mandelFlowTime, driverTime, mapTravel, cameraX, cameraY, fxOrder, layerBlend, layers } = state;
+  const { groups, blendMode, tiling, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, particleBlend, pictureBlend, particleStops, cyclesMove, cyclesBlend, cyclesPaint, cyclesStops, solidShape, solidMap, solidBlend, solidKeep, mandelPlace, solidSpinTurns, solidTumbleTurns, driverSource, driverMode, videoCrossfade, time, clock, warpTime, mandelFlowTime, driverTime, mapTravel, cameraX, cameraY, fxOrder, layerBlend } = state;
   /**
    * "effects" is the effect list. Earlier versions of the app read two full
    * orders of their own, so they get the list's order inside each kind,
@@ -57,7 +57,7 @@ export function serializeScene(params: Params, state: PlayState, { image, image2
     app: "KaleidoSage",
     version: SCENE_VERSION,
     params: savedParams,
-    state: { groups: { ...groups }, blendMode, tiling, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, particleBlend, pictureBlend, particleStops: particleStops.map((stop) => ({ ...stop })), cyclesMove, cyclesBlend, cyclesPaint, cyclesStops: cyclesStops.map((stop) => ({ ...stop })), solidShape, solidMap, solidBlend, solidKeep, mandelPlace, solidSpinTurns, solidTumbleTurns, driverSource, driverMode, videoCrossfade, time, clock, warpTime, mandelFlowTime, driverTime, mapTravel, cameraX, cameraY, effects: [...fxOrder], shapeStack, pictureOrder, layerBlend: { ...layerBlend }, layers: layers.map((layer) => ({ ...layer, ...(layer.fx ? { fx: [...layer.fx] } : {}) })), sound: soundList(state.sound) },
+    state: { groups: { ...groups }, blendMode, tiling, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, particleBlend, pictureBlend, particleStops: particleStops.map((stop) => ({ ...stop })), cyclesMove, cyclesBlend, cyclesPaint, cyclesStops: cyclesStops.map((stop) => ({ ...stop })), solidShape, solidMap, solidBlend, solidKeep, mandelPlace, solidSpinTurns, solidTumbleTurns, driverSource, driverMode, videoCrossfade, time, clock, warpTime, mandelFlowTime, driverTime, mapTravel, cameraX, cameraY, effects: [...fxOrder], shapeStack, pictureOrder, layerBlend: { ...layerBlend }, sound: soundList(state.sound) },
     image,
     ...(image2 ? { image2 } : {})
   };
@@ -95,66 +95,6 @@ function oldRateSeconds(param: Param, rate: number) {
 }
 
 /** A saved image, if it has an image type and data. */
-/**
- * The layers a scene file keeps (see PlayState.layers), or undefined when
- * they do not read well. A layer of a kind that this version does not know,
- * or a second layer of a kind, is left out; a stack must have the Image
- * layer.
- */
-function readLayers(value: unknown, fxOrder: readonly FxStep[]): SceneLayer[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const layers: SceneLayer[] = [];
-  /* Each effect is in one layer only: the Image layer's list first, then each layer's from the bottom up. */
-  const used = new Set<FxStep>(fxOrder);
-  const names: Record<LayerKind, string> = { image: "Image", solid: "3D Object", media: "Image or Video" };
-  for (const item of value) {
-    if (!isRecord(item) || !(item.kind === "image" || item.kind === "solid" || item.kind === "media") || layers.some((layer) => layer.kind === item.kind)) continue;
-    const kind: LayerKind = item.kind;
-    const layer: SceneLayer = {
-      kind,
-      name: typeof item.name === "string" && item.name.trim() ? item.name.trim().slice(0, 60) : names[kind],
-      visible: item.visible !== false,
-      blend: mode(item.blend, [0, 1, 2, 3] as const) ?? 0,
-      opacity: isNumber(item.opacity) ? Math.min(1, Math.max(0, item.opacity)) : 1
-    };
-    if (kind !== "image") {
-      const fx = Array.isArray(item.fx) ? item.fx.filter((step): step is FxStep => typeof step === "string" && defaultFxOrder().includes(step as FxStep) && !LAYER_STEPS.includes(step as FxStep) && !used.has(step as FxStep)) : [];
-      for (const step of fx) used.add(step);
-      layer.fx = [...new Set(fx)];
-    }
-    if (kind === "solid") layer.paint = mode(item.paint, [0, 1] as const) ?? 0;
-    layers.push(layer);
-  }
-  return layers.some((layer) => layer.kind === "image") ? layers : undefined;
-}
-
-/**
- * A scene from before layers (see docs/LAYERS.md): the Image layer with its
- * effects, and the 3D Object and the Overlay, which were effects, as layers
- * above it. With Freeze background, the effects after the 3D Object change
- * only the picture painted on it, as they did; without it, they stay in the
- * Image layer. The Overlay's blend and opacity become its layer's.
- */
-function layersOf(state: PlayState, params: Params): SceneLayer[] {
-  const layers = defaultLayers();
-  const order = state.fxOrder;
-  const solidAt = order.indexOf("solid");
-  let imageFx = order.filter((step) => !LAYER_STEPS.includes(step));
-  if (solidAt >= 0) {
-    const after = order.slice(solidAt + 1).filter((step) => !LAYER_STEPS.includes(step));
-    const frozen = state.solidKeep && after.length > 0;
-    if (frozen) imageFx = order.slice(0, solidAt).filter((step) => !LAYER_STEPS.includes(step));
-    layers.push({ kind: "solid", name: "3D Object", visible: true, blend: 0, opacity: 1, fx: frozen ? after : [], paint: 0 });
-  }
-  if (order.includes("picture")) {
-    const blend: StackBlend = state.pictureBlend === 1 ? 1 : state.pictureBlend === 2 ? 2 : 0;
-    layers.push({ kind: "media", name: "Image or Video", visible: true, blend, opacity: Math.min(1, Math.max(0, params.pictureAmount.value)), fx: [] });
-  }
-  state.fxOrder = imageFx;
-  state.solidKeep = false;
-  return layers;
-}
-
 function sceneImage(value: unknown): SceneImage | undefined {
   if (!isRecord(value) || typeof value.type !== "string" || !/^(image|video)\//.test(value.type)) return undefined;
   if (typeof value.data === "string" && value.data) return { type: value.type, data: value.data };
@@ -339,20 +279,6 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   state.solidBlend = mode(saved.solidBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? state.solidBlend;
   /* A scene from before Freeze background has the 3D Object in the one picture, as it had then. */
   state.solidKeep = saved.solidKeep === true;
-  /**
-   * The layers (see docs/LAYERS.md). A scene from before layers gets them
-   * from its FX list (see layersOf). An effect in another layer than the
-   * Image layer keeps its group as saved.
-   */
-  const savedLayers = readLayers(saved.layers, state.fxOrder);
-  if (savedLayers) {
-    state.layers = savedLayers;
-    state.fxOrder = state.fxOrder.filter((step) => !LAYER_STEPS.includes(step));
-  } else {
-    state.layers = layersOf(state, params);
-  }
-  const savedGroups = isRecord(saved.groups) ? saved.groups : {};
-  for (const layer of state.layers) for (const step of layer.fx ?? []) state.groups[step] = savedGroups[step] !== false;
   if (isNumber(saved.solidSpinTurns)) state.solidSpinTurns = saved.solidSpinTurns % 1;
   if (isNumber(saved.solidTumbleTurns)) state.solidTumbleTurns = saved.solidTumbleTurns % 1;
   state.driverSource = mode(saved.driverSource, [0, 1, 2, 3, 4, 5] as const) ?? state.driverSource;
@@ -361,7 +287,7 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   const driverMedia = sceneImage(scene.driverVideo);
   const driverVideo = driverMedia?.video !== undefined ? { media: driverMedia, name: isRecord(scene.driverVideo) && typeof scene.driverVideo.name === "string" ? scene.driverVideo.name : "Video" } : undefined;
   const pictureMedia = sceneImage(scene.picture);
-  const picture = pictureMedia ? { media: pictureMedia, name: isRecord(scene.picture) && typeof scene.picture.name === "string" ? scene.picture.name : "Overlay" } : undefined;
+  const picture = pictureMedia ? { media: pictureMedia, name: isRecord(scene.picture) && typeof scene.picture.name === "string" ? scene.picture.name : "Image or Video" } : undefined;
   return { image, ...(image2 ? { image2 } : {}), ...(driverVideo ? { driverVideo } : {}), ...(picture ? { picture } : {}) };
 }
 
@@ -377,8 +303,8 @@ export function sceneFingerprint(params: Params, state: PlayState, imageIds: rea
     const { value, low, high, on, ease, custom, seconds } = params[key];
     return [value, low, high, on, ease ?? null, custom ?? false, custom ? seconds : null];
   });
-  const { groups, blendMode, tiling, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, particleBlend, pictureBlend, particleStops, cyclesMove, cyclesBlend, cyclesPaint, cyclesStops, solidShape, solidMap, solidBlend, solidKeep, mandelPlace, driverSource, driverMode, videoCrossfade, fxOrder, layerBlend, layers } = state;
-  return JSON.stringify([settings, layers, groups, blendMode, tiling, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, particleBlend, pictureBlend, particleStops, cyclesMove, cyclesBlend, cyclesPaint, cyclesStops, solidShape, solidMap, solidBlend, solidKeep, mandelPlace, driverSource, driverMode, videoCrossfade, fxOrder, layerBlend, soundList(state.sound), imageIds]);
+  const { groups, blendMode, tiling, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, particleBlend, pictureBlend, particleStops, cyclesMove, cyclesBlend, cyclesPaint, cyclesStops, solidShape, solidMap, solidBlend, solidKeep, mandelPlace, driverSource, driverMode, videoCrossfade, fxOrder, layerBlend } = state;
+  return JSON.stringify([settings, groups, blendMode, tiling, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, skyColor, cameraRepeat, sortOrder, particleBlend, pictureBlend, particleStops, cyclesMove, cyclesBlend, cyclesPaint, cyclesStops, solidShape, solidMap, solidBlend, solidKeep, mandelPlace, driverSource, driverMode, videoCrossfade, fxOrder, layerBlend, soundList(state.sound), imageIds]);
 }
 
 /** Uint8Array.fromBase64 and toBase64, in newer browsers; much faster for a large video. */

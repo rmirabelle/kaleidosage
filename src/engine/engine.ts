@@ -1,4 +1,4 @@
-import { GROUP_PARAMS, NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, defaultValue, hexToRgb, liveValue, rangeAt, rangeClock, startRangeAt, type GroupKey, type ParamKey, type PlayState } from "./params";
+import { GROUP_PARAMS, NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, defaultValue, hexToRgb, liveValue, rangeAt, rangeClock, startRangeAt, type GroupKey, type ParamKey } from "./params";
 import { KaleidoRenderer, type FrameValues, type ImageSource } from "./renderer";
 import { MANDEL_CENTERS } from "./submodes";
 import { audioLinkable, pushRange, pushedValue, type AudioSignal } from "./audio";
@@ -310,7 +310,7 @@ export class Engine {
     return this.state.driverTime % video.duration;
   }
 
-  /** The Overlay effect's image or video, or null. Its owner (the scene) keeps it; the engine plays a video while the effect is on. */
+  /** The Image or Video effect's image or video, or null. Its owner (the scene) keeps it; the engine plays a video while the effect is on. */
   private pictureSource: ImageSource | null = null;
 
   setPicture(source: ImageSource | null) {
@@ -323,18 +323,25 @@ export class Engine {
   /**
    * Where the overlay's video should be: the scene's clock around the
    * video's length, so it plays at its own speed, loops, and holds while
-   * the scene is paused or waits for the music. Null while the Overlay
+   * the scene is paused or waits for the music. Null while the Image or Video
    * effect is off or holds no video.
    */
   private pictureVideoTarget() {
     const video = this.pictureSource;
-    if (!(video instanceof HTMLVideoElement) || !(video.duration > 0) || !this.state.layers.some((layer) => layer.kind === "media" && layer.visible)) return null;
+    if (!(video instanceof HTMLVideoElement) || !(video.duration > 0) || !this.state.groups.picture || !this.state.fxOrder.includes("picture")) return null;
     return this.state.clock % video.duration;
   }
 
-  /** True when the scene has a layer of this kind (see docs/LAYERS.md). */
-  hasLayer(kind: PlayState["layers"][number]["kind"]) {
-    return this.state.layers.some((layer) => layer.kind === kind);
+  /** Freeze background's three parts of the FX list (see FrameValues.freeze), or null. */
+  private freezeParts(): FrameValues["freeze"] {
+    const order = this.state.fxOrder;
+    const at = order.indexOf("solid");
+    if (!this.state.solidKeep || at < 0 || at === order.length - 1) return null;
+    const rest = order.slice(at + 1);
+    const picture = rest.indexOf("picture");
+    const end = picture < 0 ? rest.length : picture;
+    if (end === 0) return null;
+    return { before: order.slice(0, at), object: rest.slice(0, end), after: rest.slice(end) };
   }
 
   /** Keeps the overlay's video at its place, and stops it while it is not used. */
@@ -1140,6 +1147,7 @@ export class Engine {
     const fadeIn = Math.min(1, Math.max(0, (divePart - (1 - diveFade)) / diveFade));
     return {
       fxOrder: this.state.fxOrder,
+      freeze: this.freezeParts(),
       shapeActive: { warp: on.warp, map: on.map, kaleidoscope: on.kaleidoscope },
       /* A group that is off does nothing, so full opacity in normal mode costs no extra picture. */
       shapeOpacity: {
@@ -1283,10 +1291,9 @@ export class Engine {
       skyColor: hexToRgb(this.state.skyColor),
       cameraShine: this.live("cameraShine"),
       cameraSmooth: this.live("cameraSmooth"),
-      solid: this.hasLayer("solid") || on.solid ? this.live("solidAmount") : 0,
+      solid: on.solid ? this.live("solidAmount") : 0,
       solidShape: this.state.solidShape,
       solidMap: this.state.solidMap,
-      solidKeep: this.state.solidKeep,
       solidBlend: this.state.solidBlend,
       solidBackground: this.live("solidBackground"),
       solidSize: this.live("solidSize"),
@@ -1383,9 +1390,7 @@ export class Engine {
       laserRainbow: this.live("laserRainbow"),
       laserX: this.live("laserX"),
       laserY: this.live("laserY"),
-      /* The Image or Video and the 3D Object are layers: they draw while their layer is there (the layer has the opacity). */
-      picture: this.hasLayer("media") ? 1 : on.picture ? this.live("pictureAmount") : 0,
-      layers: this.state.layers.map(({ kind, visible, blend, opacity, fx, paint }) => ({ kind, visible, blend, opacity, fx: fx ?? [], paint: paint ?? 0 })),
+      picture: on.picture ? this.live("pictureAmount") : 0,
       pictureBlend: this.state.pictureBlend,
       pictureSize: this.live("pictureSize"),
       pictureX: this.live("pictureX"),

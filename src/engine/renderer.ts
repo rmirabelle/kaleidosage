@@ -1,7 +1,7 @@
 import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, LAYER_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 
 /** The blur mask: circle with a sharp or a blurred center, gradient, bright areas, dark areas, noise. */
 export type BlurMask = 0 | 1 | 2 | 3 | 4 | 5;
@@ -85,25 +85,8 @@ export type DriverMode = 0 | 1 | 2;
 export type SortOrder = 0 | 1;
 /** How the particles combine with the picture: 0 glow (they add their light), 1 normal (they cover it). */
 export type ParticleBlend = 0 | 1;
-/** How the Overlay effect's image or video goes over the picture: 0 normal (over, by its own cover), 1 screen, 2 add. */
+/** How the Image or Video effect's image or video goes over the picture: 0 normal (over, by its own cover), 1 screen, 2 add. */
 export type PictureBlend = 0 | 1 | 2;
-/** How a layer goes over the layers under it (see LAYER_SHADER): 0 normal, 1 screen, 2 add, 3 multiply. */
-export type StackBlend = 0 | 1 | 2 | 3;
-/** A layer's source (see docs/LAYERS.md): the source images, a 3D Object, or an image or video of its own. */
-export type LayerKind = "image" | "solid" | "media";
-/** One layer of the scene's stack, as the renderer needs it: its source, whether it shows, its blend and its opacity. */
-export interface LayerValues {
-  kind: LayerKind;
-  visible: boolean;
-  blend: StackBlend;
-  opacity: number;
-  /** The layer's own effects (the Image layer's are fxOrder). */
-  fx: FxStep[];
-  /** The 3D Object layer's paint: 0 the layers below it, put together; 1 the Image layer. */
-  paint: SolidPaint;
-}
-/** What a 3D Object layer is painted with (see LayerValues.paint). */
-export type SolidPaint = 0 | 1;
 /** How the light cycles move: 0 on grid lanes with right-angle turns, 1 in free curves. */
 export type CycleMove = 0 | 1;
 /**
@@ -129,13 +112,19 @@ export type Tiling = 0 | 1 | 2;
 export interface FrameValues {
   /** Every effect step, in the order they act on the picture. */
   fxOrder: FxStep[];
+  /**
+   * Freeze background (see render), or null when it is off or no step is
+   * after the 3D Object: fxOrder in three parts. "before" is the steps
+   * before the 3D Object; "object" the steps after it, up to an Image or
+   * Video, which change only the picture painted on the object; "after" the
+   * rest, which change the whole picture.
+   */
+  freeze: { before: FxStep[]; object: FxStep[]; after: FxStep[] } | null;
   /** Which shape steps are on; a step that is off is left out, so it costs no pass. */
   shapeActive: Record<ShapeStep, boolean>;
   /** Each shape step's opacity, and how its result combines with the picture without it (see LayerBlend). */
   shapeOpacity: Record<ShapeStep, number>;
   layerBlend: Record<ShapeStep, LayerBlend>;
-  /** The scene's layers, the bottom one first (see docs/LAYERS.md). */
-  layers: LayerValues[];
   segments: number;
   foldMode: FoldMode;
   /** The tile size in tile modes, in screen heights between neighbor cell centers. */
@@ -340,8 +329,6 @@ export interface FrameValues {
   solid: number;
   solidShape: SolidShape;
   solidMap: SolidMap;
-  /** Freeze background: the steps after the 3D Object change only the picture on the shape (see render). */
-  solidKeep: boolean;
   solidBlend: LayerBlend;
   solidBackground: number;
   solidSize: number;
@@ -490,7 +477,7 @@ export interface FrameValues {
   laserX: number;
   laserY: number;
   /**
-   * Overlay (see PICTURE_SHADER): opacity (0 = off), the blend, the size
+   * Image or Video (see PICTURE_SHADER): opacity (0 = off), the blend, the size
    * (1 covers the screen), the center (a part of the screen size from the
    * screen center) and the turn in radians.
    */
@@ -708,18 +695,13 @@ export class KaleidoRenderer {
   private readonly raysMix: Program;
   private readonly lasers: Program;
   private readonly pictureProgram: Program;
-  private readonly layerProgram: Program;
   /**
    * Where the steps draw what would go to the screen: the screen (null), or
-   * the Image layer's own picture while the layers are put together (see
-   * render).
+   * a picture of Freeze background's (see render).
    */
   private output: WebGLFramebuffer | null = null;
-  /** The pictures the layers draw into and are put together in, by name, each made on first use (see layerTarget). */
+  /** Freeze background's pictures, by name, each made on first use (see layerTarget). */
   private readonly layerPictures = new Map<string, { target: Target; size: [number, number] }>();
-  /** One clear pixel, and one black pixel: what is under a layer when nothing is. */
-  private readonly clearTexture: WebGLTexture;
-  private readonly blackTexture: WebGLTexture;
   /** The steps that do something in this frame (see activeSteps). */
   private active = {} as Record<FxStep, boolean>;
   /** Two half-size pictures for the light rays; the ray passes go back and forth between them. */
@@ -822,9 +804,6 @@ export class KaleidoRenderer {
     this.raysMix = this.createProgram(RAYS_MIX_SHADER);
     this.lasers = this.createProgram(LASER_SHADER);
     this.pictureProgram = this.createProgram(PICTURE_SHADER);
-    this.layerProgram = this.createProgram(LAYER_SHADER);
-    this.clearTexture = this.pixelTexture([0, 0, 0, 0]);
-    this.blackTexture = this.pixelTexture([0, 0, 0, 255]);
     this.bloomUp = this.createProgram(BLOOM_UP_SHADER);
     this.bloomMix = this.createProgram(BLOOM_SHADER);
 
@@ -1022,7 +1001,6 @@ export class KaleidoRenderer {
   }
 
   render(v: FrameValues) {
-    const gl = this.gl;
     this.resizeCanvas();
     this.timer.collect();
     const [width, height] = this.frameSize;
@@ -1038,60 +1016,31 @@ export class KaleidoRenderer {
     for (const step of PICTURE_STEPS) if (!active[step]) delete this.timer.times[step];
 
     /**
-     * The layers (see docs/LAYERS.md), the bottom one first. A hidden layer,
-     * an Image or Video layer with no file, and a 3D Object at opacity 0
-     * draw nothing. The Image layer shown alone, whole and by Normal draws
-     * onto the screen as before layers. Else each layer draws into a picture
-     * of its own, and LAYER_SHADER puts it over the layers under it.
+     * Freeze background (see FrameValues.freeze): the picture made before
+     * the 3D Object is kept, and the "object" steps change a copy of it,
+     * which the object is painted with, over the kept one, so its outline
+     * does not change. The "after" steps then change the whole picture.
+     * Else the list draws onto the screen in one run.
      */
-    const shown = v.layers.filter((layer) => layer.visible && layer.opacity > 0
-      && (layer.kind !== "media" || this.pictureSource !== null) && (layer.kind !== "solid" || v.solid > 0));
-    if (shown.length === 0) {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      gl.viewport(0, 0, width, height);
-      gl.clearColor(0, 0, 0, 1);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      this.endFrame(active);
-      return;
-    }
-    const alone = shown.length === 1 && shown[0].kind === "image" && shown[0].opacity >= 1 && shown[0].blend === 0;
-    if (alone) {
+    const freeze = active.solid ? v.freeze : null;
+    if (!freeze) {
       this.output = null;
       this.drawStack(v, v.fxOrder, null, width, height);
       this.endFrame(active);
       return;
     }
-    /** The layers under the one that draws, put together, or null for black. */
-    let below: WebGLTexture | null = null;
-    let imagePicture: WebGLTexture | null = null;
-    shown.forEach((layer, index) => {
-      const out = this.layerTarget(layer.kind, width, height);
-      if (layer.kind === "image") {
-        this.output = out.framebuffer;
-        this.drawStack(v, v.fxOrder, null, width, height);
-        imagePicture = out.texture;
-      } else if (layer.kind === "media") {
-        /* The file, placed by its Size, X, Y and Turn on a clear picture, then the layer's own effects. */
-        const placed = this.layerTarget("media placed", width, height);
-        this.drawPicture(v, this.clearTexture, placed, width, height, true);
-        this.output = out.framebuffer;
-        this.drawStack(v, layer.fx, placed.texture, width, height);
-      } else {
-        /* The layer's own effects change the paint; the shape, painted with it, keeps its outline, on a clear picture. */
-        const paint = this.layerTarget("solid paint", width, height);
-        this.output = paint.framebuffer;
-        this.drawStack(v, layer.fx, (layer.paint === 1 ? imagePicture : below) ?? this.blackTexture, width, height);
-        this.output = null;
-        this.timer.begin("solid");
-        this.drawSolid(v, paint.texture, out, width, height, this.clearTexture, true);
-        this.timer.end();
-      }
-      this.output = null;
-      const last = index === shown.length - 1;
-      const into = last ? null : this.layerTarget(index % 2 ? "stack b" : "stack a", width, height);
-      this.drawLayer(out.texture, below ?? this.blackTexture, layer, into, width, height);
-      below = into ? into.texture : null;
-    });
+    const image = this.layerTarget("image", width, height);
+    this.output = image.framebuffer;
+    this.drawStack(v, freeze.before, null, width, height);
+    const paint = this.layerTarget("solid paint", width, height);
+    this.output = paint.framebuffer;
+    this.drawStack(v, freeze.object, image.texture, width, height);
+    const into = freeze.after.length > 0 ? this.layerTarget("stack", width, height) : null;
+    this.output = null;
+    this.timer.begin("solid");
+    this.drawSolid(v, paint.texture, into, width, height, image.texture);
+    this.timer.end();
+    if (into) this.drawStack(v, freeze.after, into.texture, width, height);
     this.endFrame(active);
   }
 
@@ -1876,7 +1825,7 @@ export class KaleidoRenderer {
    * place, see render).
    */
   /** "layer": the 3D Object layer's shape on a clear picture, with no background and no blend of its own (the layer has them). */
-  private drawSolid(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture, layer = false) {
+  private drawSolid(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture) {
     const gl = this.gl;
     const s = this.solidProgram;
     gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
@@ -1889,9 +1838,9 @@ export class KaleidoRenderer {
     gl.uniform1f(s.uniforms.u_pixel, 1 / height);
     gl.uniform1i(s.uniforms.u_shape, v.solidShape);
     gl.uniform1i(s.uniforms.u_map, v.solidMap);
-    gl.uniform1i(s.uniforms.u_blend, layer ? 0 : v.solidBlend);
+    gl.uniform1i(s.uniforms.u_blend, v.solidBlend);
     gl.uniform1f(s.uniforms.u_opacity, Math.min(1, Math.max(0, v.solid)));
-    gl.uniform1f(s.uniforms.u_background, layer ? 0 : Math.min(1, Math.max(0, v.solidBackground)));
+    gl.uniform1f(s.uniforms.u_background, Math.min(1, Math.max(0, v.solidBackground)));
     gl.uniform1f(s.uniforms.u_size, Math.max(0.01, v.solidSize));
     gl.uniform1f(s.uniforms.u_round, Math.min(1, Math.max(0, v.solidRound)));
     gl.uniform1f(s.uniforms.u_morph, v.solidMorph);
@@ -2141,9 +2090,7 @@ export class KaleidoRenderer {
     return this.mandel;
   }
 
-  /** Freeze background's picture behind the 3D Object (see render), made at the screen's size when first needed. */
-
-  /** A layer picture by name ("image", "stack a", ...), the size of the screen (see render). */
+  /** A picture of Freeze background's by name ("image", "solid paint", "stack"), the size of the screen (see render). */
   private layerTarget(name: string, width: number, height: number) {
     let picture = this.layerPictures.get(name);
     if (!picture) {
@@ -2155,37 +2102,6 @@ export class KaleidoRenderer {
       picture.size = [width, height];
     }
     return picture.target;
-  }
-
-  /** A 1 by 1 texture of one color (RGBA bytes, premultiplied). The texture bound before stays bound, so the passes see what they saw before layers. */
-  private pixelTexture(rgba: [number, number, number, number]) {
-    const gl = this.gl;
-    const bound = gl.getParameter(gl.TEXTURE_BINDING_2D) as WebGLTexture | null;
-    const texture = gl.createTexture()!;
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(rgba));
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.bindTexture(gl.TEXTURE_2D, bound);
-    return texture;
-  }
-
-  /** Puts a layer's picture over "base" (the layers under it), by its blend and opacity (LAYER_SHADER), into "into" or onto the screen. */
-  private drawLayer(texture: WebGLTexture, base: WebGLTexture, layer: LayerValues, into: Target | null, width: number, height: number) {
-    const gl = this.gl;
-    const p = this.layerProgram;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, into ? into.framebuffer : null);
-    gl.viewport(0, 0, width, height);
-    gl.useProgram(p.program);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, base);
-    gl.uniform1i(p.uniforms.u_base, 1);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.uniform1i(p.uniforms.u_layer, 0);
-    gl.uniform1i(p.uniforms.u_blend, layer.blend);
-    gl.uniform1f(p.uniforms.u_opacity, Math.min(1, Math.max(0, layer.opacity)));
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
   /**
@@ -2501,14 +2417,14 @@ export class KaleidoRenderer {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
-  /** The Overlay effect's image or video (an image, or a video element that the engine plays), or null; see setPicture. */
+  /** The Image or Video effect's image or video (an image, or a video element that the engine plays), or null; see setPicture. */
   private pictureSource: ImageSource | null = null;
   private pictureTexture: WebGLTexture | null = null;
   /** The video time of the frame in the texture (-1: none yet), so a frame is uploaded once. */
   private pictureVideoTime = -1;
   private pictureSize: [number, number] = [1, 1];
 
-  /** Sets the Overlay effect's image or video, or none. A still image goes to its texture at once; a video, frame by frame (see uploadPicture). */
+  /** Sets the Image or Video effect's image or video, or none. A still image goes to its texture at once; a video, frame by frame (see uploadPicture). */
   setPicture(source: ImageSource | null) {
     const gl = this.gl;
     this.pictureSource = source;
@@ -2545,9 +2461,8 @@ export class KaleidoRenderer {
     gl.activeTexture(gl.TEXTURE0);
   }
 
-  /** Overlay: the image or video over the picture made so far, in one pass (PICTURE_SHADER). A video's new frame is uploaded first. */
-  /** "layer": the Image or Video layer's file alone, whole and by Normal (the layer has its own blend and opacity). */
-  private drawPicture(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number, layer = false) {
+  /** Image or Video: the file over the picture made so far, in one pass (PICTURE_SHADER). A video's new frame is uploaded first. */
+  private drawPicture(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
     const gl = this.gl;
     const video = this.pictureSource instanceof HTMLVideoElement ? this.pictureSource : null;
     if (video && video.readyState >= 2 && video.videoWidth > 0 && video.currentTime !== this.pictureVideoTime) {
@@ -2568,8 +2483,8 @@ export class KaleidoRenderer {
     gl.uniform2f(p.uniforms.u_res, width, height);
     /* Until a video's first frame is there, nothing shows over the picture. */
     const ready = !video || this.pictureVideoTime >= 0;
-    gl.uniform1f(p.uniforms.u_opacity, ready ? (layer ? 1 : Math.min(1, Math.max(0, v.picture))) : 0);
-    gl.uniform1i(p.uniforms.u_blend, layer ? 0 : v.pictureBlend);
+    gl.uniform1f(p.uniforms.u_opacity, ready ? Math.min(1, Math.max(0, v.picture)) : 0);
+    gl.uniform1i(p.uniforms.u_blend, v.pictureBlend);
     gl.uniform1f(p.uniforms.u_layerAspect, this.pictureSize[1] > 0 ? this.pictureSize[0] / this.pictureSize[1] : 1);
     gl.uniform1f(p.uniforms.u_size, Math.max(0.01, v.pictureSize));
     gl.uniform2f(p.uniforms.u_offset, v.pictureX, v.pictureY);
