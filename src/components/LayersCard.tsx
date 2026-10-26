@@ -1,17 +1,21 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Cube, Eye, EyeSlash, FilmStrip, PencilSimple, Plus } from "@phosphor-icons/react";
+import { Cube, Eye, EyeSlash, FilmStrip, Image as ImageIcon, PencilSimple, Plus, Trash } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
 import type { SceneLayer } from "../engine/params";
-import type { StackBlend } from "../engine/renderer";
+import type { LayerKind, StackBlend } from "../engine/renderer";
 import { ContextMenu } from "./ContextMenu";
 import { Dropdown } from "./Dropdown";
 import { Slider } from "./Slider";
+import { useDragReorder } from "./useDragReorder";
 import { useParamRows } from "./useParamRows";
 import { help } from "../help/topics";
 
 const BLENDS = [[0, "Normal"], [1, "Screen"], [2, "Add"], [3, "Multiply"]] as const;
 const BLEND_NAMES: Record<StackBlend, string> = { 0: "Normal", 1: "Screen", 2: "Add", 3: "Multiply" };
+/** The kinds "+ Layer" adds, in its menu's order, with each kind's name and icon. */
+const KINDS: readonly (readonly [LayerKind, string])[] = [["solid", "3D Object"], ["media", "Image or Video"], ["image", "Image"]];
+const KIND_ICONS: Record<LayerKind, typeof Cube> = { image: ImageIcon, solid: Cube, media: FilmStrip };
 
 /**
  * The Layers card (see docs/LAYERS.md), at the top of the left panel, laid
@@ -20,32 +24,38 @@ const BLEND_NAMES: Record<StackBlend, string> = { 0: "Normal", 1: "Screen", 2: "
  * selected layer's blend and opacity; then one row per layer, the top layer
  * first: the eye switch, a thumbnail and the name, and for a layer that is
  * not Normal at 100%, its blend and opacity in small text. A click selects
- * a row; a double-click or Rename in its right-click menu renames it.
- * "+ Layer" adds a kind of layer; the 3D Object and Image or Video kinds
- * come in the next steps. Each change goes to the engine at once, so the
- * canvas shows it, and is part of Undo and of the unsaved-change check.
+ * a row (the Source and FX cards show that layer); a drag moves it; a
+ * double-click or Rename in its right-click menu renames it, and Delete
+ * takes it out. "+ Layer" adds a kind that the scene does not have yet. An
+ * effect's grip dropped on a row moves the effect to that layer (see
+ * ControlPanel). The panel owns the layers; each change goes to it.
  */
-export function LayersCard({ engine, sceneName, thumbnails }: {
+export function LayersCard({ engine, sceneName, thumbnails, layers, selected, onSelect, onChange, onAdd, onDelete }: {
   engine: Engine;
   /** The scene's name (without .ksage), or "Untitled Scene": the card's title. */
   sceneName: string;
-  /** Each kind's thumbnail (a data URL), if it has one: the Image layer shows slot A's. */
-  thumbnails: Partial<Record<SceneLayer["kind"], string>>;
+  /** Each kind's thumbnail (a data URL), if it has one. */
+  thumbnails: Partial<Record<LayerKind, string>>;
+  /** The stack, the bottom layer first. */
+  layers: SceneLayer[];
+  selected: LayerKind;
+  onSelect: (kind: LayerKind) => void;
+  onChange: (layers: SceneLayer[]) => void;
+  onAdd: (kind: LayerKind) => void;
+  onDelete: (kind: LayerKind) => void;
 }) {
   const row = useParamRows(engine);
-  const [layers, setLayers] = useState(() => engine.state.layers.map((layer) => ({ ...layer })));
-  const [selected, setSelected] = useState<SceneLayer["kind"]>(() => engine.state.layers.find((layer) => layer.kind === "image")?.kind ?? "image");
-  const [renaming, setRenaming] = useState<{ kind: SceneLayer["kind"]; value: string } | null>(null);
-  const [menu, setMenu] = useState<{ left: number; top: number; kind: SceneLayer["kind"] | null } | null>(null);
+  const [renaming, setRenaming] = useState<{ kind: LayerKind; value: string } | null>(null);
+  const [menu, setMenu] = useState<{ left: number; top: number; kind: LayerKind | null } | null>(null);
   const layer = layers.find((candidate) => candidate.kind === selected) ?? layers[0];
+  /* The rows show the top layer first; the stack keeps the bottom one first. */
+  const shownOrder = [...layers].reverse().map((item) => item.kind);
+  const drag = useDragReorder(shownOrder, (order) => {
+    const byKind = new Map(layers.map((item) => [item.kind, item]));
+    onChange([...order].reverse().flatMap((kind) => byKind.get(kind) ?? []));
+  });
 
-  /** Changes one layer in the engine and in the card. */
-  const change = (kind: SceneLayer["kind"], next: Partial<SceneLayer>) => {
-    const updated = layers.map((candidate) => candidate.kind === kind ? { ...candidate, ...next } : candidate);
-    engine.state.layers = updated.map((candidate) => ({ ...candidate }));
-    engine.wake();
-    setLayers(updated);
-  };
+  const change = (kind: LayerKind, next: Partial<SceneLayer>) => onChange(layers.map((candidate) => candidate.kind === kind ? { ...candidate, ...next } : candidate));
   const commitRename = () => {
     if (!renaming) return;
     const name = renaming.value.trim();
@@ -94,20 +104,27 @@ export function LayersCard({ engine, sceneName, thumbnails }: {
           <span className="layers-opacity-value">{Math.round(layer.opacity * 100)}%</span>
         </div>
       )}
-      <ol className="layers-list" aria-label="Layers">
+      <ol ref={drag.listRef} className="layers-list" aria-label="Layers">
         {[...layers].reverse().map((item) => {
           const active = item.kind === layer?.kind;
           const plain = item.blend === 0 && item.opacity >= 1;
+          const Icon = KIND_ICONS[item.kind];
           return (
             <li
               key={item.kind}
-              className={`layers-row ${active ? "active" : ""} ${item.visible ? "" : "hidden"}`}
+              data-key={item.kind}
+              data-layer-kind={item.kind}
+              className={`layers-row ${active ? "active" : ""} ${item.visible ? "" : "hidden"} ${drag.dragging === item.kind ? "dragging" : ""}`}
               aria-selected={active}
-              onPointerDown={(event) => { if (event.button === 0) setSelected(item.kind); }}
+              onPointerDown={(event) => {
+                if (event.button !== 0) return;
+                onSelect(item.kind);
+                drag.start(item.kind)(event);
+              }}
               onDoubleClick={() => setRenaming({ kind: item.kind, value: item.name })}
               onContextMenu={(event) => {
                 event.preventDefault();
-                setSelected(item.kind);
+                onSelect(item.kind);
                 setMenu({ left: event.clientX, top: event.clientY, kind: item.kind });
               }}
             >
@@ -121,7 +138,9 @@ export function LayersCard({ engine, sceneName, thumbnails }: {
               >
                 {item.visible ? <Eye size={14} /> : <EyeSlash size={14} />}
               </button>
-              <span className="layers-thumb" style={thumbnails[item.kind] ? { backgroundImage: `url(${thumbnails[item.kind]})` } : undefined} />
+              <span className="layers-thumb" style={thumbnails[item.kind] ? { backgroundImage: `url(${thumbnails[item.kind]})` } : undefined}>
+                {!thumbnails[item.kind] && <Icon size={13} />}
+              </span>
               {renaming?.kind === item.kind ? (
                 <input
                   className="scene-list-rename"
@@ -153,11 +172,15 @@ export function LayersCard({ engine, sceneName, thumbnails }: {
           position={{ left: menu.left, top: menu.top }}
           onClose={() => setMenu(null)}
           items={menu.kind
-            ? [{ label: "Rename…", icon: <PencilSimple size={14} />, run: () => { const item = layers.find((candidate) => candidate.kind === menu.kind); if (item) setRenaming({ kind: item.kind, value: item.name }); } }]
-            : [
-              { label: "3D Object (coming soon)", icon: <Cube size={14} />, disabled: true, run: () => {} },
-              { label: "Image or Video (coming soon)", icon: <FilmStrip size={14} />, disabled: true, run: () => {} }
-            ]}
+            ? [
+              { label: "Rename…", icon: <PencilSimple size={14} />, run: () => { const item = layers.find((candidate) => candidate.kind === menu.kind); if (item) setRenaming({ kind: item.kind, value: item.name }); } },
+              { label: menu.kind === "image" ? "Delete Layer (the Image layer stays)" : "Delete Layer", icon: <Trash size={14} />, disabled: menu.kind === "image", run: () => menu.kind && onDelete(menu.kind) }
+            ]
+            : KINDS.map(([kind, name]) => {
+              const Icon = KIND_ICONS[kind];
+              const there = layers.some((candidate) => candidate.kind === kind);
+              return { label: there ? `${name} (in the scene)` : name, icon: <Icon size={14} />, disabled: there, run: () => onAdd(kind) };
+            })}
         />,
         document.body
       )}

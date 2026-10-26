@@ -97,7 +97,13 @@ export interface LayerValues {
   visible: boolean;
   blend: StackBlend;
   opacity: number;
+  /** The layer's own effects (the Image layer's are fxOrder). */
+  fx: FxStep[];
+  /** The 3D Object layer's paint: 0 the layers below it, put together; 1 the Image layer. */
+  paint: SolidPaint;
 }
+/** What a 3D Object layer is painted with (see LayerValues.paint). */
+export type SolidPaint = 0 | 1;
 /** How the light cycles move: 0 on grid lanes with right-angle turns, 1 in free curves. */
 export type CycleMove = 0 | 1;
 /**
@@ -707,8 +713,13 @@ export class KaleidoRenderer {
    * render).
    */
   private output: WebGLFramebuffer | null = null;
-  /** The Image layer's own picture, made on first use (see layerTarget). */
-  private layerPicture: { target: Target; size: [number, number] } | null = null;
+  /** The pictures the layers draw into and are put together in, by name, each made on first use (see layerTarget). */
+  private readonly layerPictures = new Map<string, { target: Target; size: [number, number] }>();
+  /** One clear pixel, and one black pixel: what is under a layer when nothing is. */
+  private readonly clearTexture: WebGLTexture;
+  private readonly blackTexture: WebGLTexture;
+  /** The steps that do something in this frame (see activeSteps). */
+  private active = {} as Record<FxStep, boolean>;
   /** Two half-size pictures for the light rays; the ray passes go back and forth between them. */
   private readonly raysTargets: [Target, Target];
   private readonly bloomBright: Program;
@@ -810,6 +821,8 @@ export class KaleidoRenderer {
     this.lasers = this.createProgram(LASER_SHADER);
     this.pictureProgram = this.createProgram(PICTURE_SHADER);
     this.layerProgram = this.createProgram(LAYER_SHADER);
+    this.clearTexture = this.pixelTexture([0, 0, 0, 0]);
+    this.blackTexture = this.pixelTexture([0, 0, 0, 255]);
     this.bloomUp = this.createProgram(BLOOM_UP_SHADER);
     this.bloomMix = this.createProgram(BLOOM_SHADER);
 
@@ -1013,30 +1026,77 @@ export class KaleidoRenderer {
     const [width, height] = this.frameSize;
     if (width === 0 || height === 0) return;
 
+    const active = this.activeSteps(v);
+    this.active = active;
+    if (v.mapMode === 9 && active.map) this.updateMandelStrips(v, width, height);
+    else this.stripPass = [null, null];
+    const opacity = (step: ShapeStep) => Math.min(1, Math.max(0, v.shapeOpacity[step]));
+    const shapeSteps = v.fxOrder.filter((step): step is ShapeStep => isShapeStep(step) && active[step]);
+    this.info.shapeVersions = 1 + shapeSteps.filter((step) => opacity(step) < 1 || v.layerBlend[step] !== 0).length;
+    for (const step of PICTURE_STEPS) if (!active[step]) delete this.timer.times[step];
+
     /**
-     * The layers (see docs/LAYERS.md). The Image layer draws onto the screen
-     * as before layers while it shows alone, whole and by Normal. Else it
-     * draws into a picture of its own, and LAYER_SHADER puts it over black
-     * (see the end of this function). A hidden layer draws nothing.
+     * The layers (see docs/LAYERS.md), the bottom one first. A hidden layer,
+     * an Image or Video layer with no file, and a 3D Object at opacity 0
+     * draw nothing. The Image layer shown alone, whole and by Normal draws
+     * onto the screen as before layers. Else each layer draws into a picture
+     * of its own, and LAYER_SHADER puts it over the layers under it.
      */
-    const image = v.layers.find((layer) => layer.kind === "image");
-    if (!image || !image.visible || image.opacity <= 0) {
+    const shown = v.layers.filter((layer) => layer.visible && layer.opacity > 0
+      && (layer.kind !== "media" || this.pictureSource !== null) && (layer.kind !== "solid" || v.solid > 0));
+    if (shown.length === 0) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.viewport(0, 0, width, height);
       gl.clearColor(0, 0, 0, 1);
       gl.clear(gl.COLOR_BUFFER_BIT);
+      this.endFrame(active);
       return;
     }
-    const alone = v.layers.length === 1 && image.opacity >= 1 && image.blend === 0;
-    this.output = alone ? null : this.layerTarget(width, height).framebuffer;
+    const alone = shown.length === 1 && shown[0].kind === "image" && shown[0].opacity >= 1 && shown[0].blend === 0;
+    if (alone) {
+      this.output = null;
+      this.drawStack(v, v.fxOrder, null, width, height);
+      this.endFrame(active);
+      return;
+    }
+    /** The layers under the one that draws, put together, or null for black. */
+    let below: WebGLTexture | null = null;
+    let imagePicture: WebGLTexture | null = null;
+    shown.forEach((layer, index) => {
+      const out = this.layerTarget(layer.kind, width, height);
+      if (layer.kind === "image") {
+        this.output = out.framebuffer;
+        this.drawStack(v, v.fxOrder, null, width, height);
+        imagePicture = out.texture;
+      } else if (layer.kind === "media") {
+        /* The file, placed by its Size, X, Y and Turn on a clear picture, then the layer's own effects. */
+        const placed = this.layerTarget("media placed", width, height);
+        this.drawPicture(v, this.clearTexture, placed, width, height, true);
+        this.output = out.framebuffer;
+        this.drawStack(v, layer.fx, placed.texture, width, height);
+      } else {
+        /* The layer's own effects change the paint; the shape, painted with it, keeps its outline, on a clear picture. */
+        const paint = this.layerTarget("solid paint", width, height);
+        this.output = paint.framebuffer;
+        this.drawStack(v, layer.fx, (layer.paint === 1 ? imagePicture : below) ?? this.blackTexture, width, height);
+        this.output = null;
+        this.timer.begin("solid");
+        this.drawSolid(v, paint.texture, out, width, height, this.clearTexture, true);
+        this.timer.end();
+      }
+      this.output = null;
+      const last = index === shown.length - 1;
+      const into = last ? null : this.layerTarget(index % 2 ? "stack b" : "stack a", width, height);
+      this.drawLayer(out.texture, below ?? this.blackTexture, layer, into, width, height);
+      below = into ? into.texture : null;
+    });
+    this.endFrame(active);
+  }
 
+  /** The steps that do something in this frame. A shape step that is off does nothing either, and neither does one at opacity 0. */
+  private activeSteps(v: FrameValues): Record<FxStep, boolean> {
     const opacity = (step: ShapeStep) => Math.min(1, Math.max(0, v.shapeOpacity[step]));
-    /**
-     * The picture steps that do something. A shape step that is off does
-     * nothing either, and neither does one at opacity 0: the shader would
-     * mix all of it away.
-     */
-    const active: Record<FxStep, boolean> = {
+    return {
       warp: v.shapeActive.warp && opacity("warp") > 0,
       map: v.shapeActive.map && opacity("map") > 0,
       kaleidoscope: v.shapeActive.kaleidoscope && opacity("kaleidoscope") > 0,
@@ -1061,18 +1121,32 @@ export class KaleidoRenderer {
       color: v.overlayOpacity > 0,
       levels: v.exposure !== 0 || v.blackLevel > 0
     };
-    /**
-     * The steps in the user's order, with shape steps that are next to each
-     * other (once the steps that do nothing are left out) joined into one
-     * pass. The shape steps before the first picture step read the source
-     * images; a later group of shape steps reads the picture made so far.
-     */
-    /**
-     * Sharpen, Color and Levels next to each other, in that order, join into
-     * one pass of FINISH_SHADER, which applies them in that order.
-     */
+  }
+
+  /** What the effects with a memory keep from this frame to the next. */
+  private endFrame(active: Record<FxStep, boolean>) {
+    this.trailsWereOn = active.trails;
+    this.contoursWereOn = active.contours;
+    this.smearWasOn = active.smear;
+    this.particlesWereOn = active.particles;
+    this.cyclesWereOn = active.cycles;
+  }
+
+  /**
+   * One layer's effects ("fx", in the user's order), drawn into the output
+   * (see output): from the source images when "input" is null (the Image
+   * layer), or from "input", a picture the size of the screen. Shape steps
+   * that are next to each other (once the steps that do nothing are left
+   * out) join into one pass. The shape steps before the first picture step
+   * read the source images; a later group of shape steps, or any with an
+   * input, reads the picture made so far. Sharpen, Color and Levels next to
+   * each other, in that order, join into one pass of FINISH_SHADER.
+   */
+  private drawStack(v: FrameValues, fx: readonly FxStep[], input: WebGLTexture | null, width: number, height: number) {
+    const gl = this.gl;
+    const active = this.active;
     const passes: (PictureStep | ShapeStep[] | { finish: FinishPart[] })[] = [];
-    for (const step of v.fxOrder.filter((candidate) => active[candidate])) {
+    for (const step of fx.filter((candidate) => active[candidate])) {
       const previous = passes[passes.length - 1];
       if (isFinishPart(step)) {
         const group = typeof previous === "object" && !Array.isArray(previous) ? previous.finish : null;
@@ -1082,42 +1156,33 @@ export class KaleidoRenderer {
       else if (Array.isArray(previous)) previous.push(step);
       else passes.push([step]);
     }
-    const first = Array.isArray(passes[0]) ? passes.shift() as ShapeStep[] : [];
-    if (v.mapMode === 9 && active.map) this.updateMandelStrips(v, width, height);
-    else this.stripPass = [null, null];
-    /**
-     * Freeze background (docs/LAYERS.md, phase 2): with a step after the 3D
-     * Object, the steps after it change only the picture on the shape. The
-     * 3D Object's place keeps the picture as it is there in keptTarget, and
-     * passes it on unchanged; the steps after it change it as usual, but the
-     * last one draws into a picture, not onto the screen. Then the 3D Object
-     * is drawn last, painted with that picture, over the kept one.
-     */
-    const solidAt = passes.indexOf("solid");
-    const layered = v.solidKeep && solidAt >= 0 && solidAt < passes.length - 1;
-
-    const shapeSteps = v.fxOrder.filter((step): step is ShapeStep => isShapeStep(step) && active[step]);
-    this.info.shapeVersions = 1 + shapeSteps.filter((step) => opacity(step) < 1 || v.layerBlend[step] !== 0).length;
+    const first = input === null && Array.isArray(passes[0]) ? passes.shift() as ShapeStep[] : [];
 
     if (passes.length > 0) this.ensureTrailTargets(width, height);
-    for (const step of PICTURE_STEPS) if (!active[step]) delete this.timer.times[step];
     /* A joined Sharpen, Color and Levels pass is timed under its first part. */
     for (const pass of passes) if (typeof pass === "object" && !Array.isArray(pass)) for (const part of pass.finish.slice(1)) delete this.timer.times[part];
-    if (!passes.some(Array.isArray)) delete this.timer.times.refold;
+    if (input === null && !passes.some(Array.isArray)) delete this.timer.times.refold;
     /** A scratch picture that is not the one being read. */
-    const scratchFor = (input: WebGLTexture) => (input === this.current.texture ? this.scratch : this.current);
+    const scratchFor = (picture: WebGLTexture) => (picture === this.current.texture ? this.scratch : this.current);
 
     /**
      * The kaleidoscope picture. Only a Blur that comes first reads past the
      * screen's edge (up to about its radius), so then the picture is drawn
      * into a texture with a border that wide. Otherwise it is drawn at the
      * screen's size straight into the picture for the next step, or onto
-     * the screen when no step follows.
+     * the output when no step follows. A layer with an input starts from it.
      */
     let source: WebGLTexture;
     let padded = false;
-    const blurFirst = passes[0] === "blur";
-    if (blurFirst) {
+    const blurFirst = input === null && passes[0] === "blur";
+    if (input !== null) {
+      source = input;
+      if (passes.length === 0) {
+        gl.viewport(0, 0, width, height);
+        this.drawCopy(input);
+        return;
+      }
+    } else if (blurFirst) {
       this.ensurePad(v.blur * height);
       const [textureWidth, textureHeight] = this.textureSize;
       gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
@@ -1136,11 +1201,13 @@ export class KaleidoRenderer {
       this.timer.end();
       source = target ? target.texture : this.current.texture;
     }
-    const [textureWidth, textureHeight] = blurFirst ? this.textureSize : [width, height];
-    Object.assign(this.info, { width, height, textureWidth, textureHeight, blurSamples: v.blur > 0 ? BLUR_TAPS : 0 });
+    if (input === null) {
+      const [textureWidth, textureHeight] = blurFirst ? this.textureSize : [width, height];
+      Object.assign(this.info, { width, height, textureWidth, textureHeight, blurSamples: v.blur > 0 ? BLUR_TAPS : 0 });
+    }
 
     passes.forEach((step, index) => {
-      const last = index === passes.length - 1 && !layered;
+      const last = index === passes.length - 1;
       if (typeof step === "object" && !Array.isArray(step)) {
         const target = last ? null : scratchFor(source);
         this.timer.begin(step.finish[0]);
@@ -1151,7 +1218,7 @@ export class KaleidoRenderer {
         return;
       }
       if (Array.isArray(step)) {
-        /* Shape steps after a picture step move the picture made so far. */
+        /* Shape steps after a picture step, or in a layer with an input, move the picture made so far. */
         const target = last ? null : scratchFor(source);
         gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
         gl.viewport(0, 0, width, height);
@@ -1172,12 +1239,7 @@ export class KaleidoRenderer {
         else if (step === "relief") this.drawRelief(v, source, target, width, height);
         else if (step === "driver") this.drawDriver(v, source, target, width, height);
         else if (step === "camera") this.drawCamera(v, source, target, width, height);
-        else if (step === "solid" && layered) {
-          /* The picture goes on as it is; the shape comes at the end (see after this loop). */
-          this.drawCopy(source, this.keptTarget(width, height));
-          this.timer.end();
-          return;
-        } else if (step === "solid") this.drawSolid(v, source, target, width, height, source);
+        else if (step === "solid") this.drawSolid(v, source, target, width, height, source);
         else if (step === "contours") this.drawContours(v, source, target, width, height);
         else if (step === "smear") this.drawSmear(v, source, target, width, height);
         else if (step === "particles") this.drawParticles(v, source, target, width, height);
@@ -1192,20 +1254,6 @@ export class KaleidoRenderer {
       }
       this.timer.end();
     });
-    if (layered) {
-      this.timer.begin("solid");
-      this.drawSolid(v, source, null, width, height, this.keptTarget(width, height).texture);
-      this.timer.end();
-    }
-    if (this.output) {
-      this.output = null;
-      this.drawLayer(this.layerTarget(width, height).texture, image, width, height);
-    }
-    this.trailsWereOn = active.trails;
-    this.contoursWereOn = active.contours;
-    this.smearWasOn = active.smear;
-    this.particlesWereOn = active.particles;
-    this.cyclesWereOn = active.cycles;
   }
 
   /**
@@ -1825,7 +1873,8 @@ export class KaleidoRenderer {
    * picture, or with Freeze background the picture kept at the 3D Object's
    * place, see render).
    */
-  private drawSolid(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture) {
+  /** "layer": the 3D Object layer's shape on a clear picture, with no background and no blend of its own (the layer has them). */
+  private drawSolid(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture, layer = false) {
     const gl = this.gl;
     const s = this.solidProgram;
     gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
@@ -1838,9 +1887,9 @@ export class KaleidoRenderer {
     gl.uniform1f(s.uniforms.u_pixel, 1 / height);
     gl.uniform1i(s.uniforms.u_shape, v.solidShape);
     gl.uniform1i(s.uniforms.u_map, v.solidMap);
-    gl.uniform1i(s.uniforms.u_blend, v.solidBlend);
+    gl.uniform1i(s.uniforms.u_blend, layer ? 0 : v.solidBlend);
     gl.uniform1f(s.uniforms.u_opacity, Math.min(1, Math.max(0, v.solid)));
-    gl.uniform1f(s.uniforms.u_background, Math.min(1, Math.max(0, v.solidBackground)));
+    gl.uniform1f(s.uniforms.u_background, layer ? 0 : Math.min(1, Math.max(0, v.solidBackground)));
     gl.uniform1f(s.uniforms.u_size, Math.max(0.01, v.solidSize));
     gl.uniform1f(s.uniforms.u_round, Math.min(1, Math.max(0, v.solidRound)));
     gl.uniform1f(s.uniforms.u_morph, v.solidMorph);
@@ -2091,24 +2140,44 @@ export class KaleidoRenderer {
   }
 
   /** Freeze background's picture behind the 3D Object (see render), made at the screen's size when first needed. */
-  private kept: { target: Target; size: [number, number] } | null = null;
-  /** The Image layer's own picture, the size of the screen (see render). */
-  private layerTarget(width: number, height: number) {
-    this.layerPicture ??= { target: this.createTarget(), size: [0, 0] };
-    if (this.layerPicture.size[0] !== width || this.layerPicture.size[1] !== height) {
-      this.allocate(this.layerPicture.target, width, height);
-      this.layerPicture.size = [width, height];
+
+  /** A layer picture by name ("image", "stack a", ...), the size of the screen (see render). */
+  private layerTarget(name: string, width: number, height: number) {
+    let picture = this.layerPictures.get(name);
+    if (!picture) {
+      picture = { target: this.createTarget(), size: [0, 0] };
+      this.layerPictures.set(name, picture);
     }
-    return this.layerPicture.target;
+    if (picture.size[0] !== width || picture.size[1] !== height) {
+      this.allocate(picture.target, width, height);
+      picture.size = [width, height];
+    }
+    return picture.target;
   }
 
-  /** Puts a layer's picture onto the screen over black, by its blend and opacity (LAYER_SHADER). */
-  private drawLayer(texture: WebGLTexture, layer: LayerValues, width: number, height: number) {
+  /** A 1 by 1 texture of one color (RGBA bytes, premultiplied). The texture bound before stays bound, so the passes see what they saw before layers. */
+  private pixelTexture(rgba: [number, number, number, number]) {
+    const gl = this.gl;
+    const bound = gl.getParameter(gl.TEXTURE_BINDING_2D) as WebGLTexture | null;
+    const texture = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(rgba));
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.bindTexture(gl.TEXTURE_2D, bound);
+    return texture;
+  }
+
+  /** Puts a layer's picture over "base" (the layers under it), by its blend and opacity (LAYER_SHADER), into "into" or onto the screen. */
+  private drawLayer(texture: WebGLTexture, base: WebGLTexture, layer: LayerValues, into: Target | null, width: number, height: number) {
     const gl = this.gl;
     const p = this.layerProgram;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, into ? into.framebuffer : null);
     gl.viewport(0, 0, width, height);
     gl.useProgram(p.program);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, base);
+    gl.uniform1i(p.uniforms.u_base, 1);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.uniform1i(p.uniforms.u_layer, 0);
@@ -2116,16 +2185,6 @@ export class KaleidoRenderer {
     gl.uniform1f(p.uniforms.u_opacity, Math.min(1, Math.max(0, layer.opacity)));
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
-
-  private keptTarget(width: number, height: number) {
-    this.kept ??= { target: this.createTarget(), size: [0, 0] };
-    if (this.kept.size[0] !== width || this.kept.size[1] !== height) {
-      this.allocate(this.kept.target, width, height);
-      this.kept.size = [width, height];
-    }
-    return this.kept.target;
-  }
-
 
   /**
    * Light Cycles (see cycles.ts). The cycles drive on the CPU, with a small
@@ -2485,7 +2544,8 @@ export class KaleidoRenderer {
   }
 
   /** Overlay: the image or video over the picture made so far, in one pass (PICTURE_SHADER). A video's new frame is uploaded first. */
-  private drawPicture(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+  /** "layer": the Image or Video layer's file alone, whole and by Normal (the layer has its own blend and opacity). */
+  private drawPicture(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number, layer = false) {
     const gl = this.gl;
     const video = this.pictureSource instanceof HTMLVideoElement ? this.pictureSource : null;
     if (video && video.readyState >= 2 && video.videoWidth > 0 && video.currentTime !== this.pictureVideoTime) {
@@ -2506,8 +2566,8 @@ export class KaleidoRenderer {
     gl.uniform2f(p.uniforms.u_res, width, height);
     /* Until a video's first frame is there, nothing shows over the picture. */
     const ready = !video || this.pictureVideoTime >= 0;
-    gl.uniform1f(p.uniforms.u_opacity, ready ? Math.min(1, Math.max(0, v.picture)) : 0);
-    gl.uniform1i(p.uniforms.u_blend, v.pictureBlend);
+    gl.uniform1f(p.uniforms.u_opacity, ready ? (layer ? 1 : Math.min(1, Math.max(0, v.picture))) : 0);
+    gl.uniform1i(p.uniforms.u_blend, layer ? 0 : v.pictureBlend);
     gl.uniform1f(p.uniforms.u_layerAspect, this.pictureSize[1] > 0 ? this.pictureSize[0] / this.pictureSize[1] : 1);
     gl.uniform1f(p.uniforms.u_size, Math.max(0.01, v.pictureSize));
     gl.uniform2f(p.uniforms.u_offset, v.pictureX, v.pictureY);

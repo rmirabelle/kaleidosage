@@ -17,7 +17,6 @@ import { BottomPanelTabs, type BottomTab } from "./components/BottomPanelTabs";
 import { SongMapPanel, type SongTip } from "./components/SongMapPanel";
 import { PointerTip } from "./components/PointerTip";
 import { SceneTransport, SourcePanel } from "./components/SourcePanel";
-import { LayersCard } from "./components/LayersCard";
 import { StartScreen } from "./components/StartScreen";
 import { LoadingOverlay, type Loading } from "./components/LoadingOverlay";
 import { SceneList } from "./components/SceneList";
@@ -211,8 +210,8 @@ async function writeSceneFile(path: string, params: Params, state: PlayState, [f
    */
   const usesDriverVideo = state.fxOrder.includes("driver") && state.driverSource === 5;
   if (driver && usesDriverVideo) scene.driverVideo = { type: driver.videoFile.mime, video: driver.videoFile.id, name: driver.name };
-  /* The overlay's image or video goes in the same way: only while the Overlay effect is in the list. */
-  if (picture && state.fxOrder.includes("picture")) scene.picture = { ...(await sceneMedia(picture)), name: picture.label };
+  /* The Image or Video layer's file goes in the same way: only while the scene has that layer. */
+  if (picture && state.layers.some((layer) => layer.kind === "media")) scene.picture = { ...(await sceneMedia(picture)), name: picture.label };
   await writeScene(path, JSON.stringify(scene));
 }
 
@@ -2497,7 +2496,8 @@ export default function App() {
                   nextTip={nextTip}
                   onNextTipDone={endNextTip}
                   transport={<SceneTransport engine={engine} paused={paused} onTogglePause={togglePause} onStop={stop} show={holdUseful} autoNext={tracksActive && docs.length > 1} held={holdUseful && sceneHeld} onToggleHold={() => holdScene(!sceneHeldRef.current)} input={inputInPlaylist ? null : inputMenu} />}
-                  layers={<LayersCard engine={engine} sceneName={sceneFileName.replace(/\.ksage$/i, "")} thumbnails={{ image: images[0]?.thumbnail }} />}
+                  sceneName={sceneFileName.replace(/\.ksage$/i, "")}
+                  thumbnails={{ image: images[0]?.thumbnail, media: pictureRef.current?.thumbnail }}
                   source={(
                     <SourcePanel
                       engine={engine}

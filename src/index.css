@@ -525,6 +525,13 @@ button { border: 0; }
 .layers-thumb { flex: none; width: 36px; height: 20px; border: 1px solid #3a3f4d; border-radius: 3px; background: #11131a center / cover no-repeat; }
 .layers-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .layers-mode { color: #8a8fa0; font-size: 11px; white-space: nowrap; }
+.layers-row.dragging { opacity: .6; }
+.layers-thumb { display: grid; place-items: center; color: #8a8fa0; }
+/* The 3D Object and Image or Video layers' Source cards: their settings in one column. */
+.layer-source-body { display: flex; flex-direction: column; padding: 4px 0 6px; }
+.layer-source-body > .panel-select-row { padding: 6px 10px; }
+/* The FX title names the selected layer when it is not the Image layer. */
+.fx-layer-name { color: #8a8fa0; font-weight: 400; }
 .fx-card { display: flex; flex: 1; flex-direction: column; min-height: 0; margin-bottom: 8px; }
 /* 10px around the groups: each group already has 6px above it, so the list adds 4px at the top. */
 .fx-card > .panel-scroll { margin: 0; padding: 4px 6px 10px 10px; }

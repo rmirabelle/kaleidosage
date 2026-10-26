@@ -1,4 +1,4 @@
-import { GROUP_PARAMS, NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, defaultValue, hexToRgb, liveValue, rangeAt, rangeClock, startRangeAt, type GroupKey, type ParamKey } from "./params";
+import { GROUP_PARAMS, NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, defaultValue, hexToRgb, liveValue, rangeAt, rangeClock, startRangeAt, type GroupKey, type ParamKey, type PlayState } from "./params";
 import { KaleidoRenderer, type FrameValues, type ImageSource } from "./renderer";
 import { MANDEL_CENTERS } from "./submodes";
 import { audioLinkable, pushRange, pushedValue, type AudioSignal } from "./audio";
@@ -328,8 +328,13 @@ export class Engine {
    */
   private pictureVideoTarget() {
     const video = this.pictureSource;
-    if (!(video instanceof HTMLVideoElement) || !(video.duration > 0) || !this.state.groups.picture || !this.state.fxOrder.includes("picture")) return null;
+    if (!(video instanceof HTMLVideoElement) || !(video.duration > 0) || !this.state.layers.some((layer) => layer.kind === "media" && layer.visible)) return null;
     return this.state.clock % video.duration;
+  }
+
+  /** True when the scene has a layer of this kind (see docs/LAYERS.md). */
+  hasLayer(kind: PlayState["layers"][number]["kind"]) {
+    return this.state.layers.some((layer) => layer.kind === kind);
   }
 
   /** Keeps the overlay's video at its place, and stops it while it is not used. */
@@ -1278,7 +1283,7 @@ export class Engine {
       skyColor: hexToRgb(this.state.skyColor),
       cameraShine: this.live("cameraShine"),
       cameraSmooth: this.live("cameraSmooth"),
-      solid: on.solid ? this.live("solidAmount") : 0,
+      solid: this.hasLayer("solid") || on.solid ? this.live("solidAmount") : 0,
       solidShape: this.state.solidShape,
       solidMap: this.state.solidMap,
       solidKeep: this.state.solidKeep,
@@ -1378,8 +1383,9 @@ export class Engine {
       laserRainbow: this.live("laserRainbow"),
       laserX: this.live("laserX"),
       laserY: this.live("laserY"),
-      picture: on.picture ? this.live("pictureAmount") : 0,
-      layers: this.state.layers.map(({ kind, visible, blend, opacity }) => ({ kind, visible, blend, opacity })),
+      /* The Image or Video and the 3D Object are layers: they draw while their layer is there (the layer has the opacity). */
+      picture: this.hasLayer("media") ? 1 : on.picture ? this.live("pictureAmount") : 0,
+      layers: this.state.layers.map(({ kind, visible, blend, opacity, fx, paint }) => ({ kind, visible, blend, opacity, fx: fx ?? [], paint: paint ?? 0 })),
       pictureBlend: this.state.pictureBlend,
       pictureSize: this.live("pictureSize"),
       pictureX: this.live("pictureX"),

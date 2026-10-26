@@ -56,7 +56,9 @@ export const HELP_TOPICS = {
       "Click a layer to select it; the strip above the list sets its blend and opacity.",
       "The eye hides or shows a layer.",
       "Double-click a layer to rename it.",
-      "Screen and Add make a layer's black disappear."
+      "Screen and Add make a layer's black disappear.",
+      "Drag an effect's grip onto a layer's row to move the effect there.",
+      "A 3D Object layer's effects change the picture painted on the object."
     ],
     keywords: ["layer", "layers", "stack", "blend", "opacity", "screen", "add", "multiply", "hide", "photoshop"]
   },

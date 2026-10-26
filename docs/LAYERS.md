@@ -134,6 +134,14 @@ Talked about 2026-10-24; none of these is planned yet.
 
 ## Layers before effect copies (decided 2026-10-25)
 
+Built 2026-10-25, steps 1 to 5. Two choices made while building: the 3D
+Object layer's effects change the picture painted on the object (its
+outline stays), which is what Freeze background did; and the 3D Object's
+Paint choices are "Layers below" and "Image layer" (not the bare slot A,
+which would not fit the screen). Random all no longer picks the 3D Object,
+so seeded random scenes that had one now differ (tools/test-layers.mjs);
+with its old chance, every one of the 97 scenes is the same.
+
 The user works like in Photoshop: each layer has its own effects, and the
 layers go together from the bottom up. Freeze background (phase 2) and
 the Overlay effect gave one FX list two meanings, which was hard to

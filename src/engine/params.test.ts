@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GROUP_PARAMS, PARAM_KEYS, applyRadialStart, createParams, gradientColorAt, rgbToHex, createPlayState, defaultValue, fullRange, NUDGE, hexToRgb, hslToHex, liveValue, NO_EFFECT, nudgeParams, randomizeGroup, randomizeParams, resetEffects, setCustomTime, startRangeAt, withKindOrder, openRange, addEffect, removeEffect, toSlider, fromSlider, SLIDER_STEPS } from "./params";
+import { GROUP_PARAMS, PARAM_KEYS, applyRadialStart, createParams, gradientColorAt, rgbToHex, createPlayState, defaultValue, fullRange, NUDGE, hexToRgb, hslToHex, liveValue, NO_EFFECT, nudgeParams, randomizeGroup, randomizeParams, resetEffects, setCustomTime, startRangeAt, withKindOrder, openRange, addEffect, removeEffect, effectLayer, layerFx, toSlider, fromSlider, SLIDER_STEPS } from "./params";
 
 /** A play state at this many seconds, on both clocks: animation time (the shared cycle) and real time (custom ranges). */
 const at = (time: number) => ({ ...createPlayState(), time, clock: time });
@@ -537,5 +537,45 @@ describe("openRange", () => {
       if (!param.drift || param.low === undefined || param.high === undefined) continue;
       expect(Math.abs(param.high - param.low), key).toBeGreaterThanOrEqual(param.step / 2);
     }
+  });
+});
+
+describe("layers' own effects", () => {
+  const withSolid = () => {
+    const state = createPlayState();
+    state.layers = [
+      { kind: "image", name: "Image", visible: true, blend: 0, opacity: 1 },
+      { kind: "solid", name: "3D Object", visible: true, blend: 0, opacity: 1, fx: [], paint: 0 }
+    ];
+    return state;
+  };
+
+  it("add an effect to a layer, and move it when it is in another layer", () => {
+    const state = withSolid();
+    addEffect(state, "bloom");
+    expect([state.fxOrder, layerFx(state, "solid")]).toEqual([["bloom"], []]);
+    addEffect(state, "bloom", "solid");
+    expect([state.fxOrder, layerFx(state, "solid"), effectLayer(state, "bloom")]).toEqual([[], ["bloom"], "solid"]);
+    removeEffect(state, "bloom");
+    expect([layerFx(state, "solid"), effectLayer(state, "bloom"), state.groups.bloom]).toEqual([[], null, false]);
+  });
+
+  it("let Random all leave an effect in another layer where it is", () => {
+    const state = withSolid();
+    addEffect(state, "trails", "solid");
+    for (let round = 0; round < 20; round++) {
+      randomizeParams(createParams(), state);
+      expect(state.fxOrder).not.toContain("trails");
+      expect(state.fxOrder).not.toContain("solid");
+      expect(layerFx(state, "solid")).toEqual(["trails"]);
+      expect(state.groups.trails).toBe(true);
+    }
+  });
+
+  it("take unlocked effects out of every layer on Clear all", () => {
+    const state = withSolid();
+    addEffect(state, "bloom", "solid");
+    resetEffects(createParams(), state);
+    expect(layerFx(state, "solid")).toEqual([]);
   });
 });

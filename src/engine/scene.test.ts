@@ -24,6 +24,60 @@ describe("scene files", () => {
     expect(loaded.layers).toEqual([{ kind: "image", name: "Image", visible: true, blend: 0, opacity: 1 }]);
   });
 
+  it("open an old Freeze background scene as an Image layer and a 3D Object layer with the effects after it", () => {
+    const old = JSON.stringify({
+      app: "KaleidoSage", version: 3, image: IMAGE,
+      params: { solidAmount: { value: 1 }, bloomAmount: { value: 1 }, sharpen: { value: 1 } },
+      state: { effects: ["kaleidoscope", "solid", "bloom", "sharpen"], groups: { kaleidoscope: true, solid: true, bloom: true, sharpen: true }, solidKeep: true }
+    });
+    const state = createPlayState();
+    applyScene(old, createParams(), state);
+    expect(state.fxOrder).toEqual(["kaleidoscope"]);
+    expect(state.layers.map((layer) => [layer.kind, layer.fx ?? null, layer.paint ?? null])).toEqual([["image", null, null], ["solid", ["bloom", "sharpen"], 0]]);
+    expect(state.groups.bloom && state.groups.sharpen).toBe(true);
+    expect(state.solidKeep).toBe(false);
+  });
+
+  it("open an old 3D Object without Freeze as a layer above, with the effects after it in the Image layer", () => {
+    const old = JSON.stringify({
+      app: "KaleidoSage", version: 3, image: IMAGE,
+      params: { solidAmount: { value: 1 }, bloomAmount: { value: 1 } },
+      state: { effects: ["kaleidoscope", "solid", "bloom"], groups: { kaleidoscope: true, solid: true, bloom: true } }
+    });
+    const state = createPlayState();
+    applyScene(old, createParams(), state);
+    expect(state.fxOrder).toEqual(["kaleidoscope", "bloom"]);
+    expect(state.layers.map((layer) => [layer.kind, layer.fx ?? null])).toEqual([["image", null], ["solid", []]]);
+  });
+
+  it("open an old Overlay effect as an Image or Video layer on top, with its blend and opacity", () => {
+    const old = JSON.stringify({
+      app: "KaleidoSage", version: 3, image: IMAGE,
+      params: { pictureAmount: { value: 0.6 } },
+      state: { effects: ["kaleidoscope", "picture"], groups: { kaleidoscope: true, picture: true }, pictureBlend: 2 }
+    });
+    const state = createPlayState();
+    applyScene(old, createParams(), state);
+    expect(state.fxOrder).toEqual(["kaleidoscope"]);
+    expect(state.layers[1]).toEqual({ kind: "media", name: "Image or Video", visible: true, blend: 2, opacity: 0.6, fx: [] });
+  });
+
+  it("keep each layer's own effects, with each effect in one layer only", () => {
+    const state = createPlayState();
+    state.fxOrder = ["kaleidoscope", "trails"];
+    state.groups.kaleidoscope = state.groups.trails = state.groups.bloom = true;
+    state.layers = [
+      { kind: "image", name: "Image", visible: true, blend: 0, opacity: 1 },
+      { kind: "solid", name: "Ball", visible: true, blend: 1, opacity: 0.5, fx: ["bloom", "trails"], paint: 1 }
+    ];
+    const loaded = createPlayState();
+    applyScene(serializeScene(createParams(), state, { image: IMAGE }), createParams(), loaded);
+    expect(loaded.fxOrder).toEqual(["kaleidoscope", "trails"]);
+    /* Trails is in the Image layer already, so the 3D Object layer keeps only Bloom. */
+    expect(loaded.layers[1]).toEqual({ kind: "solid", name: "Ball", visible: true, blend: 1, opacity: 0.5, fx: ["bloom"], paint: 1 });
+    expect(loaded.groups.bloom).toBe(true);
+  });
+
   it("keep the particles' gradient stops, and drop stops that do not read", () => {
     const state = createPlayState();
     state.particleStops = [{ at: 0, color: "#112233" }, { at: 0.4, color: "#ffffff" }, { at: 1, color: "#000000" }];

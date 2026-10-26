@@ -203,13 +203,13 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 
 ## Effects list
 
-- The app has 21 effects.
+- The app has 19 effects. The 3D Object and the Image or Video are layers, not effects.
 - The list is empty at start-up.
 - The first effect in the list acts first, and each next one works on its result.
 - A shape effect (Warp, Algorithm, Kaleidoscope) moves the picture made before it.
 - The Seamless and Droste spirals always move the point last.
 - The New button adds an effect at the end of the list and opens it.
-- The New button is off when all 21 effects are in the list.
+- The New button is off when all 19 effects are in the list.
 - The Add menu shows added effects dimmed and does not let you pick them.
 - The Add menu shows a preview with a note and thumbnails.
 - For an effect with types, the preview shows each type in turn, 1 second each.
@@ -221,13 +221,6 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Adding Algorithm changes a Power map at power 1 to power 2.
 - Adding the Kaleidoscope starts Pan X and Pan Y looping.
 - Adding Lasers starts Sweep looping, so the fan tilts up and down and looks flat as it passes level.
-- Adding Overlay with no image or video opens the Open dialog for one.
-- Overlay lays its own image or video over the picture made so far; an Overlay last in the list lies on top of everything.
-- Overlay blends: Normal (a PNG's clear parts show the picture), Screen and Add (black adds nothing). Screen is the default.
-- Overlay Size 1 covers the screen and keeps the media's shape; X and Y move its center (0.5 is a screen edge); Turn turns it.
-- An Overlay video loops on the scene's clock: it holds while the scene is paused or waits for the music.
-- A scene keeps its Overlay image or video only while Overlay is in its list.
-- Random all never adds Overlay, as it needs a picked image or video.
 - Adding Contours with no lines sets black lines, 16 levels and 1.5 px width.
 - The X button takes an effect out of the list and keeps its settings.
 - You drag a group by its grip to change the order, and the picture changes live.
@@ -281,10 +274,6 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 
 - The range button turns one handle into two, and the value moves between them.
 - When both new handles would be on one value, the range opens to a tenth of the slider: up from the value, or down at the top.
-- The 3D Object's Freeze background: the effects after it in the FX list change only the picture painted on the object; the picture behind it stays as it was at the 3D Object.
-- With Freeze background, the object is drawn last, so its outline does not change.
-- With no effect after the 3D Object, Freeze background changes nothing.
-- A scene saved before Freeze background opens with it off.
 - With its range off, a value is its slider value.
 - When a range comes on, the end handle takes the single value.
 - A setting that goes below zero starts its range at ±10% around 0.
@@ -408,6 +397,32 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Play, pause and Stop make no Undo steps.
 - A new change after Undo clears Redo.
 - A message says when there is nothing to undo or redo.
+
+## Layers
+
+- A scene is a stack of layers, the top one first in the Layers card.
+- Each layer has an eye switch, a name, a blend (Normal, Screen, Add, Multiply), an opacity and its own effects.
+- A layer's effects change only that layer; the layers go together from the bottom up, over black.
+- The kinds are Image (the source slots), 3D Object, and Image or Video; each kind is in a scene at most once.
+- Each effect is in one layer only. "+ New" shows an effect of another layer with that layer's name; a pick moves it here.
+- An effect moves to another layer by a drag of its grip onto that layer's row, or by Move to in its right-click menu.
+- A click on a row selects the layer; the Source and FX cards show the selected layer.
+- A drag of a row moves the layer; a double-click or Rename renames it; Delete takes it out (the Image layer stays).
+- Deleting a layer takes its effects out of the scene; their settings stay.
+- A hidden layer draws nothing. The Image layer alone, whole and by Normal, draws as a scene from before layers.
+- Screen and Add make a layer's black add nothing.
+- The 3D Object layer is clear around the shape. Its Paint is the layers below it, put together, or the Image layer.
+- The 3D Object layer's effects change the picture painted on it; the shape keeps its outline.
+- A new 3D Object layer at opacity 0 gets its opacity set to 1, so it shows.
+- The Image or Video layer has its own file (a PNG keeps its clear parts), with Size, X, Y and Turn.
+- Adding an Image or Video layer with no file opens the Open dialog for one.
+- An Image or Video layer's Size 1 covers the screen and keeps the file's shape; X and Y move its center (0.5 is a screen edge).
+- A video loops on the scene's clock: it holds while the scene is paused or waits for the music.
+- A scene keeps the Image or Video layer's file while it has that layer.
+- A scene from before layers opens as the Image layer with its effects.
+- Its 3D Object opens as a layer above; with Freeze background, the effects after the 3D Object become that layer's own.
+- Its Overlay effect opens as an Image or Video layer on top, with the Overlay's blend and opacity.
+- Random all and Clear all leave an effect in another layer than the Image layer where it is.
 
 ## Projects
 

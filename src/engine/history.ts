@@ -45,7 +45,7 @@ function take(params: Params, state: PlayState): Snapshot {
       videoCrossfade: state.videoCrossfade,
       fxOrder: [...state.fxOrder],
       layerBlend: { ...state.layerBlend },
-      layers: state.layers.map((layer) => ({ ...layer })),
+      layers: state.layers.map((layer) => ({ ...layer, ...(layer.fx ? { fx: [...layer.fx] } : {}) })),
       sound: Object.fromEntries(soundList(state.sound).map((key) => [key, true])),
       particleStops: state.particleStops.map((stop) => ({ ...stop })),
       cyclesMove: state.cyclesMove,
@@ -129,7 +129,7 @@ export class SettingsHistory {
     for (const key of PARAM_KEYS) Object.assign(this.params[key], step.params[key]);
     const { groups, layerBlend, layers, fxOrder, sound, particleStops, cyclesStops, ...modes } = step.state;
     Object.assign(this.state, modes, {
-      fxOrder: [...fxOrder], layers: layers.map((layer) => ({ ...layer })), sound: { ...sound },
+      fxOrder: [...fxOrder], layers: layers.map((layer) => ({ ...layer, ...(layer.fx ? { fx: [...layer.fx] } : {}) })), sound: { ...sound },
       particleStops: particleStops.map((stop) => ({ ...stop })), cyclesStops: cyclesStops.map((stop) => ({ ...stop }))
     });
     Object.assign(this.state.groups, groups);
