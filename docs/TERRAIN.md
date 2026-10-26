@@ -36,14 +36,18 @@ new parts looks as before.
    - *Picture*: as today (the default, so old scenes do not change).
    - *Real terrain*: heights from the Terrain Tiles for a place.
    - *Generated*: mountains made from noise in the shader; no download.
-2. **Color of the land:** the picture made so far, as today. A second
-   choice, *Height colors*, paints the land from a gradient by height
-   (sea blue, green, rock brown, snow white), with the gradient editor
-   that Particles and Light cycles use. Height colors also look good with
-   Generated, which has no picture of its own.
-3. **Real terrain's picture:** a pick of a place loads the heights and
-   puts the NASA picture of the same area into Slot A, so the colors fit
-   the land. (Proposed; the other way is heights only.)
+2. **Color of the land**, a second new menu on the Camera group:
+   - *Picture*: the picture made so far, as today.
+   - *Height colors*: a gradient by height (sea blue, green, rock brown,
+     snow white), with the gradient editor that Particles and Light
+     cycles use. It also looks good with Generated, which has no picture
+     of its own.
+   - *Terrain picture*: the NASA picture of the place (Real terrain only).
+3. **Real terrain's picture is the camera's own** (decided 2026-10-26), as
+   the Image or Video effect keeps its own file. A place pick never
+   changes Slot A or Slot B, so no warning is needed. The picture always
+   fits the land exactly, because no slot fitting and no earlier effect
+   changes it.
 4. **Picking a place:** the list of striking places that the random
    terrain images use now (`TERRAIN_PLACES`), a Random button, and an
    Area setting for how wide the land is (in kilometers). A search box
@@ -67,10 +71,14 @@ new parts looks as before.
 - **Generated:** `CAMERA_FIELD_SHADER` makes the height itself: layers of
   noise (fractal), with ridges for sharp mountain tops. New settings:
   Scale, Roughness, Ridges and Seed. It costs one shader pass, as today.
-- **The scene file:** a scene with Real terrain keeps its heights in the
-  `.ksage` file as one more part ("terrain": 16-bit heights plus the
-  place, the area and the lowest and highest meters), so it opens without
-  the internet. Generated keeps only its settings.
+- **The terrain picture:** a second texture, at the same size as the
+  heights. With Terrain picture as the color, `CAMERA_SHADER` reads the
+  land's color from it instead of from the picture made so far.
+- **The scene file:** a scene with Real terrain keeps its heights and its
+  picture in the `.ksage` file as more parts ("terrain": 16-bit heights
+  plus the place, the area and the lowest and highest meters;
+  "terrain picture": the NASA picture), so it opens without the
+  internet. Generated keeps only its settings.
 - **Undo** keeps the height source and its settings; the heights
   themselves change only with a new place pick.
 
@@ -80,7 +88,7 @@ new parts looks as before.
    whether the camera's land looks good with real mountain shapes.
 2. **Height colors.** The gradient by height, as a color choice.
 3. **Real terrain.** The place picker, the tile loader, the height
-   texture, and the NASA picture in Slot A.
+   texture, and the terrain picture as a color choice.
 4. **Save and open** the heights in the scene file; Undo; RULES.md and
    the help topics.
 
