@@ -269,7 +269,7 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   state.cameraRepeat = mode(saved.cameraRepeat, [0, 1, 2] as const) ?? state.cameraRepeat;
   state.sortOrder = mode(saved.sortOrder, [0, 1] as const) ?? state.sortOrder;
   state.particleBlend = mode(saved.particleBlend, [0, 1] as const) ?? state.particleBlend;
-  state.particleShape = mode(saved.particleShape, [0, 1, 2, 3] as const) ?? state.particleShape;
+  state.particleShape = mode(saved.particleShape, [0, 1, 2] as const) ?? state.particleShape;
   state.pictureBlend = mode(saved.pictureBlend, [0, 1, 2] as const) ?? state.pictureBlend;
   state.cyclesMove = mode(saved.cyclesMove, [0, 1] as const) ?? state.cyclesMove;
   state.cyclesBlend = mode(saved.cyclesBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? state.cyclesBlend;

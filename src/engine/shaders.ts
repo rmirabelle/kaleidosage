@@ -3101,8 +3101,7 @@ void main() {
  * living particle is a small rectangle (an instance; gl_InstanceID picks
  * its texel), with the same fade, size and color as a Dot. A Line lies
  * along the particle's motion, and longer the faster it moves: 2 sizes
- * plus the way it goes in 60 ms. A Ring is a size wide. An Image copy's
- * longer side is a size, upright. v_px is the place in the rectangle in
+ * plus the way it goes in 60 ms. A Ring is a size wide. v_px is the place in the rectangle in
  * pixels from its center, along and across it; v_half is the shape's half
  * size. The rectangle is 1 pixel larger on each side, for the soft edge.
  */
@@ -3112,7 +3111,6 @@ precision highp int;
 ${PARTICLE_LOOK_GLSL}
 uniform vec2 u_res;
 uniform int u_shape;
-uniform float u_imageAspect;
 out vec2 v_px;
 out vec2 v_half;
 void main() {
@@ -3136,8 +3134,6 @@ void main() {
     float spin = 6.2831853 * life.z;
     dir = speed > 1e-5 ? motion.zw / speed : vec2(cos(spin), sin(spin));
     v_half = 0.5 * vec2(max(1.0, size * 2.0 + speed * u_res.y * 0.06), max(1.0, size * 0.25));
-  } else if (u_shape == 3) {
-    v_half = 0.5 * max(size, 1.0) * (u_imageAspect >= 1.0 ? vec2(1.0, 1.0 / u_imageAspect) : vec2(u_imageAspect, 1.0));
   } else {
     v_half = vec2(0.5 * max(size, 1.0));
   }
@@ -3178,9 +3174,9 @@ void main() {
 /**
  * Particles, the other shapes (see PARTICLE_QUAD_SHADER), with premultiplied
  * alpha and a soft edge 1 pixel wide. A Line is brighter at its head than at
- * its tail. A Ring's band is a fifth of its radius (at least 1 pixel). An
- * Image copy shows Source A (u_image) with its own colors. Boost works as on
- * a Dot: more cover, and a brighter color up to the full channel.
+ * its tail. A Ring's band is a fifth of its radius (at least 1 pixel). Boost
+ * works as on a Dot: more cover, and a brighter color up to the full
+ * channel.
  */
 export const PARTICLE_SHAPE_SHADER = `#version 300 es
 precision highp float;
@@ -3191,7 +3187,6 @@ in vec2 v_px;
 in vec2 v_half;
 uniform int u_shape;
 uniform float u_boost;
-uniform sampler2D u_image;
 out vec4 o;
 void main() {
   float boost = max(u_boost, 1.0);
@@ -3207,11 +3202,6 @@ void main() {
   }
   float a = min(1.0, v_color.a * boost) * cover;
   if (a <= 0.0) discard;
-  if (u_shape == 3) {
-    vec3 image = texture(u_image, clamp(v_px / v_half * 0.5 + 0.5, 0.0, 1.0)).rgb;
-    o = vec4(image * a, a);
-    return;
-  }
   float peak = max(max(v_color.r, v_color.g), v_color.b);
   o = vec4(v_color.rgb * min(boost, 1.0 / max(peak, 1e-3)) * a, a);
 }`;

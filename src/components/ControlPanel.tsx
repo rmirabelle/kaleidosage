@@ -82,8 +82,8 @@ const LAYER_BLENDS = [
 ] as const;
 const TRAIL_MODES = [[1, "Mix (smoky)"], [2, "Lighten (glowing)"]] as const;
 const PARTICLE_BLENDS = [[0, "Glow (add)"], [1, "Normal"]] as const;
-/** How each particle looks; an Image copy shows Source A. */
-const PARTICLE_SHAPES = [[0, "Dot"], [1, "Line"], [2, "Ring"], [3, "Image copy"]] as const;
+/** How each particle looks. */
+const PARTICLE_SHAPES = [[0, "Dot"], [1, "Line"], [2, "Ring"]] as const;
 /* Screen and Add: the overlay's black adds nothing, so a video on black needs no clear parts. */
 const PICTURE_BLENDS = [[0, "Normal"], [1, "Screen"], [2, "Add"]] as const;
 const SORT_ORDERS = [[0, "Dark to bright"], [1, "Bright to dark"]] as const;

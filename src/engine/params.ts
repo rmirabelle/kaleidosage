@@ -326,7 +326,7 @@ export interface PlayState {
   sortOrder: SortOrder;
   /** How the particles combine with the picture under them: they add light (glow), or cover it. */
   particleBlend: ParticleBlend;
-  /** How each particle looks: a dot, a line along its motion, a ring, or a copy of Source A. */
+  /** How each particle looks: a dot, a line along its motion, or a ring. */
   particleShape: ParticleShape;
   /** How the Image or Video effect's image or video goes over the picture: 0 Normal (its clear parts show the picture), 1 Screen and 2 Add (its black adds nothing). */
   pictureBlend: PictureBlend;
@@ -674,7 +674,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   particleBackground: { label: "Background", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0, high: 1, on: false },
   particleCount: { label: "Count", min: 100, max: 1048576, step: 1, scale: "log", value: 4000, drift: "wave", low: 1000, high: 10000, on: false },
   particleLevel: { label: "Threshold", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.4, high: 0.8, on: false },
-  particleSize: { label: "Size", min: 0.5, max: 160, step: 0.1, scale: "log", value: 4, unit: "px", drift: "wave", low: 2, high: 8, on: false },
+  particleSize: { label: "Size", min: 0.5, max: 40, step: 0.1, scale: "log", value: 4, unit: "px", drift: "wave", low: 2, high: 8, on: false },
   particleLife: { label: "Life", min: 0.2, max: 10, step: 0.1, value: 2.5, unit: " s", drift: "wave", low: 1, high: 4, on: false },
   particleSpeed: { label: "Speed", min: 0, max: 0.2, step: 0.001, value: 0.15, drift: "wave", low: 0.05, high: 0.2, on: false },
   particleGravity: { label: "Gravity", min: -1, max: 1, step: 0.01, value: 0.1, drift: "wave", low: -0.2, high: 0.2, on: false },

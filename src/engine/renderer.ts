@@ -85,8 +85,8 @@ export type DriverMode = 0 | 1 | 2;
 export type SortOrder = 0 | 1;
 /** How the particles combine with the picture: 0 glow (they add their light), 1 normal (they cover it). */
 export type ParticleBlend = 0 | 1;
-/** How each particle looks: 0 a soft dot, 1 a line along its motion, 2 a ring, 3 a copy of Source A (see PARTICLE_QUAD_SHADER). */
-export type ParticleShape = 0 | 1 | 2 | 3;
+/** How each particle looks: 0 a soft dot, 1 a line along its motion, 2 a ring (see PARTICLE_QUAD_SHADER). */
+export type ParticleShape = 0 | 1 | 2;
 /** How the Image or Video effect's image or video goes over the picture: 0 normal (over, by its own cover), 1 screen, 2 add. */
 export type PictureBlend = 0 | 1 | 2;
 /** How the light cycles move: 0 on grid lanes with right-angle turns, 1 in free curves. */
@@ -661,7 +661,7 @@ export class KaleidoRenderer {
   private smearWasOn = false;
   private readonly particleStep: Program;
   private readonly particleDraw: Program;
-  /** The particles as lines, rings or image copies: one small rectangle each (see PARTICLE_QUAD_SHADER). */
+  /** The particles as lines or rings: one small rectangle each (see PARTICLE_QUAD_SHADER). */
   private readonly particleShapes: Program;
   /** The particle state of the last frame and of this frame; they change roles each frame. Made on first use. */
   private particleStates: [ParticleState, ParticleState] | null = null;
@@ -1740,7 +1740,7 @@ export class KaleidoRenderer {
    * frame on (and gives each particle that is born its place and color from
    * the picture), then the picture is copied and the particles are drawn
    * over it as soft dots (PARTICLE_VERTEX_SHADER and PARTICLE_SHADER), or as
-   * lines, rings or image copies (PARTICLE_QUAD_SHADER), with
+   * lines or rings (PARTICLE_QUAD_SHADER), with
    * glow (add) or normal blending. The copy is dimmed toward black by the
    * background opacity; the particles still read the whole picture. While
    * paused, they stand still.
@@ -1809,10 +1809,6 @@ export class KaleidoRenderer {
     if (shape !== 0) {
       gl.uniform2f(d.uniforms.u_res, width, height);
       gl.uniform1i(d.uniforms.u_shape, shape);
-      gl.uniform1f(d.uniforms.u_imageAspect, this.imageSizes[0][1] > 0 ? this.imageSizes[0][0] / this.imageSizes[0][1] : 1);
-      gl.activeTexture(gl.TEXTURE3);
-      gl.bindTexture(gl.TEXTURE_2D, this.imageTextures[0]);
-      gl.uniform1i(d.uniforms.u_image, 3);
     }
     gl.uniform1f(d.uniforms.u_size, v.particleSize * height / 1080);
     gl.uniform1f(d.uniforms.u_maxSize, this.maxPointSize);
