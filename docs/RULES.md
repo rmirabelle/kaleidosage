@@ -203,13 +203,13 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 
 ## Effects list
 
-- The app has 17 effects.
+- The app has 21 effects.
 - The list is empty at start-up.
 - The first effect in the list acts first, and each next one works on its result.
 - A shape effect (Warp, Algorithm, Kaleidoscope) moves the picture made before it.
 - The Seamless and Droste spirals always move the point last.
 - The New button adds an effect at the end of the list and opens it.
-- The New button is off when all 17 effects are in the list.
+- The New button is off when all 21 effects are in the list.
 - The Add menu shows added effects dimmed and does not let you pick them.
 - The Add menu shows a preview with a note and thumbnails.
 - For an effect with types, the preview shows each type in turn, 1 second each.
@@ -221,6 +221,13 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Adding Algorithm changes a Power map at power 1 to power 2.
 - Adding the Kaleidoscope starts Pan X and Pan Y looping.
 - Adding Lasers starts Sweep looping, so the fan tilts up and down and looks flat as it passes level.
+- Adding Overlay with no image or video opens the Open dialog for one.
+- Overlay lays its own image or video over the picture made so far; an Overlay last in the list lies on top of everything.
+- Overlay blends: Normal (a PNG's clear parts show the picture), Screen and Add (black adds nothing). Screen is the default.
+- Overlay Size 1 covers the screen and keeps the media's shape; X and Y move its center (0.5 is a screen edge); Turn turns it.
+- An Overlay video loops on the scene's clock: it holds while the scene is paused or waits for the music.
+- A scene keeps its Overlay image or video only while Overlay is in its list.
+- Random all never adds Overlay, as it needs a picked image or video.
 - Adding Contours with no lines sets black lines, 16 levels and 1.5 px width.
 - The X button takes an effect out of the list and keeps its settings.
 - You drag a group by its grip to change the order, and the picture changes live.
@@ -416,6 +423,8 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Replace puts each new scene in the old scene's place, and its song map picks go with it.
 - After an import, the status tells how many scenes came in, were replaced and were skipped.
 - A project never saved asks for a name; the first scene's name is the default.
+- A scene with no name yet takes the project's name when the project is saved: "Cool", then "Cool 2" and so on.
+- A scene with no name yet takes the exported file's name when it is exported.
 - A new blank scene with no changes is not saved, unless it is the only scene.
 - Export Scene writes the selected scene to a project of its own, with no tracks.
 - A file that is not in this layout gives "The file is not a Kaleido Sage file."

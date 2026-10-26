@@ -1,7 +1,7 @@
 import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 
 /** The blur mask: circle with a sharp or a blurred center, gradient, bright areas, dark areas, noise. */
 export type BlurMask = 0 | 1 | 2 | 3 | 4 | 5;
@@ -21,7 +21,7 @@ export type ShapeStep = "warp" | "map" | "kaleidoscope";
 /** The kind of warp: noise, ripple, waves, swirl, bulge and pinch, cells. */
 export type WarpType = 0 | 1 | 2 | 3 | 4 | 5;
 /** The steps that change the drawn picture. The user sets their order. */
-export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "bloom" | "sharpen" | "color" | "levels";
+export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "bloom" | "sharpen" | "color" | "levels" | "picture";
 /**
  * Any effect step. The user sets one order for all of them. Shape steps
  * that are next to each other run in one pass; a shape step after a
@@ -29,7 +29,7 @@ export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | 
  */
 export type FxStep = ShapeStep | PictureStep;
 export const SHAPE_STEPS: readonly ShapeStep[] = ["warp", "map", "kaleidoscope"];
-export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "bloom", "sharpen", "color", "levels"];
+export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "bloom", "sharpen", "color", "levels", "picture"];
 
 /** Sharpen, Color and Levels, in the order FINISH_SHADER applies them (see drawFinish). */
 type FinishPart = "sharpen" | "color" | "levels";
@@ -85,6 +85,8 @@ export type DriverMode = 0 | 1 | 2;
 export type SortOrder = 0 | 1;
 /** How the particles combine with the picture: 0 glow (they add their light), 1 normal (they cover it). */
 export type ParticleBlend = 0 | 1;
+/** How the Overlay effect's image or video goes over the picture: 0 normal (over, by its own cover), 1 screen, 2 add. */
+export type PictureBlend = 0 | 1 | 2;
 /** How the light cycles move: 0 on grid lanes with right-angle turns, 1 in free curves. */
 export type CycleMove = 0 | 1;
 /**
@@ -469,6 +471,17 @@ export interface FrameValues {
   laserX: number;
   laserY: number;
   /**
+   * Overlay (see PICTURE_SHADER): opacity (0 = off), the blend, the size
+   * (1 covers the screen), the center (a part of the screen size from the
+   * screen center) and the turn in radians.
+   */
+  picture: number;
+  pictureBlend: PictureBlend;
+  pictureSize: number;
+  pictureX: number;
+  pictureY: number;
+  pictureTurn: number;
+  /**
    * Bloom (see BLOOM_SHADER): strength (0 = off), the brightness where the
    * glow starts and how gradually, and its size (a mip level at 1080p).
    */
@@ -673,6 +686,7 @@ export class KaleidoRenderer {
   private readonly rays: Program;
   private readonly raysMix: Program;
   private readonly lasers: Program;
+  private readonly pictureProgram: Program;
   /** Two half-size pictures for the light rays; the ray passes go back and forth between them. */
   private readonly raysTargets: [Target, Target];
   private readonly bloomBright: Program;
@@ -772,6 +786,7 @@ export class KaleidoRenderer {
     };
     this.raysMix = this.createProgram(RAYS_MIX_SHADER);
     this.lasers = this.createProgram(LASER_SHADER);
+    this.pictureProgram = this.createProgram(PICTURE_SHADER);
     this.bloomUp = this.createProgram(BLOOM_UP_SHADER);
     this.bloomMix = this.createProgram(BLOOM_SHADER);
 
@@ -1000,6 +1015,7 @@ export class KaleidoRenderer {
       sort: v.sort > 0 && this.floatTargets,
       rays: v.rays > 0,
       lasers: v.lasers > 0,
+      picture: v.picture > 0 && this.pictureSource !== null,
       bloom: v.bloom > 0,
       sharpen: v.sharpen > 0,
       color: v.overlayOpacity > 0,
@@ -1128,6 +1144,7 @@ export class KaleidoRenderer {
         else if (step === "cycles") this.drawCycles(v, source, target, width, height);
         else if (step === "rays") this.drawRays(v, source, target, width, height);
         else if (step === "lasers") this.drawLasers(v, source, target, width, height);
+        else if (step === "picture") this.drawPicture(v, source, target, width, height);
         else if (step === "sort") this.drawSort(v, source, target, width, height);
         else if (step === "bloom") this.drawBloom(v, source, target, width, height);
         if (target) source = target.texture;
@@ -2354,6 +2371,81 @@ export class KaleidoRenderer {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
+  /** The Overlay effect's image or video (an image, or a video element that the engine plays), or null; see setPicture. */
+  private pictureSource: ImageSource | null = null;
+  private pictureTexture: WebGLTexture | null = null;
+  /** The video time of the frame in the texture (-1: none yet), so a frame is uploaded once. */
+  private pictureVideoTime = -1;
+  private pictureSize: [number, number] = [1, 1];
+
+  /** Sets the Overlay effect's image or video, or none. A still image goes to its texture at once; a video, frame by frame (see uploadPicture). */
+  setPicture(source: ImageSource | null) {
+    const gl = this.gl;
+    this.pictureSource = source;
+    this.pictureVideoTime = -1;
+    if (!source) {
+      if (this.pictureTexture) gl.deleteTexture(this.pictureTexture);
+      this.pictureTexture = null;
+      return;
+    }
+    if (!this.pictureTexture) this.pictureTexture = gl.createTexture()!;
+    this.pictureSize = sourceSize(source);
+    if (!(source instanceof HTMLVideoElement)) this.uploadPicture(source, true);
+  }
+
+  /**
+   * Puts the overlay's picture in its texture, with its clear parts kept
+   * (premultiplied, see COVER_GLSL). A still image gets smaller copies (mip
+   * levels), so a small Size does not shimmer; a video frame does not.
+   */
+  private uploadPicture(source: TexImageSource, still: boolean) {
+    const gl = this.gl;
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.pictureTexture);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    if (still) gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, still ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.activeTexture(gl.TEXTURE0);
+  }
+
+  /** Overlay: the image or video over the picture made so far, in one pass (PICTURE_SHADER). A video's new frame is uploaded first. */
+  private drawPicture(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+    const gl = this.gl;
+    const video = this.pictureSource instanceof HTMLVideoElement ? this.pictureSource : null;
+    if (video && video.readyState >= 2 && video.videoWidth > 0 && video.currentTime !== this.pictureVideoTime) {
+      this.uploadPicture(video, false);
+      this.pictureVideoTime = video.currentTime;
+      this.pictureSize = [video.videoWidth, video.videoHeight];
+    }
+    const p = this.pictureProgram;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(p.program);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.pictureTexture);
+    gl.uniform1i(p.uniforms.u_layer, 1);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.uniform1i(p.uniforms.u_tex, 0);
+    gl.uniform2f(p.uniforms.u_res, width, height);
+    /* Until a video's first frame is there, nothing shows over the picture. */
+    const ready = !video || this.pictureVideoTime >= 0;
+    gl.uniform1f(p.uniforms.u_opacity, ready ? Math.min(1, Math.max(0, v.picture)) : 0);
+    gl.uniform1i(p.uniforms.u_blend, v.pictureBlend);
+    gl.uniform1f(p.uniforms.u_layerAspect, this.pictureSize[1] > 0 ? this.pictureSize[0] / this.pictureSize[1] : 1);
+    gl.uniform1f(p.uniforms.u_size, Math.max(0.01, v.pictureSize));
+    gl.uniform2f(p.uniforms.u_offset, v.pictureX, v.pictureY);
+    gl.uniform1f(p.uniforms.u_turn, v.pictureTurn);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
   /** Lasers: the picture plus the beams, in one pass (LASER_SHADER). Widths are screen pixels, so a video looks like the screen. */
   private drawLasers(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
     const gl = this.gl;
@@ -2667,6 +2759,7 @@ export class KaleidoRenderer {
     this.disposed = true;
     this.stopVideo(0);
     this.stopVideo(1);
+    this.pictureSource = null;
     this.gl.getExtension("WEBGL_lose_context")?.loseContext();
   }
 

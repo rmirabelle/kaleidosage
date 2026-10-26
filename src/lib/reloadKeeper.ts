@@ -31,6 +31,8 @@ export interface KeptDoc {
   scene: string;
   images: [KeptImage | null, KeptImage | null];
   driver: { video: VideoFile; name: string } | null;
+  /** The Overlay effect's image or video; missing in a snapshot from before the Overlay effect. */
+  picture?: KeptImage | null;
   openGroup: string | null;
 }
 

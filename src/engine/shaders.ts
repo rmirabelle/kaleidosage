@@ -2638,6 +2638,51 @@ void main() {
  * the fan. Each beam's start glows in a dot u_emitter pixels across (0 = no dot).
  * The beams are added light (see addLight).
  */
+/**
+ * Overlay: the Overlay effect's image or video (u_layer, premultiplied, with
+ * its clear parts) over the picture made so far. Size 1 covers the screen
+ * and keeps the layer's shape; u_offset moves its center (a part of the
+ * screen size from the screen center), and u_turn turns it about that
+ * center. Outside the layer, the picture shows as it is. Blend 0 lays it
+ * over (Normal); 1 is Screen and 2 is Add, where black adds nothing, so a
+ * video on black needs no clear parts. Its light adds cover as it adds
+ * color (see COVER_GLSL), so it shows over what is under a clear layer.
+ */
+export const PICTURE_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform sampler2D u_layer;
+uniform vec2 u_res;
+uniform float u_opacity;
+uniform int u_blend;
+uniform float u_layerAspect;
+uniform float u_size;
+uniform vec2 u_offset;
+uniform float u_turn;
+${COVER_GLSL}
+void main() {
+  vec4 base = texture(u_tex, v_uv);
+  float aspect = u_res.x / u_res.y;
+  /* The point in screen-height units from the layer's center, turned back by the layer's turn. */
+  vec2 p = (v_uv - 0.5 - u_offset) * vec2(aspect, 1.0);
+  float c = cos(u_turn);
+  float s = sin(u_turn);
+  p = mat2(c, -s, s, c) * p;
+  /* At Size 1 the layer covers the screen: its height is the screen's, or more for a layer narrower than the screen. */
+  float h = max(1.0, aspect / u_layerAspect) * u_size;
+  vec2 uv = p / vec2(h * u_layerAspect, h) + 0.5;
+  bool inside = all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)));
+  vec4 layer = inside ? texture(u_layer, uv) * u_opacity : vec4(0.0);
+  if (u_blend == 0) {
+    o = layer + base * (1.0 - layer.a);
+    return;
+  }
+  vec3 light = u_blend == 1 ? layer.rgb * (1.0 - clamp(base.rgb, 0.0, 1.0)) : layer.rgb;
+  o = addLight(base, light);
+}`;
+
 export const LASER_SHADER = `#version 300 es
 precision highp float;
 in vec2 v_uv;

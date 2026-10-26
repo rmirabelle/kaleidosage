@@ -43,6 +43,10 @@ interface Props {
   /** The file name of the Driver effect's own video, or null, and the button that picks one. */
   driverVideoName: string | null;
   onPickDriverVideo: () => void;
+  /** The file name of the Overlay effect's image or video, or null, and the buttons that pick one and take it away. */
+  pictureName: string | null;
+  onPickPicture: () => void;
+  onRemovePicture: () => void;
   /** The FX audio button was turned on while the app listens to nothing: the play toolbar shows a tip at its Input menu. */
   onNeedAudioInput: () => void;
   /** An input with sound was picked and turned the audio buttons on: a tip at the FX audio button tells what it does, and a tip shows the next step. */
@@ -66,6 +70,7 @@ const SORT_KEYS: ParamKey[] = ["sortAmount", "sortLow", "sortHigh", "sortAngle",
 /* The Blend menu and the Opacity slider (particleAmount) come after these, in the Common part at the bottom of the group. */
 const PARTICLE_KEYS: ParamKey[] = ["particleLevel", "particleBackground", "particleCount", "particleSize", "particleLife", "particleSpeed", "particleFollow", "particleCling", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleGradient", "particleBoost"];
 const RAYS_KEYS: ParamKey[] = ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"];
+const PICTURE_KEYS: ParamKey[] = ["pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn"];
 const LASER_KEYS: ParamKey[] = ["laserAmount", "laserCount", "laserSpread", "laserSweep", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"];
 const BLOOM_KEYS: ParamKey[] = ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"];
 const SHARPEN_KEYS: ParamKey[] = ["sharpen", "sharpenRadius"];
@@ -77,6 +82,8 @@ const LAYER_BLENDS = [
 ] as const;
 const TRAIL_MODES = [[1, "Mix (smoky)"], [2, "Lighten (glowing)"]] as const;
 const PARTICLE_BLENDS = [[0, "Glow (add)"], [1, "Normal"]] as const;
+/* Screen and Add: the overlay's black adds nothing, so a video on black needs no clear parts. */
+const PICTURE_BLENDS = [[0, "Normal"], [1, "Screen"], [2, "Add"]] as const;
 const SORT_ORDERS = [[0, "Dark to bright"], [1, "Bright to dark"]] as const;
 const DRIVER_SOURCES = [[0, "Caustics"], [1, "Smoke"], [2, "Ink"], [3, "Fire"], [4, "Ripples"], [5, "Video"]] as const;
 const DRIVER_MODES = [[0, "Bend"], [1, "Reveal"], [2, "Light"]] as const;
@@ -88,7 +95,7 @@ const CAMERA_REPEATS = [[0, "Mirror"], [1, "Tile"], [2, "None"]] as const;
 /** The controls of the left panel whose press is work on the scene (see onWork): buttons, fields, the sliders' parts, the gradient and the effect grips. */
 const WORK_CONTROLS = "button, input, select, textarea, a, label, [role=slider], [role=button], [role=option], [role=menuitem], [contenteditable=true], .range-grab, .range-low, .range-high, .gradient-bar, .gradient-stop, .panel-group-grip";
 
-export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, transport, onWork, driverVideoName, onPickDriverVideo, onNeedAudioInput, linksTip, onLinksTipDone, nextTip, onNextTipDone, onFirstEffect }: Props) {
+export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, transport, onWork, driverVideoName, onPickDriverVideo, pictureName, onPickPicture, onRemovePicture, onNeedAudioInput, linksTip, onLinksTipDone, nextTip, onNextTipDone, onFirstEffect }: Props) {
   const holdOnly = useSceneHoldOnly();
   const row = useParamRows(engine);
   /** True while MIDI holds any range: the Effects header then shows a play button that plays them all again. */
@@ -284,7 +291,12 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
         const { low, high } = sweep.low !== sweep.high ? sweep : createParams().laserSweep;
         Object.assign(sweep, { low, high, on: true });
       },
-      bloom: () => start("bloomAmount", 1)
+      bloom: () => start("bloomAmount", 1),
+      picture: () => {
+        start("pictureAmount", 1);
+        /* An overlay shows nothing until it has an image or a video. */
+        if (!pictureName) onPickPicture();
+      }
     };
     enable[step]?.();
     if (engine.state.fxOrder.length === 0) onFirstEffect();
@@ -382,6 +394,22 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     rays: (grip) => (
       <Group engine={engine} group="rays" title="Light rays" grip={grip} {...accordion("rays")}>
         {RAYS_KEYS.map(row)}
+      </Group>
+    ),
+    picture: (grip) => (
+      <Group engine={engine} group="picture" title="Overlay" grip={grip} {...accordion("picture")}>
+        <div className="panel-select-row panel-select-named driver-video-row">
+          <span className="panel-row-name">Media</span>
+          <span className="driver-video-name" data-tip={pictureName ? `The overlay: ${pictureName}` : "No image or video yet"}>{pictureName ?? "None"}</span>
+          <button className="button secondary small" onClick={onPickPicture} data-tip="Pick an image or a video. A PNG keeps its clear parts; the scene file keeps a copy.">Choose…</button>
+          {pictureName && (
+            <button className="button secondary small" onClick={onRemovePicture} data-tip="Take the image or video out of the overlay" aria-label="Remove the overlay's image or video">
+              <X size={12} weight="bold" />
+            </button>
+          )}
+        </div>
+        <ModeSelect engine={engine} stateKey="pictureBlend" options={PICTURE_BLENDS} name="Blend" />
+        {PICTURE_KEYS.map(row)}
       </Group>
     ),
     lasers: (grip) => (
@@ -834,7 +862,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange }: {

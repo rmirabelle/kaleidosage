@@ -20,7 +20,7 @@ fn save(path: &Path, contents: &[u8], videos: &Videos) -> Result<(), String> {
     let mut scene: serde_json::Value =
         serde_json::from_slice(contents).map_err(|e| e.to_string())?;
     let mut media = Vec::new();
-    for slot in ["image", "image2", "driverVideo"] {
+    for slot in ["image", "image2", "driverVideo", "picture"] {
         if let Some(id) = scene[slot]["video"].as_str() {
             let source = videos.get(id)?;
             let name = format!("media/{}.video", media.len());
@@ -177,7 +177,7 @@ fn read_window(mut file: Window, videos: &Videos) -> Result<Vec<u8>, String> {
         serde_json::from_reader(entry).map_err(|e| e.to_string())?
     };
     let mut media = Vec::new();
-    for slot in ["image", "image2", "driverVideo"] {
+    for slot in ["image", "image2", "driverVideo", "picture"] {
         if let Some(name) = scene[slot]["video"].as_str() {
             if !scene[slot]["type"]
                 .as_str()

@@ -23,3 +23,6 @@ Thumbs.db
 
 # The one-time conversion program's build (see docs/ONE-FILE.md)
 /tools/convert-files/target/
+
+# A side copy of src for large edits (it is copied back in one step)
+/.work/

@@ -195,6 +195,13 @@ export class Engine {
         copy.ownVideos.push(video);
         copy.setDriverVideo(video);
       }
+      if (this.pictureSource instanceof HTMLVideoElement) {
+        const video = await copyVideo(this.pictureSource);
+        copy.ownVideos.push(video);
+        copy.setPicture(video);
+      } else if (this.pictureSource) {
+        copy.setPicture(this.pictureSource);
+      }
     } catch (error) {
       copy.dispose();
       throw error;
@@ -301,6 +308,41 @@ export class Engine {
     const video = this.driverVideo;
     if (!video || !(video.duration > 0) || !this.state.groups.driver || this.state.driverSource !== 5) return null;
     return this.state.driverTime % video.duration;
+  }
+
+  /** The Overlay effect's image or video, or null. Its owner (the scene) keeps it; the engine plays a video while the effect is on. */
+  private pictureSource: ImageSource | null = null;
+
+  setPicture(source: ImageSource | null) {
+    this.wake();
+    if (this.pictureSource instanceof HTMLVideoElement && this.pictureSource !== source) this.pictureSource.pause();
+    this.pictureSource = source;
+    this.renderer.setPicture(source);
+  }
+
+  /**
+   * Where the overlay's video should be: the scene's clock around the
+   * video's length, so it plays at its own speed, loops, and holds while
+   * the scene is paused or waits for the music. Null while the Overlay
+   * effect is off or holds no video.
+   */
+  private pictureVideoTarget() {
+    const video = this.pictureSource;
+    if (!(video instanceof HTMLVideoElement) || !(video.duration > 0) || !this.state.groups.picture || !this.state.fxOrder.includes("picture")) return null;
+    return this.state.clock % video.duration;
+  }
+
+  /** Keeps the overlay's video at its place, and stops it while it is not used. */
+  private syncPictureVideo(paused: boolean) {
+    const video = this.pictureSource;
+    if (!(video instanceof HTMLVideoElement)) return;
+    const target = this.pictureVideoTarget();
+    if (target === null) {
+      if (!video.paused) video.pause();
+      return;
+    }
+    video.playbackRate = 1;
+    syncVideo(video, target, paused || this.gated);
   }
 
   /** Keeps the driver video at its place: it plays at Speed, waits while paused or at Speed 0, and stops while it is not used. */
@@ -1018,6 +1060,8 @@ export class Engine {
     for (const slot of [0, 1] as const) await Promise.all(this.placeVideo(slot, (video, target) => seekVideo(video, target)));
     const driverTarget = this.driverVideoTarget();
     if (this.driverVideo && driverTarget !== null) await seekVideo(this.driverVideo, driverTarget);
+    const pictureTarget = this.pictureVideoTarget();
+    if (this.pictureSource instanceof HTMLVideoElement && pictureTarget !== null) await seekVideo(this.pictureSource, pictureTarget);
     this.renderer.updateVideos(true);
   }
 
@@ -1035,6 +1079,7 @@ export class Engine {
       this.placeVideo(slot, (video, target, waiting) => waiting ? cueVideo(video, target) : syncVideo(video, target, paused));
     }
     this.syncDriverVideo(paused);
+    this.syncPictureVideo(paused);
     if (this.renderer.updateVideos()) this.wake();
 
     const renderStart = performance.now();
@@ -1333,6 +1378,12 @@ export class Engine {
       laserRainbow: this.live("laserRainbow"),
       laserX: this.live("laserX"),
       laserY: this.live("laserY"),
+      picture: on.picture ? this.live("pictureAmount") : 0,
+      pictureBlend: this.state.pictureBlend,
+      pictureSize: this.live("pictureSize"),
+      pictureX: this.live("pictureX"),
+      pictureY: this.live("pictureY"),
+      pictureTurn: this.live("pictureTurn") * DEGREES,
       bloom: on.bloom ? this.live("bloomAmount") : 0,
       bloomThreshold: this.live("bloomThreshold"),
       bloomSoftness: this.live("bloomSoftness"),

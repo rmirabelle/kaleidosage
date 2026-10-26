@@ -131,6 +131,8 @@ interface StoredScene {
   state: PlayState;
   images: [SlotImage | null, SlotImage | null];
   driver: DriverVideo | null;
+  /** The Overlay effect's image or video (its label is the file name), or null. */
+  picture: SlotImage | null;
   savedFingerprint: string;
   history: SettingsHistory;
   openGroup: string | null;
@@ -178,7 +180,7 @@ const samePath = (a: string | null, b: string | null) => a !== null && b !== nul
 
 
 /** One image slot as a scene file keeps it: a video by its stream (embedded when the file is written), anything else as image bytes. */
-async function sceneMedia(image: SlotImage): Promise<SceneImage> {
+async function sceneMedia(image: Pick<SlotImage, "source" | "blob" | "videoFile">): Promise<SceneImage> {
   if (!image.videoFile && image.blob && isVideoType(image.blob.type)) {
     image.videoFile = await stageVideoBlob(image.blob);
   }
@@ -195,7 +197,7 @@ async function sceneMedia(image: SlotImage): Promise<SceneImage> {
  * copy). The settings are taken before the media is copied, so a change
  * made while it writes still counts as unsaved.
  */
-async function writeSceneFile(path: string, params: Params, state: PlayState, [first, second]: [SlotImage | null, SlotImage | null], driver: DriverVideo | null) {
+async function writeSceneFile(path: string, params: Params, state: PlayState, [first, second]: [SlotImage | null, SlotImage | null], driver: DriverVideo | null, picture: SlotImage | null) {
   if (!first) throw new Error("There is no source image or video to save in the scene.");
   const scene = JSON.parse(serializeScene(params, state, { image: { type: "image/png", data: "pending" } }));
   scene.image = await sceneMedia(first);
@@ -208,6 +210,8 @@ async function writeSceneFile(path: string, params: Params, state: PlayState, [f
    */
   const usesDriverVideo = state.fxOrder.includes("driver") && state.driverSource === 5;
   if (driver && usesDriverVideo) scene.driverVideo = { type: driver.videoFile.mime, video: driver.videoFile.id, name: driver.name };
+  /* The overlay's image or video goes in the same way: only while the Overlay effect is in the list. */
+  if (picture && state.fxOrder.includes("picture")) scene.picture = { ...(await sceneMedia(picture)), name: picture.label };
   await writeScene(path, JSON.stringify(scene));
 }
 
@@ -215,8 +219,8 @@ async function writeSceneFile(path: string, params: Params, state: PlayState, [f
 interface OpenRequest {
   kind: OpenKind;
   slot: ImageSlot;
-  /** "driver": the picked video becomes the Driver effect's own video. "import": the picked projects' scenes go into the open project. */
-  target?: "driver" | "import";
+  /** "driver": the picked video becomes the Driver effect's own video. "picture": the picked image or video becomes the Overlay effect's. "import": the picked projects' scenes go into the open project. */
+  target?: "driver" | "picture" | "import";
 }
 
 export type ImageSlot = 0 | 1;
@@ -243,6 +247,9 @@ export default function App() {
   /** The Driver effect's own video for the selected scene (the ref at once, the name for the panel). */
   const driverRef = useRef<DriverVideo | null>(null);
   const [driverVideoName, setDriverVideoName] = useState<string | null>(null);
+  /** The Overlay effect's image or video for the selected scene (the ref at once, the name for the panel). */
+  const pictureRef = useRef<SlotImage | null>(null);
+  const [pictureName, setPictureName] = useState<string | null>(null);
   const [engine, setEngine] = useState<Engine | null>(null);
   /** Loads started by a closed scene must not reopen it when they finish. */
   const sceneGenerationRef = useRef(0);
@@ -577,6 +584,13 @@ export default function App() {
     engine?.setDriverVideo(driver?.video ?? null);
   }, [engine]);
 
+  /** Sets the selected scene's overlay image or video (or none) in the engine and in the panel. */
+  const setPicture = useCallback((picture: SlotImage | null) => {
+    pictureRef.current = picture;
+    setPictureName(picture?.label ?? null);
+    engine?.setPicture(picture?.source ?? null);
+  }, [engine]);
+
   /** "replaced": scenes that took the place of others (old id to new id), so their song map picks go to the new scene. */
   const writeDocs = useCallback((next: SceneDoc[], replaced?: ReadonlyMap<number, number>) => {
     const before = docsRef.current;
@@ -847,7 +861,7 @@ export default function App() {
   const fingerprint = useCallback(() => {
     if (!engine) return "";
     const [first, second] = imagesRef.current;
-    return sceneFingerprint(engine.params, engine.state, [first?.id ?? null, second?.id ?? null, driverRef.current?.id ?? null]);
+    return sceneFingerprint(engine.params, engine.state, [first?.id ?? null, second?.id ?? null, driverRef.current?.id ?? null, pictureRef.current?.id ?? null]);
   }, [engine]);
 
   /**
@@ -909,6 +923,7 @@ export default function App() {
       state: structuredClone(engine.state),
       images: imagesRef.current,
       driver: driverRef.current,
+      picture: pictureRef.current,
       savedFingerprint: savedFingerprintRef.current,
       history,
       openGroup: openGroupRef.current
@@ -937,6 +952,7 @@ export default function App() {
     if (second) engine.setImage(second.source, 1);
     else engine.clearSecondImage();
     setDriver(stored.driver);
+    setPicture(stored.picture);
     engine.settle();
     engine.resetTrails();
     setSlotImage(0, first);
@@ -953,7 +969,7 @@ export default function App() {
     setPaused(engine.state.paused);
     setRandomLoading(null);
     setRevision((value) => value + 1);
-  }, [engine, selectDocId, setDriver, setSlotImage]);
+  }, [engine, selectDocId, setDriver, setPicture, setSlotImage]);
 
   /** Selects another tab. A photo still loading for the scene that was shown is dropped. */
   const switchToDoc = useCallback((id: number) => {
@@ -1057,8 +1073,9 @@ export default function App() {
   const askToSaveAll = useCallback((reason: string) => askToSaveFileRef.current(reason), []);
 
   /**
-   * Export Scene As: writes the selected scene to a Kaleido Sage file of its
-   * own, with no tracks. The scene stays the open file's, as it was.
+   * Export Scene: writes the selected scene to a Kaleido Sage file of its
+   * own, with no tracks. The scene stays the open file's, as it was; a scene
+   * that had no name yet takes the exported file's name.
    * Returns true when the file was written.
    */
   const exportScene = useCallback(async (): Promise<boolean> => {
@@ -1078,17 +1095,19 @@ export default function App() {
     try {
       showStatus("Exporting the scene and embedding media…", 0, undefined, true);
       const copy = await invoke<string>("scene_copy_path", { name: fileNameOf(path) });
-      await writeSceneFile(copy, engine.params, engine.state, imagesRef.current, driverRef.current);
+      await writeSceneFile(copy, engine.params, engine.state, imagesRef.current, driverRef.current, pictureRef.current);
       /* A scene alone has no tracks, so Files as the input would open with an empty list: it keeps no input then. */
       const audio = fileAudio();
       await saveKaleidoFile(path, { audio: audio.kind === "tracks" ? { ...audio, kind: "none" } : audio, activeScene: 0 }, [copy], []);
+      /* A scene that had no name yet takes the exported file's name: its copy is the one just written. */
+      if (scenePathRef.current === null) setActivePath(copy);
       showSaved(path, 5000);
       return true;
     } catch (error) {
       showError(`Could not export the scene. ${String(error)}`);
       return false;
     }
-  }, [engine, fileAudio, showError, showSaved, showStatus]);
+  }, [engine, fileAudio, setActivePath, showError, showSaved, showStatus]);
 
   /* Open Project: the Open dialog, for a project in place of the open one (see openProject). */
   const openFile = useCallback(() => {
@@ -1126,6 +1145,7 @@ export default function App() {
       const image = await loadSceneMedia(images.image);
       const image2 = images.image2 ? await loadSceneMedia(images.image2) : null;
       const driverMedia = images.driverVideo ? await loadSceneMedia(images.driverVideo.media) : null;
+      const pictureMedia = images.picture ? await loadSceneMedia(images.picture.media) : null;
       if (generation !== sceneGenerationRef.current) return;
       const reuse = scenePathRef.current === null && fingerprint() === savedFingerprintRef.current;
       if (activeIdRef.current !== null && !reuse) {
@@ -1147,6 +1167,7 @@ export default function App() {
       else removeSecondImage();
       setDriver(driverMedia?.source instanceof HTMLVideoElement && driverMedia.videoFile && images.driverVideo
         ? { video: driverMedia.source, videoFile: driverMedia.videoFile, name: images.driverVideo.name, id: nextImageId++ } : null);
+      setPicture(pictureMedia && images.picture ? { ...pictureMedia, label: images.picture.name, thumbnail: makeThumbnail(pictureMedia.source), id: nextImageId++ } : null);
       setRevision((value) => value + 1);
       setActivePath(path);
       markClean();
@@ -1154,7 +1175,23 @@ export default function App() {
     } catch (error) {
       showError(`Could not open the scene. ${error instanceof Error ? error.message : String(error)}`);
     }
-  }, [addDoc, engine, fingerprint, markClean, removeSecondImage, setActivePath, setDriver, setImage, showError, showStatus, stashActive, switchToDoc]);
+  }, [addDoc, engine, fingerprint, markClean, removeSecondImage, setActivePath, setDriver, setImage, setPicture, showError, showStatus, stashActive, switchToDoc]);
+
+  /** Makes a picked image or video the Overlay effect's own (see setPicture). */
+  const openPicturePath = useCallback(async (path: string) => {
+    const generation = sceneGenerationRef.current;
+    const name = path.split(/[\\/]/).pop() ?? "Overlay";
+    try {
+      const loaded = isVideoPath(path)
+        ? await loadVideoFile(path).then(({ video, videoFile }) => ({ source: video as ImageSource, videoFile }))
+        : await loadImageFile(path).then(({ image, blob }) => ({ source: image as ImageSource, blob }));
+      if (generation !== sceneGenerationRef.current) return;
+      setPicture({ ...loaded, label: name, thumbnail: makeThumbnail(loaded.source), id: nextImageId++ });
+      showStatus(`Overlay: ${name}`);
+    } catch (error) {
+      showError(`Could not open the image or video. ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }, [setPicture, showError, showStatus]);
 
   /** Makes a picked video file the Driver effect's own video. */
   const openDriverVideo = useCallback(async (path: string) => {
@@ -1526,6 +1563,7 @@ export default function App() {
     engine.setImage(source);
     engine.clearSecondImage();
     setDriver(null);
+    setPicture(null);
     engine.settle();
     engine.resetTrails();
     setSlotImage(0, { source, label: pattern.label, thumbnail: makeThumbnail(source), patternId: pattern.id, id: nextImageId++ });
@@ -1537,7 +1575,7 @@ export default function App() {
     setRandomLoading(null);
     setRevision(value => value + 1);
     markClean();
-  }, [engine, markClean, setDriver, setSlotImage]);
+  }, [engine, markClean, setDriver, setPicture, setSlotImage]);
 
   /**
    * A new file, or a closed one, starts quiet: the app stops listening
@@ -1632,6 +1670,8 @@ export default function App() {
       const keepBlank = !docsRef.current.some((doc) => docPath(doc) !== null || docDirty(doc));
       const scenes: string[] = [];
       let activeScene = 0;
+      const projectName = fileNameOf(path).replace(/\.ksage$/i, "");
+      let unnamed = 0;
       for (const doc of [...docsRef.current]) {
         const active = doc.id === activeIdRef.current;
         const stored = active ? null : storedRef.current.get(doc.id);
@@ -1643,17 +1683,19 @@ export default function App() {
           scenes.push(scenePath!);
           continue;
         }
-        const name = scenePath ? fileNameOf(scenePath) : `${docFileName(null, doc.untitled)}.${SCENE_EXTENSION}`;
+        /* A scene with no name yet takes the project's name: "Cool", then "Cool 2" and so on. */
+        if (scenePath === null) unnamed++;
+        const name = scenePath ? fileNameOf(scenePath) : `${projectName}${unnamed > 1 ? ` ${unnamed}` : ""}.${SCENE_EXTENSION}`;
         const target = isFileCopy(scenePath) ? scenePath! : await invoke<string>("scene_copy_path", { name });
         if (active) {
           const saved = fingerprint();
-          await writeSceneFile(target, engine.params, engine.state, imagesRef.current, driverRef.current);
+          await writeSceneFile(target, engine.params, engine.state, imagesRef.current, driverRef.current, pictureRef.current);
           savedFingerprintRef.current = saved;
           setDirty(fingerprint() !== saved);
           setActivePath(target);
         } else if (stored) {
-          await writeSceneFile(target, stored.params, stored.state, stored.images, stored.driver);
-          stored.savedFingerprint = sceneFingerprint(stored.params, stored.state, [stored.images[0]?.id ?? null, stored.images[1]?.id ?? null, stored.driver?.id ?? null]);
+          await writeSceneFile(target, stored.params, stored.state, stored.images, stored.driver, stored.picture);
+          stored.savedFingerprint = sceneFingerprint(stored.params, stored.state, [stored.images[0]?.id ?? null, stored.images[1]?.id ?? null, stored.driver?.id ?? null, stored.picture?.id ?? null]);
           writeDocs(docsRef.current.map((candidate) => candidate.id === doc.id ? { ...candidate, path: target, dirty: false } : candidate));
         }
         scenes.push(target);
@@ -1944,6 +1986,7 @@ export default function App() {
             scene: serializeScene(engine.params, engine.state, { image: KEPT_IMAGE }),
             images: [keepImage(imagesRef.current[0]), keepImage(imagesRef.current[1])],
             driver: driver ? { video: driver.videoFile, name: driver.name } : null,
+            picture: keepImage(pictureRef.current),
             openGroup: openGroupRef.current
           }];
         }
@@ -1958,6 +2001,7 @@ export default function App() {
           id: doc.id, path: doc.path, untitled: doc.untitled, dirty: doc.dirty, scene,
           images: [keepImage(stored.images[0]), keepImage(stored.images[1])],
           driver: stored.driver ? { video: stored.driver.videoFile, name: stored.driver.name } : null,
+          picture: keepImage(stored.picture),
           openGroup: stored.openGroup
         }];
       })
@@ -1999,7 +2043,7 @@ export default function App() {
       }
     };
     const restore = async () => {
-      const loaded: { doc: SceneDoc; params: Params; state: PlayState; images: [SlotImage, SlotImage | null]; driver: DriverVideo | null; openGroup: string | null }[] = [];
+      const loaded: { doc: SceneDoc; params: Params; state: PlayState; images: [SlotImage, SlotImage | null]; driver: DriverVideo | null; picture: SlotImage | null; openGroup: string | null }[] = [];
       for (const keptDoc of kept.docs) {
         const params = createParams();
         const state = createPlayState();
@@ -2017,16 +2061,17 @@ export default function App() {
           const media = await loadSceneMedia({ type: keptDoc.driver.video.mime, video: keptDoc.driver.video.id }).catch(() => null);
           if (media?.source instanceof HTMLVideoElement && media.videoFile) driver = { video: media.source, videoFile: media.videoFile, name: keptDoc.driver.name, id: nextImageId++ };
         }
-        loaded.push({ doc: { id: keptDoc.id, path: keptDoc.path, untitled: keptDoc.untitled, dirty: keptDoc.dirty }, params, state, images: [first, second], driver, openGroup: keptDoc.openGroup });
+        const picture = keptDoc.picture ? await loadKeptImage(keptDoc.picture) : null;
+        loaded.push({ doc: { id: keptDoc.id, path: keptDoc.path, untitled: keptDoc.untitled, dirty: keptDoc.dirty }, params, state, images: [first, second], driver, picture, openGroup: keptDoc.openGroup });
       }
       if (loaded.length === 0 || activeIdRef.current !== null) return;
       /* Each tab's Undo history is made on the engine's settings, as addDoc makes it, starting from that scene. */
-      for (const { doc, params, state, images, driver, openGroup } of loaded) {
+      for (const { doc, params, state, images, driver, picture, openGroup } of loaded) {
         Object.assign(engine.params, structuredClone(params));
         Object.assign(engine.state, structuredClone(state));
         const history = new SettingsHistory(engine.params, engine.state);
-        const savedFingerprint = doc.dirty ? "" : sceneFingerprint(params, state, [images[0].id, images[1]?.id ?? null, driver?.id ?? null]);
-        storedRef.current.set(doc.id, { params, state, images, driver, savedFingerprint, history, openGroup });
+        const savedFingerprint = doc.dirty ? "" : sceneFingerprint(params, state, [images[0].id, images[1]?.id ?? null, driver?.id ?? null, picture?.id ?? null]);
+        storedRef.current.set(doc.id, { params, state, images, driver, picture, savedFingerprint, history, openGroup });
       }
       writeDocs(loaded.map((entry) => entry.doc));
       nextDocId = Math.max(nextDocId, ...loaded.map((entry) => entry.doc.id + 1));
@@ -2441,6 +2486,9 @@ export default function App() {
                   onRandomizeGroup={randomizeOneGroup}
                   driverVideoName={driverVideoName}
                   onPickDriverVideo={() => setOpenRequest({ kind: "image", slot: 0, target: "driver" })}
+                  pictureName={pictureName}
+                  onPickPicture={() => setOpenRequest({ kind: "image", slot: 0, target: "picture" })}
+                  onRemovePicture={() => setPicture(null)}
                   onNeedAudioInput={askForAudioInput}
                   onFirstEffect={firstEffect}
                   linksTip={linksTip}
@@ -2604,12 +2652,13 @@ export default function App() {
       {openRequest && (
         <OpenDialog
           kind={openRequest.kind}
-          title={openRequest.target === "driver" ? "Open Video for the Driver" : openRequest.target === "import" ? "Import Scene(s)" : openRequest.kind === "scene" ? "Open Project" : openRequest.kind === "audio" ? "Add Audio Files" : openRequest.slot === 1 ? "Open Image or Video for Source B" : "Open Image or Video"}
+          title={openRequest.target === "driver" ? "Open Video for the Driver" : openRequest.target === "picture" ? "Open Image or Video for the Overlay" : openRequest.target === "import" ? "Import Scene(s)" : openRequest.kind === "scene" ? "Open Project" : openRequest.kind === "audio" ? "Add Audio Files" : openRequest.slot === 1 ? "Open Image or Video for Source B" : "Open Image or Video"}
           hint={openRequest.target === "import" ? "Choose one or more Kaleido Sage projects (.ksage). All of their scenes go into the open project, without their audio files." : undefined}
           onCancel={() => setOpenRequest(null)}
           onOpen={(path) => {
             setOpenRequest(null);
             if (openRequest.target === "driver") void openDriverVideo(path);
+            else if (openRequest.target === "picture") void openPicturePath(path);
             else if (openRequest.target === "import") void importScenes([path]);
             else if (openRequest.kind === "scene") void openProject(path);
             else if (openRequest.kind === "audio") addTracks([path]);
