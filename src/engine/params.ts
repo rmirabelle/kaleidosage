@@ -1,4 +1,4 @@
-import type { BlendMode, BlurMask, CameraRepeat, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidShape, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
+import type { BlendMode, BlurMask, CameraRepeat, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidShape, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
 
 export const PARAM_KEYS = [
   "cycle",
@@ -24,6 +24,7 @@ export const PARAM_KEYS = [
   "solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY",
   "raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY",
   "laserAmount", "laserCount", "laserSpread", "laserSweep", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY",
+  "outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineFlow", "outlineTurn", "outlineX", "outlineY",
   "pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn", "pictureKey",
   "bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize",
   "sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel"
@@ -256,7 +257,7 @@ export type Params = Record<ParamKey, Param>;
 export type ContourTone = "hue" | "black" | "white";
 export const CONTOUR_TONES: readonly ContourTone[] = ["hue", "black", "white"];
 
-export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "bloom" | "sharpen" | "color" | "levels" | "picture";
+export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines";
 
 export interface PlayState {
   /** Which groups are on. A group that is off has no effect, but keeps its settings. */
@@ -346,6 +347,16 @@ export interface PlayState {
   cyclesBlend: LayerBlend;
   cyclesPaint: CyclePaint;
   cyclesStops: GradientStop[];
+  /**
+   * Light shapes (see OUTLINE_SHADER): the outline, how it draws, the
+   * colors along it, and two clocks added up as the animation runs: the
+   * place in the draw cycle (0 to 1) and the color flow (0 to 1).
+   */
+  outlineShape: OutlineShape;
+  outlineDraw: OutlineDraw;
+  outlineStops: GradientStop[];
+  outlineTime: number;
+  outlineFlowTime: number;
   /**
    * 3D Object (see SOLID_SHADER): the shape preset, how the picture goes onto
    * it (wrap, project, mirror), how the shape combines with the picture
@@ -832,6 +843,29 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   laserX: { label: "Source X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.3, high: 0.3, on: false },
   laserY: { label: "Source Y", min: -0.5, max: 0.5, step: 0.01, value: -0.5, drift: "wave", low: -0.5, high: -0.3, on: false },
   /**
+   * Light shapes (see OUTLINE_SHADER): glowing outlines that draw
+   * themselves. Count copies, each smaller by Spacing and later in the draw
+   * by Delay (a part of a draw). Draw time is the seconds for one draw;
+   * Length is the chased part (Chase only); Points is the star's. Width and
+   * Glow size are pixels at 1080p. Color flow moves the colors along the
+   * outline, in turns per second.
+   */
+  outlineAmount: { label: "Strength", min: 0, max: 3, step: 0.01, value: 0, drift: "wave", low: 0.6, high: 1.5, on: false },
+  outlineCount: { label: "Count", min: 1, max: 8, step: 1, value: 1, drift: "wave", low: 1, high: 4, on: false },
+  outlineRadius: { label: "Radius", min: 0.02, max: 1, step: 0.01, value: 0.3, drift: "wave", low: 0.2, high: 0.4, on: false },
+  outlineSpacing: { label: "Spacing", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.3, high: 0.7, on: false },
+  outlineDelay: { label: "Delay", min: 0, max: 1, step: 0.01, value: 0.15, drift: "wave", low: 0.05, high: 0.3, on: false },
+  outlineDrawTime: { label: "Draw time", min: 0.25, max: 20, step: 0.01, scale: "log", value: 3, unit: "s", drift: "wave", low: 2, high: 5, on: false },
+  outlineLength: { label: "Length", min: 0.02, max: 1, step: 0.01, value: 0.35, drift: "wave", low: 0.2, high: 0.6, on: false },
+  outlinePoints: { label: "Points", min: 3, max: 12, step: 1, value: 5, drift: "wave", low: 4, high: 8, on: false },
+  outlineWidth: { label: "Width", min: 0.5, max: 12, step: 0.1, value: 2, unit: "px", drift: "wave", low: 1, high: 3, on: false },
+  outlineGlow: { label: "Glow", min: 0, max: 4, step: 0.01, value: 1, drift: "wave", low: 0.5, high: 1.5, on: false },
+  outlineGlowSize: { label: "Glow size", min: 2, max: 80, step: 0.1, scale: "log", value: 16, unit: "px", drift: "wave", low: 8, high: 30, on: false },
+  outlineFlow: { label: "Color flow", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
+  outlineTurn: { label: "Turn", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "spin", low: -180, high: 180, on: false },
+  outlineX: { label: "X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
+  outlineY: { label: "Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
+  /**
    * Image or Video (see PICTURE_SHADER): an image or a video of the scene's own
    * over the picture made so far, by its blend (pictureBlend). Size 1
    * covers the screen and keeps the media's shape; X and Y move its center,
@@ -896,7 +930,7 @@ export function createParams(): Params {
 
 /** The start-up orders: the fold, then the map bends the folded picture, then the warp; and blur, trails, time smear, contours, relief, driver, camera, 3D object, pixel sort, particles, light cycles, light rays, lasers, bloom, final effects. */
 export const defaultShapeOrder = (): ShapeStep[] => ["kaleidoscope", "map", "warp"];
-export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "driver", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "bloom", "sharpen", "color", "levels", "picture"];
+export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "driver", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "bloom", "sharpen", "color", "levels", "picture", "outlines"];
 export const defaultFxOrder = (): FxStep[] => [...defaultShapeOrder(), ...defaultPictureOrder()];
 
 /**
@@ -943,6 +977,7 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
     case "cycles": return used("cyclesAmount");
     case "rays": return used("raysAmount");
     case "lasers": return used("laserAmount");
+    case "outlines": return used("outlineAmount");
     case "picture": return used("pictureAmount");
     case "bloom": return used("bloomAmount");
     case "sharpen": return used("sharpen");
@@ -955,9 +990,9 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
 export function createPlayState(): PlayState {
   return {
     /* No effect is in the list at start-up, so every effect group is off. */
-    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false },
-    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false },
+    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false },
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), outlineTime: 0, outlineFlowTime: 0, solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1083,6 +1118,8 @@ export const defaultGradientStops = (): GradientStop[] => [{ at: 0, color: "#ff0
 
 /** The light cycles' gradient in a new scene: cyan to orange, the two colors of the film's cycles. */
 export const defaultCycleStops = (): GradientStop[] => [{ at: 0, color: "#18e0ff" }, { at: 1, color: "#ff7a1a" }];
+/** Light shapes' colors along the outline: the same color at both ends, so no seam shows at the top. */
+export const defaultOutlineStops = (): GradientStop[] => [{ at: 0, color: "#18e0ff" }, { at: 0.5, color: "#ff2bd6" }, { at: 1, color: "#18e0ff" }];
 
 /**
  * The gradient's color at a place from 0 to 1, as red, green and blue from
@@ -1311,6 +1348,11 @@ export function resetEffects(params: Params, state: PlayState) {
     state.cyclesPaint = fresh.cyclesPaint;
     state.cyclesStops = fresh.cyclesStops;
   }
+  if (!state.locks.outlines) {
+    state.outlineShape = fresh.outlineShape;
+    state.outlineDraw = fresh.outlineDraw;
+    state.outlineStops = fresh.outlineStops;
+  }
   if (!state.locks.driver) {
     state.driverSource = fresh.driverSource;
     state.driverMode = fresh.driverMode;
@@ -1348,6 +1390,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   rays: ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"],
   picture: ["pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn", "pictureKey"],
   lasers: ["laserAmount", "laserCount", "laserSpread", "laserSweep", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"],
+  outlines: ["outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineFlow", "outlineTurn", "outlineX", "outlineY"],
   bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
   sharpen: ["sharpen", "sharpenRadius"],
   color: ["overlayOpacity"],
@@ -1366,6 +1409,7 @@ const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   camera: ["skyColor", "cameraBlend", "cameraRepeat"],
   sort: ["sortOrder"],
   particles: ["particleBlend", "particleShape"],
+  outlines: ["outlineShape", "outlineDraw"],
   picture: ["pictureBlend"],
   cycles: ["cyclesMove", "cyclesBlend", "cyclesPaint"],
   solid: ["solidShape", "solidMap", "solidBlend"],
@@ -1391,7 +1435,8 @@ export function randomizeGroup(params: Params, state: PlayState, group: GroupKey
 const EFFECT_CHANCE: Record<FxStep, number> = {
   kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.25, relief: 0.4, driver: 0.3, camera: 0.3, solid: 0.2, sort: 0.2, particles: 0.25, cycles: 0.25, rays: 0.25, lasers: 0.15, bloom: 0.3, sharpen: 0.3, color: 0.15, levels: 0.25,
   /* An overlay needs an image or a video that the user picks. */
-  picture: 0
+  picture: 0,
+  outlines: 0.15
 };
 
 function randomizeAll(params: Params, state?: PlayState) {
@@ -1406,7 +1451,8 @@ function randomizeAll(params: Params, state?: PlayState) {
      * Each unlocked effect is in the new list by its chance, in a random
      * order. A locked effect keeps its place (or stays out of the list).
      */
-    const chosen = defaultFxOrder().filter((step) => !state.locks[step] && Math.random() < EFFECT_CHANCE[step]);
+    /* Light shapes draws its chance at the end (see below), so the other effects' random values stay as they were before it. */
+    const chosen = defaultFxOrder().filter((step) => step !== "outlines" && !state.locks[step] && Math.random() < EFFECT_CHANCE[step]);
     for (let index = chosen.length - 1; index > 0; index--) {
       const other = Math.floor(Math.random() * (index + 1));
       [chosen[index], chosen[other]] = [chosen[other], chosen[index]];
@@ -1671,5 +1717,30 @@ function randomizeAll(params: Params, state?: PlayState) {
       if (param.low !== undefined) param.low *= 0.6;
       if (param.high !== undefined) param.high *= 0.6;
     }
+  }
+  /**
+   * Light shapes, last: its random values come after every other effect's,
+   * so the effects from before it get the same values from the same random
+   * numbers. When Randomize picks it, it goes at the end of the list, over
+   * the picture.
+   */
+  set("outlineAmount", rand(0.6, 1.5), rand(0.1, 0.3));
+  set("outlineCount", Math.round(rand(1, 5)), 0);
+  set("outlineRadius", rand(0.15, 0.45), rand(0, 0.08));
+  set("outlineSpacing", rand(0.2, 0.8), rand(0, 0.2));
+  set("outlineDelay", rand(0, 0.3), rand(0, 0.1));
+  set("outlineDrawTime", rand(1.5, 6), rand(0, 1));
+  set("outlineLength", rand(0.15, 0.6), rand(0, 0.15));
+  set("outlinePoints", Math.round(rand(4, 8)), 0);
+  set("outlineWidth", rand(1, 3), rand(0, 0.8));
+  set("outlineGlow", rand(0.4, 1.8), rand(0, 0.4));
+  set("outlineGlowSize", rand(8, 30), rand(0, 5));
+  set("outlineFlow", Math.random() < 0.5 ? 0 : rand(-0.3, 0.3), rand(0, 0.1));
+  if (state && !state.locks.outlines) {
+    const on = Math.random() < EFFECT_CHANCE.outlines;
+    state.groups.outlines = on;
+    if (on) state.fxOrder = [...state.fxOrder, "outlines"];
+    state.outlineShape = Math.floor(Math.random() * 4) as OutlineShape;
+    state.outlineDraw = Math.floor(Math.random() * 3) as OutlineDraw;
   }
 }

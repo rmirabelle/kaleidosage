@@ -2769,6 +2769,201 @@ void main() {
 }`;
 
 /**
+ * Light shapes: glowing outlines (a ring, a square, a triangle or a star)
+ * that draw themselves, in one pass over the picture. Each of u_count
+ * copies has its own radius (smaller by u_spacing from the first) and its
+ * own place in the draw cycle (later by u_delay). For each pixel, each
+ * copy finds the nearest point of its outline and that point's place s
+ * along it (0 at the top, going clockwise, to 1 back at the top). A ring
+ * is exact; the other shapes are their corners joined by straight lines.
+ * u_draw: 0 draws the outline from the top, then erases it from the top; 1
+ * a part u_length long chases around it, brightest at its head; 2 shows
+ * it whole. The color is the gradient (u_stopAt, u_stopColor) at s, moved
+ * along by u_shift. The core, the glow and the head's spot are as in
+ * LASER_SHADER, so the lights look the same. Sizes are in pixels.
+ */
+export const OUTLINE_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_picture;
+uniform vec2 u_res;
+uniform vec2 u_center;
+uniform float u_turn;
+uniform int u_shape;
+uniform int u_count;
+uniform float u_radius;
+uniform float u_spacing;
+uniform float u_delay;
+uniform float u_phase;
+uniform int u_draw;
+uniform float u_length;
+uniform int u_points;
+uniform float u_width;
+uniform float u_glow;
+uniform float u_glowSize;
+uniform float u_shift;
+uniform float u_amount;
+uniform int u_stopCount;
+uniform float u_stopAt[8];
+uniform vec3 u_stopColor[8];
+${COVER_GLSL}
+const float TAU = 6.2831853;
+
+/* The gradient at t (0 to 1), as gradientColorAt in params.ts. */
+vec3 stopColor(float t) {
+  if (t <= u_stopAt[0]) return u_stopColor[0];
+  for (int i = 1; i < 8; i++) {
+    if (i >= u_stopCount) break;
+    if (t <= u_stopAt[i]) {
+      float span = u_stopAt[i] - u_stopAt[i - 1];
+      return mix(u_stopColor[i - 1], u_stopColor[i], span > 0.0 ? (t - u_stopAt[i - 1]) / span : 1.0);
+    }
+  }
+  return u_stopColor[clamp(u_stopCount - 1, 0, 7)];
+}
+
+/* Corner k of a shape of radius r: on a circle, from the top, clockwise. A star's inner corners are at 0.45 r; a square stands level. */
+vec2 corner(int k, int corners, float r) {
+  float start = u_shape == 1 ? 0.5 : 0.0;
+  float a = TAU * (float(k) + start) / float(corners);
+  float rr = u_shape == 3 && (k % 2) == 1 ? r * 0.45 : r;
+  return rr * vec2(sin(a), cos(a));
+}
+
+/* The outline's length, in pixels. */
+float outlineLength(float r) {
+  if (u_shape == 0) return TAU * r;
+  int corners = u_shape == 1 ? 4 : u_shape == 2 ? 3 : 2 * u_points;
+  float total = 0.0;
+  for (int k = 0; k < 24; k++) {
+    if (k >= corners) break;
+    total += length(corner((k + 1) % corners, corners, r) - corner(k, corners, r));
+  }
+  return total;
+}
+
+/* The point at place s (0 to 1) along the outline. */
+vec2 outlinePoint(float s, float r, float total) {
+  if (u_shape == 0) return r * vec2(sin(TAU * s), cos(TAU * s));
+  int corners = u_shape == 1 ? 4 : u_shape == 2 ? 3 : 2 * u_points;
+  float walked = 0.0;
+  float h = fract(s) * total;
+  for (int k = 0; k < 24; k++) {
+    if (k >= corners) break;
+    vec2 a = corner(k, corners, r);
+    vec2 ab = corner((k + 1) % corners, corners, r) - a;
+    float side = length(ab);
+    if (h <= walked + side || k == corners - 1) return a + ab * clamp((h - walked) / max(side, 1e-6), 0.0, 1.0);
+    walked += side;
+  }
+  return corner(0, corners, r);
+}
+
+/**
+ * The nearest point to p on the part of the outline that shows: from place
+ * a to place b (b - a at most 1; a is below 0 for a part across the top).
+ * Its distance in pixels (x) and its place (y, from a to b). Only the part
+ * that shows counts, so its ends are round and its glow ends with it.
+ */
+vec2 nearestShown(vec2 p, float r, float total, float a, float b) {
+  if (b - a <= 1e-5) return vec2(1e9, a);
+  if (u_shape == 0) {
+    float s = a + fract(fract(atan(p.x, p.y) / TAU) - a);
+    if (s <= b) return vec2(abs(length(p) - r), s);
+    float da = length(p - outlinePoint(a, r, total));
+    float db = length(p - outlinePoint(b, r, total));
+    return da < db ? vec2(da, a) : vec2(db, b);
+  }
+  int corners = u_shape == 1 ? 4 : u_shape == 2 ? 3 : 2 * u_points;
+  vec2 best = vec2(1e9, a);
+  float walked = 0.0;
+  for (int k = 0; k < 24; k++) {
+    if (k >= corners) break;
+    vec2 c0 = corner(k, corners, r);
+    vec2 ab = corner((k + 1) % corners, corners, r) - c0;
+    float side = length(ab);
+    float s0 = walked / total;
+    float s1 = (walked + side) / total;
+    walked += side;
+    /* The side as it is, and one turn earlier, for a part across the top. */
+    for (int w = -1; w <= 0; w++) {
+      float lo = max(a, s0 + float(w));
+      float hi = min(b, s1 + float(w));
+      if (hi < lo) continue;
+      float span = max(s1 - s0, 1e-6);
+      float t0 = (lo - s0 - float(w)) / span;
+      float t1 = (hi - s0 - float(w)) / span;
+      float t = clamp(dot(p - c0, ab) / max(side * side, 1e-6), t0, t1);
+      float d = length(p - c0 - ab * t);
+      if (d < best.x) best = vec2(d, s0 + float(w) + t * span);
+    }
+  }
+  return best;
+}
+
+void main() {
+  vec2 p = (v_uv - 0.5) * u_res - u_center;
+  float c = cos(u_turn);
+  float sn = sin(u_turn);
+  p = mat2(c, -sn, sn, c) * p;
+  float haze = u_width + u_glowSize;
+  vec3 light = vec3(0.0);
+  float glowSum = 0.0;
+  vec3 glowColor = vec3(0.0);
+  float spot = 0.0;
+  vec3 spotColor = vec3(0.0);
+  for (int i = 0; i < 8; i++) {
+    if (i >= u_count) break;
+    float r = u_radius * (1.0 - u_spacing * float(i) / float(max(u_count - 1, 1)));
+    if (r < 0.5) continue;
+    float phase = fract(u_phase - u_delay * float(i));
+    float total = outlineLength(r);
+    /**
+     * The part that shows, from place a to place b. Drawing: from the top
+     * to the head in the first half of the cycle, then from the eraser to
+     * the end. Chasing: Length behind the head, once around per cycle.
+     */
+    float a = 0.0;
+    float b = 1.0;
+    bool moving = false;
+    if (u_draw == 0) {
+      moving = phase < 0.5;
+      if (moving) b = phase * 2.0;
+      else a = phase * 2.0 - 1.0;
+    } else if (u_draw == 1) {
+      moving = true;
+      a = phase - u_length;
+      b = phase;
+    }
+    vec2 n = nearestShown(p, r, total, a, b);
+    /* A chased part is full at its head and fades to nothing at its tail. */
+    float shown = u_draw == 1 ? clamp((n.y - a) / max(u_length, 1e-3), 0.0, 1.0) : 1.0;
+    vec3 color = stopColor(fract(n.y + u_shift));
+    float across = n.x / u_width;
+    float core = exp(-4.0 * across * across);
+    float glow = u_glow * 0.5 * exp(-n.x / haze);
+    light += (color + 0.6) * core * shown;
+    glowSum += glow * shown;
+    glowColor += color * glow * shown;
+    /* The head's bright spot while the outline is drawn or chased. */
+    if (moving) {
+      float near = length(p - outlinePoint(b, r, total)) / (u_width * 3.0 + 4.0);
+      float headSpot = exp(-near * near);
+      if (headSpot > spot) {
+        spot = headSpot;
+        spotColor = stopColor(fract(b + u_shift));
+      }
+    }
+  }
+  float glowMax = u_glow;
+  if (glowSum > 0.0) light += glowColor / glowSum * glowMax * (1.0 - exp(-glowSum / max(glowMax, 1e-4)));
+  light += (spotColor + 0.5) * spot * (0.5 + min(u_glow, 1.0));
+  o = addLight(texture(u_picture, v_uv), u_amount * light);
+}`;
+
+/**
  * Bloom, step 2: one level of the glow, half the size of the level before
  * (u_texel is one pixel of that level). It reads 13 points in a 4 by 4
  * pixel area, weighted toward the middle, so the level is a soft copy

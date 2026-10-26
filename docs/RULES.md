@@ -203,13 +203,13 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 
 ## Effects list
 
-- The app has 21 effects.
+- The app has 22 effects.
 - The list is empty at start-up.
 - The first effect in the list acts first, and each next one works on its result.
 - A shape effect (Warp, Algorithm, Kaleidoscope) moves the picture made before it.
 - The Seamless and Droste spirals always move the point last.
 - The New button adds an effect at the end of the list and opens it.
-- The New button is off when all 21 effects are in the list.
+- The New button is off when all 22 effects are in the list.
 - The Add menu shows added effects dimmed and does not let you pick them.
 - The Add menu shows a preview with a note and thumbnails.
 - For an effect with types, the preview shows each type in turn, 1 second each.
@@ -221,6 +221,12 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Adding Algorithm changes a Power map at power 1 to power 2.
 - Adding the Kaleidoscope starts Pan X and Pan Y looping.
 - Adding Lasers starts Sweep looping, so the fan tilts up and down and looks flat as it passes level.
+- Light shapes draws glowing outlines: a ring, a square, a triangle or a star (Points sets its points).
+- Light shapes Draw: Draw and erase draws the outline from the top, then erases it from the top; Chase sends a part of Length around it, brightest at its head; Whole shows it all.
+- Light shapes has Count copies, each smaller by Spacing and later in its draw by Delay. One draw takes Draw time seconds.
+- Light shapes colors come from a gradient along the outline; Color flow moves them along it.
+- Only the drawn part of an outline glows, and its ends are round.
+- Random all puts Light shapes at the end of the list when it picks it.
 - Adding Image or Video with no image or video opens the Open dialog for one.
 - Image or Video lays its own image or video over the picture made so far; the effects after it change the whole picture, and one last in the list lies on top of everything.
 - Image or Video blends: Normal (a PNG's clear parts show the picture), Screen and Add (black adds nothing). Screen is the default.

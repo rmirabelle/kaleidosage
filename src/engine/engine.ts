@@ -883,6 +883,8 @@ export class Engine {
     this.state.warpTime = 0;
     this.state.mandelFlowTime = 0;
     this.state.driverTime = 0;
+    this.state.outlineTime = 0;
+    this.state.outlineFlowTime = 0;
     this.state.solidSpinTurns = 0;
     this.state.solidTumbleTurns = 0;
     this.state.mapTravel = 0;
@@ -1019,6 +1021,9 @@ export class Engine {
     this.state.warpTime += animated * (this.live("warpFlow") + this.warpFlowOffset);
     this.state.mandelFlowTime += animated * this.live("mandelFlow");
     this.state.driverTime += animated * this.live("driverSpeed");
+    /* Light shapes: one draw cycle takes Draw time seconds; the colors flow by Color flow turns a second. */
+    this.state.outlineTime = (this.state.outlineTime + animated / Math.max(0.05, this.live("outlineDrawTime"))) % 1;
+    this.state.outlineFlowTime = (this.state.outlineFlowTime + animated * this.live("outlineFlow") + 1) % 1;
     /* The 3D Object's spin and tumble are speeds in turns per minute, added up the same way. */
     this.state.solidSpinTurns = (this.state.solidSpinTurns + animated * this.live("solidSpin") / 60) % 1;
     this.state.solidTumbleTurns = (this.state.solidTumbleTurns + animated * this.live("solidTumble") / 60) % 1;
@@ -1391,6 +1396,25 @@ export class Engine {
       laserRainbow: this.live("laserRainbow"),
       laserX: this.live("laserX"),
       laserY: this.live("laserY"),
+      outlines: on.outlines ? this.live("outlineAmount") : 0,
+      outlineShape: this.state.outlineShape,
+      outlineDraw: this.state.outlineDraw,
+      outlineCount: this.live("outlineCount"),
+      outlineRadius: this.live("outlineRadius"),
+      outlineSpacing: this.live("outlineSpacing"),
+      outlineDelay: this.live("outlineDelay"),
+      outlinePhase: this.state.outlineTime,
+      outlineLength: this.live("outlineLength"),
+      outlinePoints: this.live("outlinePoints"),
+      outlineWidth: this.live("outlineWidth"),
+      outlineGlow: this.live("outlineGlow"),
+      outlineGlowSize: this.live("outlineGlowSize"),
+      outlineFlow: this.state.outlineFlowTime,
+      outlineTurn: this.live("outlineTurn") * DEGREES,
+      outlineX: this.live("outlineX"),
+      outlineY: this.live("outlineY"),
+      outlineStopAt: new Float32Array(this.state.outlineStops.map((stop) => stop.at)),
+      outlineStopColor: new Float32Array(this.state.outlineStops.flatMap((stop) => hexToRgb(stop.color))),
       picture: on.picture ? this.live("pictureAmount") : 0,
       pictureBlend: this.state.pictureBlend,
       pictureSize: this.live("pictureSize"),

@@ -10,7 +10,7 @@ import { GradientEditor } from "./GradientEditor";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
 import { BLUR_KEYS, BLUR_MASKS, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
-import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
+import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, OutlineDraw, OutlineShape, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ContextMenu } from "./ContextMenu";
@@ -71,6 +71,10 @@ const SORT_KEYS: ParamKey[] = ["sortAmount", "sortLow", "sortHigh", "sortAngle",
 const PARTICLE_KEYS: ParamKey[] = ["particleLevel", "particleBackground", "particleCount", "particleSize", "particleLife", "particleSpeed", "particleFollow", "particleCling", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleGradient", "particleBoost"];
 const RAYS_KEYS: ParamKey[] = ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"];
 const PICTURE_KEYS: ParamKey[] = ["pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn", "pictureKey"];
+/** Light shapes' settings; OutlineSection hides Length but for Chase, and Points but for a star. */
+const OUTLINE_KEYS: ParamKey[] = ["outlineAmount", "outlineRadius", "outlineCount", "outlineSpacing", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineFlow", "outlineTurn", "outlineX", "outlineY"];
+const OUTLINE_SHAPES = [[0, "Ring"], [1, "Square"], [2, "Triangle"], [3, "Star"]] as const;
+const OUTLINE_DRAWS = [[0, "Draw and erase"], [1, "Chase"], [2, "Whole"]] as const;
 const LASER_KEYS: ParamKey[] = ["laserAmount", "laserCount", "laserSpread", "laserSweep", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"];
 const BLOOM_KEYS: ParamKey[] = ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"];
 const SHARPEN_KEYS: ParamKey[] = ["sharpen", "sharpenRadius"];
@@ -294,6 +298,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
         Object.assign(sweep, { low, high, on: true });
       },
       bloom: () => start("bloomAmount", 1),
+      outlines: () => start("outlineAmount", 1),
       picture: () => {
         start("pictureAmount", 1);
         /* An overlay shows nothing until it has an image or a video. */
@@ -418,6 +423,11 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     lasers: (grip) => (
       <Group engine={engine} group="lasers" title="Lasers" grip={grip} {...accordion("lasers")}>
         {LASER_KEYS.map(row)}
+      </Group>
+    ),
+    outlines: (grip) => (
+      <Group engine={engine} group="outlines" title="Light shapes" grip={grip} {...accordion("outlines")}>
+        <OutlineSection engine={engine} row={row} />
       </Group>
     ),
     bloom: (grip) => (
@@ -865,7 +875,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "outlineShape" | "outlineDraw" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange }: {
@@ -953,6 +963,26 @@ function SmearSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =>
  * gradient's sliders and its colors under the Gradient slider, then the
  * Blend menu and Opacity.
  */
+/**
+ * Light shapes' settings: the Shape and Draw menus, then the sliders, with
+ * the colors along the outline (a gradient) above Color flow. Length shows
+ * only for Chase, and Points only for a star.
+ */
+function OutlineSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
+  const [shape, setShape] = useState<OutlineShape>(engine.state.outlineShape);
+  const [draw, setDraw] = useState<OutlineDraw>(engine.state.outlineDraw);
+  const keys = OUTLINE_KEYS.filter((key) => (key !== "outlineLength" || draw === 1) && (key !== "outlinePoints" || shape === 3));
+  return (
+    <>
+      <ModeSelect engine={engine} stateKey="outlineShape" options={OUTLINE_SHAPES} name="Shape" onChange={setShape} />
+      <ModeSelect engine={engine} stateKey="outlineDraw" options={OUTLINE_DRAWS} name="Draw" onChange={setDraw} />
+      {keys.map((key) => key === "outlineFlow"
+        ? <Fragment key={key}><GradientEditor engine={engine} stateKey="outlineStops" />{row(key)}</Fragment>
+        : row(key))}
+    </>
+  );
+}
+
 function CyclesSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
   const [move, setMove] = useState<CycleMove>(engine.state.cyclesMove);
   const [paint, setPaint] = useState<CyclePaint>(engine.state.cyclesPaint);
