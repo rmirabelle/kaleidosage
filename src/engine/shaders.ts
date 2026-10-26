@@ -2279,7 +2279,8 @@ float periodicNoise(vec2 p, vec2 period) {
  * bent by a coarser noise so the ridges wander like erosion. Its largest
  * features have the same size on the land whatever the area: about 24
  * across the land's height at Detail size 1 (u_detailSize; larger is
- * fewer and larger). Finer layers stop at about 4 screen pixels.
+ * fewer and larger). Finer layers stop at about 2 pixels of the height
+ * field (the screen's size), the finest it can hold.
  */
 vec2 detailPeriod() {
   float aspect = u_res.x / u_res.y;
@@ -2294,7 +2295,7 @@ float fineDetail(vec2 uv) {
   float total = 0.0;
   float size = 1.0;
   for (int octave = 0; octave < 5; octave++) {
-    if (period.y > u_res.y * 0.25) break;
+    if (period.y > u_res.y * 0.5) break;
     float ridge = 1.0 - min(abs(periodicNoise(q, period)) * 1.2, 1.0);
     sum += size * (ridge * ridge - 0.5);
     total += size;
@@ -2350,8 +2351,13 @@ void main() {
     int level = int(floor(blur));
     h = mix(terrainAt(v_uv, level), terrainAt(v_uv, level + 1), blur - float(level));
     if (u_detail > 0.0) {
-      /* The detail is about as tall as the land changes across one of its largest features, so steep slopes get rugged and flat valleys stay smooth. */
-      vec2 spacing = 0.5 / detailPeriod();
+      /**
+       * The detail is about as tall as the land changes across one of its
+       * largest features (at least 1% of the land, so very small detail
+       * stays visible), so steep slopes get rugged and flat valleys stay
+       * smooth.
+       */
+      vec2 spacing = max(0.5 / detailPeriod(), vec2(0.01));
       float slope = length(vec2(terrainAt(v_uv + vec2(spacing.x, 0.0), 0) - terrainAt(v_uv - vec2(spacing.x, 0.0), 0),
         terrainAt(v_uv + vec2(0.0, spacing.y), 0) - terrainAt(v_uv - vec2(0.0, spacing.y), 0)));
       h = clamp(h + u_detail * fineDetail(v_uv) * (slope + 0.002), 0.0, 1.0);

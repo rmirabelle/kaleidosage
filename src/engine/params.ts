@@ -679,7 +679,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * across the land's height, at any area).
    */
   cameraDetail: { label: "Detail", min: 0, max: 2, step: 0.01, value: 0.6, drift: "wave", low: 0.3, high: 1, on: false },
-  cameraDetailSize: { label: "Detail size", min: 0.25, max: 4, step: 0.01, scale: "log", value: 1, drift: "wave", low: 0.7, high: 1.5, on: false },
+  cameraDetailSize: { label: "Detail size", min: 0.05, max: 4, step: 0.01, scale: "log", value: 1, drift: "wave", low: 0.7, high: 1.5, on: false },
   /**
    * Pixel sort (see SORT_STEP_SHADER): along lines at Angle, each run of
    * pixels whose brightness is between Low and High is sorted by
