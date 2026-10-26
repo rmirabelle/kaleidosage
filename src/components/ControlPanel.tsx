@@ -10,7 +10,7 @@ import { GradientEditor } from "./GradientEditor";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
 import { BLUR_KEYS, BLUR_MASKS, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
-import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, OutlineDraw, OutlineShape, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
+import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ContextMenu } from "./ContextMenu";
@@ -385,13 +385,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     ),
     particles: (grip) => (
       <Group engine={engine} group="particles" title="Particles" grip={grip} {...accordion("particles")}>
-        <ModeSelect engine={engine} stateKey="particleShape" options={PARTICLE_SHAPES} name="Shape" />
-        {/* The life gradient's colors, under its Gradient slider, in the same row block (no line between them). */}
-        <SplitRows
-          keys={[...PARTICLE_KEYS, "particleAmount"]}
-          row={(key) => key === "particleGradient" ? <Fragment key={key}>{row(key)}<GradientEditor engine={engine} /></Fragment> : row(key)}
-          blend={<ModeSelect engine={engine} stateKey="particleBlend" options={PARTICLE_BLENDS} name="Blend" />}
-        />
+        <ParticleSection engine={engine} row={row} />
       </Group>
     ),
     cycles: (grip) => (
@@ -963,6 +957,26 @@ function SmearSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =>
  * gradient's sliders and its colors under the Gradient slider, then the
  * Blend menu and Opacity.
  */
+/**
+ * Particles' settings: the Shape menu, then the sliders, with Ring radius
+ * after Size only for rings, and the life gradient's colors under its
+ * Gradient slider, in the same row block (no line between them).
+ */
+function ParticleSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
+  const [shape, setShape] = useState<ParticleShape>(engine.state.particleShape);
+  const keys = PARTICLE_KEYS.flatMap((key): ParamKey[] => key === "particleSize" && shape === 2 ? [key, "particleRingRadius"] : [key]);
+  return (
+    <>
+      <ModeSelect engine={engine} stateKey="particleShape" options={PARTICLE_SHAPES} name="Shape" onChange={setShape} />
+      <SplitRows
+        keys={[...keys, "particleAmount"]}
+        row={(key) => key === "particleGradient" ? <Fragment key={key}>{row(key)}<GradientEditor engine={engine} /></Fragment> : row(key)}
+        blend={<ModeSelect engine={engine} stateKey="particleBlend" options={PARTICLE_BLENDS} name="Blend" />}
+      />
+    </>
+  );
+}
+
 /**
  * Light shapes' settings: the Shape and Draw menus, then the sliders, with
  * the colors along the outline (a gradient) above Color flow. Length shows

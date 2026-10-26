@@ -1333,6 +1333,7 @@ export class Engine {
       particles: on.particles ? this.live("particleAmount") : 0,
       particleBlend: this.state.particleBlend,
       particleShape: this.state.particleShape,
+      particleRingRadius: this.live("particleRingRadius"),
       particleBackground: this.live("particleBackground"),
       particleCount: this.live("particleCount"),
       particleLevel: this.live("particleLevel"),

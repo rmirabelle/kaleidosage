@@ -386,6 +386,8 @@ export interface FrameValues {
   particles: number;
   particleBlend: ParticleBlend;
   particleShape: ParticleShape;
+  /** A Ring's radius, in pixels at 1080p (its line is half of particleSize wide). */
+  particleRingRadius: number;
   /** The opacity of the picture under the particles: 1 shows it whole, 0 leaves only the particles, on black. */
   particleBackground: number;
   particleCount: number;
@@ -1843,6 +1845,7 @@ export class KaleidoRenderer {
     if (shape !== 0) {
       gl.uniform2f(d.uniforms.u_res, width, height);
       gl.uniform1i(d.uniforms.u_shape, shape);
+      gl.uniform1f(d.uniforms.u_ringRadius, Math.max(0.5, v.particleRingRadius ?? 12) * height / 1080);
     }
     gl.uniform1f(d.uniforms.u_size, v.particleSize * height / 1080);
     gl.uniform1f(d.uniforms.u_maxSize, this.maxPointSize);

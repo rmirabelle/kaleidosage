@@ -403,7 +403,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Particles stand still while paused.
 - Particle Shape is Dot (the default), Line or Ring. A scene saved before Shape opens with Dot.
 - A Line lies along the particle's motion and gets longer as the particle moves faster.
-- A Ring is a circle line; its band is a fifth of its radius.
+- A Ring is a circle line. Ring radius (shown only for rings) sets its radius, and Size sets its line: half of Size wide.
 - While paused, drawing stops when nothing changes for 1 second (6 with Time smear).
 - Trails, a crossfade, a snapshot or a new image or video frame always draw.
 

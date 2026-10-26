@@ -3296,7 +3296,9 @@ void main() {
  * living particle is a small rectangle (an instance; gl_InstanceID picks
  * its texel), with the same fade, size and color as a Dot. A Line lies
  * along the particle's motion, and longer the faster it moves: 2 sizes
- * plus the way it goes in 60 ms. A Ring is a size wide. v_px is the place in the rectangle in
+ * plus the way it goes in 60 ms. A Ring's radius is u_ringRadius (with the
+ * same 0.6 to 1.4 spread as the size), and its line is half a size wide
+ * (v_half is then its outer radius and its line width). v_px is the place in the rectangle in
  * pixels from its center, along and across it; v_half is the shape's half
  * size. The rectangle is 1 pixel larger on each side, for the soft edge.
  */
@@ -3306,6 +3308,7 @@ precision highp int;
 ${PARTICLE_LOOK_GLSL}
 uniform vec2 u_res;
 uniform int u_shape;
+uniform float u_ringRadius;
 out vec2 v_px;
 out vec2 v_half;
 void main() {
@@ -3330,10 +3333,12 @@ void main() {
     dir = speed > 1e-5 ? motion.zw / speed : vec2(cos(spin), sin(spin));
     v_half = 0.5 * vec2(max(1.0, size * 2.0 + speed * u_res.y * 0.06), max(1.0, size * 0.25));
   } else {
-    v_half = vec2(0.5 * max(size, 1.0));
+    float band = max(1.0, size * 0.5);
+    float radius = max(u_ringRadius * (0.6 + 0.8 * life.z), band * 0.5);
+    v_half = vec2(radius + band * 0.5, band);
   }
   vec2 corner = vec2(float(gl_VertexID & 1), float(gl_VertexID >> 1)) * 2.0 - 1.0;
-  v_px = corner * (v_half + 1.0);
+  v_px = corner * (u_shape == 2 ? vec2(v_half.x + 1.0) : v_half + 1.0);
   vec2 offset = dir * v_px.x + vec2(-dir.y, dir.x) * v_px.y;
   gl_Position = vec4(motion.xy * 2.0 - 1.0 + offset * 2.0 / u_res, 0.0, 1.0);
   float sweep = clamp((t - 0.05) / 0.7, 0.0, 1.0);
@@ -3369,7 +3374,7 @@ void main() {
 /**
  * Particles, the other shapes (see PARTICLE_QUAD_SHADER), with premultiplied
  * alpha and a soft edge 1 pixel wide. A Line is brighter at its head than at
- * its tail. A Ring's band is a fifth of its radius (at least 1 pixel). Boost
+ * its tail. A Ring's band is its line width (at least 1 pixel). Boost
  * works as on a Dot: more cover, and a brighter color up to the full
  * channel.
  */
@@ -3390,7 +3395,7 @@ void main() {
   if (u_shape == 1) {
     cover = inside.x * inside.y * mix(0.25, 1.0, clamp(0.5 + 0.5 * v_px.x / v_half.x, 0.0, 1.0));
   } else if (u_shape == 2) {
-    float band = max(1.0, v_half.x * 0.2);
+    float band = v_half.y;
     cover = clamp(0.5 - (abs(length(v_px) - (v_half.x - band * 0.5)) - band * 0.5), 0.0, 1.0);
   } else {
     cover = inside.x * inside.y;
