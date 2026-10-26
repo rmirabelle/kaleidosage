@@ -1301,6 +1301,7 @@ export class Engine {
       cameraRidges: this.live("cameraRidges"),
       cameraSeed: this.live("cameraSeed"),
       cameraDetail: this.live("cameraDetail"),
+      cameraDetailSize: this.live("cameraDetailSize"),
       cameraColors: this.state.cameraColors,
       cameraStopAt: new Float32Array(this.state.cameraStops.map((stop) => stop.at)),
       cameraStopColor: new Float32Array(this.state.cameraStops.flatMap((stop) => hexToRgb(stop.color))),

@@ -2171,6 +2171,7 @@ uniform sampler2D u_terrain;
 /* Real terrain: its heights across and down, and how much made-up fine detail to add (see fineDetail). */
 uniform vec2 u_terrainSize;
 uniform float u_detail;
+uniform float u_detailSize;
 
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 ${CUBIC_GLSL}
@@ -2215,21 +2216,26 @@ float periodicNoise(vec2 p, vec2 period) {
 }
 
 /**
- * Made-up fine detail for real terrain: ridged noise from about 5 data
- * spacings (u_terrainSize heights across) down to about 4 screen pixels,
- * about -0.5 to 0.5, bent by a coarser noise so the ridges wander like
- * erosion. It fades out where the data is already as fine as
- * the screen, so a large area does not shimmer.
+ * Made-up fine detail for real terrain: ridged noise, about -0.5 to 0.5,
+ * bent by a coarser noise so the ridges wander like erosion. Its largest
+ * features have the same size on the land whatever the area: about 24
+ * across the land's height at Detail size 1 (u_detailSize; larger is
+ * fewer and larger). Finer layers stop at about 4 screen pixels.
  */
+vec2 detailPeriod() {
+  float aspect = u_res.x / u_res.y;
+  return max(vec2(1.0), floor(vec2(aspect, 1.0) * 24.0 / max(u_detailSize, 0.05) + 0.5));
+}
+
 float fineDetail(vec2 uv) {
-  vec2 period = max(vec2(1.0), floor(u_terrainSize * 0.2 + 0.5));
+  vec2 period = detailPeriod();
   vec2 q = uv * period;
   q += 0.6 * vec2(periodicNoise(q * 0.5 + 3.7, period * 0.5), periodicNoise(q * 0.5 + 9.1, period * 0.5));
   float sum = 0.0;
   float total = 0.0;
   float size = 1.0;
   for (int octave = 0; octave < 5; octave++) {
-    if (period.x > u_res.x * 0.25) break;
+    if (period.y > u_res.y * 0.25) break;
     float ridge = 1.0 - min(abs(periodicNoise(q, period)) * 1.2, 1.0);
     sum += size * (ridge * ridge - 0.5);
     total += size;
@@ -2237,8 +2243,7 @@ float fineDetail(vec2 uv) {
     q *= 2.0;
     period *= 2.0;
   }
-  float pixelsPerHeight = u_res.x / max(u_terrainSize.x, 1.0);
-  return total > 0.0 ? sum / total * smoothstep(1.5, 4.0, pixelsPerHeight) : 0.0;
+  return total > 0.0 ? sum / total : 0.0;
 }
 
 float mountains(vec2 uv) {
@@ -2286,11 +2291,11 @@ void main() {
     int level = int(floor(blur));
     h = mix(terrainAt(v_uv, level), terrainAt(v_uv, level + 1), blur - float(level));
     if (u_detail > 0.0) {
-      /* The detail is about as tall as the land changes over 5 data spacings, so steep slopes get rugged and flat valleys stay smooth. */
-      vec2 spacing = 1.0 / max(u_terrainSize, vec2(1.0));
+      /* The detail is about as tall as the land changes across one of its largest features, so steep slopes get rugged and flat valleys stay smooth. */
+      vec2 spacing = 0.5 / detailPeriod();
       float slope = length(vec2(terrainAt(v_uv + vec2(spacing.x, 0.0), 0) - terrainAt(v_uv - vec2(spacing.x, 0.0), 0),
         terrainAt(v_uv + vec2(0.0, spacing.y), 0) - terrainAt(v_uv - vec2(0.0, spacing.y), 0)));
-      h = clamp(h + u_detail * fineDetail(v_uv) * (slope * 2.5 + 0.002), 0.0, 1.0);
+      h = clamp(h + u_detail * fineDetail(v_uv) * (slope + 0.002), 0.0, 1.0);
     }
   } else {
     int level = int(floor(u_smooth));

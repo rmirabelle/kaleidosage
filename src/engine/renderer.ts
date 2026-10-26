@@ -320,6 +320,8 @@ export interface FrameValues {
   cameraSeed: number;
   /** Real terrain: how much made-up fine detail to add where the data is coarser than the screen (0 = none). */
   cameraDetail: number;
+  /** The size of the made-up detail's largest features (1: about 24 across the land's height). */
+  cameraDetailSize: number;
   /** The land's colors, and the height gradient's stops (Height colors). */
   cameraColors: CameraColors;
   cameraStopAt: Float32Array;
@@ -1592,6 +1594,7 @@ export class KaleidoRenderer {
     gl.uniform1i(f.uniforms.u_terrain, 1);
     gl.uniform2f(f.uniforms.u_terrainSize, this.terrainSize[0], this.terrainSize[1]);
     gl.uniform1f(f.uniforms.u_detail, terrain ? Math.max(0, v.cameraDetail ?? 0) : 0);
+    gl.uniform1f(f.uniforms.u_detailSize, Math.max(0.05, v.cameraDetailSize ?? 1));
     gl.activeTexture(gl.TEXTURE0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 

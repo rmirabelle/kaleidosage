@@ -16,7 +16,7 @@ export const PARAM_KEYS = [
   "contourHue", "contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady",
   "reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine",
   "driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast",
-  "cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth", "cameraTerrainScale", "cameraRoughness", "cameraRidges", "cameraSeed", "cameraDetail",
+  "cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth", "cameraTerrainScale", "cameraRoughness", "cameraRidges", "cameraSeed", "cameraDetail", "cameraDetailSize",
   "sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness",
   "particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost", "particleRingRadius",
   "cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead",
@@ -670,8 +670,13 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   cameraRoughness: { label: "Roughness", min: 0.2, max: 0.8, step: 0.01, value: 0.5, drift: "wave", low: 0.4, high: 0.6, on: false },
   cameraRidges: { label: "Ridges", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.3, high: 0.9, on: false },
   cameraSeed: { label: "Seed", min: 0, max: 99, step: 1, value: 0, drift: "wave", low: 0, high: 99, on: false },
-  /** Real terrain: made-up fine ridges where the data (about 30 m) is coarser than the screen; steep slopes get the most. */
+  /**
+   * Real terrain: made-up fine ridges, as tall as Detail (steep slopes get
+   * the most), with their largest features Detail size large (1: about 24
+   * across the land's height, at any area).
+   */
   cameraDetail: { label: "Detail", min: 0, max: 2, step: 0.01, value: 0.6, drift: "wave", low: 0.3, high: 1, on: false },
+  cameraDetailSize: { label: "Detail size", min: 0.25, max: 4, step: 0.01, scale: "log", value: 1, drift: "wave", low: 0.7, high: 1.5, on: false },
   /**
    * Pixel sort (see SORT_STEP_SHADER): along lines at Angle, each run of
    * pixels whose brightness is between Low and High is sorted by
@@ -1408,7 +1413,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   contours: ["contourHue", "contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady"],
   relief: ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"],
   driver: ["driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast"],
-  camera: ["cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth", "cameraTerrainScale", "cameraRoughness", "cameraRidges", "cameraSeed", "cameraDetail"],
+  camera: ["cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth", "cameraTerrainScale", "cameraRoughness", "cameraRidges", "cameraSeed", "cameraDetail", "cameraDetailSize"],
   solid: ["solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY"],
   sort: ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"],
   particles: ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost", "particleRingRadius"],
