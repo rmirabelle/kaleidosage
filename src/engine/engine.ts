@@ -1,5 +1,6 @@
 import { GROUP_PARAMS, NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, defaultValue, hexToRgb, liveValue, rangeAt, rangeClock, startRangeAt, type GroupKey, type ParamKey } from "./params";
 import { KaleidoRenderer, type FrameValues, type ImageSource } from "./renderer";
+import type { TerrainData } from "./terrain";
 import { MANDEL_CENTERS } from "./submodes";
 import { audioLinkable, pushRange, pushedValue, type AudioSignal } from "./audio";
 import { copyVideo, cueVideo, releaseVideo, seekVideo, syncVideo, videoLoopPlan, videoLoopTime } from "./video";
@@ -342,6 +343,20 @@ export class Engine {
     const end = picture < 0 ? rest.length : picture;
     if (end === 0) return null;
     return { before: order.slice(0, at), object: rest.slice(0, end), after: rest.slice(end) };
+  }
+
+  /** The camera's real terrain (see docs/TERRAIN.md), or null. The scene owns it; the engine draws with it. */
+  terrain: TerrainData | null = null;
+
+  /** The drawn picture's shape (width over height): real terrain loads in this shape. */
+  aspect() {
+    return this.renderer.aspect();
+  }
+
+  setTerrain(terrain: TerrainData | null) {
+    this.wake();
+    this.terrain = terrain;
+    this.renderer.setTerrain(terrain);
   }
 
   /** Keeps the overlay's video at its place, and stops it while it is not used. */

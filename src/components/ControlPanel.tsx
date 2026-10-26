@@ -7,6 +7,9 @@ import { midi } from "../lib/midi";
 import { audioInput } from "../lib/audioInput";
 import { settingButtons } from "../lib/settingButtons";
 import { GradientEditor } from "./GradientEditor";
+import { TERRAIN_PLACES } from "../lib/images";
+import { loadTerrain } from "../lib/terrain";
+import type { TerrainData } from "../engine/terrain";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
 import { BLUR_KEYS, BLUR_MASKS, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
@@ -1175,9 +1178,62 @@ function DriverSection({ engine, row, videoName, onPickVideo }: { engine: Engine
 
 /** How the camera's land goes on past the picture's edge. */
 /** Where the camera's land heights come from (see docs/TERRAIN.md). */
-const CAMERA_HEIGHT_SOURCES = [[0, "Picture"], [1, "Generated"]] as const;
+const CAMERA_HEIGHT_SOURCES = [[0, "Picture"], [1, "Generated"], [2, "Real terrain"]] as const;
 /** The land's colors: the picture, or a gradient by height. */
-const CAMERA_COLORS = [[0, "Picture"], [1, "Height colors"]] as const;
+const CAMERA_COLORS = [[0, "Picture"], [1, "Height colors"], [2, "Terrain picture"]] as const;
+/** How wide the real terrain's area is. */
+const TERRAIN_AREAS = [[5, "5 km"], [10, "10 km"], [20, "20 km"], [40, "40 km"], [80, "80 km"], [160, "160 km"]] as const;
+/** The places to load: Random first, then each striking place (see TERRAIN_PLACES). */
+const TERRAIN_PLACE_OPTIONS: readonly (readonly [number, string])[] = [[-1, "Random"], ...TERRAIN_PLACES.map(([name], index) => [index, name.charAt(0).toUpperCase() + name.slice(1)] as const)];
+
+/** What the loaded real terrain is, for the panel. */
+const terrainNote = (terrain: TerrainData | null) => terrain
+  ? `${terrain.place.charAt(0).toUpperCase() + terrain.place.slice(1)}, ${terrain.areaKm} km: ${Math.round(terrain.lowest)} to ${Math.round(terrain.highest)} m${terrain.picture ? "" : " (no picture)"}`
+  : "No land loaded yet";
+
+/**
+ * Real terrain's place: the place (or Random), how wide the area is, and
+ * Load, which loads the heights and the picture (see src/lib/terrain.ts)
+ * and gives them to the engine. The line under it names what is loaded.
+ */
+function TerrainRows({ engine }: { engine: Engine }) {
+  const [place, setPlace] = useState(-1);
+  const [area, setArea] = useState<number>(engine.terrain?.areaKm ?? 40);
+  const [note, setNote] = useState(() => terrainNote(engine.terrain));
+  const [busy, setBusy] = useState(false);
+  const load = async () => {
+    const choices = TERRAIN_PLACES.map((_, index) => index).filter((index) => Math.abs(TERRAIN_PLACES[index][2]) < 84);
+    const index = place >= 0 ? place : choices[Math.floor(Math.random() * choices.length)];
+    const [name, longitude, latitude] = TERRAIN_PLACES[index];
+    setBusy(true);
+    setNote(`Loading ${name}…`);
+    try {
+      const terrain = await loadTerrain({ place: name, longitude, latitude, areaKm: area, aspect: engine.aspect() });
+      engine.setTerrain(terrain);
+      setNote(terrainNote(terrain));
+    } catch (error) {
+      setNote(`Could not load the land. ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <div className="panel-select-row panel-select-named">
+        <span className="panel-row-name">Place</span>
+        <Dropdown value={place} options={TERRAIN_PLACE_OPTIONS} label="The place whose land to load" onChange={setPlace} />
+      </div>
+      <div className="panel-select-row panel-select-named driver-video-row">
+        <span className="panel-row-name">Area</span>
+        <Dropdown value={area} options={TERRAIN_AREAS} label="How wide the land is" onChange={setArea} />
+        <button className="button secondary small" disabled={busy} onClick={() => void load()} data-tip="Load the land's heights and its picture from the internet (AWS Terrain Tiles and NASA)">{busy ? "Loading…" : "Load"}</button>
+      </div>
+      <div className="panel-select-row panel-select-named driver-video-row">
+        <span className="driver-video-name" data-tip={note}>{note}</span>
+      </div>
+    </>
+  );
+}
 /** Generated's own settings, after Height. */
 const CAMERA_TERRAIN_KEYS: ParamKey[] = ["cameraTerrainScale", "cameraRoughness", "cameraRidges", "cameraSeed"];
 
@@ -1194,6 +1250,7 @@ function CameraSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =
     <>
       <ModeSelect engine={engine} stateKey="cameraHeightSource" options={CAMERA_HEIGHT_SOURCES} name="Heights" onChange={setSource} />
       <ModeSelect engine={engine} stateKey="cameraColors" options={CAMERA_COLORS} name="Colors" onChange={setColors} />
+      {source === 2 && <TerrainRows engine={engine} />}
       {colors === 1 && <GradientEditor engine={engine} stateKey="cameraStops" />}
       <SplitRows keys={keys} row={row} />
     </>

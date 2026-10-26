@@ -26,6 +26,7 @@ import { MenuBar, type Menu } from "./components/MenuBar";
 import { OpenDialog, type OpenKind } from "./components/OpenDialog";
 import { StatsOverlay } from "./components/StatsOverlay";
 import { TitleBar } from "./components/TitleBar";
+import type { TerrainData } from "./engine/terrain";
 import { DocumentTabs, type DocumentTabInfo } from "./components/DocumentTabs";
 import { StageControls } from "./components/StageControls";
 import { Engine } from "./engine/engine";
@@ -133,6 +134,8 @@ interface StoredScene {
   driver: DriverVideo | null;
   /** The Image or Video effect's image or video (its label is the file name), or null. */
   picture: SlotImage | null;
+  /** The camera's real terrain (see docs/TERRAIN.md), or null. */
+  terrain?: TerrainData | null;
   savedFingerprint: string;
   history: SettingsHistory;
   openGroup: string | null;
@@ -924,6 +927,7 @@ export default function App() {
       images: imagesRef.current,
       driver: driverRef.current,
       picture: pictureRef.current,
+      terrain: engine.terrain,
       savedFingerprint: savedFingerprintRef.current,
       history,
       openGroup: openGroupRef.current
@@ -953,6 +957,7 @@ export default function App() {
     else engine.clearSecondImage();
     setDriver(stored.driver);
     setPicture(stored.picture);
+    engine?.setTerrain(stored.terrain ?? null);
     engine.settle();
     engine.resetTrails();
     setSlotImage(0, first);
@@ -1167,6 +1172,7 @@ export default function App() {
       else removeSecondImage();
       setDriver(driverMedia?.source instanceof HTMLVideoElement && driverMedia.videoFile && images.driverVideo
         ? { video: driverMedia.source, videoFile: driverMedia.videoFile, name: images.driverVideo.name, id: nextImageId++ } : null);
+      engine?.setTerrain(null);
       setPicture(pictureMedia && images.picture ? { ...pictureMedia, label: images.picture.name, thumbnail: makeThumbnail(pictureMedia.source), id: nextImageId++ } : null);
       setRevision((value) => value + 1);
       setActivePath(path);
@@ -1564,6 +1570,7 @@ export default function App() {
     engine.clearSecondImage();
     setDriver(null);
     setPicture(null);
+    engine?.setTerrain(null);
     engine.settle();
     engine.resetTrails();
     setSlotImage(0, { source, label: pattern.label, thumbnail: makeThumbnail(source), patternId: pattern.id, id: nextImageId++ });

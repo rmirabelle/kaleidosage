@@ -2,6 +2,7 @@ import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
 import { BLUR_SHADER, CAMERA_FIELD_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, OUTLINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { halveGrid, type TerrainData } from "./terrain";
 
 /** The blur mask: circle with a sharp or a blurred center, gradient, bright areas, dark areas, noise. */
 export type BlurMask = 0 | 1 | 2 | 3 | 4 | 5;
@@ -77,10 +78,10 @@ const mandelLimit = (depth: number) => {
 export type LayerBlend = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 /** How the camera's land goes on past the picture: 0 mirrored, 1 repeated as it is, 2 not at all (sky around the picture). */
 export type CameraRepeat = 0 | 1 | 2;
-/** Where the camera's land heights come from (see docs/TERRAIN.md): 0 the picture's brightness, 1 generated mountains. */
-export type CameraHeightSource = 0 | 1;
-/** The camera's land colors: 0 the picture, 1 a gradient by height (see docs/TERRAIN.md). */
-export type CameraColors = 0 | 1;
+/** Where the camera's land heights come from (see docs/TERRAIN.md): 0 the picture's brightness, 1 generated mountains, 2 real terrain. */
+export type CameraHeightSource = 0 | 1 | 2;
+/** The camera's land colors: 0 the picture, 1 a gradient by height, 2 the real terrain's picture (see docs/TERRAIN.md). */
+export type CameraColors = 0 | 1 | 2;
 /** The Driver effect's driver: 0 caustics, 1 smoke, 2 ink, 3 fire, 4 rain ripples, 5 the user's video (see DRIVER_SHADER). */
 export type DriverSource = 0 | 1 | 2 | 3 | 4 | 5;
 /** What the driver does to the picture: 0 bends it, 1 reveals it through the driver, 2 lights it. */
@@ -1582,6 +1583,13 @@ export class KaleidoRenderer {
     gl.uniform1f(f.uniforms.u_roughness, Math.min(0.9, Math.max(0.1, v.cameraRoughness ?? 0.5)));
     gl.uniform1f(f.uniforms.u_ridges, Math.min(1, Math.max(0, v.cameraRidges ?? 0.6)));
     gl.uniform1f(f.uniforms.u_seed, Math.round(v.cameraSeed ?? 0));
+    /* Real terrain: Height 0.25 shows the land at twice its true height. With no land loaded, it is flat; the picture stands in for the texture (never the field itself, which this pass draws). */
+    const terrain = v.cameraHeightSource === 2 && this.terrainHeights !== null;
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.terrainHeights ?? source);
+    gl.uniform1i(f.uniforms.u_terrain, 1);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.uniform1f(f.uniforms.u_relief, terrain ? this.terrainRelief * 8 : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     const m = this.maxPass;
@@ -1638,7 +1646,15 @@ export class KaleidoRenderer {
     gl.uniform3f(c.uniforms.u_skyColor, ...v.skyColor);
     gl.uniform1f(c.uniforms.u_shine, Math.max(0, v.cameraShine));
     gl.uniform1f(c.uniforms.u_smooth, Math.max(0, v.cameraSmooth));
-    gl.uniform1i(c.uniforms.u_colors, v.cameraColors ?? 0);
+    /* With no terrain picture, Terrain picture colors are Height colors. */
+    const colors = v.cameraColors === 2 && this.terrainPicture === null ? 1 : v.cameraColors ?? 0;
+    gl.uniform1i(c.uniforms.u_colors, colors);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, this.terrainPicture ?? source);
+    gl.uniform1i(c.uniforms.u_terrainPicture, 3);
+    gl.activeTexture(gl.TEXTURE0);
+    /* Height colors run from the lowest land to the highest: real terrain's heights go up to its relief, the others to 1. */
+    gl.uniform1f(c.uniforms.u_relief, v.cameraHeightSource === 2 && this.terrainHeights !== null ? Math.max(1e-4, this.terrainRelief * 8) : 1);
     if (v.cameraStopAt) {
       gl.uniform1i(c.uniforms.u_stopCount, v.cameraStopAt.length);
       gl.uniform1fv(c.uniforms["u_stopAt[0]"], v.cameraStopAt);
@@ -2166,6 +2182,69 @@ export class KaleidoRenderer {
     gl.activeTexture(gl.TEXTURE0);
     this.mandel = { texture, key, length };
     return this.mandel;
+  }
+
+  /** The drawn picture's shape: its width over its height. */
+  aspect() {
+    const [width, height] = this.frameSize;
+    return width > 0 && height > 0 ? width / height : 16 / 9;
+  }
+
+  /** The camera's real terrain (see setTerrain): its heights (one channel, with smaller copies), its picture, and its true-scale relief. */
+  private terrainHeights: WebGLTexture | null = null;
+  private terrainPicture: WebGLTexture | null = null;
+  private terrainRelief = 0;
+
+  /**
+   * The camera's real terrain, or none (see docs/TERRAIN.md). The heights
+   * go into a half-float texture with its smaller copies made here (a
+   * half-float texture cannot make its own), the rows turned so north is
+   * up. The picture goes into a texture of its own.
+   */
+  setTerrain(terrain: TerrainData | null) {
+    const gl = this.gl;
+    if (this.terrainHeights) gl.deleteTexture(this.terrainHeights);
+    if (this.terrainPicture) gl.deleteTexture(this.terrainPicture);
+    this.terrainHeights = null;
+    this.terrainPicture = null;
+    this.terrainRelief = 0;
+    if (!terrain) return;
+    const bound = gl.getParameter(gl.TEXTURE_BINDING_2D) as WebGLTexture | null;
+    gl.activeTexture(gl.TEXTURE0);
+    let width = terrain.width;
+    let height = terrain.height;
+    let grid = new Float32Array(width * height);
+    for (let y = 0; y < height; y++) grid.set(terrain.heights.subarray((height - 1 - y) * width, (height - y) * width), y * width);
+    const heights = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_2D, heights);
+    let level = 0;
+    for (;;) {
+      gl.texImage2D(gl.TEXTURE_2D, level, gl.R16F, width, height, 0, gl.RED, gl.FLOAT, grid);
+      if (width === 1 && height === 1) break;
+      [grid, width, height] = halveGrid(grid, width, height);
+      level++;
+    }
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, level);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    this.terrainHeights = heights;
+    this.terrainRelief = terrain.relief;
+    if (terrain.picture) {
+      const picture = gl.createTexture()!;
+      gl.bindTexture(gl.TEXTURE_2D, picture);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, terrain.picture);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      this.terrainPicture = picture;
+    }
+    gl.bindTexture(gl.TEXTURE_2D, bound);
   }
 
   /** A picture of Freeze background's by name ("image", "solid paint", "stack"), the size of the screen (see render). */

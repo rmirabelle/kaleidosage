@@ -164,7 +164,7 @@ const TERRAIN_LAYERS: readonly { layer: string; name: string; span: [number, num
   { layer: "BlueMarble_NextGeneration", name: "Blue Marble", span: [2, 9], maxLatitude: 85 }
 ];
 /** Places with striking land (mountains, canyons, dunes, deltas, ice): their names, longitudes and latitudes. */
-const TERRAIN_PLACES: readonly [string, number, number][] = [
+export const TERRAIN_PLACES: readonly [string, number, number][] = [
   ["the Himalayas", 86.9, 28.0], ["the Karakoram", 76.5, 35.8], ["Tibet", 88.0, 31.5], ["the Tian Shan", 80.0, 42.0],
   ["the Atacama", -68.2, -23.5], ["the Salar de Uyuni", -67.5, -20.2], ["Patagonia", -73.4, -49.5], ["the Alps", 8.5, 46.5],
   ["the Grand Canyon", -112.1, 36.2], ["Canyonlands", -110.0, 38.3], ["Death Valley", -117.0, 36.4], ["the Appalachians", -77.5, 40.5],

@@ -87,13 +87,24 @@ new parts looks as before.
 1. **Height source menu and Generated.** Built 2026-10-26. No network. It shows at once
    whether the camera's land looks good with real mountain shapes.
 2. **Height colors.** Built 2026-10-26. The gradient by height, as a color choice.
-3. **Real terrain.** The place picker, the tile loader, the height
+3. **Real terrain.** Built 2026-10-26. The place picker, the tile loader, the height
    texture, and the terrain picture as a color choice.
 4. **Save and open** the heights in the scene file; Undo; RULES.md and
    the help topics.
 
 Each step is a commit, checked off screen (pictures of the land) before
 the user tries it.
+
+## Built notes (step 3)
+
+- The tile zoom is the one at which the area is at most 1024 tile pixels
+  wide, so the heights are about 500 to 1024 samples across.
+- Height 0.25 shows real terrain at twice its true height (the land's
+  relief over the area's north-south size, times 8 in the field shader).
+- The picture is Landsat WELD (30 m), with Blue Marble (500 m) as the
+  backup. With no picture, Terrain picture colors are Height colors.
+- A load is not saved yet (step 4): a scene keeps its terrain while its tab
+  is open, and a scene opened from a file has none.
 
 ## Open points
 

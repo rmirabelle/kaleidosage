@@ -223,6 +223,9 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Adding Lasers starts Sweep looping, so the fan tilts up and down and looks flat as it passes level.
 - Camera Heights: Picture (the picture's brightness, as before) or Generated (noise mountains with Scale, Roughness, Ridges and Seed). A scene saved before Heights opens with Picture.
 - Generated mountains repeat a whole number of times across the land, so Tile repeat shows no seam.
+- Camera Heights Real terrain: pick a place (or Random) and an Area (5 to 160 km), then Load. The heights come from the AWS Terrain Tiles; the picture from NASA (Landsat, or Blue Marble).
+- Real terrain at Height 0.25 shows the land at twice its true height. Land below the sea is the sea's flat top.
+- Camera Colors Terrain picture paints the land with the loaded picture; with none, it uses Height colors.
 - Camera Colors: Picture (as before) or Height colors, a gradient from the lowest land (left) to the highest (right): valley green, grass, rock, stone, snow by default.
 - Light shapes draws glowing outlines: a ring, a square, a triangle or a star (Points sets its points).
 - Light shapes Draw: Draw and erase draws the outline from the top, then erases it from the top; Chase sends a part of Length around it, brightest at its head; Whole shows it all.

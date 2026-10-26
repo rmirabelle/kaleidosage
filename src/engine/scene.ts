@@ -267,8 +267,8 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   state.contourBlend = mode(saved.contourBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? state.contourBlend;
   state.cameraBlend = mode(saved.cameraBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? state.cameraBlend;
   state.cameraRepeat = mode(saved.cameraRepeat, [0, 1, 2] as const) ?? state.cameraRepeat;
-  state.cameraHeightSource = mode(saved.cameraHeightSource, [0, 1] as const) ?? state.cameraHeightSource;
-  state.cameraColors = mode(saved.cameraColors, [0, 1] as const) ?? state.cameraColors;
+  state.cameraHeightSource = mode(saved.cameraHeightSource, [0, 1, 2] as const) ?? state.cameraHeightSource;
+  state.cameraColors = mode(saved.cameraColors, [0, 1, 2] as const) ?? state.cameraColors;
   state.cameraStops = readGradientStops(saved.cameraStops) ?? defaultTerrainStops();
   state.sortOrder = mode(saved.sortOrder, [0, 1] as const) ?? state.sortOrder;
   state.particleBlend = mode(saved.particleBlend, [0, 1] as const) ?? state.particleBlend;
