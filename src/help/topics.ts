@@ -47,7 +47,7 @@ export const HELP_TOPICS = {
       "Double-click a tab, or right-click it and pick Rename, to rename a saved scene.",
       "With Files as the input, the scenes are a list at the left, not tabs."
     ],
-    keywords: ["scene", "tab", "crossfade", "switch", "document", "new scene", "open scene"]
+    keywords: ["scene", "tab", "rename", "crossfade", "switch", "document", "new scene", "open scene"]
   },
   source: {
     title: "Source",
