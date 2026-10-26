@@ -322,6 +322,8 @@ button { border: 0; }
 .panel-header-bar .side-panel-title.source-title { font-size: 18px; }
 /* Room on the right, so the last italic letter is not cut. */
 .side-panel-title.source-title span { min-width: 0; padding-right: 3px; overflow: hidden; text-overflow: ellipsis; }
+/* The subtle "Scene:" before the scene's name: small, gray and upright; it is never cut. */
+.side-panel-title.source-title .source-title-prefix { flex: none; align-self: center; padding-right: 6px; color: #7d8494; font-size: 13px; font-style: normal; font-weight: 400; letter-spacing: .02em; }
 /* The Length row inside the scene's card, above the sources, with a line under it. */
 .panel-root-row.source-length { border-bottom: 1px solid #2b2f3a; }
 .panel-root-row.source-length > .panel-row { padding: 8px 10px; }

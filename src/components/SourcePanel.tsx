@@ -56,7 +56,7 @@ export function SourcePanel({ engine, sceneName, dirty, ...sources }: Omit<Sourc
   return (
     <section className="panel-card source-section" {...help("source")}>
       <div className="panel-header-bar">
-        <h2 className="side-panel-title source-title" data-tip={dirty ? `${sceneName}: this scene has changes that are not saved` : sceneName}><span>{sceneName}</span>{dirty && <span className="titlebar-dirty">*</span>}</h2>
+        <h2 className="side-panel-title source-title" data-tip={dirty ? `${sceneName}: this scene has changes that are not saved` : sceneName}><span className="source-title-prefix">Scene:</span><span>{sceneName}</span>{dirty && <span className="titlebar-dirty">*</span>}</h2>
       </div>
       <div className="panel-root-row source-length">
         {row("cycle")}
