@@ -17,6 +17,7 @@ import { BottomPanelTabs, type BottomTab } from "./components/BottomPanelTabs";
 import { SongMapPanel, type SongTip } from "./components/SongMapPanel";
 import { PointerTip } from "./components/PointerTip";
 import { SceneTransport, SourcePanel } from "./components/SourcePanel";
+import { LayersCard } from "./components/LayersCard";
 import { StartScreen } from "./components/StartScreen";
 import { LoadingOverlay, type Loading } from "./components/LoadingOverlay";
 import { SceneList } from "./components/SceneList";
@@ -2496,10 +2497,10 @@ export default function App() {
                   nextTip={nextTip}
                   onNextTipDone={endNextTip}
                   transport={<SceneTransport engine={engine} paused={paused} onTogglePause={togglePause} onStop={stop} show={holdUseful} autoNext={tracksActive && docs.length > 1} held={holdUseful && sceneHeld} onToggleHold={() => holdScene(!sceneHeldRef.current)} input={inputInPlaylist ? null : inputMenu} />}
+                  layers={<LayersCard engine={engine} sceneName={sceneFileName.replace(/\.ksage$/i, "")} thumbnails={{ image: images[0]?.thumbnail }} />}
                   source={(
                     <SourcePanel
                       engine={engine}
-                      sceneName={sceneFileName.replace(/\.ksage$/i, "")}
                       images={images}
                       randomLoading={randomLoading}
                       onOpenImage={(slot) => void openImage(slot)}
@@ -2593,7 +2594,7 @@ export default function App() {
           anchor={sceneCard}
           wide
           outline={sceneOutline}
-          text="This is the scene SOURCE panel. It shows the scene name and controls the scene loop LENGTH. SLOT A holds a checkerboard pattern - good for testing FX. Hover over a slot to load a random image, search for a specific image, choose a pattern, or load your own image or video."
+          text="This is the scene's LAYERS panel and, under it, the SOURCE panel of the selected layer. The top shows the scene name and its loop LENGTH. SLOT A holds a checkerboard pattern - good for testing FX. Hover over a slot to load a random image, search for a specific image, choose a pattern, or load your own image or video."
           onClose={() => setPanelTips((tips) => ({ ...tips, scene: false }))}
         />
       )}

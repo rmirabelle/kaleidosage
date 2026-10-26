@@ -508,6 +508,23 @@ button { border: 0; }
 .panel-card { overflow: hidden; border: 1px solid var(--border); border-radius: 6px; background: #1b1e25; }
 .panel-card > .panel-header-bar { margin: 0; }
 .source-section { flex: 0 0 auto; margin: 8px 0; }
+/* The Layers card (see LayersCard) above the Source card: the scene's name and Length, the selected layer's blend and opacity, then one row per layer. */
+.layers-card { flex: 0 0 auto; margin: 8px 0 0; }
+.layers-header { gap: 8px; }
+.layers-add { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; font-size: 12px; }
+.layers-strip { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #2b2f3a; }
+.layers-opacity { flex: 1; min-width: 0; }
+.layers-opacity-value { width: 34px; color: #c3c7d0; font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+.layers-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 6px; list-style: none; }
+.layers-row { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 3px 6px; border: 1px solid transparent; border-radius: 4px; color: #d9dce3; font-size: 12px; cursor: default; }
+.layers-row:hover { background: rgba(255,255,255,.04); }
+.layers-row.active { border-color: rgba(75,118,247,.55); background: rgba(75,118,247,.16); }
+.layers-row.hidden .layers-name, .layers-row.hidden .layers-thumb { opacity: .45; }
+.layers-eye { display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border-radius: 4px; color: #c3c7d0; background: transparent; cursor: pointer; }
+.layers-eye:hover { color: #fff; background: rgba(255,255,255,.08); }
+.layers-thumb { flex: none; width: 36px; height: 20px; border: 1px solid #3a3f4d; border-radius: 3px; background: #11131a center / cover no-repeat; }
+.layers-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.layers-mode { color: #8a8fa0; font-size: 11px; white-space: nowrap; }
 .fx-card { display: flex; flex: 1; flex-direction: column; min-height: 0; margin-bottom: 8px; }
 /* 10px around the groups: each group already has 6px above it, so the list adds 4px at the top. */
 .fx-card > .panel-scroll { margin: 0; padding: 4px 6px 10px 10px; }

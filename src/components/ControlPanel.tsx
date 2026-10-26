@@ -38,6 +38,8 @@ interface Props {
   source: ReactNode;
   /** The scene's play toolbar (see SceneTransport), at the bottom of the panel, under the FX card. */
   transport: ReactNode;
+  /** The Layers card (see LayersCard), above the Source card. */
+  layers?: ReactNode;
   /** A press anywhere in the panel but the scene's play toolbar: the user works on the scene (it turns Hold on, see App). */
   onWork: () => void;
   /** The file name of the Driver effect's own video, or null, and the button that picks one. */
@@ -95,7 +97,7 @@ const CAMERA_REPEATS = [[0, "Mirror"], [1, "Tile"], [2, "None"]] as const;
 /** The controls of the left panel whose press is work on the scene (see onWork): buttons, fields, the sliders' parts, the gradient and the effect grips. */
 const WORK_CONTROLS = "button, input, select, textarea, a, label, [role=slider], [role=button], [role=option], [role=menuitem], [contenteditable=true], .range-grab, .range-low, .range-high, .gradient-bar, .gradient-stop, .panel-group-grip";
 
-export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, transport, onWork, driverVideoName, onPickDriverVideo, pictureName, onPickPicture, onRemovePicture, onNeedAudioInput, linksTip, onLinksTipDone, nextTip, onNextTipDone, onFirstEffect }: Props) {
+export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, layers, transport, onWork, driverVideoName, onPickDriverVideo, pictureName, onPickPicture, onRemovePicture, onNeedAudioInput, linksTip, onLinksTipDone, nextTip, onNextTipDone, onFirstEffect }: Props) {
   const holdOnly = useSceneHoldOnly();
   const row = useParamRows(engine);
   /** True while MIDI holds any range: the Effects header then shows a play button that plays them all again. */
@@ -450,7 +452,9 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
         if (target.closest(WORK_CONTROLS) && !target.closest(".scene-transport, .panel-group-header")) onWork();
       }}
     >
-      {/* The scene's card (see SourcePanel): its name, its sources, its Length and its play controls. */}
+      {/* The Layers card (see LayersCard): the scene's name, its Length and its layers. */}
+      {layers}
+      {/* The selected layer's source (see SourcePanel). */}
       {source}
       {/* The FX card: its title bar (Random all, Nudge, Clear all, then New), then the effect groups, which scroll. */}
       <section

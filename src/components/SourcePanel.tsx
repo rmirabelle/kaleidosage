@@ -40,10 +40,8 @@ const TILINGS: readonly (readonly [Tiling, string, ReactNode])[] = [
  * how the images go on past their edges. It is always open. The scene's play toolbar is at the
  * bottom of the column, under the FX card (see SceneTransport).
  */
-export function SourcePanel({ engine, sceneName, ...sources }: Omit<SourceImagesProps, "videoLoop" | "onVideoLoop"> & {
+export function SourcePanel({ engine, ...sources }: Omit<SourceImagesProps, "videoLoop" | "onVideoLoop"> & {
   engine: Engine;
-  /** The scene's file name (without .ksage), or "Untitled Scene": the card's title. */
-  sceneName: string;
 }) {
   const row = useParamRows(engine);
   const [blendMode, setBlendMode] = useState<BlendMode>(engine.state.blendMode);
@@ -53,11 +51,9 @@ export function SourcePanel({ engine, sceneName, ...sources }: Omit<SourceImages
   const tilingName = TILINGS.find(([mode]) => mode === tiling)?.[1] ?? "Auto";
   return (
     <section className="panel-card source-section" {...help("source")}>
+      {/* The scene's name and Length are in the Layers card above (see LayersCard). */}
       <div className="panel-header-bar">
-        <h2 className="side-panel-title source-title" data-tip={sceneName}><span>{sceneName}</span></h2>
-      </div>
-      <div className="panel-root-row source-length">
-        {row("cycle")}
+        <h2 className="side-panel-title">Source</h2>
       </div>
       <div className="source-well">
         <SourceImages

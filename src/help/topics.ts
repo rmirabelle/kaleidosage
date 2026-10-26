@@ -48,6 +48,18 @@ export const HELP_TOPICS = {
     ],
     keywords: ["scene", "tab", "crossfade", "switch", "document", "new scene", "open scene"]
   },
+  layers: {
+    title: "Layers",
+    text: "A scene is a stack of layers, as in Photoshop. Each layer has its own source and its own effects, and the layers go together from the bottom up.",
+    tips: [
+      "The header has the scene's name and its Length.",
+      "Click a layer to select it; the strip above the list sets its blend and opacity.",
+      "The eye hides or shows a layer.",
+      "Double-click a layer to rename it.",
+      "Screen and Add make a layer's black disappear."
+    ],
+    keywords: ["layer", "layers", "stack", "blend", "opacity", "screen", "add", "multiply", "hide", "photoshop"]
+  },
   source: {
     title: "Source",
     text: "Load an image or video into a slot by hovering over it and choosing an option:",
