@@ -1938,6 +1938,25 @@ float heightAt(vec2 p) {
   return textureLod(u_fine, q / u_res, 0.0).r * abs(u_height);
 }
 
+/**
+ * The lowest the camera may go at a place: a little above the highest land
+ * in a circle 0.15 screen heights around it (17 points). The highest of
+ * many points moves smoothly as the camera moves, so small bumps under it
+ * hardly move it, and it rises early before a peak. A peak between the
+ * points is caught by the camera's own height check (see main).
+ */
+float cameraFloor(vec2 at) {
+  float highest = heightAt(at);
+  for (int ring = 1; ring <= 2; ring++) {
+    float radius = 0.075 * float(ring);
+    for (int k = 0; k < 8; k++) {
+      float a = 6.2831853 * (float(k) + 0.5 * float(ring)) / 8.0;
+      highest = max(highest, heightAt(at + radius * vec2(cos(a), sin(a))));
+    }
+  }
+  return highest + 0.03;
+}
+
 /* The height gradient at h (0 to 1), as gradientColorAt in params.ts. */
 vec3 heightColor(float h) {
   if (h <= u_stopAt[0]) return u_stopColor[0];
@@ -2078,9 +2097,13 @@ bool march(vec3 eye, vec3 dir, float t, int visits, bool giveUp, out float tHit)
 void main() {
   aspect = u_res.x / u_res.y;
   float top = abs(u_height);
-  /* The camera: at its place and height (never inside the land), looking by Pan and Tilt. Right stays level, so there is no roll, even looking straight down. */
+  /* The camera: at its place and height (never inside the land, see cameraFloor), looking by Pan and Tilt. Right stays level, so there is no roll, even looking straight down. */
   vec3 eye = vec3(u_offset, u_pedestal);
-  eye.z = max(eye.z, heightAt(eye.xy) + 0.02);
+  float floorHeight = cameraFloor(eye.xy);
+  /* A smooth blend of the Pedestal and the floor, so the camera eases up as the land rises under it. */
+  float gap = u_pedestal - floorHeight;
+  eye.z = 0.5 * (u_pedestal + floorHeight + sqrt(gap * gap + 0.05 * 0.05));
+  eye.z = max(eye.z, heightAt(eye.xy) + 0.01);
   vec3 forward = vec3(cos(u_tilt) * cos(u_pan), cos(u_tilt) * sin(u_pan), sin(u_tilt));
   vec3 right = vec3(sin(u_pan), -cos(u_pan), 0.0);
   vec3 up = cross(right, forward);
