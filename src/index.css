@@ -420,6 +420,8 @@ button { border: 0; }
 .document-tab:hover { color: #fff; background: #343947; }
 .document-tab.active { color: #fff; background: #3b63dc; cursor: default; }
 .document-tab-name { overflow: hidden; text-overflow: ellipsis; }
+/* The tab's name field while it is renamed (see DocumentTabs), in the tab's height. */
+.document-tab-rename { flex: 1; width: 160px; height: 21px; }
 /* The tab or track that is being dragged (see useDragReorder). */
 .document-tab.dragging { opacity: .55; }
 /* On the blue of the selected tab, a lighter red shows better. */

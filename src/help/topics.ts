@@ -44,6 +44,7 @@ export const HELP_TOPICS = {
       "The {x} on a tab takes the scene out of the project.",
       "A middle click on a tab takes the scene out of the project.",
       "Drag a tab to move it; the scenes play in tab order.",
+      "Double-click a tab, or right-click it and pick Rename, to rename a saved scene.",
       "With Files as the input, the scenes are a list at the left, not tabs."
     ],
     keywords: ["scene", "tab", "crossfade", "switch", "document", "new scene", "open scene"]

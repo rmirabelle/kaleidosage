@@ -2524,7 +2524,7 @@ export default function App() {
         </div>
         {/* The picture under its document tab; full screen hides the tab. */}
         <div className="document">
-          {!fullscreen && !startScreen && !sceneListMode && <DocumentTabs tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} />}
+          {!fullscreen && !startScreen && !sceneListMode && <DocumentTabs tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} />}
           <main className={`stage ${cursorIdle ? "cursor-idle" : ""}`}>
             <canvas ref={canvasRef} onDoubleClick={() => void toggleFullscreen()} />
             {engine && statsOpen && <StatsOverlay engine={engine} />}
