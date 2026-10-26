@@ -375,8 +375,6 @@ button { border: 0; }
 .files-splitter:hover { background-color: var(--accent); }
 .scene-card > .panel-header-bar { justify-content: flex-start; gap: 8px; }
 .scene-list-count { padding: 1px 7px; border-radius: 9px; color: #fff; background: var(--accent); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
-/* The Playlist and Scenes titles are the size of the scene's and the song's names (18px), not the Designer's. */
-.scene-card > .panel-header-bar .side-panel-title, .files-card > .panel-header-bar .side-panel-title { font-size: 18px; }
 .scene-list-items { flex: 1; min-height: 0; margin: 0; padding: 6px; overflow-y: auto; list-style: none; scrollbar-width: thin; scrollbar-color: #474c5e transparent; }
 .scene-list-item { display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 4px 0 8px; border-radius: 5px; color: #c3c7d4; font-size: 13px; cursor: pointer; }
 .scene-list-item + .scene-list-item { margin-top: 2px; }
