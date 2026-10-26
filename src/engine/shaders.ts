@@ -215,6 +215,8 @@ uniform int u_foldMode;
  */
 uniform int u_shapeOrder[3];
 uniform int u_shapeCount;
+/* 1 when Algorithm is one of this pass's steps: only then does a spiral map go last (see shapeColor). */
+uniform int u_spiralPass;
 /**
  * 1: the pass reads the picture made so far (u_img, the size of the screen)
  * instead of the source images, for shape steps that come after a picture
@@ -1150,8 +1152,10 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
    * The seamless spiral meets itself only if nothing moves the point after
    * it (a fold or warp after it would not repeat the way it does), so it is
    * always the last step to move the point, whatever the order in the list.
+   * That is so only in the pass that has Algorithm: a pass with only other
+   * steps (before a 3D Object or another picture step) has no spiral.
    */
-  bool spiralLast = (u_mapMode == 7 || u_mapMode == 8) && (skip & 2) == 0;
+  bool spiralLast = (u_mapMode == 7 || u_mapMode == 8) && (skip & 2) == 0 && u_spiralPass == 1;
   /* During the radial crossfade (see fold), a second point, with no fold, goes through the later steps too. */
   bool fading = false;
   vec2 p2 = p;

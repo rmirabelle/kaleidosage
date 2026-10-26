@@ -1337,6 +1337,7 @@ export class KaleidoRenderer {
     const codes = [...steps].reverse().map((step) => SHAPE_CODES[step]);
     gl.uniform1iv(k.uniforms["u_shapeOrder[0]"], new Int32Array([...codes, 0, 0, 0].slice(0, 3)));
     gl.uniform1i(k.uniforms.u_shapeCount, codes.length);
+    gl.uniform1i(k.uniforms.u_spiralPass, steps.includes("map") ? 1 : 0);
     const opacity = (step: ShapeStep) => Math.min(1, Math.max(0, v.shapeOpacity[step]));
     gl.uniform1fv(k.uniforms["u_shapeOpacity[0]"], new Float32Array([opacity("warp"), opacity("map"), opacity("kaleidoscope")]));
     gl.uniform1iv(k.uniforms["u_shapeBlend[0]"], new Int32Array([v.layerBlend.warp, v.layerBlend.map, v.layerBlend.kaleidoscope]));
