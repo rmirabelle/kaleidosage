@@ -2107,10 +2107,19 @@ void main() {
 }`;
 
 /**
- * The camera's height field: the picture's brightness from a smaller copy
- * (mip level u_smooth), read with smooth cubic curves, so the land is
- * smooth and not made of the small copy's square pixels. u_sign below 0
- * turns it over, so dark areas rise.
+ * The camera's height field (see docs/TERRAIN.md), by u_source:
+ * 0 Picture: the picture's brightness from a smaller copy (mip level
+ * u_smooth), read with smooth cubic curves, so the land is smooth and not
+ * made of the small copy's square pixels.
+ * 1 Generated: mountains made from layers of noise (fractal), each layer
+ * twice as fine and u_roughness as tall as the one before. u_ridges mixes
+ * in ridged noise, which has sharp crests, and puts the fine detail on the
+ * high parts, as erosion does. The noise repeats a whole number of times
+ * across the land (about u_scale across its height), so Tile repeat meets
+ * itself with no seam. u_seed picks another land. Smooth (u_smooth) takes
+ * away the finest layers: 9 layers at 0, one fewer for each step, with the
+ * last one faded in by the part after the whole number.
+ * u_sign below 0 turns the heights over, so dark areas (or valleys) rise.
  */
 export const CAMERA_FIELD_SHADER = `#version 300 es
 precision highp float;
@@ -2119,16 +2128,82 @@ out vec4 o;
 uniform sampler2D u_tex;
 uniform float u_smooth;
 uniform float u_sign;
+uniform int u_source;
+uniform vec2 u_res;
+uniform float u_scale;
+uniform float u_roughness;
+uniform float u_ridges;
+uniform float u_seed;
 
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 ${CUBIC_GLSL}
+
+/* A random direction for each lattice point (and the seed). */
+vec2 latticeDirection(vec2 cell) {
+  float a = 6.2831853 * fract(sin(dot(cell, vec2(127.1, 311.7)) + u_seed * 17.13) * 43758.5453);
+  return vec2(cos(a), sin(a));
+}
+
+/* Smooth gradient noise (about -0.7 to 0.7) that repeats every "period" lattice cells. */
+float periodicNoise(vec2 p, vec2 period) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+  float a = dot(latticeDirection(mod(i, period)), f);
+  float b = dot(latticeDirection(mod(i + vec2(1.0, 0.0), period)), f - vec2(1.0, 0.0));
+  float c = dot(latticeDirection(mod(i + vec2(0.0, 1.0), period)), f - vec2(0.0, 1.0));
+  float d = dot(latticeDirection(mod(i + vec2(1.0), period)), f - vec2(1.0));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+float mountains(vec2 uv) {
+  float aspect = u_res.x / u_res.y;
+  vec2 period = max(vec2(1.0), floor(vec2(u_scale * aspect, u_scale) + 0.5));
+  vec2 q = uv * period;
+  float height = 0.0;
+  float total = 0.0;
+  float size = 1.0;
+  /* How much detail the land has had so far: ridged detail grows on high crests and fades in the valleys. */
+  float weight = 1.0;
+  float layers = clamp(9.0 - u_smooth, 1.0, 9.0);
+  for (int octave = 0; octave < 9; octave++) {
+    float part = clamp(layers - float(octave), 0.0, 1.0);
+    if (part <= 0.0) break;
+    float n = periodicNoise(q, period);
+    float ridge = 1.0 - min(abs(n) * 1.2, 1.0);
+    ridge *= ridge;
+    float layer = mix(n * 0.7 + 0.5, ridge * weight, u_ridges);
+    weight = clamp(ridge * 1.6, 0.0, 1.0);
+    height += size * part * layer;
+    total += size * part;
+    size *= u_roughness;
+    q *= 2.0;
+    period *= 2.0;
+  }
+  /**
+   * The layers average out to about 0.25 to 0.75 (higher with ridges), so
+   * the heights stretch to the full range on a soft curve, which rounds
+   * the highest peaks instead of cutting them flat. Then the low parts
+   * flatten into valleys and plains and the high parts get steeper, as on
+   * real land.
+   */
+  float middle = mix(0.5, 0.6, u_ridges);
+  float h = 0.5 + 0.5 * tanh((height / total - middle) * 3.0);
+  return pow(h, 1.6);
+}
+
 void main() {
-  int level = int(floor(u_smooth));
-  float between = u_smooth - float(level);
-  vec3 color = cubicAt(v_uv, level);
-  if (between > 0.0) color = mix(color, cubicAt(v_uv, level + 1), between);
-  float bright = clamp(luma(color), 0.0, 1.0);
-  o = vec4(u_sign < 0.0 ? 1.0 - bright : bright, 0.0, 0.0, 1.0);
+  float h;
+  if (u_source == 1) {
+    h = mountains(v_uv);
+  } else {
+    int level = int(floor(u_smooth));
+    float between = u_smooth - float(level);
+    vec3 color = cubicAt(v_uv, level);
+    if (between > 0.0) color = mix(color, cubicAt(v_uv, level + 1), between);
+    h = clamp(luma(color), 0.0, 1.0);
+  }
+  o = vec4(u_sign < 0.0 ? 1.0 - h : h, 0.0, 0.0, 1.0);
 }`;
 
 /**

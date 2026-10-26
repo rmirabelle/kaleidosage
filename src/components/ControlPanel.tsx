@@ -10,7 +10,7 @@ import { GradientEditor } from "./GradientEditor";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
 import { BLUR_KEYS, BLUR_MASKS, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
-import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
+import type { BlurMask, CameraHeightSource, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ContextMenu } from "./ContextMenu";
@@ -369,7 +369,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       <Group engine={engine} group="camera" title="Camera" grip={grip} {...accordion("camera")}>
         <CameraBlend engine={engine} />
         <CameraRepeatRow engine={engine} />
-        <SplitRows keys={CAMERA_KEYS} row={row} />
+        <CameraSection engine={engine} row={row} />
       </Group>
     ),
     solid: (grip) => (
@@ -869,7 +869,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "outlineShape" | "outlineDraw" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "cameraHeightSource" | "sortOrder" | "particleBlend" | "particleShape" | "outlineShape" | "outlineDraw" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange }: {
@@ -1174,6 +1174,26 @@ function DriverSection({ engine, row, videoName, onPickVideo }: { engine: Engine
 }
 
 /** How the camera's land goes on past the picture's edge. */
+/** Where the camera's land heights come from (see docs/TERRAIN.md). */
+const CAMERA_HEIGHT_SOURCES = [[0, "Picture"], [1, "Generated"]] as const;
+/** Generated's own settings, after Height. */
+const CAMERA_TERRAIN_KEYS: ParamKey[] = ["cameraTerrainScale", "cameraRoughness", "cameraRidges", "cameraSeed"];
+
+/**
+ * The camera's settings: the Heights menu, then the sliders. Generated's
+ * own settings show after Height only for Generated heights.
+ */
+function CameraSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
+  const [source, setSource] = useState<CameraHeightSource>(engine.state.cameraHeightSource);
+  const keys = CAMERA_KEYS.flatMap((key): ParamKey[] => key === "cameraHeight" && source === 1 ? [key, ...CAMERA_TERRAIN_KEYS] : [key]);
+  return (
+    <>
+      <ModeSelect engine={engine} stateKey="cameraHeightSource" options={CAMERA_HEIGHT_SOURCES} name="Heights" onChange={setSource} />
+      <SplitRows keys={keys} row={row} />
+    </>
+  );
+}
+
 function CameraRepeatRow({ engine }: { engine: Engine }) {
   const [repeat, setRepeat] = useState(engine.state.cameraRepeat);
   return (

@@ -77,6 +77,8 @@ const mandelLimit = (depth: number) => {
 export type LayerBlend = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 /** How the camera's land goes on past the picture: 0 mirrored, 1 repeated as it is, 2 not at all (sky around the picture). */
 export type CameraRepeat = 0 | 1 | 2;
+/** Where the camera's land heights come from (see docs/TERRAIN.md): 0 the picture's brightness, 1 generated mountains. */
+export type CameraHeightSource = 0 | 1;
 /** The Driver effect's driver: 0 caustics, 1 smoke, 2 ink, 3 fire, 4 rain ripples, 5 the user's video (see DRIVER_SHADER). */
 export type DriverSource = 0 | 1 | 2 | 3 | 4 | 5;
 /** What the driver does to the picture: 0 bends it, 1 reveals it through the driver, 2 lights it. */
@@ -307,6 +309,12 @@ export interface FrameValues {
   /** How the raised land combines with the flat floor (see blendLayer), and how the land goes on past the picture. */
   cameraBlend: LayerBlend;
   cameraRepeat: CameraRepeat;
+  /** The land heights' source, and Generated's settings: the size of the land's features (about how many across its height), roughness, ridges and seed. */
+  cameraHeightSource: CameraHeightSource;
+  cameraTerrainScale: number;
+  cameraRoughness: number;
+  cameraRidges: number;
+  cameraSeed: number;
   camera: number;
   cameraHeight: number;
   cameraTilt: number;
@@ -1562,6 +1570,12 @@ export class KaleidoRenderer {
     gl.uniform1i(f.uniforms.u_tex, 0);
     gl.uniform1f(f.uniforms.u_smooth, Math.max(0, v.cameraSmooth));
     gl.uniform1f(f.uniforms.u_sign, v.cameraHeight < 0 ? -1 : 1);
+    gl.uniform1i(f.uniforms.u_source, v.cameraHeightSource ?? 0);
+    gl.uniform2f(f.uniforms.u_res, width, height);
+    gl.uniform1f(f.uniforms.u_scale, Math.max(0.5, v.cameraTerrainScale ?? 3));
+    gl.uniform1f(f.uniforms.u_roughness, Math.min(0.9, Math.max(0.1, v.cameraRoughness ?? 0.5)));
+    gl.uniform1f(f.uniforms.u_ridges, Math.min(1, Math.max(0, v.cameraRidges ?? 0.6)));
+    gl.uniform1f(f.uniforms.u_seed, Math.round(v.cameraSeed ?? 0));
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     const m = this.maxPass;

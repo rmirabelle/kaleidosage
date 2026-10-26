@@ -1,4 +1,4 @@
-import type { BlendMode, BlurMask, CameraRepeat, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidShape, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
+import type { BlendMode, BlurMask, CameraHeightSource, CameraRepeat, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidShape, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
 
 export const PARAM_KEYS = [
   "cycle",
@@ -16,7 +16,7 @@ export const PARAM_KEYS = [
   "contourHue", "contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady",
   "reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine",
   "driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast",
-  "cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth",
+  "cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth", "cameraTerrainScale", "cameraRoughness", "cameraRidges", "cameraSeed",
   "sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness",
   "particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost", "particleRingRadius",
   "cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead",
@@ -323,6 +323,8 @@ export interface PlayState {
   skyColor: string;
   /** How the camera's land goes on past the picture: mirrored, repeated as it is, or not at all. */
   cameraRepeat: CameraRepeat;
+  /** Where the camera's land heights come from: the picture's brightness, or generated mountains (see docs/TERRAIN.md). */
+  cameraHeightSource: CameraHeightSource;
   /** The pixel sort's order along each run: dark to bright, or bright to dark. */
   sortOrder: SortOrder;
   /** How the particles combine with the picture under them: they add light (glow), or cover it. */
@@ -655,6 +657,16 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   cameraSky: { label: "Sky", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.2, high: 0.8, on: false },
   cameraShine: { label: "Shine", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.1, high: 0.5, on: false },
   cameraSmooth: { label: "Smooth", min: 0, max: 6, step: 0.1, value: 2.5, drift: "wave", low: 1, high: 4, on: false },
+  /**
+   * Generated heights (see docs/TERRAIN.md): Scale is about how many
+   * mountains fit across the land's height; Roughness how tall each finer
+   * layer of detail is; Ridges how sharp the crests are; Seed picks
+   * another land.
+   */
+  cameraTerrainScale: { label: "Scale", min: 0.5, max: 16, step: 0.1, value: 1.5, drift: "wave", low: 1, high: 3, on: false },
+  cameraRoughness: { label: "Roughness", min: 0.2, max: 0.8, step: 0.01, value: 0.5, drift: "wave", low: 0.4, high: 0.6, on: false },
+  cameraRidges: { label: "Ridges", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.3, high: 0.9, on: false },
+  cameraSeed: { label: "Seed", min: 0, max: 99, step: 1, value: 0, drift: "wave", low: 0, high: 99, on: false },
   /**
    * Pixel sort (see SORT_STEP_SHADER): along lines at Angle, each run of
    * pixels whose brightness is between Low and High is sorted by
@@ -994,7 +1006,7 @@ export function createPlayState(): PlayState {
     /* No effect is in the list at start-up, so every effect group is off. */
     groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false },
     locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), outlineTime: 0, outlineFlowTime: 0, solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 0, sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), outlineTime: 0, outlineFlowTime: 0, solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1330,6 +1342,7 @@ export function resetEffects(params: Params, state: PlayState) {
     state.cameraBlend = fresh.cameraBlend;
     state.skyColor = fresh.skyColor;
     state.cameraRepeat = fresh.cameraRepeat;
+    state.cameraHeightSource = fresh.cameraHeightSource;
   }
   if (!state.locks.sort) state.sortOrder = fresh.sortOrder;
   if (!state.locks.picture) state.pictureBlend = fresh.pictureBlend;
@@ -1384,7 +1397,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   contours: ["contourHue", "contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady"],
   relief: ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"],
   driver: ["driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast"],
-  camera: ["cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth"],
+  camera: ["cameraAmount", "cameraHeight", "cameraTilt", "cameraTurn", "cameraSpeed", "cameraDistance", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth", "cameraTerrainScale", "cameraRoughness", "cameraRidges", "cameraSeed"],
   solid: ["solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY"],
   sort: ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"],
   particles: ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost", "particleRingRadius"],
@@ -1408,7 +1421,7 @@ const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   trails: ["trailColor"],
   smear: ["smearShape"],
   contours: ["contourTone", "contourBlend"],
-  camera: ["skyColor", "cameraBlend", "cameraRepeat"],
+  camera: ["skyColor", "cameraBlend", "cameraRepeat", "cameraHeightSource"],
   sort: ["sortOrder"],
   particles: ["particleBlend", "particleShape"],
   outlines: ["outlineShape", "outlineDraw"],

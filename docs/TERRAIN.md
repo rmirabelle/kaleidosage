@@ -84,7 +84,7 @@ new parts looks as before.
 
 ## Steps
 
-1. **Height source menu and Generated.** No network. It shows at once
+1. **Height source menu and Generated.** Built 2026-10-26. No network. It shows at once
    whether the camera's land looks good with real mountain shapes.
 2. **Height colors.** The gradient by height, as a color choice.
 3. **Real terrain.** The place picker, the tile loader, the height
