@@ -221,13 +221,14 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Adding Algorithm changes a Power map at power 1 to power 2.
 - Adding the Kaleidoscope starts Pan X and Pan Y looping.
 - Adding Lasers starts Sweep looping, so the fan tilts up and down and looks flat as it passes level.
-- Camera Heights: Picture (the picture's brightness, as before) or Generated (noise mountains with Scale, Roughness, Ridges and Seed). A scene saved before Heights opens with Picture.
+- Terrain makes land from the picture and lights it from straight above, like a shaded relief map. Camera only views: it flies over the picture made before it, which is the land of a Terrain before it, or flat.
+- Terrain Heights: Picture (the picture's brightness, as before) or Generated (noise mountains with Scale, Roughness, Ridges and Seed). A scene saved before Heights opens with Picture.
 - Generated mountains repeat a whole number of times across the land, so Tile repeat shows no seam.
-- Camera Heights Real terrain: pick a place (or Random) and an Area (5 to 160 km), then Load. The heights come from the AWS Terrain Tiles; the picture from NASA (Landsat, or Blue Marble).
+- Terrain Heights Real terrain: pick a place (or Random) and an Area (5 to 160 km), then Load. The heights come from the AWS Terrain Tiles; the picture from NASA (Landsat, or Blue Marble).
 - Real terrain's Detail adds made-up fine ridges, most on steep slopes. Detail size (0.05 to 4) sets how large they are on the land (1: about 24 across its height), the same at any area.
 - Real terrain at Height 0.25 shows the land at twice its true height. Land below the sea is the sea's flat top.
-- Camera Colors Terrain picture paints the land with the loaded picture; with none, it uses Height colors.
-- Camera Colors: Picture (as before) or Height colors, a gradient from the lowest land (left) to the highest (right): valley green, grass, rock, stone, snow by default.
+- Terrain Colors Terrain picture paints the land with the loaded picture; with none, it uses Height colors.
+- Terrain Colors: Picture (as before) or Height colors, a gradient from the lowest land (left) to the highest (right): valley green, grass, rock, stone, snow by default.
 - Light shapes draws glowing outlines: a ring, a square, a triangle or a star (Points sets its points).
 - Light shapes Draw: Draw and erase draws the outline from the top, then erases it from the top; Chase sends a part of Length around it, brightest at its head; Whole shows it all.
 - Light shapes has Count copies, each smaller by Spacing and later in its draw by Delay. One draw takes Draw time seconds.
@@ -246,7 +247,10 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - The X button takes an effect out of the list and keeps its settings.
 - You drag a group by its grip to change the order, and the picture changes live.
 - An effect at strength 0, or a shape effect at opacity 0, is skipped.
-- Camera shows its view while on, also at opacity 0.
+- Terrain works while on, also at opacity 0: its land still shapes a Camera after it.
+- Terrain's sun, shadows and shine light the land from straight above, so a Camera after it sees that light. Effects between them change the land's colors, not its heights.
+- Random all adds Terrain just before Camera when it picks Camera.
+- A scene from before Terrain opens with a Terrain just before its Camera. Its old Opacity (the land over a flat floor) scales the land's Height, and its Camera blends as Normal at full opacity.
 - Particles and Pixel sort do nothing on a GPU without float textures.
 - Each shape effect has an Opacity from 0 to 1.
 - Each shape effect has one of 8 blends: normal, screen, multiply, overlay, difference, lighten, darken, add.
@@ -278,6 +282,8 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - A slider with a no-effect point shows a tick mark there.
 - A handle within 2% of the span snaps to the no-effect point.
 - Camera height shows its tick but does not snap.
+- Camera Lens is a focal length on a 35 mm camera, 7 to 300 mm, and snaps at 14, 18, 24, 35, 50, 85, 135 and 200 mm. A scene from before it opens with the same view.
+- Every angle setting with a whole turn (0 to 360°, or -180 to 180°) snaps at each 45°.
 - Segments and Droste spirals snap to whole numbers.
 - A log slider has 1000 equal-ratio positions.
 - A double-click on a setting name sets its default.

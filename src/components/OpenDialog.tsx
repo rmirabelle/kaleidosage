@@ -137,6 +137,7 @@ const EFFECT_GROUPS: [GroupKey, string][] = [
   ["contours", "Contours"],
   ["relief", "Relief"],
   ["driver", "Driver"],
+  ["terrain", "Terrain"],
   ["camera", "Camera"],
   ["solid", "3D object"],
   ["sort", "Pixel sort"],

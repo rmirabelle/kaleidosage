@@ -4,7 +4,7 @@ import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, SmearS
 /** The effects in the Add effect menu, in menu order, with the names their groups show. */
 export const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
   ["kaleidoscope", "Kaleidoscope"], ["map", "Algorithm"], ["warp", "Warp"], ["blur", "Blur"], ["trails", "Trails"],
-  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["driver", "Driver"], ["camera", "Camera"], ["solid", "3D object"], ["sort", "Pixel sort"], ["particles", "Particles"], ["cycles", "Light cycles"], ["rays", "Light rays"], ["lasers", "Lasers"], ["outlines", "Light shapes"], ["picture", "Image or Video"], ["bloom", "Bloom"], ["sharpen", "Sharpen"], ["color", "Color"], ["levels", "Levels"]
+  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["driver", "Driver"], ["terrain", "Terrain"], ["camera", "Camera"], ["solid", "3D object"], ["sort", "Pixel sort"], ["particles", "Particles"], ["cycles", "Light cycles"], ["rays", "Light rays"], ["lasers", "Lasers"], ["outlines", "Light shapes"], ["picture", "Image or Video"], ["bloom", "Bloom"], ["sharpen", "Sharpen"], ["color", "Color"], ["levels", "Levels"]
 ];
 
 /**

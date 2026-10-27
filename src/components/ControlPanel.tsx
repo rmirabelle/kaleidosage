@@ -68,7 +68,8 @@ const TRAIL_KEYS: ParamKey[] = ["trailAmount", "trailZoom", "trailTurn", "trailH
 const CONTOUR_KEYS: ParamKey[] = ["contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady"];
 const RELIEF_KEYS: ParamKey[] = ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"];
 const DRIVER_KEYS: ParamKey[] = ["driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast"];
-const CAMERA_KEYS: ParamKey[] = ["cameraAmount", "cameraHeight", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth"];
+const CAMERA_KEYS: ParamKey[] = ["cameraAmount", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraFog", "cameraSky"];
+const TERRAIN_KEYS: ParamKey[] = ["terrainAmount", "cameraHeight", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraShine", "cameraSmooth"];
 const SORT_KEYS: ParamKey[] = ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"];
 /* The Blend menu and the Opacity slider (particleAmount) come after these, in the Common part at the bottom of the group. */
 const PARTICLE_KEYS: ParamKey[] = ["particleLevel", "particleBackground", "particleCount", "particleSize", "particleLife", "particleSpeed", "particleFollow", "particleCling", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleGradient", "particleBoost"];
@@ -286,6 +287,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       smear: () => start("smearAmount", 1),
       relief: () => start("reliefAmount", 0.6),
       driver: () => start("driverAmount", 1),
+      terrain: () => start("terrainAmount", 1),
       camera: () => start("cameraAmount", 1),
       solid: () => start("solidAmount", 1),
       sort: () => start("sortAmount", 1),
@@ -368,11 +370,16 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
         <DriverSection engine={engine} row={row} videoName={driverVideoName} onPickVideo={onPickDriverVideo} />
       </Group>
     ),
+    terrain: (grip) => (
+      <Group engine={engine} group="terrain" title="Terrain" grip={grip} {...accordion("terrain")}>
+        <TerrainSection engine={engine} row={row} />
+      </Group>
+    ),
     camera: (grip) => (
       <Group engine={engine} group="camera" title="Camera" grip={grip} {...accordion("camera")}>
         <CameraBlend engine={engine} />
         <CameraRepeatRow engine={engine} />
-        <CameraSection engine={engine} row={row} />
+        <SplitRows keys={CAMERA_KEYS} row={row} />
       </Group>
     ),
     solid: (grip) => (
@@ -1125,7 +1132,7 @@ function ContourBlend({ engine }: { engine: Engine }) {
   );
 }
 
-/** How the camera's raised land combines with the flat floor under it. */
+/** How the camera's view combines with the picture under it. */
 function CameraBlend({ engine }: { engine: Engine }) {
   const [blend, setBlend] = useState(engine.state.cameraBlend);
   return (
@@ -1238,15 +1245,15 @@ function TerrainRows({ engine }: { engine: Engine }) {
 const CAMERA_TERRAIN_KEYS: ParamKey[] = ["cameraTerrainScale", "cameraRoughness", "cameraRidges", "cameraSeed"];
 
 /**
- * The camera's settings: the Heights and Colors menus (with the height
+ * Terrain's settings: the Heights and Colors menus (with the height
  * gradient under Colors for Height colors), then the sliders. Generated's
  * own settings show after Height only for Generated heights, and Detail
  * and Detail size only for Real terrain.
  */
-function CameraSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
+function TerrainSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
   const [source, setSource] = useState<CameraHeightSource>(engine.state.cameraHeightSource);
   const [colors, setColors] = useState<CameraColors>(engine.state.cameraColors);
-  const keys = CAMERA_KEYS.flatMap((key): ParamKey[] => key !== "cameraHeight" ? [key] : source === 1 ? [key, ...CAMERA_TERRAIN_KEYS] : source === 2 ? [key, "cameraDetail", "cameraDetailSize"] : [key]);
+  const keys = TERRAIN_KEYS.flatMap((key): ParamKey[] => key !== "cameraHeight" ? [key] : source === 1 ? [key, ...CAMERA_TERRAIN_KEYS] : source === 2 ? [key, "cameraDetail", "cameraDetailSize"] : [key]);
   return (
     <>
       <ModeSelect engine={engine} stateKey="cameraHeightSource" options={CAMERA_HEIGHT_SOURCES} name="Heights" onChange={setSource} />

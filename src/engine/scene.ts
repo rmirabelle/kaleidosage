@@ -3,9 +3,9 @@ import { isShapeStep, type FxStep } from "./renderer";
 import { readSound, soundList } from "./audio";
 
 export const SCENE_EXTENSION = "ksage";
-/** 4: the camera Lens is a focal length in mm, not an angle. 3: reads as 2 (it changed only an effect that was later removed). 2: ranges share one cycle, and a custom range keeps its own seconds. 1: each range had its own rate, and a speed. */
-const SCENE_VERSION = 4;
-const GROUP_KEYS: GroupKey[] = ["warp", "map", "kaleidoscope", "blur", "trails", "smear", "contours", "relief", "driver", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "outlines", "bloom", "sharpen", "color", "levels"];
+/** 5: Terrain makes the land, and Camera only views it. 4: the camera Lens is a focal length in mm, not an angle. 3: reads as 2 (it changed only an effect that was later removed). 2: ranges share one cycle, and a custom range keeps its own seconds. 1: each range had its own rate, and a speed. */
+const SCENE_VERSION = 5;
+const GROUP_KEYS: GroupKey[] = ["warp", "map", "kaleidoscope", "blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "outlines", "bloom", "sharpen", "color", "levels"];
 
 /** Still images and legacy videos use base64. New videos refer to an embedded archive entry. */
 export type SceneImage = { type: string; data: string; video?: never }
@@ -129,6 +129,30 @@ function freeCameraOf(savedParams: Record<string, unknown>, params: Params, stat
   take("cameraSpeed", params.cameraDolly, (speed) => speed);
   params.cameraPedestal.value = clamp(Math.max(top * 0.5 + distance * Math.cos(tilt * toRadians), top + 0.02), params.cameraPedestal.min, params.cameraPedestal.max);
   params.cameraPedestal.on = false;
+}
+
+/**
+ * A scene from before Terrain had one Camera that made the land too. It
+ * becomes Terrain (the same land and light, at full opacity) just before
+ * Camera (the view). The old Opacity showed the raised land over the
+ * camera's view of the flat picture, so it now scales the land's Height
+ * (by the middle of its range, if it had one), and the view covers the
+ * picture with no blend.
+ */
+function terrainOf(params: Params, state: PlayState) {
+  if (!state.groups.camera || !state.fxOrder.includes("camera")) return;
+  const amount = params.cameraAmount;
+  const rise = clamp(amount.drift && amount.on ? ((amount.low ?? amount.value) + (amount.high ?? amount.value)) / 2 : amount.value, 0, 1);
+  const height = params.cameraHeight;
+  height.value *= rise;
+  if (height.low !== undefined) height.low *= rise;
+  if (height.high !== undefined) height.high *= rise;
+  Object.assign(amount, { value: 1, on: false });
+  params.terrainAmount.value = 1;
+  state.cameraBlend = 0;
+  state.groups.terrain = true;
+  const at = state.fxOrder.indexOf("camera");
+  state.fxOrder = [...state.fxOrder.slice(0, at), "terrain", ...state.fxOrder.slice(at)];
 }
 
 function oldRateSeconds(param: Param, rate: number) {
@@ -321,6 +345,7 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   state.cameraHeightSource = mode(saved.cameraHeightSource, [0, 1, 2] as const) ?? state.cameraHeightSource;
   state.cameraColors = mode(saved.cameraColors, [0, 1, 2] as const) ?? state.cameraColors;
   state.cameraStops = readGradientStops(saved.cameraStops) ?? defaultTerrainStops();
+  if (!(isNumber(scene.version) && scene.version >= 5)) terrainOf(params, state);
   state.sortOrder = mode(saved.sortOrder, [0, 1] as const) ?? state.sortOrder;
   state.particleBlend = mode(saved.particleBlend, [0, 1] as const) ?? state.particleBlend;
   state.particleShape = mode(saved.particleShape, [0, 1, 2] as const) ?? state.particleShape;

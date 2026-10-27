@@ -27,7 +27,9 @@ export const PARAM_KEYS = [
   "outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineFlow", "outlineTurn", "outlineX", "outlineY",
   "pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn", "pictureKey",
   "bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize",
-  "sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel"
+  "sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel",
+  /* Last, so the settings before it keep their seeds (see createParams). */
+  "terrainAmount"
 ] as const;
 export type ParamKey = typeof PARAM_KEYS[number];
 
@@ -257,7 +259,7 @@ export type Params = Record<ParamKey, Param>;
 export type ContourTone = "hue" | "black" | "white";
 export const CONTOUR_TONES: readonly ContourTone[] = ["hue", "black", "white"];
 
-export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines";
+export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines";
 
 export interface PlayState {
   /** Which groups are on. A group that is off has no effect, but keeps its settings. */
@@ -637,18 +639,23 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   lightAngle: { label: "Light angle", min: 0, max: 360, step: 1, value: 135, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   shine: { label: "Shine", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.1, high: 0.5, on: false },
   /**
-   * Camera (see CAMERA_SHADER): how much the raised land shows over the
-   * same camera's view of the flat picture, the land's height at white (below 0, dark areas rise), the
-   * free camera, as on a film set: Pan (the way it looks, 0 along +x,
-   * counterclockwise), Tilt (up from level; below 0 looks down), Pedestal
-   * (its height, screen heights), Dolly and Truck (its speeds forward and
-   * to its right, screen heights per second; it holds still at 0), and
-   * its lens (the focal length on a 35 mm camera, see lensAngle), the sun's direction and
-   * height, the shadows' darkness, the fog, how much the sky and fog take
-   * state.skyColor (0 = the picture's mean color), the shine of the land,
-   * and how blurred the height is.
+   * Camera (see CAMERA_SHADER): how much its view shows over the picture,
+   * and the free camera, as on a film set: Pan (the way it looks, 0 along
+   * +x, counterclockwise), Tilt (up from level; below 0 looks down),
+   * Pedestal (its height, screen heights), Dolly and Truck (its speeds
+   * forward and to its right, screen heights per second; it holds still at
+   * 0), and its lens (the focal length on a 35 mm camera, see lensAngle),
+   * the fog, and how much the sky and fog take state.skyColor (0 = the
+   * picture's mean color).
+   *
+   * Terrain (see TERRAIN_SHADER) has the rest, under the names they had
+   * when Camera made the land, so saved scenes and MIDI links still find
+   * them: the land's height at white (below 0, dark areas rise), the sun's
+   * direction and height, the shadows' darkness, the shine of the land,
+   * and how blurred the height is. Its own Opacity is terrainAmount.
    */
   cameraAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
+  terrainAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
   cameraHeight: { label: "Height", min: -1, max: 1, step: 0.01, value: 0.25, drift: "wave", low: 0.1, high: 0.4, on: false },
   cameraPan: { label: "Pan", min: 0, max: 360, step: 1, value: 90, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   cameraTilt: { label: "Tilt", min: -90, max: 60, step: 1, value: -40, unit: "°", drift: "wave", low: -60, high: -20, on: false },
@@ -957,7 +964,7 @@ export function createParams(): Params {
 
 /** The start-up orders: the fold, then the map bends the folded picture, then the warp; and blur, trails, time smear, contours, relief, driver, camera, 3D object, pixel sort, particles, light cycles, light rays, lasers, bloom, final effects. */
 export const defaultShapeOrder = (): ShapeStep[] => ["kaleidoscope", "map", "warp"];
-export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "driver", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "bloom", "sharpen", "color", "levels", "picture", "outlines"];
+export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "bloom", "sharpen", "color", "levels", "picture", "outlines"];
 export const defaultFxOrder = (): FxStep[] => [...defaultShapeOrder(), ...defaultPictureOrder()];
 
 /**
@@ -1017,8 +1024,8 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
 export function createPlayState(): PlayState {
   return {
     /* No effect is in the list at start-up, so every effect group is off. */
-    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false },
-    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false },
+    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false },
+    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false },
     blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 0, cameraColors: 0, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), outlineTime: 0, outlineFlowTime: 0, solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
@@ -1366,6 +1373,8 @@ export function resetEffects(params: Params, state: PlayState) {
     state.cameraBlend = fresh.cameraBlend;
     state.skyColor = fresh.skyColor;
     state.cameraRepeat = fresh.cameraRepeat;
+  }
+  if (!state.locks.terrain) {
     state.cameraHeightSource = fresh.cameraHeightSource;
     state.cameraColors = fresh.cameraColors;
     state.cameraStops = fresh.cameraStops;
@@ -1423,7 +1432,8 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   contours: ["contourHue", "contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady"],
   relief: ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"],
   driver: ["driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast"],
-  camera: ["cameraAmount", "cameraHeight", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth", "cameraTerrainScale", "cameraRoughness", "cameraRidges", "cameraSeed", "cameraDetail", "cameraDetailSize"],
+  terrain: ["terrainAmount", "cameraHeight", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraShine", "cameraSmooth", "cameraTerrainScale", "cameraRoughness", "cameraRidges", "cameraSeed", "cameraDetail", "cameraDetailSize"],
+  camera: ["cameraAmount", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraFog", "cameraSky"],
   solid: ["solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY"],
   sort: ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"],
   particles: ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost", "particleRingRadius"],
@@ -1447,7 +1457,8 @@ const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   trails: ["trailColor"],
   smear: ["smearShape"],
   contours: ["contourTone", "contourBlend"],
-  camera: ["skyColor", "cameraBlend", "cameraRepeat", "cameraHeightSource", "cameraColors"],
+  terrain: ["cameraHeightSource", "cameraColors"],
+  camera: ["skyColor", "cameraBlend", "cameraRepeat"],
   sort: ["sortOrder"],
   particles: ["particleBlend", "particleShape"],
   outlines: ["outlineShape", "outlineDraw"],
@@ -1474,7 +1485,7 @@ export function randomizeGroup(params: Params, state: PlayState, group: GroupKey
 
 /** The chance that Randomize puts each effect in the list. Blur looks the least good, so Randomize leaves it out. */
 const EFFECT_CHANCE: Record<FxStep, number> = {
-  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.25, relief: 0.4, driver: 0.3, camera: 0.3, solid: 0.2, sort: 0.2, particles: 0.25, cycles: 0.25, rays: 0.25, lasers: 0.15, bloom: 0.3, sharpen: 0.3, color: 0.15, levels: 0.25,
+  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.25, relief: 0.4, driver: 0.3, terrain: 0, camera: 0.3, solid: 0.2, sort: 0.2, particles: 0.25, cycles: 0.25, rays: 0.25, lasers: 0.15, bloom: 0.3, sharpen: 0.3, color: 0.15, levels: 0.25,
   /* An overlay needs an image or a video that the user picks. */
   picture: 0,
   outlines: 0.15
@@ -1493,11 +1504,14 @@ function randomizeAll(params: Params, state?: PlayState) {
      * order. A locked effect keeps its place (or stays out of the list).
      */
     /* Light shapes draws its chance at the end (see below), so the other effects' random values stay as they were before it. */
-    const chosen = defaultFxOrder().filter((step) => step !== "outlines" && !state.locks[step] && Math.random() < EFFECT_CHANCE[step]);
+    /* Terrain draws no chance of its own (so the other effects' random values stay as they were before it): it comes with Camera, see below. */
+    const chosen = defaultFxOrder().filter((step) => step !== "outlines" && step !== "terrain" && !state.locks[step] && Math.random() < EFFECT_CHANCE[step]);
     for (let index = chosen.length - 1; index > 0; index--) {
       const other = Math.floor(Math.random() * (index + 1));
       [chosen[index], chosen[other]] = [chosen[other], chosen[index]];
     }
+    /* A new Camera flies over the land of a new Terrain just before it. */
+    if (!state.locks.terrain && chosen.includes("camera")) chosen.splice(chosen.indexOf("camera"), 0, "terrain");
     for (const step of defaultFxOrder()) if (!state.locks[step]) state.groups[step] = chosen.includes(step);
     const next = [...chosen];
     state.fxOrder.forEach((step, index) => { if (state.locks[step]) next.splice(Math.min(index, next.length), 0, step); });
@@ -1635,6 +1649,7 @@ function randomizeAll(params: Params, state?: PlayState) {
   setAngle("lightAngle", 0.5);
   set("shine", Math.random() < 0.5 ? 0 : rand(0.1, 0.6), rand(0, 0.2));
   set("cameraAmount", 1, rand(0, 0.1));
+  set("terrainAmount", 1);
   set("cameraHeight", (Math.random() < 0.8 ? 1 : -1) * rand(0.1, 0.5), rand(0.02, 0.15));
   /* The same random draws as the orbit camera's before it, so the effects after it keep their random values. */
   set("cameraTilt", rand(20, 75) - 90, rand(5, 20));

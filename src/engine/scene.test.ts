@@ -142,7 +142,7 @@ describe("scene files", () => {
     /* Earlier versions of the app read a full order inside each kind: the list's order first. */
     const savedState = JSON.parse(text).state;
     expect(savedState.shapeStack).toEqual(["warp", "map", "kaleidoscope"]);
-    expect(savedState.pictureOrder).toEqual(["relief", "blur", "trails", "smear", "contours", "driver", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "bloom", "sharpen", "color", "levels", "picture", "outlines"]);
+    expect(savedState.pictureOrder).toEqual(["relief", "blur", "trails", "smear", "contours", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "bloom", "sharpen", "color", "levels", "picture", "outlines"]);
 
     /* Scenes from before the effect list: every effect that is on and changes the picture, in their order. */
     const showing = { warpAmount: { value: 0.3 }, blurAmount: { value: 10 }, trailAmount: { value: 0.5 }, smearAmount: { value: 1 }, contourOpacity: { value: 1 }, reliefAmount: { value: 1 }, sharpen: { value: 1 } };
@@ -176,6 +176,27 @@ describe("scene files", () => {
     expect(params.warpCellSize.low).toBeCloseTo(10 / 1.5);
     expect(params.warpCellSize.high).toBeCloseTo(10 / 6);
     expect(params.warpCellSize.on).toBe(true);
+  });
+
+  it("give scenes from before Terrain a Terrain just before their Camera, with the old Opacity in the land's Height", () => {
+    const params = createParams();
+    const state = createPlayState();
+    const old = { cameraAmount: { value: 0.5 }, cameraHeight: { value: 0.4, low: 0.2, high: 0.6 } };
+    applyScene(JSON.stringify({ app: "KaleidoSage", version: 4, params: old, state: { groups: { camera: true, blur: true }, effects: ["blur", "camera"], cameraBlend: 3 }, image: IMAGE }), params, state);
+    expect(state.fxOrder).toEqual(["blur", "terrain", "camera"]);
+    expect(state.groups.terrain).toBe(true);
+    expect(params.terrainAmount.value).toBe(1);
+    expect(params.cameraAmount.value).toBe(1);
+    expect(params.cameraHeight.value).toBeCloseTo(0.2);
+    expect(params.cameraHeight.high).toBeCloseTo(0.3);
+    expect(state.cameraBlend).toBe(0);
+    /* A new scene keeps its own list, and a Camera with no Terrain stays alone. */
+    const fresh = createPlayState();
+    fresh.fxOrder = ["camera"];
+    fresh.groups.camera = true;
+    const loaded = createPlayState();
+    applyScene(serializeScene(createParams(), fresh, { image: IMAGE }), createParams(), loaded);
+    expect(loaded.fxOrder).toEqual(["camera"]);
   });
 
   it("give scenes from before the Lens in millimeters the same view, and keep a new scene's Lens", () => {
