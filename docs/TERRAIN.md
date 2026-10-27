@@ -5,6 +5,12 @@ its land looks poor. This plan gives the camera a height source of its
 own. Each step leaves the app working, and a scene that does not use the
 new parts looks as before.
 
+**Update 2026-10-27:** the Heights and Colors menus are gone. Terrain is
+always Real terrain colored by its Terrain picture (older scenes load that
+way too). Place and Area are at the top, and the camera's settings sit
+under a Camera heading above Common. The Generated and Height colors code
+stays: Height colors still stands in while no land is loaded.
+
 ## Today
 
 - The camera's land is the picture made so far, laid flat. Its heights

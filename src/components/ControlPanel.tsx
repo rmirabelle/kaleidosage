@@ -13,7 +13,7 @@ import type { TerrainData } from "../engine/terrain";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
 import { BLUR_KEYS, BLUR_MASKS, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
-import type { BlurMask, CameraColors, CameraHeightSource, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
+import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ContextMenu } from "./ContextMenu";
@@ -70,7 +70,9 @@ const RELIEF_KEYS: ParamKey[] = ["reliefAmount", "reliefDepth", "reliefSize", "l
 const DRIVER_KEYS: ParamKey[] = ["driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast"];
 /** Camera shares its camera settings with Terrain; only its Opacity (and Blend) are its own. */
 const CAMERA_KEYS: ParamKey[] = ["viewAmount", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraFog", "cameraSky"];
-const TERRAIN_KEYS: ParamKey[] = ["cameraAmount", "cameraHeight", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth"];
+/** Terrain's land and light; its camera (TERRAIN_CAMERA_KEYS, with Opacity for Common) goes under a Camera heading. */
+const TERRAIN_LAND_KEYS: ParamKey[] = ["cameraHeight", "cameraDetail", "cameraDetailSize", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth"];
+const TERRAIN_CAMERA_KEYS: ParamKey[] = ["cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraAmount"];
 const SORT_KEYS: ParamKey[] = ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"];
 /* The Blend menu and the Opacity slider (particleAmount) come after these, in the Common part at the bottom of the group. */
 const PARTICLE_KEYS: ParamKey[] = ["particleLevel", "particleBackground", "particleCount", "particleSize", "particleLife", "particleSpeed", "particleFollow", "particleCling", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleGradient", "particleBoost"];
@@ -880,7 +882,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "cameraHeightSource" | "cameraColors" | "sortOrder" | "particleBlend" | "particleShape" | "outlineShape" | "outlineDraw" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "outlineShape" | "outlineDraw" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange }: {
@@ -1184,11 +1186,6 @@ function DriverSection({ engine, row, videoName, onPickVideo }: { engine: Engine
   );
 }
 
-/** How the camera's land goes on past the picture's edge. */
-/** Where the camera's land heights come from (see docs/TERRAIN.md). */
-const CAMERA_HEIGHT_SOURCES = [[0, "Picture"], [1, "Generated"], [2, "Real terrain"]] as const;
-/** The land's colors: the picture, or a gradient by height. */
-const CAMERA_COLORS = [[0, "Picture"], [1, "Height colors"], [2, "Terrain picture"]] as const;
 /** How wide the real terrain's area is. */
 const TERRAIN_AREAS = [[5, "5 km"], [10, "10 km"], [20, "20 km"], [40, "40 km"], [80, "80 km"], [160, "160 km"]] as const;
 /** The places to load: Random first, then each striking place (see LAND_PLACES). */
@@ -1242,26 +1239,18 @@ function TerrainRows({ engine }: { engine: Engine }) {
     </>
   );
 }
-/** Generated's own settings, after Height. */
-const CAMERA_TERRAIN_KEYS: ParamKey[] = ["cameraTerrainScale", "cameraRoughness", "cameraRidges", "cameraSeed"];
-
 /**
- * Terrain's settings: the Heights and Colors menus (with the height
- * gradient under Colors for Height colors), then the sliders. Generated's
- * own settings show after Height only for Generated heights, and Detail
- * and Detail size only for Real terrain.
+ * Terrain's settings: Place and Area first, then the land and its light,
+ * then the camera (which Camera shares) under a Camera heading, then
+ * Common. The land is always real terrain, colored by its NASA picture.
  */
 function TerrainSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
-  const [source, setSource] = useState<CameraHeightSource>(engine.state.cameraHeightSource);
-  const [colors, setColors] = useState<CameraColors>(engine.state.cameraColors);
-  const keys = TERRAIN_KEYS.flatMap((key): ParamKey[] => key !== "cameraHeight" ? [key] : source === 1 ? [key, ...CAMERA_TERRAIN_KEYS] : source === 2 ? [key, "cameraDetail", "cameraDetailSize"] : [key]);
   return (
     <>
-      <ModeSelect engine={engine} stateKey="cameraHeightSource" options={CAMERA_HEIGHT_SOURCES} name="Heights" onChange={setSource} />
-      <ModeSelect engine={engine} stateKey="cameraColors" options={CAMERA_COLORS} name="Colors" onChange={setColors} />
-      {source === 2 && <TerrainRows engine={engine} />}
-      {colors === 1 && <GradientEditor engine={engine} stateKey="cameraStops" />}
-      <SplitRows keys={keys} row={row} blend={<CameraBlend engine={engine} stateKey="cameraBlend" />} />
+      <TerrainRows engine={engine} />
+      {TERRAIN_LAND_KEYS.map(row)}
+      <div className="panel-sub-head" data-tip="Where the camera is and where it looks. The Camera effect uses the same camera.">Camera</div>
+      <SplitRows keys={TERRAIN_CAMERA_KEYS} row={row} blend={<CameraBlend engine={engine} stateKey="cameraBlend" />} />
     </>
   );
 }

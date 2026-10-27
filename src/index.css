@@ -920,6 +920,8 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 /* The Common part at the bottom of an effect (see SplitRows): a dark band with its name, and the names of the common settings in lavender. */
 .panel-common-head { padding: 6px 14px 5px; color: #c3b5ff; background: #1b1e25; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; cursor: default; }
 .panel-common-head ~ * .panel-row-name:not(.midi-touched):not(.bypassed) { color: #c3b5ff; }
+/* A named part inside an effect's own settings (Terrain's Camera): the same band, in grey. */
+.panel-sub-head { padding: 6px 14px 5px; color: #a9afbd; background: #1b1e25; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; cursor: default; }
 .gradient-editor { position: relative; flex: 1; min-width: 0; height: 30px; margin: 0 6px; }
 .gradient-bar { position: absolute; top: 2px; right: 0; left: 0; height: 14px; border: 1px solid #474c5e; border-radius: 4px; cursor: copy; }
 .gradient-bar.full { cursor: default; }

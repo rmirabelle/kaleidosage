@@ -328,9 +328,9 @@ export interface PlayState {
   skyColor: string;
   /** How the camera's land goes on past the picture: mirrored, repeated as it is, or not at all. */
   cameraRepeat: CameraRepeat;
-  /** Where the camera's land heights come from: the picture's brightness, or generated mountains (see docs/TERRAIN.md). */
+  /** Where the camera's land heights come from. The panel offers only real terrain (2) now (see docs/TERRAIN.md). */
   cameraHeightSource: CameraHeightSource;
-  /** The land's colors: the picture, or a gradient by height (cameraStops). */
+  /** The land's colors. The panel offers only the terrain picture (2) now; with no picture loaded, the gradient by height (cameraStops) stands in. */
   cameraColors: CameraColors;
   cameraStops: GradientStop[];
   /** The pixel sort's order along each run: dark to bright, or bright to dark. */
@@ -1037,7 +1037,7 @@ export function createPlayState(): PlayState {
     /* No effect is in the list at start-up, so every effect group is off. */
     groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false },
     locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 0, cameraColors: 0, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), outlineTime: 0, outlineFlowTime: 0, solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), outlineTime: 0, outlineFlowTime: 0, solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1480,7 +1480,7 @@ const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   trails: ["trailColor"],
   smear: ["smearShape"],
   contours: ["contourTone", "contourBlend"],
-  terrain: ["skyColor", "cameraBlend", "cameraRepeat", "cameraHeightSource", "cameraColors"],
+  terrain: ["skyColor", "cameraBlend", "cameraRepeat"],
   camera: ["skyColor", "viewBlend", "cameraRepeat"],
   sort: ["sortOrder"],
   particles: ["particleBlend", "particleShape"],

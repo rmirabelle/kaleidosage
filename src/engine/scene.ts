@@ -365,8 +365,9 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   state.cameraBlend = mode(saved.cameraBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? state.cameraBlend;
   state.viewBlend = mode(saved.viewBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? state.viewBlend;
   state.cameraRepeat = mode(saved.cameraRepeat, [0, 1, 2] as const) ?? state.cameraRepeat;
-  state.cameraHeightSource = mode(saved.cameraHeightSource, [0, 1, 2] as const) ?? state.cameraHeightSource;
-  state.cameraColors = mode(saved.cameraColors, [0, 1, 2] as const) ?? state.cameraColors;
+  /* Terrain's land is always real terrain colored by its picture; older scenes' other choices are not read. */
+  state.cameraHeightSource = 2;
+  state.cameraColors = 2;
   state.cameraStops = readGradientStops(saved.cameraStops) ?? defaultTerrainStops();
   if (!(isNumber(scene.version) && scene.version >= 6)) terrainOf(state);
   state.sortOrder = mode(saved.sortOrder, [0, 1] as const) ?? state.sortOrder;
