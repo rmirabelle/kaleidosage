@@ -211,7 +211,9 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - The New button adds an effect at the end of the list and opens it.
 - The New button is off when all 22 effects are in the list.
 - The Add menu shows added effects dimmed and does not let you pick them.
-- The Add menu shows a preview with a note and thumbnails.
+- The Add menu lists the effects in two columns of named groups (Space, Time, Texture, 3D; Light, Overlay, Finish), A to Z in each group.
+- Left and Right arrows move to the nearest effect in the other column.
+- The Add menu shows a preview with a note and thumbnails, at the right of both columns.
 - For an effect with types, the preview shows each type in turn, 1 second each.
 - A new effect starts with a strength that shows.
 - Start strengths are: Trails 0.85, Time smear 1, Relief 0.6, Light rays 1.5, others 1.

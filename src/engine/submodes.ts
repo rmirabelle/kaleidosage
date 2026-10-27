@@ -7,6 +7,18 @@ export const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
   ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["driver", "Driver"], ["terrain", "Terrain"], ["camera", "Camera"], ["solid", "3D object"], ["sort", "Pixel sort"], ["particles", "Particles"], ["cycles", "Light cycles"], ["rays", "Light rays"], ["lasers", "Lasers"], ["outlines", "Light shapes"], ["picture", "Image or Video"], ["bloom", "Bloom"], ["sharpen", "Sharpen"], ["color", "Color"], ["levels", "Levels"]
 ];
 
+/** An effect's name in the panel and the menus. */
+export const effectName = (step: FxStep) => EFFECT_NAMES.find(([key]) => key === step)?.[1] ?? step;
+
+/**
+ * The Add effect menu's two columns of named groups. Each group lists its
+ * effects by name, A to Z. Every effect is in exactly one group.
+ */
+export const EFFECT_COLUMNS: readonly (readonly (readonly [string, readonly FxStep[]])[])[] = ([
+  [["Space", ["map", "kaleidoscope", "warp"]], ["Time", ["smear", "trails"]], ["Texture", ["contours", "driver", "sort", "relief"]], ["3D", ["solid", "camera", "terrain"]]],
+  [["Light", ["bloom", "lasers", "cycles", "rays", "outlines", "particles"]], ["Overlay", ["picture"]], ["Finish", ["blur", "color", "levels", "sharpen"]]]
+] as const).map((column) => column.map(([title, steps]) => [title, [...steps].sort((a, b) => effectName(a).localeCompare(effectName(b)))] as const));
+
 /**
  * The submode menus of the effect groups (Kaleidoscope's Radial or tiles,
  * the warp type, the algorithm, the blur mask, the smear pattern), and the
