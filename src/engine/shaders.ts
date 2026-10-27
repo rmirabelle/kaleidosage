@@ -2954,8 +2954,9 @@ void main() {
  * up, 0 = level and seen edge-on, below 0 = down); each beam is drawn as
  * seen from the front, so a beam that points away gets shorter (only one
  * that points almost straight away ends on the screen). The beams start in
- * a row along u_base (the base line, in pixels), centered on u_source
- * (pixels from the screen center).
+ * a row along u_base (the base line, in pixels, across the fan), centered
+ * on u_source (pixels from the screen center). u_turn turns the whole fan,
+ * base line and beams, clockwise about u_source.
  * Each beam is a bright core u_width pixels wide, with a white-hot middle,
  * in a haze u_glow bright that reaches about u_glowSize pixels, and gets
  * dimmer along its length by u_fade (per screen height). The beams' hues
@@ -3025,6 +3026,7 @@ uniform sampler2D u_picture;
 uniform vec2 u_res;
 uniform vec2 u_source;
 uniform vec2 u_base;
+uniform float u_turn;
 uniform float u_sweep;
 uniform float u_spread;
 uniform int u_count;
@@ -3041,6 +3043,10 @@ ${COVER_GLSL}
 vec3 hueColor(float h) { return clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0); }
 void main() {
   vec2 fromSource = (v_uv - 0.5) * u_res - u_source;
+  /* Into the fan's own frame: turned back (counterclockwise) by the fan's clockwise turn. */
+  float turnCos = cos(u_turn);
+  float turnSin = sin(u_turn);
+  fromSource = vec2(fromSource.x * turnCos - fromSource.y * turnSin, fromSource.x * turnSin + fromSource.y * turnCos);
   float haze = u_width + u_glowSize;
   vec3 light = vec3(0.0);
   /* The beams' glows, added up (strength and color times strength); see the end. */

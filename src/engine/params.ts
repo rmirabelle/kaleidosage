@@ -858,7 +858,8 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * straight up, at 0 it is level and seen edge-on, so it looks flat, and
    * below 0 it points down. The beams start from a base line:
    * Base width is its length (a part of the screen height; 0 = all beams
-   * from one point), and Base angle turns it (0 = level). Width is the beam
+   * from one point). Turn turns the whole fan, base line and beams,
+   * clockwise about the source (0 = upright). Width is the beam
    * width in screen pixels; Glow is how bright the haze around each beam
    * is, and Glow size how far it reaches, in screen pixels, so a thin beam
    * can have a strong glow. Emitter is the size of the glowing dot where
@@ -873,7 +874,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   laserSpread: { label: "Spread", min: 0, max: 180, step: 1, value: 60, unit: "°", drift: "wave", low: 20, high: 100, on: false },
   laserSweep: { label: "Sweep", min: -90, max: 90, step: 1, value: 60, unit: "°", drift: "wave", low: -30, high: 90, on: false },
   laserBase: { label: "Base width", min: 0, max: 2, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.5, on: false },
-  laserBaseAngle: { label: "Base angle", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "wave", low: -20, high: 20, on: false },
+  laserBaseAngle: { label: "Turn", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "wave", low: -20, high: 20, on: false },
   laserWidth: { label: "Width", min: 0.5, max: 12, step: 0.1, value: 1.5, unit: "px", drift: "wave", low: 1, high: 3, on: false },
   laserGlow: { label: "Glow", min: 0, max: 4, step: 0.01, value: 0.5, drift: "wave", low: 0.3, high: 1.5, on: false },
   laserEmitter: { label: "Emitter", min: 0, max: 3, step: 0.01, value: 1, drift: "wave", low: 0.5, high: 1.5, on: false },
