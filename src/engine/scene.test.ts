@@ -178,25 +178,26 @@ describe("scene files", () => {
     expect(params.warpCellSize.on).toBe(true);
   });
 
-  it("give scenes from before Terrain a Terrain just before their Camera, with the old Opacity in the land's Height", () => {
+  it("give scenes from before Terrain their landscape Camera as Terrain, with the same settings", () => {
     const params = createParams();
     const state = createPlayState();
     const old = { cameraAmount: { value: 0.5 }, cameraHeight: { value: 0.4, low: 0.2, high: 0.6 } };
-    applyScene(JSON.stringify({ app: "KaleidoSage", version: 4, params: old, state: { groups: { camera: true, blur: true }, effects: ["blur", "camera"], cameraBlend: 3 }, image: IMAGE }), params, state);
-    expect(state.fxOrder).toEqual(["blur", "terrain", "camera"]);
-    expect(state.groups.terrain).toBe(true);
-    expect(params.terrainAmount.value).toBe(1);
-    expect(params.cameraAmount.value).toBe(1);
-    expect(params.cameraHeight.value).toBeCloseTo(0.2);
-    expect(params.cameraHeight.high).toBeCloseTo(0.3);
-    expect(state.cameraBlend).toBe(0);
-    /* A new scene keeps its own list, and a Camera with no Terrain stays alone. */
+    applyScene(JSON.stringify({ app: "KaleidoSage", version: 4, params: old, state: { groups: { camera: true, blur: true }, effects: ["camera", "blur"], cameraBlend: 3 }, image: IMAGE }), params, state);
+    expect(state.fxOrder).toEqual(["terrain", "blur"]);
+    expect(state.groups).toMatchObject({ terrain: true, camera: false });
+    expect(params.cameraAmount.value).toBe(0.5);
+    expect(params.cameraHeight.value).toBeCloseTo(0.4);
+    expect(state.cameraBlend).toBe(3);
+    /* A new scene keeps its own list: the flat Camera stays a Camera, with its own blend. */
     const fresh = createPlayState();
-    fresh.fxOrder = ["camera"];
+    fresh.fxOrder = ["camera", "terrain"];
     fresh.groups.camera = true;
+    fresh.groups.terrain = true;
+    fresh.viewBlend = 2;
     const loaded = createPlayState();
     applyScene(serializeScene(createParams(), fresh, { image: IMAGE }), createParams(), loaded);
-    expect(loaded.fxOrder).toEqual(["camera"]);
+    expect(loaded.fxOrder).toEqual(["camera", "terrain"]);
+    expect(loaded.viewBlend).toBe(2);
   });
 
   it("give scenes from before the Lens in millimeters the same view, and keep a new scene's Lens", () => {

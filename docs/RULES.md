@@ -221,7 +221,9 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Adding Algorithm changes a Power map at power 1 to power 2.
 - Adding the Kaleidoscope starts Pan X and Pan Y looping.
 - Adding Lasers starts Sweep looping, so the fan tilts up and down and looks flat as it passes level.
-- Terrain makes land from the picture and lights it from straight above, like a shaded relief map. Camera only views: it flies over the picture made before it, which is the land of a Terrain before it, or flat.
+- Terrain flies a camera over the picture as a lit landscape (the effect that was called Camera). Camera flies the same camera over the picture made before it, lying flat, with no land, light or shadows.
+- Terrain and Camera share one camera: Pan, Tilt, Pedestal, Dolly, Truck, Lens, Fog, Sky, the sky color and Repeat. Each has its own Opacity and Blend.
+- A lock on Terrain or Camera keeps the shared camera settings for Randomize, Nudge and Reset.
 - Terrain Heights: Picture (the picture's brightness, as before) or Generated (noise mountains with Scale, Roughness, Ridges and Seed). A scene saved before Heights opens with Picture.
 - Generated mountains repeat a whole number of times across the land, so Tile repeat shows no seam.
 - Terrain Heights Real terrain: pick a place (or Random) and an Area (5 to 160 km), then Load. The heights come from the AWS Terrain Tiles; the picture from NASA (Landsat, or Blue Marble).
@@ -247,10 +249,9 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - The X button takes an effect out of the list and keeps its settings.
 - You drag a group by its grip to change the order, and the picture changes live.
 - An effect at strength 0, or a shape effect at opacity 0, is skipped.
-- Terrain works while on, also at opacity 0: its land still shapes a Camera after it.
-- Terrain's sun, shadows and shine light the land from straight above, so a Camera after it sees that light. Effects between them change the land's colors, not its heights.
-- Random all adds Terrain just before Camera when it picks Camera.
-- A scene from before Terrain opens with a Terrain just before its Camera. Its old Opacity (the land over a flat floor) scales the land's Height, and its Camera blends as Normal at full opacity.
+- Terrain shows its view while on, also at opacity 0 (then the land is flat).
+- Random all can pick Terrain, as it picked the old Camera; it never picks the flat Camera.
+- A scene from before Terrain opens with its Camera as Terrain, with the same settings.
 - Particles and Pixel sort do nothing on a GPU without float textures.
 - Each shape effect has an Opacity from 0 to 1.
 - Each shape effect has one of 8 blends: normal, screen, multiply, overlay, difference, lighten, darken, add.
@@ -281,7 +282,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Sliders have no mouse-wheel control.
 - A slider with a no-effect point shows a tick mark there.
 - A handle within 2% of the span snaps to the no-effect point.
-- Camera height shows its tick but does not snap.
+- Terrain height shows its tick but does not snap.
 - Camera Lens is a focal length on a 35 mm camera, 7 to 300 mm, and snaps at 14, 18, 24, 35, 50, 85, 135 and 200 mm. A scene from before it opens with the same view.
 - Every angle setting with a whole turn (0 to 360°, or -180 to 180°) snaps at each 45°.
 - Segments and Droste spirals snap to whole numbers.
@@ -351,7 +352,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Warp flow, driver, map and camera speeds add up over time.
 - The camera is a free camera: Pan (the way it looks), Tilt (up from level; below 0 looks down), Pedestal (its height), and Dolly and Truck (its speeds forward and to its right; 0 holds still). There is no roll.
 - The camera stays above the land: a little above the highest land in a circle around it, read back from the GPU and eased over time (up in about 0.25 s, down in about 0.8 s), blended softly into its Pedestal, so it rises and sinks smoothly. A camera lower than the highest land sees the land around and above it.
-- While Camera is on, the mouse moves it on the picture, and the picture follows the mouse: drag for Pan and Tilt; right-drag or Shift-drag for Truck and Pedestal; the wheel for Dolly. A drag is one Undo step for Pan, Tilt and Pedestal; Truck and Dolly move the camera's place, which Undo does not keep.
+- While Camera or Terrain is on, the mouse moves the camera on the picture, and the picture follows the mouse: drag for Pan and Tilt; right-drag or Shift-drag for Truck and Pedestal; the wheel for Dolly. A drag is one Undo step for Pan, Tilt and Pedestal; Truck and Dolly move the camera's place, which Undo does not keep.
 - A scene from before the free camera opens with the same view: its old eye's place and height, Pan from Turn, Tilt from Tilt, Dolly from Speed. A turning orbit becomes a turning pan in place.
 - A single value glides to a new slider value in about 0.03 s.
 - Glide also works while paused.
@@ -384,7 +385,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 
 ## Colors
 
-- Color overlay, Trail tint and Camera sky have a color swatch.
+- Color overlay, Trail tint and the camera's Sky have a color swatch.
 - The color picker has a square, a hue strip, a hex field and 9 presets.
 - The picture changes during each drag in the picker.
 - The hex field accepts 3 or 6 digits, with or without "#".

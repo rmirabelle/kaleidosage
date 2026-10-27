@@ -15,7 +15,7 @@ const DEGREES = Math.PI / 180;
  * Returns a function that removes it.
  */
 export function attachCameraDrag(canvas: HTMLCanvasElement, engine: Engine, active: () => boolean) {
-  const on = () => active() && Boolean(engine.state.groups.camera);
+  const on = () => active() && Boolean(engine.state.groups.camera || engine.state.groups.terrain);
   let drag: { id: number; x: number; y: number; move: boolean } | null = null;
 
   /** Where the setting is now: a range's held or moving value, else its value. */

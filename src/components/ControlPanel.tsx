@@ -68,8 +68,9 @@ const TRAIL_KEYS: ParamKey[] = ["trailAmount", "trailZoom", "trailTurn", "trailH
 const CONTOUR_KEYS: ParamKey[] = ["contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady"];
 const RELIEF_KEYS: ParamKey[] = ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"];
 const DRIVER_KEYS: ParamKey[] = ["driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast"];
-const CAMERA_KEYS: ParamKey[] = ["cameraAmount", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraFog", "cameraSky"];
-const TERRAIN_KEYS: ParamKey[] = ["terrainAmount", "cameraHeight", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraShine", "cameraSmooth"];
+/** Camera shares its camera settings with Terrain; only its Opacity (and Blend) are its own. */
+const CAMERA_KEYS: ParamKey[] = ["viewAmount", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraFog", "cameraSky"];
+const TERRAIN_KEYS: ParamKey[] = ["cameraAmount", "cameraHeight", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth"];
 const SORT_KEYS: ParamKey[] = ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"];
 /* The Blend menu and the Opacity slider (particleAmount) come after these, in the Common part at the bottom of the group. */
 const PARTICLE_KEYS: ParamKey[] = ["particleLevel", "particleBackground", "particleCount", "particleSize", "particleLife", "particleSpeed", "particleFollow", "particleCling", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleGradient", "particleBoost"];
@@ -287,8 +288,8 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       smear: () => start("smearAmount", 1),
       relief: () => start("reliefAmount", 0.6),
       driver: () => start("driverAmount", 1),
-      terrain: () => start("terrainAmount", 1),
-      camera: () => start("cameraAmount", 1),
+      terrain: () => start("cameraAmount", 1),
+      camera: () => start("viewAmount", 1),
       solid: () => start("solidAmount", 1),
       sort: () => start("sortAmount", 1),
       particles: () => start("particleAmount", 1),
@@ -372,14 +373,14 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     ),
     terrain: (grip) => (
       <Group engine={engine} group="terrain" title="Terrain" grip={grip} {...accordion("terrain")}>
+        <CameraRepeatRow engine={engine} />
         <TerrainSection engine={engine} row={row} />
       </Group>
     ),
     camera: (grip) => (
       <Group engine={engine} group="camera" title="Camera" grip={grip} {...accordion("camera")}>
-        <CameraBlend engine={engine} />
         <CameraRepeatRow engine={engine} />
-        <SplitRows keys={CAMERA_KEYS} row={row} />
+        <SplitRows keys={CAMERA_KEYS} row={row} blend={<CameraBlend engine={engine} stateKey="viewBlend" />} />
       </Group>
     ),
     solid: (grip) => (
@@ -1132,18 +1133,18 @@ function ContourBlend({ engine }: { engine: Engine }) {
   );
 }
 
-/** How the camera's view combines with the picture under it. */
-function CameraBlend({ engine }: { engine: Engine }) {
-  const [blend, setBlend] = useState(engine.state.cameraBlend);
+/** Terrain's Blend (its raised land over the flat floor), or Camera's (its view over the picture). */
+function CameraBlend({ engine, stateKey }: { engine: Engine; stateKey: "cameraBlend" | "viewBlend" }) {
+  const [blend, setBlend] = useState(engine.state[stateKey]);
   return (
     <div className="panel-select-row panel-layer-blend">
       <span className="panel-row-name">Blend</span>
       <Dropdown
         value={blend}
         options={LAYER_BLENDS}
-        label="Camera blend mode"
+        label={stateKey === "viewBlend" ? "Camera blend mode" : "Terrain blend mode"}
         onChange={(next) => {
-          engine.state.cameraBlend = next;
+          engine.state[stateKey] = next;
           setBlend(next);
         }}
       />
@@ -1260,7 +1261,7 @@ function TerrainSection({ engine, row }: { engine: Engine; row: (key: ParamKey) 
       <ModeSelect engine={engine} stateKey="cameraColors" options={CAMERA_COLORS} name="Colors" onChange={setColors} />
       {source === 2 && <TerrainRows engine={engine} />}
       {colors === 1 && <GradientEditor engine={engine} stateKey="cameraStops" />}
-      <SplitRows keys={keys} row={row} />
+      <SplitRows keys={keys} row={row} blend={<CameraBlend engine={engine} stateKey="cameraBlend" />} />
     </>
   );
 }

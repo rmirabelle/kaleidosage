@@ -370,10 +370,12 @@ describe("randomizeParams", () => {
     }
   });
 
-  it("puts every parameter in exactly one group", () => {
-    const grouped = Object.values(GROUP_PARAMS).flat();
+  it("puts every parameter in exactly one group, except the camera that Camera shares with Terrain", () => {
+    const { camera, ...others } = GROUP_PARAMS;
+    const grouped = Object.values(others).flat();
     expect(new Set(grouped).size).toBe(grouped.length);
-    expect([...grouped].sort()).toEqual([...PARAM_KEYS].sort());
+    expect([...grouped, "viewAmount"].sort()).toEqual([...PARAM_KEYS].sort());
+    expect(camera.filter((key) => key !== "viewAmount").every((key) => GROUP_PARAMS.terrain.includes(key))).toBe(true);
   });
 
   it("keeps every value and range inside the limits", () => {

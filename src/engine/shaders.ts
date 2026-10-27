@@ -1815,39 +1815,11 @@ vec3 cubicAt(vec2 uv, int level) {
 `;
 
 /**
- * The land that Terrain makes and Camera views, shared by TERRAIN_SHADER
- * and CAMERA_SHADER. Its heights are u_fine (0 to 1: the height field of
- * TERRAIN_FIELD_SHADER, in the picture's pixels) times u_height screen
- * heights, and u_max is their pyramid of highest points in ever larger
- * squares of pixels (see MAX_SHADER). Past the picture's edge the land
- * goes on by u_repeat: mirrored (seamless for every picture), repeated as
- * it is, or not at all.
- *
- * march walks a ray over the land with the help of the pyramid. At each
- * visit the ray looks up the square it is in at the current level. If the
- * ray is above the square's highest point, it can skip to where it leaves
- * the square (or sinks to that height) and try a larger square next. If
- * not, it tries a smaller square at the same place, down to one pixel,
- * where the exact crossing is found by closing in. So no step can jump
- * over a ridge, however thin, and the walls of a sharp edge come out clean.
+ * Where a point of the camera's flat picture or land lies in the picture,
+ * shared by TERRAIN_SHADER and CAMERA_SHADER (each declares aspect, u_res
+ * and u_repeat).
  */
-const LAND_GLSL = `
-uniform sampler2D u_fine;
-uniform sampler2D u_max;
-uniform int u_levels;
-uniform vec2 u_res;
-uniform int u_repeat;
-uniform float u_height;
-/**
- * The most squares one ray may visit, from the renderer. A fixed count
- * would let the graphics driver unroll the walk into one enormous program
- * that takes an age to build, or fails.
- */
-uniform int u_visits;
-const float FAR = 12.0;
-
-float aspect;
-
+const REPEAT_GLSL = `
 /* A point of the land (screen heights, the picture's center at 0) in the picture's pixels, before the mirrored repeat. */
 vec2 pixelsAt(vec2 p) { return vec2((p.x / aspect + 0.5) * u_res.x, (p.y + 0.5) * u_res.y); }
 
@@ -1873,6 +1845,110 @@ bool wrapPixels(vec2 at, out vec2 q, out vec2 flip) {
   if (q.y > u_res.y) { q.y = period.y - q.y; flip.y = -1.0; }
   return true;
 }
+`;
+
+/**
+ * Terrain: the picture becomes a landscape seen through a virtual camera
+ * (its camera settings are the ones Camera uses too).
+ * Brightness is height (u_height screen heights at white; below 0, dark
+ * areas rise instead), read from u_fine: the picture's brightness, blurred
+ * and smoothed by the renderer (see drawTerrain), in the picture's pixels.
+ * Past the picture's edge the land goes on by u_repeat: mirrored (seamless
+ * for every picture), repeated as it is, or not at all, so the picture
+ * stands alone with sky around it. The camera is a free camera, as on a
+ * film set: at u_offset on the land (from the picture's center; the engine
+ * moves it by Dolly and Truck), u_pedestal high (kept above the land under
+ * it), looking toward u_pan (0 along +x, counterclockwise) and u_tilt up
+ * from level (below 0 looks down), with a lens of u_lens vertical angle.
+ *
+ * Each pixel's ray walks over the land with the help of u_max: a pyramid
+ * of the land's highest point in ever larger squares of pixels (see
+ * MAX_SHADER). At each visit the ray looks up the square it is in at the
+ * current level. If the ray is above the square's highest point, it can
+ * skip to where it leaves the square (or sinks to that height) and try a
+ * larger square next. If not, it tries a smaller square at the same
+ * place, down to one pixel, where the exact crossing is found by closing
+ * in. So no step can jump over a ridge, however thin, and the walls of a
+ * sharp edge come out clean.
+ *
+ * The hit point is lit by a sun at u_lightTurn and u_lightHeight, with
+ * shadows (u_shadow, found by the same walk toward the sun), a glossy
+ * shine (u_shine), and fog (u_fog) toward the fog color: the picture's
+ * mean color, taken toward u_skyColor by u_sky. The sky, where a ray
+ * misses the land, has that color too. Under it lies a second layer: the
+ * same camera's view of the picture as a flat floor, with the same light
+ * and fog. The raised land (with its sky) is combined with that floor by
+ * u_blend (see blendLayer) and shows over it at u_amount, so the land
+ * seems to rise out of it.
+ */
+export const TERRAIN_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+/* The exact height (read between pixels) and the pyramid of highest points (read by pixel and level). */
+uniform sampler2D u_fine;
+uniform sampler2D u_max;
+uniform int u_levels;
+uniform vec2 u_res;
+uniform float u_amount;
+uniform int u_blend;
+uniform int u_repeat;
+uniform float u_height;
+uniform float u_tilt;
+uniform float u_pan;
+uniform vec2 u_offset;
+uniform float u_pedestal;
+/**
+ * The camera's floor (see cameraFloor). u_floorPass 1 draws only the wide
+ * floor at the camera's place into one pixel, as 16 bits in red and green
+ * (0 to 16 screen heights), for the engine to read back. u_floorMode 1
+ * uses u_floor, the engine's floor eased over time, so the camera rises
+ * and sinks smoothly; 0 (no read back yet) finds the floor here.
+ */
+uniform int u_floorPass;
+uniform int u_floorMode;
+uniform float u_floor;
+uniform float u_lens;
+uniform float u_lightTurn;
+uniform float u_lightHeight;
+uniform float u_shadow;
+uniform float u_fog;
+uniform float u_sky;
+uniform vec3 u_skyColor;
+uniform float u_shine;
+/* The blur of the height (a mip level): how wide the slope of a sharp edge is. */
+uniform float u_smooth;
+/* The land's colors: 0 the picture, 1 the gradient by height (u_stopAt, u_stopColor), 2 the real terrain's picture (u_terrainPicture; see docs/TERRAIN.md). */
+uniform int u_colors;
+uniform sampler2D u_terrainPicture;
+uniform int u_stopCount;
+uniform float u_stopAt[8];
+uniform vec3 u_stopColor[8];
+
+/**
+ * The most squares one ray may visit, from the renderer. A fixed count
+ * would let the graphics driver unroll the walk into one enormous program
+ * that takes an age to build, or fails.
+ */
+uniform int u_visits;
+const float FAR = 12.0;
+
+float aspect;
+
+vec3 blendLayer(vec3 base, vec3 top, int mode) {
+  if (mode == 1) return 1.0 - (1.0 - base) * (1.0 - top);
+  if (mode == 2) return base * top;
+  if (mode == 3) return mix(2.0 * base * top, 1.0 - 2.0 * (1.0 - base) * (1.0 - top), step(0.5, base));
+  if (mode == 4) return abs(base - top);
+  if (mode == 5) return max(base, top);
+  if (mode == 6) return min(base, top);
+  if (mode == 7) return min(base + top, 1.0);
+  return top;
+}
+
+${REPEAT_GLSL}
 
 /* The exact height of the land at a point; far below everything past the picture's edge with no repeat. */
 float heightAt(vec2 p) {
@@ -1880,6 +1956,70 @@ float heightAt(vec2 p) {
   if (!wrapPixels(pixelsAt(p), q, flip)) return -1e6;
   /* An explicit level: the walk's loop reads this, and a plain texture() read there has no defined level. */
   return textureLod(u_fine, q / u_res, 0.0).r * abs(u_height);
+}
+
+/**
+ * The lowest the camera may go at a place: a little above the highest land
+ * in a circle 0.15 screen heights around it (17 points). The highest of
+ * many points moves smoothly as the camera moves, so small bumps under it
+ * hardly move it, and it rises early before a peak. A peak between the
+ * points is caught by the camera's own height check (see main).
+ */
+/**
+ * The same, wider and with more points (0.25 screen heights, 49 points),
+ * for the one-pixel floor pass that the engine reads back and eases over
+ * time (see u_floorPass).
+ */
+float cameraFloorWide(vec2 at) {
+  float highest = heightAt(at);
+  for (int ring = 1; ring <= 4; ring++) {
+    float radius = 0.0625 * float(ring);
+    for (int k = 0; k < 12; k++) {
+      float a = 6.2831853 * (float(k) + 0.5 * float(ring)) / 12.0;
+      highest = max(highest, heightAt(at + radius * vec2(cos(a), sin(a))));
+    }
+  }
+  return highest + 0.03;
+}
+
+float cameraFloor(vec2 at) {
+  float highest = heightAt(at);
+  for (int ring = 1; ring <= 2; ring++) {
+    float radius = 0.075 * float(ring);
+    for (int k = 0; k < 8; k++) {
+      float a = 6.2831853 * (float(k) + 0.5 * float(ring)) / 8.0;
+      highest = max(highest, heightAt(at + radius * vec2(cos(a), sin(a))));
+    }
+  }
+  return highest + 0.03;
+}
+
+/* The height gradient at h (0 to 1), as gradientColorAt in params.ts. */
+vec3 heightColor(float h) {
+  if (h <= u_stopAt[0]) return u_stopColor[0];
+  for (int i = 1; i < 8; i++) {
+    if (i >= u_stopCount) break;
+    if (h <= u_stopAt[i]) {
+      float span = u_stopAt[i] - u_stopAt[i - 1];
+      return mix(u_stopColor[i - 1], u_stopColor[i], span > 0.0 ? (h - u_stopAt[i - 1]) / span : 1.0);
+    }
+  }
+  return u_stopColor[clamp(u_stopCount - 1, 0, 7)];
+}
+
+/**
+ * The land's color at a point seen from "t" away: the picture's (the blur
+ * level comes from the distance, so a cliff's edge gets no dark line), or
+ * with Height colors the gradient at the land's height there (0 at the
+ * lowest, 1 at the highest).
+ */
+vec3 colorAt(vec2 p, float t) {
+  vec2 q, flip;
+  wrapPixels(pixelsAt(p), q, flip);
+  if (u_colors == 1) return heightColor(textureLod(u_fine, q / u_res, 0.0).r);
+  if (u_colors == 2) return textureLod(u_terrainPicture, q / u_res, max(0.0, log2(t * 2.0 * tan(u_lens * 0.5)))).rgb;
+  float lod = max(0.0, log2(t * 2.0 * tan(u_lens * 0.5)));
+  return textureLod(u_tex, q / u_res, lod).rgb;
 }
 
 /**
@@ -1990,190 +2130,6 @@ bool march(vec3 eye, vec3 dir, float t, int visits, bool giveUp, out float tHit)
   tHit = t;
   return giveUp;
 }
-`;
-
-/**
- * Terrain: the picture becomes land, lit from straight above, like a
- * shaded relief map. A Camera later in the list views the same land in 3D
- * (see drawTerrain). The land's heights come from the picture's
- * brightness, generated mountains or real terrain (see
- * TERRAIN_FIELD_SHADER), at u_height screen heights at the highest.
- *
- * Each pixel is lit by a sun at u_lightTurn and u_lightHeight, with
- * shadows (u_shadow, found by a walk over the land toward the sun) and a
- * glossy shine (u_shine, as seen from straight above). Its color is the
- * picture's, or by u_colors the height gradient (u_stopAt, u_stopColor) or
- * the real terrain's picture (u_terrainPicture; see docs/TERRAIN.md). The
- * color comes from a little uphill (as far as the blur of the height,
- * u_smooth, spreads an edge), so the slope of a sharp edge takes the color
- * of its top, not a mix of both sides. The lit land shows over the picture
- * at u_amount.
- */
-export const TERRAIN_SHADER = `#version 300 es
-precision highp float;
-precision highp int;
-in vec2 v_uv;
-out vec4 o;
-uniform sampler2D u_tex;
-uniform float u_amount;
-uniform float u_lightTurn;
-uniform float u_lightHeight;
-uniform float u_shadow;
-uniform float u_shine;
-/* The blur of the height (a mip level): how wide the slope of a sharp edge is. */
-uniform float u_smooth;
-uniform int u_colors;
-uniform sampler2D u_terrainPicture;
-uniform int u_stopCount;
-uniform float u_stopAt[8];
-uniform vec3 u_stopColor[8];
-${LAND_GLSL}
-${COVER_GLSL}
-
-/* The height gradient at h (0 to 1), as gradientColorAt in params.ts. */
-vec3 heightColor(float h) {
-  if (h <= u_stopAt[0]) return u_stopColor[0];
-  for (int i = 1; i < 8; i++) {
-    if (i >= u_stopCount) break;
-    if (h <= u_stopAt[i]) {
-      float span = u_stopAt[i] - u_stopAt[i - 1];
-      return mix(u_stopColor[i - 1], u_stopColor[i], span > 0.0 ? (h - u_stopAt[i - 1]) / span : 1.0);
-    }
-  }
-  return u_stopColor[clamp(u_stopCount - 1, 0, 7)];
-}
-
-/* The land's color at a point: the picture's, the height gradient at the land's height there (0 at the lowest, 1 at the highest), or the terrain picture's. */
-vec3 landColor(vec2 p) {
-  vec2 q, flip;
-  wrapPixels(pixelsAt(p), q, flip);
-  if (u_colors == 1) return heightColor(textureLod(u_fine, q / u_res, 0.0).r);
-  if (u_colors == 2) return texture(u_terrainPicture, q / u_res).rgb;
-  return textureLod(u_tex, q / u_res, 0.0).rgb;
-}
-
-void main() {
-  aspect = u_res.x / u_res.y;
-  /* This pixel's point of the land (pixelsAt the other way). */
-  vec2 p = vec2((v_uv.x - 0.5) * aspect, v_uv.y - 0.5);
-  float e = 1.0 / u_res.y;
-  vec3 normal = normalize(vec3(heightAt(p - vec2(e, 0.0)) - heightAt(p + vec2(e, 0.0)), heightAt(p - vec2(0.0, e)) - heightAt(p + vec2(0.0, e)), 2.0 * e));
-  vec3 sun = vec3(cos(u_lightTurn) * cos(u_lightHeight), sin(u_lightTurn) * cos(u_lightHeight), sin(u_lightHeight));
-  float diffuse = max(dot(normal, sun), 0.0);
-  float lit = 1.0;
-  if (u_shadow > 0.0 && diffuse > 0.0) {
-    float tShadow;
-    if (march(vec3(p, heightAt(p)) + normal * (2.0 * e), sun, 0.0, u_visits / 2, false, tShadow)) lit = 1.0 - u_shadow;
-  }
-  float light = 0.3 + 0.7 * diffuse * lit;
-  vec3 ground = landColor(p - normal.xy * 2.0 * exp2(u_smooth) / u_res.y);
-  /* Shine: a glossy highlight where the land faces halfway between the sun and straight up. */
-  float gloss = pow(max(dot(normal, normalize(sun + vec3(0.0, 0.0, 1.0))), 0.0), 40.0) * lit;
-  vec3 land = clamp(ground * light + u_shine * gloss, 0.0, 1.0);
-  /* The land is opaque, over the picture at u_amount (as blendCover's Normal). */
-  vec4 base = textureLod(u_tex, v_uv, 0.0);
-  o = covered(mix(straight(base), land, u_amount), mix(base.a, 1.0, u_amount));
-}`;
-
-/**
- * Camera: the picture seen through a virtual camera. The camera is a free
- * camera, as on a film set: at u_offset on the land (from the picture's
- * center; the engine moves it by Dolly and Truck), u_pedestal high (kept
- * above the land under it), looking toward u_pan (0 along +x,
- * counterclockwise) and u_tilt up from level (below 0 looks down), with a
- * lens of u_lens vertical angle. The picture lies flat at height 0, or,
- * after a Terrain, it is that Terrain's land (u_height above 0; see
- * LAND_GLSL). Past the picture's edge the land goes on by u_repeat; with
- * no repeat the picture stands alone with sky around it.
- *
- * The view has fog (u_fog) toward the fog color: the picture's mean color,
- * taken toward u_skyColor by u_sky. The sky, where a ray misses the land,
- * has that color too. The view shows over the picture by u_blend (see
- * blendLayer) at u_amount.
- */
-export const CAMERA_SHADER = `#version 300 es
-precision highp float;
-precision highp int;
-in vec2 v_uv;
-out vec4 o;
-uniform sampler2D u_tex;
-uniform float u_amount;
-uniform int u_blend;
-uniform float u_tilt;
-uniform float u_pan;
-uniform vec2 u_offset;
-uniform float u_pedestal;
-/**
- * The camera's floor (see cameraFloor). u_floorPass 1 draws only the wide
- * floor at the camera's place into one pixel, as 16 bits in red and green
- * (0 to 16 screen heights), for the engine to read back. u_floorMode 1
- * uses u_floor, the engine's floor eased over time, so the camera rises
- * and sinks smoothly; 0 (no read back yet) finds the floor here.
- */
-uniform int u_floorPass;
-uniform int u_floorMode;
-uniform float u_floor;
-uniform float u_lens;
-uniform float u_fog;
-uniform float u_sky;
-uniform vec3 u_skyColor;
-${LAND_GLSL}
-
-vec3 blendLayer(vec3 base, vec3 top, int mode) {
-  if (mode == 1) return 1.0 - (1.0 - base) * (1.0 - top);
-  if (mode == 2) return base * top;
-  if (mode == 3) return mix(2.0 * base * top, 1.0 - 2.0 * (1.0 - base) * (1.0 - top), step(0.5, base));
-  if (mode == 4) return abs(base - top);
-  if (mode == 5) return max(base, top);
-  if (mode == 6) return min(base, top);
-  if (mode == 7) return min(base + top, 1.0);
-  return top;
-}
-${COVER_GLSL}
-${BLEND_COVER_GLSL}
-
-/**
- * The lowest the camera may go at a place: a little above the highest land
- * in a circle 0.15 screen heights around it (17 points). The highest of
- * many points moves smoothly as the camera moves, so small bumps under it
- * hardly move it, and it rises early before a peak. A peak between the
- * points is caught by the camera's own height check (see main).
- */
-/**
- * The same, wider and with more points (0.25 screen heights, 49 points),
- * for the one-pixel floor pass that the engine reads back and eases over
- * time (see u_floorPass).
- */
-float cameraFloorWide(vec2 at) {
-  float highest = heightAt(at);
-  for (int ring = 1; ring <= 4; ring++) {
-    float radius = 0.0625 * float(ring);
-    for (int k = 0; k < 12; k++) {
-      float a = 6.2831853 * (float(k) + 0.5 * float(ring)) / 12.0;
-      highest = max(highest, heightAt(at + radius * vec2(cos(a), sin(a))));
-    }
-  }
-  return highest + 0.03;
-}
-
-float cameraFloor(vec2 at) {
-  float highest = heightAt(at);
-  for (int ring = 1; ring <= 2; ring++) {
-    float radius = 0.075 * float(ring);
-    for (int k = 0; k < 8; k++) {
-      float a = 6.2831853 * (float(k) + 0.5 * float(ring)) / 8.0;
-      highest = max(highest, heightAt(at + radius * vec2(cos(a), sin(a))));
-    }
-  }
-  return highest + 0.03;
-}
-
-/* The picture's color at a point of the land seen from "t" away: the blur level comes from the distance, so a cliff's edge gets no dark line. */
-vec3 colorAt(vec2 p, float t) {
-  vec2 q, flip;
-  wrapPixels(pixelsAt(p), q, flip);
-  return textureLod(u_tex, q / u_res, max(0.0, log2(t * 2.0 * tan(u_lens * 0.5)))).rgb;
-}
 
 void main() {
   aspect = u_res.x / u_res.y;
@@ -2197,24 +2153,121 @@ void main() {
   vec3 dir = normalize(forward + tan(u_lens * 0.5) * (screen.x * right + screen.y * up));
 
   vec3 fog = mix(textureLod(u_tex, vec2(0.5), 12.0).rgb * 0.5, u_skyColor, u_sky);
+  vec3 sun = vec3(cos(u_lightTurn) * cos(u_lightHeight), sin(u_lightTurn) * cos(u_lightHeight), sin(u_lightHeight));
+  /* The sky: the fog color, a little lighter toward the horizon. */
+  vec3 sky = fog * (1.0 + 0.6 * max(0.0, 1.0 - dir.z * 4.0));
+  /* The floor layer: the same ray meets the flat picture at height 0, lit by the sun from straight up. */
+  vec3 floor_ = sky;
+  if (dir.z < 0.0) {
+    float tf = eye.z / -dir.z;
+    vec2 q, flip;
+    if (wrapPixels(pixelsAt((eye + dir * tf).xy), q, flip)) {
+      vec3 ground = colorAt((eye + dir * tf).xy, tf);
+      floor_ = mix(ground * (0.3 + 0.7 * sun.z), fog, 1.0 - exp(-tf * u_fog * 0.5));
+    }
+  }
+
+  /**
+   * The land: the walk starts where the ray first comes under the highest
+   * possible land. A camera lower than that (in a valley) starts at once,
+   * and its rays that look up can meet the land too.
+   */
+  vec3 color = sky;
+  float t;
+  bool low = eye.z < top;
+  if ((dir.z < 0.0 || low) && march(eye, dir, low ? 0.0 : (eye.z - top) / -dir.z, u_visits, true, t)) {
+    vec3 p = eye + dir * t;
+    float e = 1.0 / u_res.y;
+    vec3 normal = normalize(vec3(heightAt(p.xy - vec2(e, 0.0)) - heightAt(p.xy + vec2(e, 0.0)), heightAt(p.xy - vec2(0.0, e)) - heightAt(p.xy + vec2(0.0, e)), 2.0 * e));
+    float diffuse = max(dot(normal, sun), 0.0);
+    float lit = 1.0;
+    if (u_shadow > 0.0 && diffuse > 0.0) {
+      float tShadow;
+      if (march(p + normal * (2.0 * e), sun, 0.0, u_visits / 2, false, tShadow)) lit = 1.0 - u_shadow;
+    }
+    float light = 0.3 + 0.7 * diffuse * lit;
+    /**
+     * The color comes from a little uphill of the hit point (as far as the
+     * blur of the height spreads an edge), so the slope of a sharp edge
+     * takes the color of its top, not a mix of both sides.
+     */
+    vec3 ground = colorAt(p.xy - normal.xy * 2.0 * exp2(u_smooth) / u_res.y, t);
+    /* Shine: a glossy highlight where the land faces halfway between the sun and the camera. */
+    vec3 halfway = normalize(sun - dir);
+    float gloss = pow(max(dot(normal, halfway), 0.0), 40.0) * lit;
+    color = mix(ground * light + u_shine * gloss, fog, 1.0 - exp(-t * u_fog * 0.5));
+  }
+  /* The camera shows a whole world with a sky, so its picture is opaque (see COVER_GLSL). */
+  o = vec4(clamp(mix(floor_, blendLayer(floor_, clamp(color, 0.0, 1.0), u_blend), u_amount), 0.0, 1.0), 1.0);
+}`;
+
+/**
+ * Camera: the picture made so far, lying flat, seen through a virtual
+ * camera. It has the camera settings of Terrain: at u_offset on the
+ * picture (from its center; the engine moves it by Dolly and Truck),
+ * u_pedestal high, looking toward u_pan (0 along +x, counterclockwise) and
+ * u_tilt up from level (below 0 looks down), with a lens of u_lens
+ * vertical angle. Past the picture's edge it goes on by u_repeat; with no
+ * repeat the picture stands alone with sky around it. The view has fog
+ * (u_fog) toward the fog color: the picture's mean color, taken toward
+ * u_skyColor by u_sky. The sky has that color too. The view shows over the
+ * picture by u_blend (see blendLayer) at u_amount.
+ */
+export const CAMERA_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform vec2 u_res;
+uniform int u_repeat;
+uniform float u_amount;
+uniform int u_blend;
+uniform float u_tilt;
+uniform float u_pan;
+uniform vec2 u_offset;
+uniform float u_pedestal;
+uniform float u_lens;
+uniform float u_fog;
+uniform float u_sky;
+uniform vec3 u_skyColor;
+
+float aspect;
+${REPEAT_GLSL}
+
+vec3 blendLayer(vec3 base, vec3 top, int mode) {
+  if (mode == 1) return 1.0 - (1.0 - base) * (1.0 - top);
+  if (mode == 2) return base * top;
+  if (mode == 3) return mix(2.0 * base * top, 1.0 - 2.0 * (1.0 - base) * (1.0 - top), step(0.5, base));
+  if (mode == 4) return abs(base - top);
+  if (mode == 5) return max(base, top);
+  if (mode == 6) return min(base, top);
+  if (mode == 7) return min(base + top, 1.0);
+  return top;
+}
+${COVER_GLSL}
+${BLEND_COVER_GLSL}
+
+void main() {
+  aspect = u_res.x / u_res.y;
+  vec3 eye = vec3(u_offset, u_pedestal);
+  vec3 forward = vec3(cos(u_tilt) * cos(u_pan), cos(u_tilt) * sin(u_pan), sin(u_tilt));
+  vec3 right = vec3(sin(u_pan), -cos(u_pan), 0.0);
+  vec3 up = cross(right, forward);
+  vec2 screen = (v_uv - 0.5) * vec2(2.0 * aspect, 2.0);
+  vec3 dir = normalize(forward + tan(u_lens * 0.5) * (screen.x * right + screen.y * up));
+
+  vec3 fog = mix(textureLod(u_tex, vec2(0.5), 12.0).rgb * 0.5, u_skyColor, u_sky);
   /* The sky: the fog color, a little lighter toward the horizon. */
   vec3 color = fog * (1.0 + 0.6 * max(0.0, 1.0 - dir.z * 4.0));
-  /**
-   * Where the ray meets the land (-1 for none). On land, the walk starts
-   * where the ray first comes under the highest possible land. A camera
-   * lower than that (in a valley) starts at once, and its rays that look up
-   * can meet the land too. A flat picture is met at height 0.
-   */
-  float t = -1.0;
-  if (top > 0.0) {
-    bool low = eye.z < top;
-    if (!((dir.z < 0.0 || low) && march(eye, dir, low ? 0.0 : (eye.z - top) / -dir.z, u_visits, true, t))) t = -1.0;
-  } else if (dir.z < 0.0) {
-    t = eye.z / -dir.z;
+  if (dir.z < 0.0) {
+    float t = eye.z / -dir.z;
     vec2 q, flip;
-    if (!wrapPixels(pixelsAt((eye + dir * t).xy), q, flip)) t = -1.0;
+    if (wrapPixels(pixelsAt((eye + dir * t).xy), q, flip)) {
+      /* The blur level comes from the distance, so the far picture does not flicker. */
+      vec3 ground = textureLod(u_tex, q / u_res, max(0.0, log2(t * 2.0 * tan(u_lens * 0.5)))).rgb;
+      color = mix(ground, fog, 1.0 - exp(-t * u_fog * 0.5));
+    }
   }
-  if (t >= 0.0) color = mix(colorAt((eye + dir * t).xy, t), fog, 1.0 - exp(-t * u_fog * 0.5));
   o = blendCover(textureLod(u_tex, v_uv, 0.0), vec4(clamp(color, 0.0, 1.0), 1.0), u_blend, u_amount);
 }`;
 

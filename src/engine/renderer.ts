@@ -301,24 +301,24 @@ export interface FrameValues {
   lightAngle: number;
   shine: number;
   /**
-   * Terrain (see TERRAIN_SHADER): whether it is on (then its land shapes
-   * a Camera after it, also at opacity 0), how much of the lit land shows
-   * over the picture, the land's height (cameraHeight), the sun's turn and
-   * height (radians), the shadows, the shine of the land, and the blur of
-   * the height (a mip level). Its settings keep the names they had when
-   * Camera made the land, so scenes and MIDI links still find them.
+   * Terrain (see TERRAIN_SHADER): whether it is on (then its view always
+   * shows, even of a flat floor), how much of the raised land shows over
+   * the floor and how it combines with it (see blendLayer), the land's
+   * height, the sun's turn and height (radians), the shadows, the shine of
+   * the land, and the blur of the height (a mip level).
    */
   terrainOn: boolean;
   terrain: number;
+  terrainBlend: LayerBlend;
+  /** Camera (see CAMERA_SHADER): how much its view of the flat picture shows over the picture (0 = off), and how it combines with it. */
+  view: number;
+  viewBlend: LayerBlend;
   /**
-   * Camera (see CAMERA_SHADER): how much its view shows over the picture
-   * (0 = off), how it combines with the picture (see blendLayer), how the
-   * land goes on past the picture (Terrain's lighting reads the land the
-   * same way), its tilt and pan (radians), place, height and lens angle
+   * The camera that Terrain and Camera share: how the picture goes on past
+   * its edge, its tilt and pan (radians), place, height and lens angle
    * (radians), the fog, how much the sky and fog take the sky color, and
    * that color.
    */
-  cameraBlend: LayerBlend;
   cameraRepeat: CameraRepeat;
   /** The land heights' source, and Generated's settings: the size of the land's features (about how many across its height), roughness, ridges and seed. */
   cameraHeightSource: CameraHeightSource;
@@ -334,7 +334,6 @@ export interface FrameValues {
   cameraColors: CameraColors;
   cameraStopAt: Float32Array;
   cameraStopColor: Float32Array;
-  camera: number;
   cameraHeight: number;
   /** The free camera (see CAMERA_SHADER): its tilt up from level and its pan (radians), its place on the land and its height (screen heights). */
   cameraTilt: number;
@@ -703,8 +702,6 @@ export class KaleidoRenderer {
   private readonly fieldTargets: [Target, Target];
   /** Terrain's height field, and its pyramid of highest points with one mip level per square size (see drawTerrain). */
   private readonly heightTarget: Target;
-  /** The land of this frame's Terrain, for a Camera after it: its height at the highest (screen heights), or null before a Terrain has drawn. */
-  private landHeight: number | null = null;
   private maxTexture: WebGLTexture | null = null;
   /** Separate output for reductions: never sample a texture while drawing into it. */
   private maxReduction: WebGLTexture | null = null;
@@ -1081,7 +1078,6 @@ export class KaleidoRenderer {
 
     const active = this.activeSteps(v);
     this.active = active;
-    this.landHeight = null;
     if (v.mapMode === 9 && active.map) this.updateMandelStrips(v, width, height);
     else this.stripPass = [null, null];
     const opacity = (step: ShapeStep) => Math.min(1, Math.max(0, v.shapeOpacity[step]));
@@ -1131,9 +1127,9 @@ export class KaleidoRenderer {
       contours: v.contours > 0,
       relief: v.relief > 0,
       driver: v.driver > 0,
-      /* Terrain works while it is on, also at opacity 0: its land still shapes a Camera after it. */
+      /* Terrain's view always shows while it is on: at opacity 0 it is the flat floor, seen by the camera. */
       terrain: v.terrainOn,
-      camera: v.camera > 0,
+      camera: v.view > 0,
       particles: v.particles > 0 && this.floatTargets,
       cycles: v.cycles > 0,
       solid: v.solid > 0,
@@ -1573,18 +1569,16 @@ export class KaleidoRenderer {
   }
 
   /**
-   * Terrain: the picture as land, lit from straight above (see
-   * TERRAIN_SHADER), in three steps. First the height field
-   * (TERRAIN_FIELD_SHADER): the picture's brightness from a smaller copy
-   * (mip level Smooth), read with smooth cubic curves, or generated
-   * mountains, or real terrain. Then the pyramid of highest points
+   * Terrain: the picture as a landscape under the camera (see
+   * TERRAIN_SHADER), in three steps. First the height field: the picture's
+   * brightness from a smaller copy (mip level Smooth), read with smooth
+   * cubic curves (TERRAIN_FIELD_SHADER). Then the pyramid of highest points
    * (MAX_SHADER): level 0 is the field widened by a pixel, and each next
    * level holds the highest point of squares twice as large, so the rays
-   * can skip land they cannot hit. Then the light, which reads the field,
-   * the pyramid, and the picture for color. The field and the pyramid stay
-   * for a Camera after it in this frame (see landHeight). The picture gets
-   * mip levels here and loses them again after, because the picture
-   * textures are also read without them.
+   * can skip land they cannot hit. Then the view, which reads the field,
+   * the pyramid, and the picture for color. The picture gets mip levels
+   * here and loses them again after, because the picture textures are
+   * also read without them.
    */
   private drawTerrain(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
     const gl = this.gl;
@@ -1637,93 +1631,53 @@ export class KaleidoRenderer {
       if (level > 0) gl.copyTexSubImage2D(gl.TEXTURE_2D, level, 0, 0, 0, 0, side, side);
     }
 
-    /* Real terrain's heights are 0 to 1 over its lowest to highest land; its relief scales Height, so Height 0.25 shows it at twice its true height. With no land loaded, it is flat. */
-    this.landHeight = Math.abs(v.cameraHeight * (v.cameraHeightSource !== 2 ? 1 : terrain ? this.terrainRelief * 8 : 0));
-
-    const t = this.terrainProgram;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
-    gl.viewport(0, 0, width, height);
-    gl.useProgram(t.program);
-    this.bindLand(t, source, width, height);
-    /* With no repeat, the light reads the land past the edge mirrored, so the edge pixels keep their slope. */
-    gl.uniform1i(t.uniforms.u_repeat, v.cameraRepeat === 2 ? 0 : v.cameraRepeat);
-    gl.uniform1f(t.uniforms.u_amount, Math.min(1, Math.max(0, v.terrain)));
-    gl.uniform1f(t.uniforms.u_lightTurn, v.cameraLightTurn);
-    gl.uniform1f(t.uniforms.u_lightHeight, v.cameraLightHeight);
-    gl.uniform1f(t.uniforms.u_shadow, Math.min(1, Math.max(0, v.cameraShadow)));
-    gl.uniform1f(t.uniforms.u_shine, Math.max(0, v.cameraShine));
-    gl.uniform1f(t.uniforms.u_smooth, Math.max(0, v.cameraSmooth));
-    /* With no terrain picture, Terrain picture colors are Height colors. */
-    const colors = v.cameraColors === 2 && this.terrainPicture === null ? 1 : v.cameraColors ?? 0;
-    gl.uniform1i(t.uniforms.u_colors, colors);
-    gl.activeTexture(gl.TEXTURE3);
-    gl.bindTexture(gl.TEXTURE_2D, this.terrainPicture ?? source);
-    gl.uniform1i(t.uniforms.u_terrainPicture, 3);
-    gl.activeTexture(gl.TEXTURE0);
-    if (v.cameraStopAt) {
-      gl.uniform1i(t.uniforms.u_stopCount, v.cameraStopAt.length);
-      gl.uniform1fv(t.uniforms["u_stopAt[0]"], v.cameraStopAt);
-      gl.uniform3fv(t.uniforms["u_stopColor[0]"], v.cameraStopColor);
-    }
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, source);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  }
-
-  /**
-   * The land's textures and size for TERRAIN_SHADER or CAMERA_SHADER (see
-   * LAND_GLSL): the picture on unit 0, the height field on 1 and the
-   * pyramid on 2. The land's height is this frame's Terrain's, or 0 (flat).
-   */
-  private bindLand(p: Program, source: WebGLTexture, width: number, height: number) {
-    const gl = this.gl;
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, source);
-    gl.uniform1i(p.uniforms.u_tex, 0);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.heightTarget.texture);
-    gl.uniform1i(p.uniforms.u_fine, 1);
-    gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, this.maxTexture);
-    gl.uniform1i(p.uniforms.u_max, 2);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.uniform1i(p.uniforms.u_levels, this.maxLevels);
-    /* Enough for a ray that runs along a wall of a grid picture seen straight along the grid (Turn 0°, 90°, 180°, 270°). */
-    gl.uniform1i(p.uniforms.u_visits, 1024);
-    gl.uniform2f(p.uniforms.u_res, width, height);
-    gl.uniform1f(p.uniforms.u_height, this.landHeight ?? 0);
-  }
-
-  /**
-   * Camera: the picture under a virtual camera (see CAMERA_SHADER): the
-   * land of a Terrain before it in this frame (its height field and
-   * pyramid), or the flat picture. The picture gets mip levels for the
-   * view, so far land does not flicker, and loses them again after.
-   */
-  private drawCamera(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
-    const gl = this.gl;
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, source);
-    gl.generateMipmap(gl.TEXTURE_2D);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-
-    const c = this.camera;
+    const c = this.terrainProgram;
     gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
     gl.viewport(0, 0, width, height);
     gl.useProgram(c.program);
-    this.bindLand(c, source, width, height);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.uniform1i(c.uniforms.u_tex, 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.heightTarget.texture);
+    gl.uniform1i(c.uniforms.u_fine, 1);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, pyramid);
+    gl.uniform1i(c.uniforms.u_max, 2);
+    gl.uniform1i(c.uniforms.u_levels, this.maxLevels);
+    /* Enough for a ray that runs along a wall of a grid picture seen straight along the grid (Turn 0°, 90°, 180°, 270°). */
+    gl.uniform1i(c.uniforms.u_visits, 1024);
+    gl.uniform2f(c.uniforms.u_res, width, height);
+    gl.uniform1f(c.uniforms.u_amount, Math.min(1, Math.max(0, v.terrain)));
+    gl.uniform1i(c.uniforms.u_blend, v.terrainBlend);
     gl.uniform1i(c.uniforms.u_repeat, v.cameraRepeat);
-    gl.uniform1f(c.uniforms.u_amount, Math.min(1, Math.max(0, v.camera)));
-    gl.uniform1i(c.uniforms.u_blend, v.cameraBlend);
+    /* Real terrain's heights are 0 to 1 over its lowest to highest land; its relief scales Height, so Height 0.25 shows it at twice its true height. With no land loaded, it is flat. */
+    gl.uniform1f(c.uniforms.u_height, v.cameraHeight * (v.cameraHeightSource !== 2 ? 1 : terrain ? this.terrainRelief * 8 : 0));
     gl.uniform1f(c.uniforms.u_tilt, v.cameraTilt);
     gl.uniform1f(c.uniforms.u_pan, v.cameraPan);
     gl.uniform2f(c.uniforms.u_offset, v.cameraX, v.cameraY);
     gl.uniform1f(c.uniforms.u_pedestal, Math.max(0.01, v.cameraPedestal));
     gl.uniform1f(c.uniforms.u_lens, v.cameraLens);
+    gl.uniform1f(c.uniforms.u_lightTurn, v.cameraLightTurn);
+    gl.uniform1f(c.uniforms.u_lightHeight, v.cameraLightHeight);
+    gl.uniform1f(c.uniforms.u_shadow, Math.min(1, Math.max(0, v.cameraShadow)));
     gl.uniform1f(c.uniforms.u_fog, Math.max(0, v.cameraFog));
     gl.uniform1f(c.uniforms.u_sky, Math.min(1, Math.max(0, v.cameraSky)));
     gl.uniform3f(c.uniforms.u_skyColor, ...v.skyColor);
+    gl.uniform1f(c.uniforms.u_shine, Math.max(0, v.cameraShine));
+    gl.uniform1f(c.uniforms.u_smooth, Math.max(0, v.cameraSmooth));
+    /* With no terrain picture, Terrain picture colors are Height colors. */
+    const colors = v.cameraColors === 2 && this.terrainPicture === null ? 1 : v.cameraColors ?? 0;
+    gl.uniform1i(c.uniforms.u_colors, colors);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, this.terrainPicture ?? source);
+    gl.uniform1i(c.uniforms.u_terrainPicture, 3);
+    gl.activeTexture(gl.TEXTURE0);
+    if (v.cameraStopAt) {
+      gl.uniform1i(c.uniforms.u_stopCount, v.cameraStopAt.length);
+      gl.uniform1fv(c.uniforms["u_stopAt[0]"], v.cameraStopAt);
+      gl.uniform3fv(c.uniforms["u_stopColor[0]"], v.cameraStopColor);
+    }
     this.readCameraFloor();
     if (!this.floorRead?.fence) {
       this.startCameraFloor();
@@ -1736,6 +1690,39 @@ export class KaleidoRenderer {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  }
+
+
+  /**
+   * Camera: the picture made so far, lying flat under the camera (see
+   * CAMERA_SHADER). The picture gets mip levels for the view, so its far
+   * part does not flicker, and loses them again after.
+   */
+  private drawCamera(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+    const gl = this.gl;
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    const c = this.camera;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(c.program);
+    gl.uniform1i(c.uniforms.u_tex, 0);
+    gl.uniform2f(c.uniforms.u_res, width, height);
+    gl.uniform1i(c.uniforms.u_repeat, v.cameraRepeat);
+    gl.uniform1f(c.uniforms.u_amount, Math.min(1, Math.max(0, v.view)));
+    gl.uniform1i(c.uniforms.u_blend, v.viewBlend);
+    gl.uniform1f(c.uniforms.u_tilt, v.cameraTilt);
+    gl.uniform1f(c.uniforms.u_pan, v.cameraPan);
+    gl.uniform2f(c.uniforms.u_offset, v.cameraX, v.cameraY);
+    gl.uniform1f(c.uniforms.u_pedestal, Math.max(0.01, v.cameraPedestal));
+    gl.uniform1f(c.uniforms.u_lens, v.cameraLens);
+    gl.uniform1f(c.uniforms.u_fog, Math.max(0, v.cameraFog));
+    gl.uniform1f(c.uniforms.u_sky, Math.min(1, Math.max(0, v.cameraSky)));
+    gl.uniform3f(c.uniforms.u_skyColor, ...v.skyColor);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   }
 
@@ -2512,7 +2499,7 @@ export class KaleidoRenderer {
       this.floorRead = { texture, framebuffer, buffer, fence: null };
     }
     const read = this.floorRead;
-    const c = this.camera;
+    const c = this.terrainProgram;
     gl.bindFramebuffer(gl.FRAMEBUFFER, read.framebuffer);
     gl.viewport(0, 0, 1, 1);
     gl.uniform1i(c.uniforms.u_floorPass, 1);
