@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import { createPlayState } from "./params";
 import { EFFECT_COLUMNS, EFFECT_NAMES, effectName, isShown, shownIn, submodeNote, submodeOf } from "./submodes";
 
-describe("Add effect menu groups", () => {
-  it("put every effect in exactly one group, A to Z inside each group", () => {
-    const listed = EFFECT_COLUMNS.flat().flatMap(([, steps]) => steps);
+describe("Add effect menu columns", () => {
+  it("list every effect once, A to Z down the left column and then the right", () => {
+    const listed = EFFECT_COLUMNS.flat();
     expect([...listed].sort()).toEqual(EFFECT_NAMES.map(([step]) => step).sort());
-    for (const [, steps] of EFFECT_COLUMNS.flat()) {
-      const names = steps.map(effectName);
-      expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
-    }
+    const names = listed.map(effectName);
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
+    expect(EFFECT_COLUMNS[0].length - EFFECT_COLUMNS[1].length).toBeGreaterThanOrEqual(0);
+    expect(EFFECT_COLUMNS[0].length - EFFECT_COLUMNS[1].length).toBeLessThanOrEqual(1);
   });
 });
 

@@ -11,13 +11,15 @@ export const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
 export const effectName = (step: FxStep) => EFFECT_NAMES.find(([key]) => key === step)?.[1] ?? step;
 
 /**
- * The Add effect menu's two columns of named groups. Each group lists its
- * effects by name, A to Z. Every effect is in exactly one group.
+ * The Add effect menu's two columns: every effect by name, A to Z, down the
+ * left column and then down the right one. The left column holds the extra
+ * name when the count is odd.
  */
-export const EFFECT_COLUMNS: readonly (readonly (readonly [string, readonly FxStep[]])[])[] = ([
-  [["Space", ["map", "kaleidoscope", "warp"]], ["Time", ["smear", "trails"]], ["Texture", ["contours", "driver", "sort", "relief"]], ["3D", ["solid", "camera", "terrain"]]],
-  [["Light", ["bloom", "lasers", "cycles", "rays", "outlines", "particles"]], ["Overlay", ["picture"]], ["Finish", ["blur", "color", "levels", "sharpen"]]]
-] as const).map((column) => column.map(([title, steps]) => [title, [...steps].sort((a, b) => effectName(a).localeCompare(effectName(b)))] as const));
+export const EFFECT_COLUMNS: readonly (readonly FxStep[])[] = (() => {
+  const sorted = EFFECT_NAMES.map(([step]) => step).sort((a, b) => effectName(a).localeCompare(effectName(b)));
+  const half = Math.ceil(sorted.length / 2);
+  return [sorted.slice(0, half), sorted.slice(half)];
+})();
 
 /**
  * The submode menus of the effect groups (Kaleidoscope's Radial or tiles,

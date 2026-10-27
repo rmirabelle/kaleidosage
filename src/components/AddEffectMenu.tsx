@@ -44,15 +44,15 @@ for (const [path, url] of Object.entries(import.meta.glob<string>("../assets/fx/
 }
 
 /** The menu's effects in key order: the left column top to bottom, then the right column. */
-const ORDER: readonly FxStep[] = EFFECT_COLUMNS.flat().flatMap(([, steps]) => steps);
+const ORDER: readonly FxStep[] = EFFECT_COLUMNS.flat();
 
 /** An effect with types shows the next type's thumbnail after this time. */
 const TYPE_MS = 1000;
 
 /**
  * The + New button at the end of the FX title bar. It opens the Add effect
- * menu at the right of the button: two columns of effect names in named
- * groups (see EFFECT_COLUMNS). The highlighted name shows a preview frame
+ * menu at the right of the button: two columns of effect names, A to Z
+ * (see EFFECT_COLUMNS). The highlighted name shows a preview frame
  * at the right of both columns, with its thumbnails (one per type, in
  * turn) and a short note. Effects that are in the list already show dimmed
  * and cannot be picked. A pick adds that effect and closes the menu. Keys:
@@ -232,28 +232,25 @@ function AddEffectList({ button, taken, onPick, onClose }: {
         <div className="add-effect-columns">
           {EFFECT_COLUMNS.map((column, columnIndex) => (
             <div key={columnIndex} className="add-effect-column" role="group">
-              {column.map(([title, steps]) => [
-                <div key={title} className="add-effect-group" role="presentation">{title}</div>,
-                ...steps.map((step) => {
-                  const index = ORDER.indexOf(step);
-                  const inList = !canPick(index);
-                  return (
-                    <button
-                      key={step}
-                      ref={(element) => { itemRefs.current[index] = element; }}
-                      role="menuitem"
-                      aria-disabled={inList}
-                      className={`toolbar-dropdown-item ${index === active ? "active" : ""} ${inList ? "in-list" : ""}`}
-                      tabIndex={index === active ? 0 : -1}
-                      onPointerEnter={() => setActive(index)}
-                      onClick={() => !inList && onPick(step)}
-                    >
-                      {effectName(step)}
-                      {inList && <span className="add-effect-added">Added</span>}
-                    </button>
-                  );
-                })
-              ])}
+              {column.map((step) => {
+                const index = ORDER.indexOf(step);
+                const inList = !canPick(index);
+                return (
+                  <button
+                    key={step}
+                    ref={(element) => { itemRefs.current[index] = element; }}
+                    role="menuitem"
+                    aria-disabled={inList}
+                    className={`toolbar-dropdown-item ${index === active ? "active" : ""} ${inList ? "in-list" : ""}`}
+                    tabIndex={index === active ? 0 : -1}
+                    onPointerEnter={() => setActive(index)}
+                    onClick={() => !inList && onPick(step)}
+                  >
+                    {effectName(step)}
+                    {inList && <span className="add-effect-added">Added</span>}
+                  </button>
+                );
+              })}
             </div>
           ))}
         </div>
