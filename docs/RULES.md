@@ -229,6 +229,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Terrain Heights Real terrain: pick a place (or Random) and an Area (5 to 160 km), then Load. The heights come from the AWS Terrain Tiles; the picture from NASA (Landsat, or Blue Marble).
 - Real terrain's Detail adds made-up fine ridges, most on steep slopes. Detail size (0.05 to 4) sets how large they are on the land (1: about 24 across its height), the same at any area.
 - Real terrain at Height 0.25 shows the land at twice its true height. Land below the sea is the sea's flat top.
+- A saved scene keeps its loaded real terrain (heights and picture) while Terrain is in the list with Real terrain heights or Terrain picture colors, so it opens with no internet. A new Load is an unsaved change.
 - Terrain Colors Terrain picture paints the land with the loaded picture; with none, it uses Height colors.
 - Terrain Colors: Picture (as before) or Height colors, a gradient from the lowest land (left) to the highest (right): valley green, grass, rock, stone, snow by default.
 - Light shapes draws glowing outlines: a ring, a square, a triangle or a star (Points sets its points).

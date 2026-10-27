@@ -1,3 +1,5 @@
+import type { TerrainData } from "../engine/terrain";
+import { terrainFromScene, terrainToScene } from "./terrain";
 import type { VideoFile } from "./videos";
 
 /**
@@ -33,6 +35,8 @@ export interface KeptDoc {
   driver: { video: VideoFile; name: string } | null;
   /** The Image or Video effect's image or video; missing in a snapshot from before the Image or Video effect. */
   picture?: KeptImage | null;
+  /** Terrain's real land: its key in IndexedDB (see keepTerrain); missing when there is none. */
+  terrain?: string | null;
   openGroup: string | null;
 }
 
@@ -142,6 +146,38 @@ export async function keptImageBytes(key: string): Promise<Blob | null> {
   }
 }
 
+/**
+ * Terrain's real land for the snapshot: its key in IndexedDB. The first
+ * time, its scene file form (see terrainToScene) starts to go there in the
+ * background.
+ */
+export function keepTerrain(terrain: TerrainData | null | undefined): string | null {
+  if (!terrain) return null;
+  let key = imageKeys.get(terrain);
+  if (!key) {
+    key = crypto.randomUUID();
+    adoptImage(terrain, key);
+    const storing = key;
+    void terrainToScene(terrain)
+      .then((saved) => blobStore("readwrite", (store) => store.put(new Blob([JSON.stringify(saved)], { type: "application/json" }), storing)))
+      .catch(() => { imageKeys.delete(terrain); });
+  }
+  return key;
+}
+
+/** A kept real land, or null when it never made it to IndexedDB. */
+export async function keptTerrain(key: string): Promise<TerrainData | null> {
+  try {
+    const blob = await keptImageBytes(key);
+    if (!blob) return null;
+    const terrain = await terrainFromScene(JSON.parse(await blob.text()));
+    adoptImage(terrain, key);
+    return terrain;
+  } catch {
+    return null;
+  }
+}
+
 /** Each track's stored analysis: the analysis and its song map as they were stored, and the key of their text. */
 const analysisKeys = new Map<string, { analysis: object; edits: unknown; key: string }>();
 
@@ -219,7 +255,7 @@ export function keepScenes(take: () => Kept | null) {
 /** Removes the stored bytes that neither the latest snapshot nor this page uses (those of a page before this one). */
 async function pruneImages() {
   const kept = readKept();
-  const used = new Set([...keysHere, ...(kept?.docs ?? []).flatMap((doc) => doc.images.map((image) => image?.key)), ...Object.values(kept?.file?.analyses ?? {})].filter(Boolean));
+  const used = new Set([...keysHere, ...(kept?.docs ?? []).flatMap((doc) => [...doc.images.map((image) => image?.key), doc.picture?.key, doc.terrain]), ...Object.values(kept?.file?.analyses ?? {})].filter(Boolean));
   try {
     const keys = await blobStore<IDBValidKey[]>("readonly", (store) => store.getAllKeys());
     for (const key of keys) if (typeof key === "string" && !used.has(key)) await blobStore("readwrite", (store) => store.delete(key));

@@ -23,6 +23,28 @@ export interface SceneImages {
   driverVideo?: { media: SceneImage; name: string };
   /** The Image or Video effect's own image or video (a video embedded like a source video), and its file name. */
   picture?: { media: SceneImage; name: string };
+  /** Terrain's real land (see SceneTerrain). */
+  terrain?: SceneTerrain;
+}
+
+/**
+ * Real terrain as a scene file keeps it (see docs/TERRAIN.md): the place,
+ * the area, the heights' size and range, the heights (16-bit, 0 to 65535
+ * for 0 to 1, row by row from the north edge, little-endian, gzip, then
+ * base64) and the area's picture, when it has one.
+ */
+export interface SceneTerrain {
+  place: string;
+  longitude: number;
+  latitude: number;
+  areaKm: number;
+  width: number;
+  height: number;
+  lowest: number;
+  highest: number;
+  relief: number;
+  heights: string;
+  picture?: SceneImage;
 }
 
 /**
@@ -156,6 +178,17 @@ function sceneImage(value: unknown): SceneImage | undefined {
   if (typeof value.data === "string" && value.data) return { type: value.type, data: value.data };
   if (value.type.startsWith("video/") && typeof value.video === "string" && value.video) return { type: value.type, video: value.video };
   return undefined;
+}
+
+/** A scene's real terrain, or undefined when it is missing or broken (the scene then opens with no land loaded). */
+function sceneTerrain(value: unknown): SceneTerrain | undefined {
+  if (!isRecord(value)) return undefined;
+  const { place, longitude, latitude, areaKm, width, height, lowest, highest, relief, heights } = value;
+  if (typeof place !== "string" || typeof heights !== "string" || !heights) return undefined;
+  if (!isNumber(longitude) || !isNumber(latitude) || !isNumber(areaKm) || !isNumber(lowest) || !isNumber(highest) || !isNumber(relief)) return undefined;
+  if (!Number.isInteger(width) || !Number.isInteger(height) || (width as number) < 1 || (height as number) < 1) return undefined;
+  const picture = sceneImage(value.picture);
+  return { place, longitude, latitude, areaKm, width: width as number, height: height as number, lowest, highest, relief, heights, ...(picture?.data !== undefined ? { picture } : {}) };
 }
 
 /**
@@ -365,7 +398,8 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   const driverVideo = driverMedia?.video !== undefined ? { media: driverMedia, name: isRecord(scene.driverVideo) && typeof scene.driverVideo.name === "string" ? scene.driverVideo.name : "Video" } : undefined;
   const pictureMedia = sceneImage(scene.picture);
   const picture = pictureMedia ? { media: pictureMedia, name: isRecord(scene.picture) && typeof scene.picture.name === "string" ? scene.picture.name : "Image or Video" } : undefined;
-  return { image, ...(image2 ? { image2 } : {}), ...(driverVideo ? { driverVideo } : {}), ...(picture ? { picture } : {}) };
+  const terrain = sceneTerrain(scene.terrain);
+  return { image, ...(image2 ? { image2 } : {}), ...(driverVideo ? { driverVideo } : {}), ...(picture ? { picture } : {}), ...(terrain ? { terrain } : {}) };
 }
 
 /**
@@ -374,7 +408,7 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
  * images are loaded (by id). Animation time, the clocks and the range
  * timing are left out, so playing, pausing and Stop do not count as changes.
  */
-/** imageIds: the ids of the first and second images, then of the driver video and of the overlay's image or video (missing or null when there is none). */
+/** imageIds: the ids of the first and second images, then of the driver video, of the overlay's image or video and of the real terrain (missing or null when there is none). */
 export function sceneFingerprint(params: Params, state: PlayState, imageIds: readonly (number | null)[]): string {
   const settings = PARAM_KEYS.map((key) => {
     const { value, low, high, on, ease, custom, seconds } = params[key];

@@ -1,3 +1,4 @@
+import { blobToSceneImage, sceneImageToBlob, type SceneTerrain } from "../engine/scene";
 import type { TerrainData } from "../engine/terrain";
 
 /**
@@ -144,4 +145,47 @@ async function loadPicture({ left, top, width, height, worldPixels, signal }: {
     }
   }
   return null;
+}
+
+/** Bytes through a gzip stream, packed or unpacked. */
+const gzip = (bytes: BlobPart, stream: CompressionStream | DecompressionStream) =>
+  new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer();
+
+/** Loaded real terrain as a scene file keeps it (see SceneTerrain). */
+export async function terrainToScene(terrain: TerrainData): Promise<SceneTerrain> {
+  const { place, longitude, latitude, areaKm, width, height, lowest, highest, relief } = terrain;
+  const levels = Uint16Array.from(terrain.heights, (value) => Math.round(Math.min(1, Math.max(0, value)) * 65535));
+  const heights = await blobToSceneImage(new Blob([await gzip(levels, new CompressionStream("gzip"))], { type: "application/gzip" }));
+  const pictureBlob = terrain.picture
+    ? await new Promise<Blob | null>((resolve) => terrain.picture!.toBlob(resolve, "image/jpeg", 0.92))
+    : null;
+  return {
+    place, longitude, latitude, areaKm, width, height, lowest, highest, relief,
+    heights: heights.data!,
+    ...(pictureBlob ? { picture: await blobToSceneImage(pictureBlob) } : {})
+  };
+}
+
+/** A scene file's real terrain, ready for the engine. A broken picture is left out; broken heights throw. */
+export async function terrainFromScene(saved: SceneTerrain): Promise<TerrainData> {
+  const { place, longitude, latitude, areaKm, width, height, lowest, highest, relief } = saved;
+  const packed = await sceneImageToBlob({ type: "application/gzip", data: saved.heights }).arrayBuffer();
+  const bytes = await gzip(packed, new DecompressionStream("gzip"));
+  if (bytes.byteLength !== width * height * 2) throw new Error("The scene's terrain heights are broken.");
+  const levels = new Uint16Array(bytes);
+  const heights = Float32Array.from(levels, (level) => level / 65535);
+  let picture: HTMLCanvasElement | null = null;
+  if (saved.picture) {
+    try {
+      const bitmap = await createImageBitmap(sceneImageToBlob(saved.picture));
+      picture = document.createElement("canvas");
+      picture.width = width;
+      picture.height = height;
+      picture.getContext("2d")?.drawImage(bitmap, 0, 0, width, height);
+      bitmap.close();
+    } catch {
+      picture = null;
+    }
+  }
+  return { id: nextTerrainId++, place, longitude, latitude, areaKm, heights, width, height, lowest, highest, relief, picture };
 }

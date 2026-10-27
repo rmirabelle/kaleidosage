@@ -112,8 +112,11 @@ the user tries it.
   at twice its true height.
 - The picture is Landsat WELD (30 m), with Blue Marble (500 m) as the
   backup. With no picture, Terrain picture colors are Height colors.
-- A load is not saved yet (step 4): a scene keeps its terrain while its tab
-  is open, and a scene opened from a file has none.
+- Save keeps the land (built 2026-10-27, part of step 4): the scene's JSON
+  has "terrain" (the place, the area, the heights' size and range, the
+  heights as 16-bit gzip base64, and the picture as a JPEG), while Terrain
+  is in the list with Real terrain heights or Terrain picture colors. A
+  new load counts as an unsaved change. The dev reload keeper keeps it too.
 
 ## Open points
 

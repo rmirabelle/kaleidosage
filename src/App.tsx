@@ -35,7 +35,8 @@ import { SettingsHistory } from "./engine/history";
 import { scenePosition } from "./engine/loop";
 import { SCENE_EXTENSION, applyScene, blobToSceneImage, sceneFingerprint, serializeScene, type SceneImage } from "./engine/scene";
 import { loadSceneMedia, loadSceneSource, readScene, writeScene } from "./lib/scenes";
-import { adoptImage, keepAnalyses, keepImage, keepScenes, keptAnalysisText, keptImageBytes, readKept, type Kept, type KeptImage } from "./lib/reloadKeeper";
+import { terrainFromScene, terrainToScene } from "./lib/terrain";
+import { adoptImage, keepAnalyses, keepImage, keepScenes, keepTerrain, keptAnalysisText, keptImageBytes, keptTerrain, readKept, type Kept, type KeptImage } from "./lib/reloadKeeper";
 import type { ImageSource } from "./engine/renderer";
 import {
   makeThumbnail,
@@ -201,7 +202,7 @@ async function sceneMedia(image: Pick<SlotImage, "source" | "blob" | "videoFile"
  * copy). The settings are taken before the media is copied, so a change
  * made while it writes still counts as unsaved.
  */
-async function writeSceneFile(path: string, params: Params, state: PlayState, [first, second]: [SlotImage | null, SlotImage | null], driver: DriverVideo | null, picture: SlotImage | null) {
+async function writeSceneFile(path: string, params: Params, state: PlayState, [first, second]: [SlotImage | null, SlotImage | null], driver: DriverVideo | null, picture: SlotImage | null, terrain: TerrainData | null) {
   if (!first) throw new Error("There is no source image or video to save in the scene.");
   const scene = JSON.parse(serializeScene(params, state, { image: { type: "image/png", data: "pending" } }));
   scene.image = await sceneMedia(first);
@@ -216,6 +217,8 @@ async function writeSceneFile(path: string, params: Params, state: PlayState, [f
   if (driver && usesDriverVideo) scene.driverVideo = { type: driver.videoFile.mime, video: driver.videoFile.id, name: driver.name };
   /* The overlay's image or video goes in the same way: only while the Image or Video effect is in the list. */
   if (picture && state.fxOrder.includes("picture")) scene.picture = { ...(await sceneMedia(picture)), name: picture.label };
+  /* Real terrain's land and picture go in while Terrain is in the list and uses them (Real terrain heights or Terrain picture colors). */
+  if (terrain && state.fxOrder.includes("terrain") && (state.cameraHeightSource === 2 || state.cameraColors === 2)) scene.terrain = await terrainToScene(terrain);
   await writeScene(path, JSON.stringify(scene));
 }
 
@@ -865,7 +868,7 @@ export default function App() {
   const fingerprint = useCallback(() => {
     if (!engine) return "";
     const [first, second] = imagesRef.current;
-    return sceneFingerprint(engine.params, engine.state, [first?.id ?? null, second?.id ?? null, driverRef.current?.id ?? null, pictureRef.current?.id ?? null]);
+    return sceneFingerprint(engine.params, engine.state, [first?.id ?? null, second?.id ?? null, driverRef.current?.id ?? null, pictureRef.current?.id ?? null, engine.terrain?.id ?? null]);
   }, [engine]);
 
   /**
@@ -1101,7 +1104,7 @@ export default function App() {
     try {
       showStatus("Exporting the scene and embedding media…", 0, undefined, true);
       const copy = await invoke<string>("scene_copy_path", { name: fileNameOf(path) });
-      await writeSceneFile(copy, engine.params, engine.state, imagesRef.current, driverRef.current, pictureRef.current);
+      await writeSceneFile(copy, engine.params, engine.state, imagesRef.current, driverRef.current, pictureRef.current, engine.terrain);
       /* A scene alone has no tracks, so Files as the input would open with an empty list: it keeps no input then. */
       const audio = fileAudio();
       await saveKaleidoFile(path, { audio: audio.kind === "tracks" ? { ...audio, kind: "none" } : audio, activeScene: 0 }, [copy], []);
@@ -1152,6 +1155,8 @@ export default function App() {
       const image2 = images.image2 ? await loadSceneMedia(images.image2) : null;
       const driverMedia = images.driverVideo ? await loadSceneMedia(images.driverVideo.media) : null;
       const pictureMedia = images.picture ? await loadSceneMedia(images.picture.media) : null;
+      /* Broken terrain data leaves the scene with no land loaded; the rest still opens. */
+      const terrain = images.terrain ? await terrainFromScene(images.terrain).catch(() => null) : null;
       if (generation !== sceneGenerationRef.current) return;
       const reuse = scenePathRef.current === null && fingerprint() === savedFingerprintRef.current;
       if (activeIdRef.current !== null && !reuse) {
@@ -1173,7 +1178,7 @@ export default function App() {
       else removeSecondImage();
       setDriver(driverMedia?.source instanceof HTMLVideoElement && driverMedia.videoFile && images.driverVideo
         ? { video: driverMedia.source, videoFile: driverMedia.videoFile, name: images.driverVideo.name, id: nextImageId++ } : null);
-      engine?.setTerrain(null);
+      engine.setTerrain(terrain);
       setPicture(pictureMedia && images.picture ? { ...pictureMedia, label: images.picture.name, thumbnail: makeThumbnail(pictureMedia.source), id: nextImageId++ } : null);
       setRevision((value) => value + 1);
       setActivePath(path);
@@ -1706,13 +1711,13 @@ export default function App() {
         const target = isFileCopy(scenePath) ? scenePath! : await invoke<string>("scene_copy_path", { name });
         if (active) {
           const saved = fingerprint();
-          await writeSceneFile(target, engine.params, engine.state, imagesRef.current, driverRef.current, pictureRef.current);
+          await writeSceneFile(target, engine.params, engine.state, imagesRef.current, driverRef.current, pictureRef.current, engine.terrain);
           savedFingerprintRef.current = saved;
           setDirty(fingerprint() !== saved);
           setActivePath(target);
         } else if (stored) {
-          await writeSceneFile(target, stored.params, stored.state, stored.images, stored.driver, stored.picture);
-          stored.savedFingerprint = sceneFingerprint(stored.params, stored.state, [stored.images[0]?.id ?? null, stored.images[1]?.id ?? null, stored.driver?.id ?? null, stored.picture?.id ?? null]);
+          await writeSceneFile(target, stored.params, stored.state, stored.images, stored.driver, stored.picture, stored.terrain ?? null);
+          stored.savedFingerprint = sceneFingerprint(stored.params, stored.state, [stored.images[0]?.id ?? null, stored.images[1]?.id ?? null, stored.driver?.id ?? null, stored.picture?.id ?? null, stored.terrain?.id ?? null]);
           writeDocs(docsRef.current.map((candidate) => candidate.id === doc.id ? { ...candidate, path: target, dirty: false } : candidate));
         }
         scenes.push(target);
@@ -2004,6 +2009,7 @@ export default function App() {
             images: [keepImage(imagesRef.current[0]), keepImage(imagesRef.current[1])],
             driver: driver ? { video: driver.videoFile, name: driver.name } : null,
             picture: keepImage(pictureRef.current),
+            terrain: keepTerrain(engine.terrain),
             openGroup: openGroupRef.current
           }];
         }
@@ -2019,6 +2025,7 @@ export default function App() {
           images: [keepImage(stored.images[0]), keepImage(stored.images[1])],
           driver: stored.driver ? { video: stored.driver.videoFile, name: stored.driver.name } : null,
           picture: keepImage(stored.picture),
+          terrain: keepTerrain(stored.terrain),
           openGroup: stored.openGroup
         }];
       })
@@ -2060,7 +2067,7 @@ export default function App() {
       }
     };
     const restore = async () => {
-      const loaded: { doc: SceneDoc; params: Params; state: PlayState; images: [SlotImage, SlotImage | null]; driver: DriverVideo | null; picture: SlotImage | null; openGroup: string | null }[] = [];
+      const loaded: { doc: SceneDoc; params: Params; state: PlayState; images: [SlotImage, SlotImage | null]; driver: DriverVideo | null; picture: SlotImage | null; terrain: TerrainData | null; openGroup: string | null }[] = [];
       for (const keptDoc of kept.docs) {
         const params = createParams();
         const state = createPlayState();
@@ -2079,16 +2086,17 @@ export default function App() {
           if (media?.source instanceof HTMLVideoElement && media.videoFile) driver = { video: media.source, videoFile: media.videoFile, name: keptDoc.driver.name, id: nextImageId++ };
         }
         const picture = keptDoc.picture ? await loadKeptImage(keptDoc.picture) : null;
-        loaded.push({ doc: { id: keptDoc.id, path: keptDoc.path, untitled: keptDoc.untitled, dirty: keptDoc.dirty }, params, state, images: [first, second], driver, picture, openGroup: keptDoc.openGroup });
+        const terrain = keptDoc.terrain ? await keptTerrain(keptDoc.terrain) : null;
+        loaded.push({ doc: { id: keptDoc.id, path: keptDoc.path, untitled: keptDoc.untitled, dirty: keptDoc.dirty }, params, state, images: [first, second], driver, picture, terrain, openGroup: keptDoc.openGroup });
       }
       if (loaded.length === 0 || activeIdRef.current !== null) return;
       /* Each tab's Undo history is made on the engine's settings, as addDoc makes it, starting from that scene. */
-      for (const { doc, params, state, images, driver, picture, openGroup } of loaded) {
+      for (const { doc, params, state, images, driver, picture, terrain, openGroup } of loaded) {
         Object.assign(engine.params, structuredClone(params));
         Object.assign(engine.state, structuredClone(state));
         const history = new SettingsHistory(engine.params, engine.state);
-        const savedFingerprint = doc.dirty ? "" : sceneFingerprint(params, state, [images[0].id, images[1]?.id ?? null, driver?.id ?? null, picture?.id ?? null]);
-        storedRef.current.set(doc.id, { params, state, images, driver, picture, savedFingerprint, history, openGroup });
+        const savedFingerprint = doc.dirty ? "" : sceneFingerprint(params, state, [images[0].id, images[1]?.id ?? null, driver?.id ?? null, picture?.id ?? null, terrain?.id ?? null]);
+        storedRef.current.set(doc.id, { params, state, images, driver, picture, terrain, savedFingerprint, history, openGroup });
       }
       writeDocs(loaded.map((entry) => entry.doc));
       nextDocId = Math.max(nextDocId, ...loaded.map((entry) => entry.doc.id + 1));
