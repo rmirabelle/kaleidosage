@@ -42,6 +42,7 @@ button { border: 0; }
 .brand { display: flex; align-items: center; gap: 6px; padding: 0 13px; pointer-events: none; }
 .brand img { width: 18px; height: 18px; }
 .brand span { color: var(--secondary); font-size: 12px; font-weight: 800; letter-spacing: .04em; }
+.brand .brand-dev { padding: 1px 5px; border-radius: 3px; color: #1d2029; background: #f5a524; font-size: 10px; letter-spacing: .08em; }
 .titlebar-update-button {
   align-self: center;
   height: 24px;

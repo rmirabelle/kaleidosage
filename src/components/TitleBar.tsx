@@ -26,6 +26,8 @@ export function TitleBar({ updateAvailable, onAbout, fileName, dirty, sceneName 
       <div className="brand" data-tauri-drag-region>
         <img src="/icon.ico" alt="" />
         <span>Kaleido Sage</span>
+        {/* Only the dev build shows this, so it is never mixed up with the installed app. */}
+        {import.meta.env.DEV && <span className="brand-dev">DEV</span>}
       </div>
       {/* One centered group: the open project, with its asterisk, then the selected scene. */}
       {fileName !== null && (
