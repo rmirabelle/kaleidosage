@@ -49,7 +49,8 @@ new parts looks as before.
    fits the land exactly, because no slot fitting and no earlier effect
    changes it.
 4. **Picking a place:** the list of striking places that the random
-   terrain images use now (`TERRAIN_PLACES`), a Random button, and an
+   terrain images use, without the flat ones and the deltas
+   (`LAND_PLACES`), a Random button, and an
    Area setting for how wide the land is (in kilometers). A search box
    for any place name is a later step.
 5. **The sea:** heights below 0 m become flat water at 0, so coasts look

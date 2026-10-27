@@ -7,7 +7,7 @@ import { midi } from "../lib/midi";
 import { audioInput } from "../lib/audioInput";
 import { settingButtons } from "../lib/settingButtons";
 import { GradientEditor } from "./GradientEditor";
-import { TERRAIN_PLACES } from "../lib/images";
+import { LAND_PLACES } from "../lib/images";
 import { loadTerrain } from "../lib/terrain";
 import type { TerrainData } from "../engine/terrain";
 import { EmptyState } from "./EmptyState";
@@ -1191,8 +1191,8 @@ const CAMERA_HEIGHT_SOURCES = [[0, "Picture"], [1, "Generated"], [2, "Real terra
 const CAMERA_COLORS = [[0, "Picture"], [1, "Height colors"], [2, "Terrain picture"]] as const;
 /** How wide the real terrain's area is. */
 const TERRAIN_AREAS = [[5, "5 km"], [10, "10 km"], [20, "20 km"], [40, "40 km"], [80, "80 km"], [160, "160 km"]] as const;
-/** The places to load: Random first, then each striking place (see TERRAIN_PLACES). */
-const TERRAIN_PLACE_OPTIONS: readonly (readonly [number, string])[] = [[-1, "Random"], ...TERRAIN_PLACES.map(([name], index) => [index, name.charAt(0).toUpperCase() + name.slice(1)] as const)];
+/** The places to load: Random first, then each striking place (see LAND_PLACES). */
+const TERRAIN_PLACE_OPTIONS: readonly (readonly [number, string])[] = [[-1, "Random"], ...LAND_PLACES.map(([name], index) => [index, name.charAt(0).toUpperCase() + name.slice(1)] as const)];
 
 /** What the loaded real terrain is, for the panel. */
 const terrainNote = (terrain: TerrainData | null) => terrain
@@ -1210,9 +1210,9 @@ function TerrainRows({ engine }: { engine: Engine }) {
   const [note, setNote] = useState(() => terrainNote(engine.terrain));
   const [busy, setBusy] = useState(false);
   const load = async () => {
-    const choices = TERRAIN_PLACES.map((_, index) => index).filter((index) => Math.abs(TERRAIN_PLACES[index][2]) < 84);
+    const choices = LAND_PLACES.map((_, index) => index).filter((index) => Math.abs(LAND_PLACES[index][2]) < 84);
     const index = place >= 0 ? place : choices[Math.floor(Math.random() * choices.length)];
-    const [name, longitude, latitude] = TERRAIN_PLACES[index];
+    const [name, longitude, latitude] = LAND_PLACES[index];
     setBusy(true);
     setNote(`Loading ${name}…`);
     try {

@@ -174,6 +174,10 @@ export const TERRAIN_PLACES: readonly [string, number, number][] = [
   ["the Ethiopian Highlands", 39.0, 12.0], ["Kilimanjaro", 37.3, -3.1], ["the Amazon", -62.0, -3.5], ["the Ganges Delta", 89.5, 22.0],
   ["the Okavango Delta", 22.7, -19.3], ["the Mississippi Delta", -89.5, 29.3]
 ];
+/** Places too flat to make good land for the Terrain effect: they stay in the random pictures only. */
+const FLAT_PLACES = new Set(["the Atacama", "the Salar de Uyuni", "the Empty Quarter", "Iceland", "Svalbard", "the Amazon"]);
+/** The places the Terrain effect can load: the striking places without the flat ones and the deltas. */
+export const LAND_PLACES = TERRAIN_PLACES.filter(([name]) => !FLAT_PLACES.has(name) && !name.endsWith(" Delta"));
 
 /**
  * A random 4K terrain map from NASA's map service: a random layer over a
