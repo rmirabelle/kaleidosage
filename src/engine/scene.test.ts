@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createParams, createPlayState, defaultGradientStops } from "./params";
+import { createParams, createPlayState, defaultGradientStops, lensAngle } from "./params";
 import { applyScene, blobToSceneImage, sceneFingerprint, sceneImageToBlob, serializeScene } from "./scene";
 
 const IMAGE = { type: "image/png", data: "iVBORw0KGgo=" };
@@ -176,6 +176,20 @@ describe("scene files", () => {
     expect(params.warpCellSize.low).toBeCloseTo(10 / 1.5);
     expect(params.warpCellSize.high).toBeCloseTo(10 / 6);
     expect(params.warpCellSize.on).toBe(true);
+  });
+
+  it("give scenes from before the Lens in millimeters the same view, and keep a new scene's Lens", () => {
+    const params = createParams();
+    applyScene(JSON.stringify({ app: "KaleidoSage", version: 3, params: { cameraLens: { value: 60, low: 40, high: 100, on: true } }, image: IMAGE }), params, createPlayState());
+    expect(lensAngle(params.cameraLens.value)).toBeCloseTo(Math.PI / 3);
+    expect(lensAngle(params.cameraLens.low!)).toBeCloseTo((40 * Math.PI) / 180);
+    expect(lensAngle(params.cameraLens.high!)).toBeCloseTo((100 * Math.PI) / 180);
+    expect(params.cameraLens.on).toBe(true);
+    const saved = createParams();
+    saved.cameraLens.value = 50;
+    const loaded = createParams();
+    applyScene(serializeScene(saved, createPlayState(), { image: IMAGE }), loaded, createPlayState());
+    expect(loaded.cameraLens.value).toBe(50);
   });
 
   it("keep a second image, and skip a broken one", () => {

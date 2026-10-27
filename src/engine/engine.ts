@@ -1,4 +1,4 @@
-import { GROUP_PARAMS, NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, defaultValue, hexToRgb, liveValue, rangeAt, rangeClock, startRangeAt, type GroupKey, type ParamKey } from "./params";
+import { GROUP_PARAMS, NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, defaultValue, hexToRgb, lensAngle, liveValue, rangeAt, rangeClock, startRangeAt, type GroupKey, type ParamKey } from "./params";
 import { KaleidoRenderer, type FrameValues, type ImageSource } from "./renderer";
 import type { TerrainData } from "./terrain";
 import { MANDEL_CENTERS } from "./submodes";
@@ -1337,7 +1337,7 @@ export class Engine {
       cameraY: this.state.cameraY,
       cameraPedestal: this.live("cameraPedestal"),
       cameraFloor: this.cameraFloor,
-      cameraLens: this.live("cameraLens") * DEGREES,
+      cameraLens: lensAngle(this.live("cameraLens")),
       cameraLightTurn: this.live("cameraLightTurn") * DEGREES,
       cameraLightHeight: this.live("cameraLightHeight") * DEGREES,
       cameraShadow: this.live("cameraShadow"),

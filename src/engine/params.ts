@@ -643,7 +643,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * counterclockwise), Tilt (up from level; below 0 looks down), Pedestal
    * (its height, screen heights), Dolly and Truck (its speeds forward and
    * to its right, screen heights per second; it holds still at 0), and
-   * its lens angle, the sun's direction and
+   * its lens (the focal length on a 35 mm camera, see lensAngle), the sun's direction and
    * height, the shadows' darkness, the fog, how much the sky and fog take
    * state.skyColor (0 = the picture's mean color), the shine of the land,
    * and how blurred the height is.
@@ -655,7 +655,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   cameraPedestal: { label: "Pedestal", min: 0.02, max: 5, step: 0.01, value: 1, drift: "wave", low: 0.6, high: 1.6, on: false },
   cameraDolly: { label: "Dolly", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: 0.1, high: 0.5, on: false },
   cameraTruck: { label: "Truck", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -0.3, high: 0.3, on: false },
-  cameraLens: { label: "Lens", min: 20, max: 120, step: 1, value: 60, unit: "°", drift: "wave", low: 40, high: 90, on: false },
+  cameraLens: { label: "Lens", min: 7, max: 300, step: 1, scale: "log", value: 21, unit: "mm", drift: "wave", low: 14, high: 35, on: false },
   cameraLightTurn: { label: "Sun angle", min: 0, max: 360, step: 1, value: 135, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   cameraLightHeight: { label: "Sun height", min: 5, max: 90, step: 1, value: 40, unit: "°", drift: "wave", low: 15, high: 60, on: false },
   cameraShadow: { label: "Shadows", min: 0, max: 1, step: 0.01, value: 0.7, drift: "wave", low: 0.3, high: 1, on: false },
@@ -1204,6 +1204,13 @@ export function openRange(param: Param, low: number, high: number): [number, num
   return low + width <= param.max ? [round(low), round(low + width)] : [round(Math.max(param.min, low - width)), round(low)];
 }
 
+/** Half the height of a 35 mm film frame (24 mm tall), in millimeters. */
+const FRAME_HALF_HEIGHT = 12;
+/** The Lens setting's focal length (mm, on a 35 mm camera) as the view's vertical angle, in radians. */
+export const lensAngle = (focal: number) => 2 * Math.atan(FRAME_HALF_HEIGHT / focal);
+/** A vertical view angle in degrees (the Lens before millimeters) as a focal length in mm. */
+export const lensFocal = (degrees: number) => FRAME_HALF_HEIGHT / Math.tan((degrees * Math.PI) / 360);
+
 export function formatValue(param: Param, value: number): string {
   const decimals = (String(param.step).split(".")[1] ?? "").length;
   return value.toFixed(Math.max(decimals, param.step < 1 ? 2 : 0)) + (param.unit ?? "");
@@ -1634,7 +1641,7 @@ function randomizeAll(params: Params, state?: PlayState) {
   setAngle("cameraPan", 0.6);
   set("cameraDolly", Math.random() < 0.5 ? 0 : (Math.random() < 0.8 ? 1 : -1) * rand(0.1, 0.6), rand(0, 0.3));
   set("cameraPedestal", rand(0.5, 1.8), rand(0.05, 0.4));
-  set("cameraLens", rand(40, 100), rand(0, 20));
+  set("cameraLens", lensFocal(rand(40, 100)), rand(0, 6));
   setAngle("cameraLightTurn", 0.3);
   set("cameraLightHeight", rand(15, 70), rand(0, 20));
   set("cameraShadow", rand(0.3, 1), rand(0, 0.2));

@@ -1,5 +1,5 @@
 import type { Engine } from "../engine/engine";
-import type { ParamKey } from "../engine/params";
+import { lensAngle, type ParamKey } from "../engine/params";
 
 const DEGREES = Math.PI / 180;
 
@@ -62,7 +62,7 @@ export function attachCameraDrag(canvas: HTMLCanvasElement, engine: Engine, acti
     if (dx === 0 && dy === 0) return;
     const height = Math.max(1, canvas.clientHeight);
     /* One pixel of the picture's height, as an angle through the lens. */
-    const lens = engine.live("cameraLens") * DEGREES;
+    const lens = lensAngle(engine.live("cameraLens"));
     const perPixel = (2 * Math.tan(lens / 2)) / height;
     if (!drag.move) {
       set("cameraPan", current("cameraPan") + (dx * perPixel) / DEGREES);

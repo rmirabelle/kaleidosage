@@ -1,10 +1,10 @@
-import { CONTOUR_TONES, EASES, MAX_CUSTOM_SECONDS, MAX_GRADIENT_STOPS, PARAM_KEYS, REFERENCE_CYCLE, defaultCycleStops, defaultTerrainStops, defaultFxOrder, defaultOutlineStops, defaultGradientStops, defaultPictureOrder, defaultShapeOrder, effectShows, type ContourTone, type Ease, type GradientStop, type GroupKey, type Param, type Params, type PlayState } from "./params";
+import { CONTOUR_TONES, EASES, MAX_CUSTOM_SECONDS, MAX_GRADIENT_STOPS, PARAM_KEYS, REFERENCE_CYCLE, defaultCycleStops, defaultTerrainStops, defaultFxOrder, defaultOutlineStops, defaultGradientStops, defaultPictureOrder, defaultShapeOrder, effectShows, lensFocal, type ContourTone, type Ease, type GradientStop, type GroupKey, type Param, type Params, type PlayState } from "./params";
 import { isShapeStep, type FxStep } from "./renderer";
 import { readSound, soundList } from "./audio";
 
 export const SCENE_EXTENSION = "ksage";
-/** 3: reads as 2 (it changed only an effect that was later removed). 2: ranges share one cycle, and a custom range keeps its own seconds. 1: each range had its own rate, and a speed. */
-const SCENE_VERSION = 3;
+/** 4: the camera Lens is a focal length in mm, not an angle. 3: reads as 2 (it changed only an effect that was later removed). 2: ranges share one cycle, and a custom range keeps its own seconds. 1: each range had its own rate, and a speed. */
+const SCENE_VERSION = 4;
 const GROUP_KEYS: GroupKey[] = ["warp", "map", "kaleidoscope", "blur", "trails", "smear", "contours", "relief", "driver", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "outlines", "bloom", "sharpen", "color", "levels"];
 
 /** Still images and legacy videos use base64. New videos refer to an embedded archive entry. */
@@ -200,6 +200,13 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
    * seconds they took at that speed, and the speed becomes the cycle.
    */
   const oldTiming = !(isNumber(scene.version) && scene.version >= 2) && saved.sharedCycle !== true;
+  /* Scenes before version 4 saved the Lens as the view's vertical angle in degrees. */
+  const lensDegrees = !(isNumber(scene.version) && scene.version >= 4) ? savedParams.cameraLens : undefined;
+  if (isRecord(lensDegrees)) {
+    for (const end of ["value", "low", "high"] as const) {
+      if (isNumber(lensDegrees[end])) lensDegrees[end] = lensFocal(clamp(lensDegrees[end] as number, 1, 179));
+    }
+  }
   const oldSpeed = isRecord(savedParams.speed) && isNumber(savedParams.speed.value) ? savedParams.speed.value
     : isNumber(saved.speed) ? saved.speed : 1;
   if (oldTiming && !isRecord(savedParams.cycle)) {

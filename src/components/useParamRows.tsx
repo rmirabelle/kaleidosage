@@ -106,6 +106,11 @@ function sliderLimits(param: Param): [number, number, number] {
  */
 const WHOLE_SNAP_KEYS: ParamKey[] = ["drosteSpirals", "segments"];
 
+/** Settings with well-known values the handles snap to, each with a tick mark: the usual lens lengths of a 35 mm camera. The values between still work. */
+const VALUE_SNAPS: Partial<Record<ParamKey, number[]>> = {
+  cameraLens: [14, 18, 24, 35, 50, 85, 135, 200]
+};
+
 /** Settings whose small values near the zero point matter (a camera height of 0.01): the zero point keeps its tick mark, with no snap. */
 const NO_DETENT_SNAP_KEYS: ParamKey[] = ["cameraHeight"];
 
@@ -163,7 +168,7 @@ function ParamRow({ engine, paramKey, readout, marker, singleMarker, after, badg
   const detent = noEffect === undefined ? undefined : at(noEffect);
   const snaps = WHOLE_SNAP_KEYS.includes(paramKey)
     ? Array.from({ length: Math.floor(param.max) - Math.ceil(param.min) + 1 }, (_, index) => at(Math.ceil(param.min) + index))
-    : undefined;
+    : VALUE_SNAPS[paramKey]?.map(at);
 
   /** A MIDI knob moved this parameter: show its new value. */
   /**
