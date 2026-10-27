@@ -1,5 +1,5 @@
 import { GROUP_PARAMS, NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, defaultValue, hexToRgb, lensAngle, liveValue, rangeAt, rangeClock, startRangeAt, type GroupKey, type ParamKey } from "./params";
-import { KaleidoRenderer, type FrameValues, type ImageSource } from "./renderer";
+import { KaleidoRenderer, LASER_BEAMS, type FrameValues, type ImageSource } from "./renderer";
 import type { TerrainData } from "./terrain";
 import { MANDEL_CENTERS } from "./submodes";
 import { audioLinkable, pushRange, pushedValue, type AudioSignal } from "./audio";
@@ -219,6 +219,8 @@ export class Engine {
   private fade: { texture: WebGLTexture; start: number; seconds: number } | null = null;
   /** Calls waiting for the frame that a crossfade starts from, and the fade time they asked for. */
   private fadeWaiters: { resolve: () => void; seconds: number }[] = [];
+  /** Lasers' recent Sweep values (radians) on the play clock, oldest first, for Sweep delay (see laserSweeps). */
+  private sweepHistory: { clock: number; value: number }[] = [];
 
   /**
    * Starts a crossfade: the next frame is kept as a still picture, and the
@@ -1165,6 +1167,42 @@ export class Engine {
     if (Math.abs(sample - this.cameraFloor) > 1e-4) this.wake();
   }
 
+  /**
+   * Each laser beam's Sweep, as its sine (see LASER_SHADER). The first beam
+   * has the Sweep of now; each next beam has the Sweep from Sweep delay
+   * seconds before the one before it. The Sweep of now goes into the
+   * history first, so the beams follow any motion: a range, MIDI or sound.
+   * A jump back on the play clock (a new start) or a gap of more than a
+   * second starts the history again; a time older than the history has its
+   * oldest value.
+   */
+  private laserSweeps(): Float32Array {
+    const now = this.live("laserSweep") * DEGREES;
+    const delay = Math.max(0, this.live("laserSweepDelay"));
+    const clock = this.state.clock;
+    const history = this.sweepHistory;
+    const newest = history.at(-1);
+    if (newest && (clock < newest.clock || clock - newest.clock > 1)) history.length = 0;
+    if (history.length > 0 && history.at(-1)!.clock === clock) history.at(-1)!.value = now;
+    else history.push({ clock, value: now });
+    const keep = delay * (LASER_BEAMS - 1) + 0.1;
+    let old = 0;
+    while (old < history.length - 2 && history[old + 1].clock < clock - keep) old++;
+    if (old > 0) history.splice(0, old);
+    const sweepAt = (time: number) => {
+      if (time <= history[0].clock) return history[0].value;
+      for (let index = history.length - 1; index > 0; index--) {
+        const before = history[index - 1];
+        if (before.clock > time) continue;
+        const after = history[index];
+        const span = after.clock - before.clock;
+        return before.value + (after.value - before.value) * (span > 0 ? (time - before.clock) / span : 1);
+      }
+      return history[0].value;
+    };
+    return Float32Array.from({ length: LASER_BEAMS }, (_, beam) => Math.sin(sweepAt(clock - delay * beam)));
+  }
+
   /** Everything the renderer needs for one frame (see draw). */
   private frameValues(animated: number, elapsed: number): FrameValues {
     /** A group that is off gets neutral values, so it has no effect. */
@@ -1441,7 +1479,7 @@ export class Engine {
       lasers: on.lasers ? this.live("laserAmount") : 0,
       laserCount: this.live("laserCount"),
       laserSpread: this.live("laserSpread") * DEGREES,
-      laserSweep: this.live("laserSweep") * DEGREES,
+      laserSweeps: this.laserSweeps(),
       laserBase: this.live("laserBase"),
       laserBaseAngle: this.live("laserBaseAngle") * DEGREES,
       laserWidth: this.live("laserWidth"),

@@ -23,7 +23,7 @@ export const PARAM_KEYS = [
   "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY",
   "solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY",
   "raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY",
-  "laserAmount", "laserCount", "laserSpread", "laserSweep", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY",
+  "laserAmount", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY",
   "outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineFlow", "outlineTurn", "outlineX", "outlineY",
   "pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn", "pictureKey",
   "bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize",
@@ -856,7 +856,9 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * picture as light. Spread is the angle of the whole fan. The fan is a
    * flat sheet of beams, and Sweep tilts it up and down: at 90 it stands
    * straight up, at 0 it is level and seen edge-on, so it looks flat, and
-   * below 0 it points down. The beams start from a base line:
+   * below 0 it points down. Sweep delay staggers a moving Sweep: each beam
+   * does what the beam before it did, that many seconds later (0 = all
+   * beams together). The beams start from a base line:
    * Base width is its length (a part of the screen height; 0 = all beams
    * from one point). Turn turns the whole fan, base line and beams,
    * clockwise about the source (0 = upright). Width is the beam
@@ -873,6 +875,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   laserCount: { label: "Beams", min: 1, max: 32, step: 1, value: 12, drift: "wave", low: 6, high: 16, on: false },
   laserSpread: { label: "Spread", min: 0, max: 180, step: 1, value: 60, unit: "°", drift: "wave", low: 20, high: 100, on: false },
   laserSweep: { label: "Sweep", min: -90, max: 90, step: 1, value: 60, unit: "°", drift: "wave", low: -30, high: 90, on: false },
+  laserSweepDelay: { label: "Sweep delay", min: 0, max: 0.5, step: 0.01, value: 0, unit: " s", drift: "wave", low: 0.02, high: 0.15, on: false },
   laserBase: { label: "Base width", min: 0, max: 2, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.5, on: false },
   laserBaseAngle: { label: "Turn", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "wave", low: -20, high: 20, on: false },
   laserWidth: { label: "Width", min: 0.5, max: 12, step: 0.1, value: 1.5, unit: "px", drift: "wave", low: 1, high: 3, on: false },
@@ -893,7 +896,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * outline, in turns per second.
    */
   outlineAmount: { label: "Strength", min: 0, max: 3, step: 0.01, value: 0, drift: "wave", low: 0.6, high: 1.5, on: false },
-  outlineCount: { label: "Count", min: 1, max: 8, step: 1, value: 1, drift: "wave", low: 1, high: 4, on: false },
+  outlineCount: { label: "Count", min: 1, max: 24, step: 1, value: 1, drift: "wave", low: 1, high: 4, on: false },
   outlineRadius: { label: "Radius", min: 0.02, max: 1, step: 0.01, value: 0.3, drift: "wave", low: 0.2, high: 0.4, on: false },
   outlineSpacing: { label: "Spacing", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.3, high: 0.7, on: false },
   outlineDelay: { label: "Delay", min: 0, max: 1, step: 0.01, value: 0.15, drift: "wave", low: 0.05, high: 0.3, on: false },
@@ -1459,7 +1462,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   cycles: ["cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead", "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY"],
   rays: ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"],
   picture: ["pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn", "pictureKey"],
-  lasers: ["laserAmount", "laserCount", "laserSpread", "laserSweep", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"],
+  lasers: ["laserAmount", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"],
   outlines: ["outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"],
   bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
   sharpen: ["sharpen", "sharpenRadius"],
@@ -1750,6 +1753,7 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("laserCount", Math.round(rand(4, 20)), rand(0, 4));
   set("laserSpread", rand(20, 120), rand(10, 50));
   set("laserSweep", rand(20, 90), rand(20, 60));
+  set("laserSweepDelay", Math.random() < 0.5 ? 0 : rand(0.02, 0.2), rand(0, 0.05));
   set("laserWidth", rand(0.8, 3), rand(0, 1));
   set("laserBase", Math.random() < 0.6 ? 0 : rand(0.1, 1), rand(0, 0.2));
   set("laserBaseAngle", Math.random() < 0.6 ? 0 : rand(-30, 30), rand(0, 20));

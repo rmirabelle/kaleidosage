@@ -2950,8 +2950,9 @@ void main() {
 
 /**
  * Lasers: a fan of u_count thin beams, u_spread wide in all. The fan is a
- * flat sheet, tilted up by the angle whose sine is u_sweep (1 = straight
- * up, 0 = level and seen edge-on, below 0 = down); each beam is drawn as
+ * flat sheet; each beam is tilted up by the angle whose sine is its
+ * u_sweeps value (1 = straight up, 0 = level and seen edge-on, below 0 =
+ * down), so with Sweep delay the beams tilt one after another; each beam is drawn as
  * seen from the front, so a beam that points away gets shorter (only one
  * that points almost straight away ends on the screen). The beams start in
  * a row along u_base (the base line, in pixels, across the fan), centered
@@ -3027,7 +3028,7 @@ uniform vec2 u_res;
 uniform vec2 u_source;
 uniform vec2 u_base;
 uniform float u_turn;
-uniform float u_sweep;
+uniform float u_sweeps[32];
 uniform float u_spread;
 uniform int u_count;
 uniform float u_width;
@@ -3061,7 +3062,7 @@ void main() {
     vec2 d = fromSource - u_base * t;
     float a = u_spread * t;
     /* The beam's direction on the screen, and how much of its length shows (the rest points away). */
-    vec2 dir = vec2(sin(a), cos(a) * u_sweep);
+    vec2 dir = vec2(sin(a), cos(a) * u_sweeps[i]);
     float shown = length(dir);
     dir = shown > 1e-5 ? dir / shown : vec2(0.0, 1.0);
     float beamLength = shown * 12.0 * u_res.y;
@@ -3276,7 +3277,8 @@ void main() {
   vec3 spotColor = vec3(0.0);
   turned = u_turn3d != vec4(0.0);
   eye = 2.5 * u_res.y;
-  for (int i = 0; i < 8; i++) {
+  /* At most 24 copies (OUTLINE_COPIES in renderer.ts). */
+  for (int i = 0; i < 24; i++) {
     if (i >= u_count) break;
     float r = u_radius * (1.0 - u_spacing * float(i) / float(max(u_count - 1, 1)));
     if (r < 0.5) continue;

@@ -37,6 +37,10 @@ type FinishPart = "sharpen" | "color" | "levels";
 const FINISH_PARTS: readonly FinishPart[] = ["sharpen", "color", "levels"];
 const isFinishPart = (step: FxStep): step is FinishPart => (FINISH_PARTS as readonly string[]).includes(step);
 export const isShapeStep = (step: FxStep): step is ShapeStep => (SHAPE_STEPS as readonly FxStep[]).includes(step);
+/** The most laser beams: the shader draws at most this many (see LASER_SHADER). */
+export const LASER_BEAMS = 32;
+/** The most Light shapes copies: the shader draws at most this many (see OUTLINE_SHADER). */
+export const OUTLINE_COPIES = 24;
 /** The time smear's pattern: 0 linear, 1 rings, 2 sweep, 3 brightness, 4 noise (see SMEAR_SHADER). */
 export type SmearShape = 0 | 1 | 2 | 3 | 4;
 
@@ -500,7 +504,8 @@ export interface FrameValues {
   lasers: number;
   laserCount: number;
   laserSpread: number;
-  laserSweep: number;
+  /** Each beam's Sweep as its sine, LASER_BEAMS of them (see laserSweeps in the engine). */
+  laserSweeps: Float32Array;
   laserBase: number;
   laserBaseAngle: number;
   laserWidth: number;
@@ -2781,9 +2786,9 @@ export class KaleidoRenderer {
     /* The base line runs across the fan; Turn (laserBaseAngle) turns the whole fan clockwise. */
     gl.uniform2f(l.uniforms.u_base, Math.max(0, v.laserBase) * height, 0);
     gl.uniform1f(l.uniforms.u_turn, v.laserBaseAngle);
-    gl.uniform1f(l.uniforms.u_sweep, Math.sin(v.laserSweep));
+    gl.uniform1fv(l.uniforms["u_sweeps[0]"], v.laserSweeps);
     gl.uniform1f(l.uniforms.u_spread, v.laserSpread);
-    gl.uniform1i(l.uniforms.u_count, Math.min(32, Math.max(1, Math.round(v.laserCount))));
+    gl.uniform1i(l.uniforms.u_count, Math.min(LASER_BEAMS, Math.max(1, Math.round(v.laserCount))));
     gl.uniform1f(l.uniforms.u_width, Math.max(0.25, v.laserWidth * this.texelScale));
     gl.uniform1f(l.uniforms.u_glow, Math.max(0, v.laserGlow));
     gl.uniform1f(l.uniforms.u_glowSize, Math.max(0.5, v.laserGlowSize * this.texelScale));
@@ -2812,7 +2817,7 @@ export class KaleidoRenderer {
     gl.uniform4f(l.uniforms.u_turn3d, v.outlineSpin, v.outlineSpinLag, v.outlineTumble, v.outlineTumbleLag);
     gl.uniform1i(l.uniforms.u_shape, v.outlineShape);
     gl.uniform1i(l.uniforms.u_draw, v.outlineDraw);
-    gl.uniform1i(l.uniforms.u_count, Math.min(8, Math.max(1, Math.round(v.outlineCount))));
+    gl.uniform1i(l.uniforms.u_count, Math.min(OUTLINE_COPIES, Math.max(1, Math.round(v.outlineCount))));
     gl.uniform1f(l.uniforms.u_radius, Math.max(0, v.outlineRadius) * height);
     gl.uniform1f(l.uniforms.u_spacing, Math.min(1, Math.max(0, v.outlineSpacing)));
     gl.uniform1f(l.uniforms.u_delay, v.outlineDelay);
