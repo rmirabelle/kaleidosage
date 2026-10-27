@@ -375,7 +375,6 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     ),
     terrain: (grip) => (
       <Group engine={engine} group="terrain" title="Terrain" grip={grip} {...accordion("terrain")}>
-        <CameraRepeatRow engine={engine} />
         <TerrainSection engine={engine} row={row} />
       </Group>
     ),
@@ -1240,7 +1239,7 @@ function TerrainRows({ engine }: { engine: Engine }) {
   );
 }
 /**
- * Terrain's settings: Place and Area first, then the land and its light,
+ * Terrain's settings: Place and Area first, then Tiling, then the land and its light,
  * then the camera (which Camera shares) under a Camera heading, then
  * Common. The land is always real terrain, colored by its NASA picture.
  */
@@ -1248,6 +1247,7 @@ function TerrainSection({ engine, row }: { engine: Engine; row: (key: ParamKey) 
   return (
     <>
       <TerrainRows engine={engine} />
+      <CameraRepeatRow engine={engine} name="Tiling" />
       {TERRAIN_LAND_KEYS.map(row)}
       <div className="panel-sub-head" data-tip="Where the camera is and where it looks. The Camera effect uses the same camera.">Camera</div>
       <SplitRows keys={TERRAIN_CAMERA_KEYS} row={row} blend={<CameraBlend engine={engine} stateKey="cameraBlend" />} />
@@ -1255,11 +1255,12 @@ function TerrainSection({ engine, row }: { engine: Engine; row: (key: ParamKey) 
   );
 }
 
-function CameraRepeatRow({ engine }: { engine: Engine }) {
+/** How the land goes on past its edge. Terrain names it Tiling; Camera keeps Repeat. */
+function CameraRepeatRow({ engine, name = "Repeat" }: { engine: Engine; name?: string }) {
   const [repeat, setRepeat] = useState(engine.state.cameraRepeat);
   return (
     <div className="panel-select-row panel-layer-blend">
-      <span className="panel-row-name">Repeat</span>
+      <span className="panel-row-name">{name}</span>
       <Dropdown
         value={repeat}
         options={CAMERA_REPEATS}
