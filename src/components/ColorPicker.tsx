@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { X } from "@phosphor-icons/react";
+import { Check, Eyedropper, X } from "@phosphor-icons/react";
 import { hexToHsv, hsvToHex, normalizeHex, type Hsv } from "../lib/color";
 
 const PRESETS = ["#ff7a1a", "#ffd23f", "#39ff14", "#12ab9f", "#4b76f7", "#b46cff", "#ff3d8b", "#ffffff", "#000000"];
@@ -41,14 +41,16 @@ export function ColorPicker({ color, onChange, label }: {
 
 /**
  * The picker itself. It is drawn on the page body with a fixed position, so
- * the scrolling settings panel does not cut it off. Esc, Enter in the hex
- * field, the close button, the swatch or a window change closes it.
+ * the scrolling settings panel does not cut it off. OK, Enter in the hex
+ * field, a click outside, the swatch or a window change closes it and
+ * keeps the color. The close button in its corner and Esc close it and put
+ * back the color it opened with.
  *
- * Eyedropper: while the picker is open, the pointer is an eyedropper
- * everywhere in the app outside the picker. The picker shows the color
- * under the pointer as it moves, and a click applies that color and closes
- * the picker. Without the app (in a plain browser) there is no screen
- * reader, so a click outside closes.
+ * Eyedropper (only in the app, which can read the screen): its button
+ * turns it on. Then the pointer is an eyedropper everywhere in the app
+ * outside the picker, and the picker shows the color under the pointer as
+ * it moves. A click applies that color and turns the eyedropper off; Esc
+ * or the button again turns it off with no change.
  */
 export function ColorPopup({ anchor, color, onChange, onClose }: {
   anchor: HTMLElement;
@@ -63,6 +65,14 @@ export function ColorPopup({ anchor, color, onChange, onClose }: {
   const [hsv, setHsv] = useState<Hsv>(() => hexToHsv(color) ?? { h: 0, s: 0, v: 0 });
   const [text, setText] = useState(color);
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
+  const [dropper, setDropper] = useState(false);
+  /** The color the picker opened with, for Cancel. */
+  const initialRef = useRef(color);
+  const cancelRef = useRef(() => {});
+  cancelRef.current = () => {
+    onChange(initialRef.current);
+    onClose();
+  };
 
   const apply = (next: Hsv) => {
     setHsv(next);
@@ -95,7 +105,7 @@ export function ColorPopup({ anchor, color, onChange, onClose }: {
     const close = () => onCloseRef.current();
     const outside = (target: EventTarget | null) =>
       !popupRef.current?.contains(target as Node) && !anchor.contains(target as Node);
-    const eyedropper = isTauri();
+    const eyedropper = dropper;
     const mouseEvents = ["mousedown", "mouseup", "click", "dblclick"] as const;
     const read = () => invoke<string | null>("screen_color_at_cursor").catch(() => null);
     /**
@@ -135,7 +145,7 @@ export function ColorPopup({ anchor, color, onChange, onClose }: {
       for (const type of mouseEvents) window.addEventListener(type, stop, true);
       window.setTimeout(done, 1000);
     };
-    /* The color is read at the press, before the click can change anything on screen. Picking closes the picker. */
+    /* The color is read at the press, before the click can change anything on screen. Picking turns the eyedropper off. */
     const onPointerDown = async (event: PointerEvent) => {
       if (!outside(event.target)) return;
       if (!eyedropper) {
@@ -147,14 +157,16 @@ export function ColorPopup({ anchor, color, onChange, onClose }: {
       if (event.button !== 0) return;
       swallowClick();
       const color = await read();
+      over = false;
       if (color) pickRef.current(color);
-      close();
+      setDropper(false);
     };
-    /* Capture, so Esc closes the picker and does not also leave full screen. */
+    /* Capture, so Esc does not also leave full screen. Esc turns the eyedropper off first, then cancels. */
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.stopPropagation();
-      close();
+      if (eyedropper) setDropper(false);
+      else cancelRef.current();
     };
     if (eyedropper) {
       document.body.classList.add("eyedropper");
@@ -166,6 +178,8 @@ export function ColorPopup({ anchor, color, onChange, onClose }: {
     window.addEventListener("resize", close);
     window.addEventListener("blur", close);
     return () => {
+      /* A color shown while pointing goes back to the applied one. */
+      if (over) previewRef.current(appliedRef.current);
       document.body.classList.remove("eyedropper");
       window.removeEventListener("pointerdown", onPointerDown, true);
       window.removeEventListener("pointermove", onPointerMove, true);
@@ -174,7 +188,7 @@ export function ColorPopup({ anchor, color, onChange, onClose }: {
       window.removeEventListener("resize", close);
       window.removeEventListener("blur", close);
     };
-  }, [anchor]);
+  }, [anchor, dropper]);
 
   /** Follows the mouse over an area while the button is held, with x and y from 0 to 1. */
   const drag = (update: (x: number, y: number) => void) => (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -205,6 +219,12 @@ export function ColorPopup({ anchor, color, onChange, onClose }: {
       aria-label="Color"
       style={position ? { left: position.left, top: position.top } : { visibility: "hidden" }}
     >
+      <div className="color-head">
+        <span className="color-title">Color</span>
+        <button className="color-close" onClick={() => cancelRef.current()} aria-label="Cancel" data-tip="Cancel: put back the color it had `Esc`">
+          <X size={13} weight="bold" />
+        </button>
+      </div>
       <div
         className="color-sv"
         style={{ backgroundColor: `hsl(${hsv.h} 100% 50%)` }}
@@ -233,9 +253,17 @@ export function ColorPopup({ anchor, color, onChange, onClose }: {
           onBlur={() => setText(hex)}
           onKeyDown={(event) => { if (event.key === "Enter") onClose(); }}
         />
-        <button className="color-close" onClick={onClose} aria-label="Close" data-tip="Close `Esc`">
-          <X size={13} weight="bold" />
-        </button>
+        {isTauri() && (
+          <button
+            className={`color-dropper ${dropper ? "on" : ""}`}
+            onClick={() => setDropper((value) => !value)}
+            aria-label="Eyedropper"
+            aria-pressed={dropper}
+            data-tip={dropper ? "Eyedropper is on: click anywhere in the app to pick its color `Esc`" : "Eyedropper: pick a color from the app"}
+          >
+            <Eyedropper size={15} weight="bold" />
+          </button>
+        )}
       </div>
       <div className="color-presets">
         {PRESETS.map((preset) => (
@@ -249,7 +277,12 @@ export function ColorPopup({ anchor, color, onChange, onClose }: {
           />
         ))}
       </div>
-      {isTauri() && <p className="color-hint">Point at the app to see a color. Click to pick it.</p>}
+      <div className="color-foot">
+        {dropper && <p className="color-hint">Point at the app to see a color. Click to pick it.</p>}
+        <button className="color-ok" onClick={onClose} data-tip="Keep this color">
+          <Check size={14} weight="bold" /> OK
+        </button>
+      </div>
     </div>,
     document.body
   );

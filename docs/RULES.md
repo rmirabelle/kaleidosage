@@ -390,8 +390,11 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - The picture changes during each drag in the picker.
 - The hex field accepts 3 or 6 digits, with or without "#".
 - The picker keeps the hue when the color is gray or black.
-- In the app, the pointer is an eyedropper outside the picker.
-- An eyedropper click applies the color and closes the picker.
+- The picker's close button is in its top right corner. It and Esc put back the color the picker opened with, and close it.
+- OK (green, with a check mark), Enter in the hex field, or a click outside keeps the color and closes the picker.
+- In the app, the eyedropper button turns the eyedropper on; the pointer is never an eyedropper until then.
+- While the eyedropper is on, the pointer is an eyedropper outside the picker, and the picker shows the color under it.
+- An eyedropper click applies the color and turns the eyedropper off; the picker stays open. Esc or the button again turns it off with no change.
 - Contour Color has Black and White chips.
 - A new scene's particle gradient goes from red to blue.
 - A click on the gradient bar adds a stop.
