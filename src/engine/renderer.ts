@@ -535,6 +535,11 @@ export interface FrameValues {
   outlineGlowSize: number;
   outlineFlow: number;
   outlineTurn: number;
+  /** Light shapes in 3D: the first outline's Spin and Tumble angles, and how much less each next copy has turned (radians; see OUTLINE_SHADER). */
+  outlineSpin: number;
+  outlineTumble: number;
+  outlineSpinLag: number;
+  outlineTumbleLag: number;
   outlineX: number;
   outlineY: number;
   outlineStopAt: Float32Array;
@@ -2804,6 +2809,7 @@ export class KaleidoRenderer {
     gl.uniform2f(l.uniforms.u_res, width, height);
     gl.uniform2f(l.uniforms.u_center, v.outlineX * width, v.outlineY * height);
     gl.uniform1f(l.uniforms.u_turn, v.outlineTurn);
+    gl.uniform4f(l.uniforms.u_turn3d, v.outlineSpin, v.outlineSpinLag, v.outlineTumble, v.outlineTumbleLag);
     gl.uniform1i(l.uniforms.u_shape, v.outlineShape);
     gl.uniform1i(l.uniforms.u_draw, v.outlineDraw);
     gl.uniform1i(l.uniforms.u_count, Math.min(8, Math.max(1, Math.round(v.outlineCount))));

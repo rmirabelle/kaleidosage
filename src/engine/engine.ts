@@ -902,6 +902,8 @@ export class Engine {
     this.state.outlineFlowTime = 0;
     this.state.solidSpinTurns = 0;
     this.state.solidTumbleTurns = 0;
+    this.state.outlineSpinTurns = 0;
+    this.state.outlineTumbleTurns = 0;
     this.state.mapTravel = 0;
     this.state.cameraX = 0;
     this.state.cameraY = 0;
@@ -1043,6 +1045,8 @@ export class Engine {
     /* The 3D Object's spin and tumble are speeds in turns per minute, added up the same way. */
     this.state.solidSpinTurns = (this.state.solidSpinTurns + animated * this.live("solidSpin") / 60) % 1;
     this.state.solidTumbleTurns = (this.state.solidTumbleTurns + animated * this.live("solidTumble") / 60) % 1;
+    this.state.outlineSpinTurns = (this.state.outlineSpinTurns + animated * this.live("outlineSpin") / 60) % 1;
+    this.state.outlineTumbleTurns = (this.state.outlineTumbleTurns + animated * this.live("outlineTumble") / 60) % 1;
     /* Tunnel speed is a speed too, so the distance flown is added up the same way. */
     const mapSpeed = this.live("mapSpeed");
     if (this.state.mapMode === 9) {
@@ -1464,6 +1468,11 @@ export class Engine {
       outlineGlowSize: this.live("outlineGlowSize"),
       outlineFlow: this.state.outlineFlowTime,
       outlineTurn: this.live("outlineTurn") * DEGREES,
+      /* Each copy is Delay draws later than the one before, so it turns that much time later (radians per copy). */
+      outlineSpin: this.state.outlineSpinTurns * Math.PI * 2,
+      outlineTumble: this.state.outlineTumbleTurns * Math.PI * 2,
+      outlineSpinLag: (this.live("outlineSpin") / 60) * this.live("outlineDelay") * this.live("outlineDrawTime") * Math.PI * 2,
+      outlineTumbleLag: (this.live("outlineTumble") / 60) * this.live("outlineDelay") * this.live("outlineDrawTime") * Math.PI * 2,
       outlineX: this.live("outlineX"),
       outlineY: this.live("outlineY"),
       outlineStopAt: new Float32Array(this.state.outlineStops.map((stop) => stop.at)),

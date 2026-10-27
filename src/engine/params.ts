@@ -29,7 +29,8 @@ export const PARAM_KEYS = [
   "bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize",
   "sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel",
   /* Last, so the settings before it keep their seeds (see createParams). */
-  "viewAmount"
+  "viewAmount",
+  "outlineSpin", "outlineTumble"
 ] as const;
 export type ParamKey = typeof PARAM_KEYS[number];
 
@@ -382,6 +383,9 @@ export interface PlayState {
    */
   solidKeep: boolean;
   solidSpinTurns: number;
+  /** Light shapes: how far the first outline has turned by Spin and Tumble (turns, 0 to 1). */
+  outlineSpinTurns: number;
+  outlineTumbleTurns: number;
   solidTumbleTurns: number;
   /** The Driver effect's driver (caustics, smoke, ink, fire, ripples), and what it does to the picture. */
   driverSource: DriverSource;
@@ -900,6 +904,9 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   outlineGlowSize: { label: "Glow size", min: 2, max: 80, step: 0.1, scale: "log", value: 16, unit: "px", drift: "wave", low: 8, high: 30, on: false },
   outlineFlow: { label: "Color flow", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   outlineTurn: { label: "Turn", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "spin", low: -180, high: 180, on: false },
+  /** Light shapes in 3D: Spin turns each outline around its upright line, Tumble around its level line, as speeds (as the 3D object). Each copy turns later by its Delay. */
+  outlineSpin: { label: "Spin", min: -60, max: 60, step: 0.1, value: 0, unit: " rpm", drift: "wave", low: 3, high: 12, on: false },
+  outlineTumble: { label: "Tumble", min: -60, max: 60, step: 0.1, value: 0, unit: " rpm", drift: "wave", low: -3, high: 3, on: false },
   outlineX: { label: "X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   outlineY: { label: "Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   /**
@@ -951,6 +958,7 @@ export const NO_EFFECT: Partial<Record<ParamKey, number>> = {
   particleGravity: 0,
   cyclesCenterX: 0, cyclesCenterY: 0,
   solidSpin: 0, solidTumble: 0, solidTilt: 0, solidX: 0, solidY: 0,
+  outlineSpin: 0, outlineTumble: 0,
   raysX: 0, raysY: 0,
   exposure: 0
 };
@@ -1029,7 +1037,7 @@ export function createPlayState(): PlayState {
     /* No effect is in the list at start-up, so every effect group is off. */
     groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false },
     locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 0, cameraColors: 0, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), outlineTime: 0, outlineFlowTime: 0, solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 0, cameraColors: 0, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), outlineTime: 0, outlineFlowTime: 0, solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1451,7 +1459,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   rays: ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"],
   picture: ["pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn", "pictureKey"],
   lasers: ["laserAmount", "laserCount", "laserSpread", "laserSweep", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"],
-  outlines: ["outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineFlow", "outlineTurn", "outlineX", "outlineY"],
+  outlines: ["outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"],
   bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
   sharpen: ["sharpen", "sharpenRadius"],
   color: ["overlayOpacity"],
@@ -1813,4 +1821,7 @@ function randomizeAll(params: Params, state?: PlayState) {
     state.outlineShape = Math.floor(Math.random() * 4) as OutlineShape;
     state.outlineDraw = Math.floor(Math.random() * 3) as OutlineDraw;
   }
+  /* Last, so the random values before them stay as they were before them. */
+  set("outlineSpin", Math.random() < 0.6 ? 0 : (Math.random() < 0.5 ? -1 : 1) * rand(2, 12), rand(0, 3));
+  set("outlineTumble", Math.random() < 0.7 ? 0 : rand(-6, 6), rand(0, 2));
 }
