@@ -253,6 +253,8 @@ export interface FrameValues {
   drosteSpirals: number;
   drosteSoftness: number;
   drosteRound: number;
+  /** Droste spiral: each copy's darkening (0 to 1, 1 = half as bright per copy). */
+  drosteFade: number;
   drosteRotation: number;
   drostePictureTurn: number;
   mapTwist: number;
@@ -1462,6 +1464,7 @@ export class KaleidoRenderer {
     gl.uniform1f(k.uniforms.u_drosteSpirals, v.drosteSpirals);
     gl.uniform1f(k.uniforms.u_drosteSoftness, v.drosteSoftness);
     gl.uniform1f(k.uniforms.u_drosteRound, v.drosteRound);
+    gl.uniform1f(k.uniforms.u_drosteFade, Math.min(1, Math.max(0, v.drosteFade)));
     gl.uniform1f(k.uniforms.u_drosteRotation, v.drosteRotation);
     gl.uniform1f(k.uniforms.u_drostePictureTurn, v.drostePictureTurn);
     gl.uniform1f(k.uniforms.u_mapTwist, v.mapTwist);

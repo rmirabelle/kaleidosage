@@ -1290,6 +1290,7 @@ export class Engine {
       drosteSpirals: this.live("drosteSpirals"),
       drosteSoftness: this.live("drosteSoftness"),
       drosteRound: this.live("drosteRound"),
+      drosteFade: this.live("drosteFade"),
       drosteRotation: this.live("drosteRotation") * DEGREES,
       drostePictureTurn: this.live("drostePictureTurn") * DEGREES,
       mapTwist: this.live("mapTwist") * DEGREES,
