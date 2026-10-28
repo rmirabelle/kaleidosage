@@ -252,7 +252,7 @@ uniform float u_drosteSpirals;
 /* Droste spiral: how far each frame fades into the next copy, and the frames' shape from rectangle (0) to circle (1). */
 uniform float u_drosteSoftness;
 uniform float u_drosteRound;
-/* Droste spiral: each copy's darkening, 0 to 1 (see drosteLight). */
+/* Droste spiral: each copy's darkening, -1 to 1 (see drosteLight). */
 uniform float u_drosteFade;
 /* Droste spiral: the turn of the whole spiral, in radians. */
 uniform float u_drosteRotation;
@@ -533,9 +533,17 @@ float drosteAltWeight;
  */
 float drosteLevel;
 
-/* Copy fade: the light of copy "level" (each copy keeps 1 - fade / 2 of the light of the one around it), by the map mix. */
+/**
+ * Copy fade: the light of copy "level", by the map mix. Above 0, each copy
+ * keeps 1 - fade / 2 of the light of the copy around it. Below 0, each copy
+ * keeps that share of the light of the copy inside it, from the level where
+ * a copy is about one pixel tall (the screen's frame is about the screen's
+ * height), so the smallest copies are full and the larger ones darker.
+ */
 float drosteLight(float level) {
-  return mix(1.0, pow(1.0 - 0.5 * u_drosteFade, max(level, 0.0)), u_mapMix);
+  float steps = max(level, 0.0);
+  if (u_drosteFade < 0.0) steps = max(log(u_res.y) / -log(clamp(u_drosteSize, 0.05, 0.95)) - level, 0.0);
+  return mix(1.0, pow(1.0 - 0.5 * abs(u_drosteFade), steps), u_mapMix);
 }
 
 /**
@@ -1460,7 +1468,7 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
    * the copy around it, one level less). It only applies to the Droste map
    * as the last spiral step, where the levels are set.
    */
-  bool copyFade = spiralLast && u_mapMode == 8 && u_drosteFade > 0.0;
+  bool copyFade = spiralLast && u_mapMode == 8 && u_drosteFade != 0.0;
   float readLight[5] = float[5](1.0, 1.0, 1.0, 1.0, 1.0);
   if (copyFade) readLight = float[5](drosteLight(level), drosteLight(level), drosteLight(level - 1.0), drosteLight(spiralLevel), drosteLight(spiralLevel - 1.0));
   vec4 color = sourceColor(p, g);

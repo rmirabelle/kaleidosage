@@ -516,11 +516,13 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   /** Droste spiral: the frames' shape, from the picture's rectangle (0) to a circle (1). */
   drosteRound: { label: "Frame shape", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 1, on: false },
   /**
-   * Droste spiral: each copy inside the screen's frame is darker than the
-   * one around it, as Mirror fade (1 = half as bright per copy). The copies
-   * change smoothly as Travel moves them.
+   * Droste spiral: above 0, each copy inside the screen's frame is darker
+   * than the one around it, as Mirror fade (1 = half as bright per copy).
+   * Below 0 it goes the other way: the smallest copy that shows (about a
+   * pixel) is full, and each larger copy is darker, so the center glows.
+   * The copies change smoothly as Travel moves them.
    */
-  drosteFade: { label: "Copy fade", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.1, high: 0.4, on: false },
+  drosteFade: { label: "Copy fade", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.1, high: 0.4, on: false },
   /** Droste spiral: turns the whole spiral and its frames around the map's center. */
   drosteRotation: { label: "Rotate (post)", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   /**
@@ -977,7 +979,7 @@ export const NO_EFFECT: Partial<Record<ParamKey, number>> = {
   hyperFlow: 0, warpCenterX: 0, warpCenterY: 0, cameraHeight: 0, cameraDolly: 0, cameraTruck: 0,
   mapScale: 1, juliaZoom: 1, mapPower: 1, mapArms: 0, mapTwist: 0, mapSpeed: 0, tunnelTwist: 0, mapPanX: 0, mapPanY: 0,
   mobiusPanX: 0, mobiusPanY: 0,
-  centerX: 0, centerY: 0, zoom: 1, panX: 0, panY: 0, twirl: 0, mirrorHue: 0,
+  centerX: 0, centerY: 0, zoom: 1, panX: 0, panY: 0, twirl: 0, mirrorHue: 0, drosteFade: 0,
   blurMaskX: 0, blurMaskY: 0,
   trailTurn: 0, trailHue: 0, trailFlow: 0,
   particleGravity: 0,
