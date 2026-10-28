@@ -119,30 +119,47 @@ export const formatLength = (seconds: number) => {
 };
 
 /**
+ * Smaller 360 sizes, tried in turn when the encoder cannot make the one
+ * asked for: many GPUs encode H.264 only up to 3840 pixels wide, some only
+ * at 30 frames a second.
+ */
+const SPHERE_FALLBACKS = [{ width: 3840, height: 1920 }, { width: 2880, height: 1440 }];
+
+/**
  * The encoder setup for the quality: a fixed quality (quantizer) when the
  * encoder supports it, else a fixed bit rate. The GPU's encoder is tried
- * first, because it is faster and leaves the processor free.
+ * first, because it is faster and leaves the processor free. A 360 video
+ * ("sphere") that the encoder cannot make at its size and frame rate tries
+ * 30 frames a second, then the smaller SPHERE_FALLBACKS sizes.
  */
-async function pickEncoder(width: number, height: number, fps: VideoFps, quality: VideoQuality) {
+async function pickEncoder(size: { width: number; height: number }, fps: VideoFps, quality: VideoQuality, sphere: boolean) {
   if (typeof VideoEncoder === "undefined") throw new Error("This version of the app's web view cannot encode video.");
   const { quantizer, bitsPerPixel } = QUALITIES[quality];
-  const codecs = width * height > MAX_WIDTH * MAX_HEIGHT ? LEVEL_52 : QUALITIES[quality].codecs;
-  const bitrate = Math.round(width * height * fps * bitsPerPixel);
+  const sizes = sphere ? [size, ...SPHERE_FALLBACKS.filter((fallback) => fallback.width < size.width)] : [size];
+  const rates: VideoFps[] = sphere && fps !== 30 ? [fps, 30] : [fps];
   const accelerations: HardwareAcceleration[] = ["prefer-hardware", "no-preference"];
-  const attempts: { config: VideoEncoderConfig; quantizer: number | null }[] = [];
-  for (const hardwareAcceleration of accelerations) {
-    for (const codec of codecs) {
-      if (quantizer !== null) attempts.push({ config: { codec, width, height, framerate: fps, hardwareAcceleration, bitrateMode: "quantizer" }, quantizer });
+  for (const { width, height } of sizes) {
+    const codecs = width * height > MAX_WIDTH * MAX_HEIGHT ? LEVEL_52 : QUALITIES[quality].codecs;
+    for (const framerate of rates) {
+      const bitrate = Math.round(width * height * framerate * bitsPerPixel);
+      const attempts: { config: VideoEncoderConfig; quantizer: number | null }[] = [];
+      for (const hardwareAcceleration of accelerations) {
+        for (const codec of codecs) {
+          if (quantizer !== null) attempts.push({ config: { codec, width, height, framerate, hardwareAcceleration, bitrateMode: "quantizer" }, quantizer });
+        }
+      }
+      for (const hardwareAcceleration of accelerations) {
+        for (const codec of codecs) attempts.push({ config: { codec, width, height, framerate, hardwareAcceleration, bitrate }, quantizer: null });
+      }
+      for (const attempt of attempts) {
+        const support = await VideoEncoder.isConfigSupported(attempt.config).catch(() => ({ supported: false }));
+        if (support.supported) return { ...attempt, width, height, fps: framerate };
+      }
     }
   }
-  for (const hardwareAcceleration of accelerations) {
-    for (const codec of codecs) attempts.push({ config: { codec, width, height, framerate: fps, hardwareAcceleration, bitrate }, quantizer: null });
-  }
-  for (const attempt of attempts) {
-    const support = await VideoEncoder.isConfigSupported(attempt.config).catch(() => ({ supported: false }));
-    if (support.supported) return attempt;
-  }
-  throw new Error("No H.264 video encoder is available on this PC.");
+  throw new Error(sphere
+    ? "The video encoder on this PC cannot make a 360 video, even at 2880 × 1440 and 30 frames a second."
+    : "No H.264 video encoder is available on this PC.");
 }
 
 /** The app icon, cut at its right at the last visible pixel, so the space after it is only the column gap. */
@@ -354,10 +371,10 @@ export async function encodeVideo(
   signal: AbortSignal,
   file: ExportFile | null = null
 ): Promise<Blob | null> {
-  const { width, height } = size;
-  const fps = options.fps;
   /* A 360 video draws a square picture as tall as the video, then wraps it around the viewer. */
   const sphere = options.size === "sphere";
+  /* The encoder is picked first: a 360 video may get a smaller size or frame rate than asked for. */
+  const { config, quantizer, width, height, fps } = await pickEncoder(size, options.fps, options.quality, sphere);
   const frameWidth = sphere ? height : width;
   const engine = await source.forExport(frameWidth, height);
   const tail: WebGLTexture[] = [];
@@ -417,7 +434,6 @@ export async function encodeVideo(
 
     /* In a 360 video the title box is half the size, so it sits in front of the viewer and does not wrap far around. */
     const overlay = options.style === "title" ? await titleOverlay(frameWidth, height, options.title, sphere ? 0.5 : 1) : null;
-    const { config, quantizer } = await pickEncoder(width, height, fps, options.quality);
     /**
      * With a file, the MP4 goes to it in parts as it is made (see
      * openExportFile), and its index at the end; so a long or large video

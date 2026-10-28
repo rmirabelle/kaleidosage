@@ -108,7 +108,7 @@ export function ExportVideoDialog({ engine, screenSize, onCancel, onExport }: Pr
           </div>
           {sizeId === "sphere" && (
             <p className="video-note">
-              The picture goes all around you: its center is in front of you, and its mirror image is behind you. Copy the file to the headset and open it in its video player.
+              The picture goes all around you: its center is in front of you, and its mirror image is behind you. Copy the file to the headset and open it in its video player. When this PC's video encoder cannot make {size.width} × {size.height}, the video gets 30 frames a second or a smaller size (3840 × 1920 or 2880 × 1440).
             </p>
           )}
           <div className="video-row">
