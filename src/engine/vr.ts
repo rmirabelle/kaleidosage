@@ -150,13 +150,6 @@ export async function vrAvailable() {
   return xr ? xr.isSessionSupported("immersive-vr").catch(() => false) : false;
 }
 
-/** Calls "onChange" when a headset comes or goes. Returns the function that stops it. */
-export function watchVr(onChange: () => void) {
-  const xr = xrSystem();
-  xr?.addEventListener("devicechange", onChange);
-  return () => xr?.removeEventListener("devicechange", onChange);
-}
-
 /** Starts showing in the headset. It must follow a click or a key press. */
 export function startVrSession() {
   const xr = xrSystem();

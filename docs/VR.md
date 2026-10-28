@@ -27,8 +27,11 @@ subject too large.
 2. In it, Settings → General: set Meta Quest Link as the active OpenXR runtime.
 3. Connect the headset (USB 3 cable, or Air Link on Wi-Fi), and in the
    headset open Quick Settings → Quest Link → Launch.
-4. Enter VR works when the headset is ready; the app checks every 3
-   seconds, and says how to start Link when no headset is ready.
+4. Click Enter VR. With no headset ready, the app says how to start Link.
+   The app asks for a headset only on that click: each question connects
+   the web view to the headset's software, which then shows the app as
+   loading in the headset. The VR button over the picture shows once VR
+   has worked on this PC.
 
 ## How it works
 

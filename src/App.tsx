@@ -31,10 +31,10 @@ import { DocumentTabs, type DocumentTabInfo } from "./components/DocumentTabs";
 import { StageControls } from "./components/StageControls";
 import { VrScreenCard } from "./components/VrScreenCard";
 import { Engine } from "./engine/engine";
-import { vrAvailable, vrSupported, watchVr } from "./engine/vr";
+import { vrAvailable, vrSupported } from "./engine/vr";
 
-/** How often the app asks whether a VR headset is ready, in milliseconds. */
-const VR_CHECK_MS = 3000;
+/** Set once VR has worked on this PC (see toggleVr). */
+const VR_USED_KEY = "kaleidosage.vr-used";
 import { createParams, createPlayState, nudgeParams, randomizeGroup, randomizeParams, resetEffects, type GroupKey, type Params, type PlayState } from "./engine/params";
 import { SettingsHistory } from "./engine/history";
 import { scenePosition } from "./engine/loop";
@@ -1576,20 +1576,17 @@ export default function App() {
     else if (document.fullscreenElement) await document.exitFullscreen();
   }, []);
 
-  /** Live VR (see vr.ts): whether a headset is ready (for a Quest: Quest Link is on), and whether it shows the picture now. */
-  const [vrReady, setVrReady] = useState(false);
+  /**
+   * Live VR (see vr.ts): whether VR has worked on this PC before (then the
+   * VR button shows over the picture), and whether it shows the picture now.
+   * The app asks for a headset only when Enter VR is clicked: each question
+   * connects the web view to the headset's software, which then shows the
+   * app as loading in the headset.
+   */
+  const [vrUsed, setVrUsed] = useState(() => {
+    try { return localStorage.getItem(VR_USED_KEY) === "1"; } catch { return false; }
+  });
   const [inVr, setInVr] = useState(false);
-  /* The headset's "devicechange" does not always come (Link can start after the app), so the app also asks again every few seconds. */
-  useEffect(() => {
-    const check = () => void vrAvailable().then(setVrReady);
-    check();
-    const timer = window.setInterval(check, VR_CHECK_MS);
-    const unwatch = watchVr(check);
-    return () => {
-      window.clearInterval(timer);
-      unwatch();
-    };
-  }, []);
   const toggleVr = useCallback(async () => {
     if (!engine) return;
     if (engine.inVr) {
@@ -1599,10 +1596,11 @@ export default function App() {
     try {
       await engine.enterVr(() => setInVr(false));
       setInVr(engine.inVr);
+      setVrUsed(true);
+      try { localStorage.setItem(VR_USED_KEY, "1"); } catch { /* Remembering is a convenience only. */ }
     } catch (error) {
       /* The usual reason is a headset that is not ready, so say how to make it ready. */
       const ready = await vrAvailable();
-      setVrReady(ready);
       showError(ready
         ? `Could not show the picture in VR. ${error instanceof Error ? error.message : String(error)}`
         : "No VR headset is ready. For a Quest, start Quest Link (or Air Link) in the headset, then try again.");
@@ -2598,7 +2596,7 @@ export default function App() {
             {engine && statsOpen && <StatsOverlay engine={engine} />}
             {engine && inVr && <VrScreenCard engine={engine} />}
             {engine && !startScreen && !fullscreen && (
-              <StageControls onFullscreen={() => void toggleFullscreen()} onVr={vrReady || inVr ? () => void toggleVr() : null} inVr={inVr} />
+              <StageControls onFullscreen={() => void toggleFullscreen()} onVr={vrUsed || inVr ? () => void toggleVr() : null} inVr={inVr} />
             )}
             {fullscreen && (
               /* In full screen the title bar and toolbar are gone; these buttons show while the mouse moves. */
