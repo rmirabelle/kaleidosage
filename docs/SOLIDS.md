@@ -57,6 +57,7 @@ picture.
 | Light angle | The direction the light comes from, around the shape. |
 | Shading | How dark the side away from the light is. 0 is flat, with no light and shade. |
 | Shine | A bright highlight where the light reflects toward the viewer. |
+| Frost | Project only: frosted glass. The picture through the shape gets soft, grainy and a little milky (0 = clear glass). |
 | Shadow | A soft shadow of the shape on the picture behind it. |
 | Background | The picture behind the shape: 1 shows it whole, 0 shows black. |
 | Center X, Center Y | Where the shape is (Common: Pan X and Pan Y). |

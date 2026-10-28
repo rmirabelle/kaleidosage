@@ -411,6 +411,8 @@ export interface FrameValues {
   solidTumble: number;
   solidTilt: number;
   solidBend: number;
+  /** Project's frost: 0 clear glass, 1 frosted (see SOLID_SHADER). */
+  solidFrost: number;
   solidTiles: number;
   solidLight: number;
   solidShading: number;
@@ -2049,6 +2051,7 @@ export class KaleidoRenderer {
     gl.uniformMatrix3fv(s.uniforms.u_turn, false, [0, 1, 2].flatMap((column) => rows.map((row) => row[column])));
     gl.uniform2f(s.uniforms.u_center, v.solidX, v.solidY);
     gl.uniform1f(s.uniforms.u_bend, Math.max(0, v.solidBend));
+    gl.uniform1f(s.uniforms.u_frost, Math.min(1, Math.max(0, v.solidFrost)));
     gl.uniform1f(s.uniforms.u_tiles, Math.max(0.01, v.solidTiles));
     const light = [Math.cos(v.solidLight), Math.sin(v.solidLight), 1.2];
     const length = Math.hypot(...light);

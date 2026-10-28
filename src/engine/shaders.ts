@@ -4070,6 +4070,7 @@ uniform float u_time;
 uniform mat3 u_turn;
 uniform vec2 u_center;
 uniform float u_bend;
+uniform float u_frost;
 uniform float u_tiles;
 /* Toward the light, in the view. */
 uniform vec3 u_light;
@@ -4493,7 +4494,28 @@ void main() {
       vec3 p = eye + rd * at;
       vec3 n = normalAt(p, max(u_pixel * at / EYE * 0.5, 1e-4));
       if (u_map == 1) {
-        color = straight(texture(u_tex, fold(v_uv + n.xy * u_bend * 0.3 * vec2(1.0 / u_aspect, 1.0))));
+        vec2 lens = v_uv + n.xy * u_bend * 0.3 * vec2(1.0 / u_aspect, 1.0);
+        if (u_frost > 0.001) {
+          /**
+           * Frost: frosted glass. The picture is read at 16 places in a
+           * disk around the lens point (up to 0.05 screen heights across at
+           * Frost 1), turned by a random angle that sticks to the surface,
+           * so it is soft and grainy and the grain turns with the shape.
+           * The glass scatters light, so it also looks a little milky.
+           */
+          vec3 grainAt = toShape(p) * 731.0;
+          float spin = 6.2831853 * fract(sin(dot(grainAt, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+          float reach = u_frost * u_frost * 0.05;
+          vec3 sum = vec3(0.0);
+          for (int k = 0; k < 16; k++) {
+            float angle = float(k) * 2.39996323 + spin;
+            vec2 tap = vec2(cos(angle), sin(angle)) * sqrt((float(k) + 0.5) / 16.0) * reach;
+            sum += straight(texture(u_tex, fold(lens + tap * vec2(1.0 / u_aspect, 1.0))));
+          }
+          color = mix(sum / 16.0, vec3(1.0), u_frost * 0.12);
+        } else {
+          color = straight(texture(u_tex, fold(lens)));
+        }
       } else if (u_map == 2) {
         vec3 r = reflect(rd, n);
         color = straight(texture(u_tex, vec2(abs(atan(r.x, -r.z)) / PI, asin(clamp(r.y, -1.0, 1.0)) / PI + 0.5)));

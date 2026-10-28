@@ -1064,7 +1064,7 @@ function SolidSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =>
   const [shape, setShape] = useState<SolidShape>(engine.state.solidShape);
   const [map, setMap] = useState<SolidMap>(engine.state.solidMap);
   const shown = (key: ParamKey) => SOLID_SHAPE_ONLY.includes(key) ? SOLID_SHAPE_KEYS[shape].includes(key)
-    : key === "solidTiles" || key === "solidBend" ? SOLID_MAP_KEYS[map].includes(key) : true;
+    : key === "solidTiles" || key === "solidBend" || key === "solidFrost" ? SOLID_MAP_KEYS[map].includes(key) : true;
   return (
     <>
       <ModeSelect engine={engine} stateKey="solidShape" options={SOLID_SHAPES} name="Shape" onChange={setShape} />

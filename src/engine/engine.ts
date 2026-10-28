@@ -1414,6 +1414,7 @@ export class Engine {
       solidTumble: this.state.solidTumbleTurns * Math.PI * 2,
       solidTilt: this.live("solidTilt") * DEGREES,
       solidBend: this.live("solidBend"),
+      solidFrost: this.live("solidFrost"),
       solidTiles: this.live("solidTiles"),
       solidLight: this.live("solidLight") * DEGREES,
       solidShading: this.live("solidShading"),
