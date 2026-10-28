@@ -106,11 +106,47 @@ interface CommonsPage {
   imageinfo?: { url: string; thumburl?: string; mime: string; width: number; height: number }[];
 }
 
+/** How long to wait before each new try when Wikimedia is busy or down (ms): two more tries. */
+const RETRY_WAITS = [1000, 3000];
+
+/** Waits "ms", or stops at once with an AbortError when "signal" aborts. */
+function wait(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) return reject(signal.reason);
+    const timer = setTimeout(() => { signal?.removeEventListener("abort", onAbort); resolve(); }, ms);
+    const onAbort = () => { clearTimeout(timer); reject(signal?.reason); };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+/**
+ * A Wikimedia request that tries again, after each of "waits", when the
+ * service is busy or down (429 or a 5xx status) or the connection fails.
+ * After the last try it says so in words. Other statuses and an abort stop
+ * at once.
+ */
+export async function fetchWikimedia(url: URL | string, { signal, headers }: { signal?: AbortSignal; headers?: Record<string, string> } = {}, waits: readonly number[] = RETRY_WAITS): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    let failure: Error;
+    try {
+      const response = await fetch(url, { signal, headers });
+      if (response.ok) return response;
+      const busy = response.status === 429 || response.status >= 500;
+      if (!busy) throw new Error(`The image service returned ${response.status}.`);
+      failure = new Error(`Wikimedia Commons is busy or down (error ${response.status}). Try again in a few minutes.`);
+    } catch (error) {
+      if (signal?.aborted || !(error instanceof TypeError)) throw error;
+      failure = new Error("Wikimedia Commons could not be reached. Check the internet connection.");
+    }
+    if (attempt >= waits.length) throw failure;
+    await wait(waits[attempt], signal);
+  }
+}
+
 async function commonsQuery(params: Record<string, string>, signal?: AbortSignal) {
   const api = new URL(COMMONS_API);
   for (const [key, value] of Object.entries({ action: "query", format: "json", origin: "*", ...params })) api.searchParams.set(key, value);
-  const response = await fetch(api, { signal, headers: { "Api-User-Agent": API_USER_AGENT } });
-  if (!response.ok) throw new Error(`The image service returned ${response.status}.`);
+  const response = await fetchWikimedia(api, { signal, headers: { "Api-User-Agent": API_USER_AGENT } });
   return await response.json() as { query?: { pages?: Record<string, CommonsPage>; searchinfo?: { totalhits: number } }; continue?: { gsroffset?: number } };
 }
 
@@ -144,8 +180,7 @@ export async function loadCommonsPhoto(title: string, signal?: AbortSignal): Pro
   const data = await commonsQuery({ titles: title, prop: "imageinfo", iiprop: "url|mime|size", iiurlwidth: String(SOURCE_WIDTH) }, signal);
   const info = Object.values(data.query?.pages ?? {})[0]?.imageinfo?.[0];
   if (!info) throw new Error("The image service did not find that photo.");
-  const download = await fetch(info.thumburl ?? info.url, { signal });
-  if (!download.ok) throw new Error(`The image service returned ${download.status}.`);
+  const download = await fetchWikimedia(info.thumburl ?? info.url, { signal });
   const blob = await download.blob();
   return { image: await loadImageBlob(blob), blob, title: labelOf(title) || "Photo" };
 }
