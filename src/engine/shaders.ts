@@ -252,8 +252,6 @@ uniform float u_drosteSpirals;
 /* Droste spiral: how far each frame fades into the next copy, and the frames' shape from rectangle (0) to circle (1). */
 uniform float u_drosteSoftness;
 uniform float u_drosteRound;
-/* Droste spiral: each copy's darkening, -1 to 1 (see drosteLight). */
-uniform float u_drosteFade;
 /* Droste spiral: the turn of the whole spiral, in radians. */
 uniform float u_drosteRotation;
 /* Droste spiral: how much more each smaller copy turns than the copy around it, in radians. */
@@ -526,27 +524,6 @@ vec2 drosteAlt;
 float drosteAltWeight;
 
 /**
- * Set by drosteMap: how many copies inside the screen's frame the point's
- * copy is. It grows by 1 at each frame inward, and smoothly with Travel,
- * so a copy darkens as it moves in. Below 0 (copies larger than the
- * screen's frame) nothing darkens.
- */
-float drosteLevel;
-
-/**
- * Copy fade: the light of copy "level", by the map mix. Above 0, each copy
- * keeps 1 - fade / 2 of the light of the copy around it. Below 0, each copy
- * keeps that share of the light of the copy inside it, from the level where
- * a copy is about one pixel tall (the screen's frame is about the screen's
- * height), so the smallest copies are full and the larger ones darker.
- */
-float drosteLight(float level) {
-  float steps = max(level, 0.0);
-  if (u_drosteFade < 0.0) steps = max(log(u_res.y) / -log(clamp(u_drosteSize, 0.05, 0.95)) - level, 0.0);
-  return mix(1.0, pow(1.0 - 0.5 * abs(u_drosteFade), steps), u_mapMix);
-}
-
-/**
  * Droste spiral: the picture holds a smaller copy of itself at its center
  * (u_drosteSize of its size), which holds a smaller copy, and so on, with no
  * end inward or outward. Each copy is the whole picture as a rectangle, so
@@ -626,7 +603,6 @@ vec2 drosteMap(vec2 z) {
     }
   }
   q = picture;
-  drosteLevel = k - u_mapTravel / logS;
   drosteStretch = length(beta) * length(q) / max(length(z), 1e-6);
   /* The fade starts this far inside the frame, in log steps: at softness 1, at the copy's frame. */
   float band = clamp(u_drosteSoftness, 0.0, 1.0) * logS;
@@ -1346,9 +1322,6 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
   /* The Droste edge blend's second point and its weight (see drosteMap). */
   vec2 drosteP = p;
   float drosteWeight = 0.0;
-  /* Copy fade (see drosteLight): the copy level of the point and of the higher spiral count's point. */
-  float level = 0.0;
-  float spiralLevel = 0.0;
   /**
    * A spiral count between two whole numbers: the picture of the higher
    * count (with its own edge blend and stretch) fades in over the picture
@@ -1398,13 +1371,11 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
           if (spiralStep && u_mapMode == 8) {
             drosteP = drosteAlt;
             drosteWeight = drosteAltWeight;
-            level = drosteLevel;
           }
         } else if (second) {
           p2 = q;
         } else {
           spiralP = q;
-          spiralLevel = drosteLevel;
           spiralAlt = drosteAlt;
           spiralAltWeight = drosteAltWeight;
           spiralStretch = mix(1.0, drosteStretch, u_mapMix);
@@ -1463,24 +1434,11 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
     (1.0 - altShare) * spiralFade,
     altShare * spiralFade);
   int reads = spiralFade > 0.0 ? 5 : 3;
-  /**
-   * Copy fade: each read's light by its copy (the edge blend's point is in
-   * the copy around it, one level less). It only applies to the Droste map
-   * as the last spiral step, where the levels are set.
-   */
-  bool copyFade = spiralLast && u_mapMode == 8 && u_drosteFade != 0.0;
-  float readLight[5] = float[5](1.0, 1.0, 1.0, 1.0, 1.0);
-  if (copyFade) readLight = float[5](drosteLight(level), drosteLight(level), drosteLight(level - 1.0), drosteLight(spiralLevel), drosteLight(spiralLevel - 1.0));
   vec4 color = sourceColor(p, g);
-  if (copyFade) color.rgb *= readLight[0];
   if (readShare[0] < 1.0) {
     color *= readShare[0];
     for (int k = 1; k < reads; k++) {
-      if (readShare[k] > 0.0) {
-        vec4 read = sourceColor(readAt[k], readDetail[k]);
-        read.rgb *= readLight[k];
-        color += readShare[k] * read;
-      }
+      if (readShare[k] > 0.0) color += readShare[k] * sourceColor(readAt[k], readDetail[k]);
     }
   }
   if (folded && foldBounces > 0.0) color.rgb = mirrorLight(color.rgb, foldBounces);

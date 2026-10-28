@@ -7,7 +7,7 @@ export const PARAM_KEYS = [
   "warpAmount", "warpScale", "warpCellSize", "warpCellAngle", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle",
   "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl",
   "mandelDepth", "mandelEnd", "mandelSpeed", "mandelFade", "mandelSpread", "mandelInvert", "mandelEdge", "mandelEdgeWidth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle",
-  "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn", "drosteFade",
+  "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
   "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness",
   "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl", "mirrorFade", "mirrorHue",
   "blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel",
@@ -515,14 +515,6 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   drosteSoftness: { label: "Edge softness", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.6, on: false },
   /** Droste spiral: the frames' shape, from the picture's rectangle (0) to a circle (1). */
   drosteRound: { label: "Frame shape", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 1, on: false },
-  /**
-   * Droste spiral: above 0, each copy inside the screen's frame is darker
-   * than the one around it, as Mirror fade (1 = half as bright per copy).
-   * Below 0 it goes the other way: the smallest copy that shows (about a
-   * pixel) is full, and each larger copy is darker, so the center glows.
-   * The copies change smoothly as Travel moves them.
-   */
-  drosteFade: { label: "Copy fade", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.1, high: 0.4, on: false },
   /** Droste spiral: turns the whole spiral and its frames around the map's center. */
   drosteRotation: { label: "Rotate (post)", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   /**
@@ -979,7 +971,7 @@ export const NO_EFFECT: Partial<Record<ParamKey, number>> = {
   hyperFlow: 0, warpCenterX: 0, warpCenterY: 0, cameraHeight: 0, cameraDolly: 0, cameraTruck: 0,
   mapScale: 1, juliaZoom: 1, mapPower: 1, mapArms: 0, mapTwist: 0, mapSpeed: 0, tunnelTwist: 0, mapPanX: 0, mapPanY: 0,
   mobiusPanX: 0, mobiusPanY: 0,
-  centerX: 0, centerY: 0, zoom: 1, panX: 0, panY: 0, twirl: 0, mirrorHue: 0, drosteFade: 0,
+  centerX: 0, centerY: 0, zoom: 1, panX: 0, panY: 0, twirl: 0, mirrorHue: 0,
   blurMaskX: 0, blurMaskY: 0,
   trailTurn: 0, trailHue: 0, trailFlow: 0,
   particleGravity: 0,
@@ -1467,7 +1459,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   /** The images are the user's choice; Randomize does not change the blend. */
   source: ["imageBlend"],
   warp: ["warpOpacity", "warpAmount", "warpScale", "warpCellSize", "warpCellAngle", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle"],
-  map: ["mapOpacity", "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl", "mandelDepth", "mandelEnd", "mandelSpeed", "mandelFade", "mandelSpread", "mandelInvert", "mandelEdge", "mandelEdgeWidth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle", "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn", "drosteFade",
+  map: ["mapOpacity", "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl", "mandelDepth", "mandelEnd", "mandelSpeed", "mandelFade", "mandelSpread", "mandelInvert", "mandelEdge", "mandelEdgeWidth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle", "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
     "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness"],
   kaleidoscope: ["foldOpacity", "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl", "mirrorFade", "mirrorHue"],
   blur: ["blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel"],
