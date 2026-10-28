@@ -9,7 +9,7 @@ export const PARAM_KEYS = [
   "mandelDepth", "mandelEnd", "mandelSpeed", "mandelFade", "mandelSpread", "mandelInvert", "mandelEdge", "mandelEdgeWidth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle",
   "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
   "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness",
-  "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl",
+  "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl", "mirrorFade", "mirrorHue",
   "blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel",
   "trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint",
   "smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade",
@@ -584,6 +584,14 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   panY: { label: "Pan Y", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.35, high: 0.35, on: false },
   twirl: { label: "Twirl", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -1.5, high: 1.5, on: false },
   /**
+   * Every Kaleidoscope type: each reflection is darker, as real glass loses
+   * light at each bounce (1 = half as bright per mirror), and turns the
+   * hue by Mirror hue degrees per mirror. The picture with no bounce stays
+   * as it is.
+   */
+  mirrorFade: { label: "Mirror fade", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.1, high: 0.4, on: false },
+  mirrorHue: { label: "Mirror hue", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "wave", low: -30, high: 30, on: false },
+  /**
    * Blur: how much the picture is blurred where the mask is full, in pixels
    * at 1080p (it scales with the picture height). The mask decides where.
    * Size, softness and the mask position are in screen heights from the
@@ -963,7 +971,7 @@ export const NO_EFFECT: Partial<Record<ParamKey, number>> = {
   hyperFlow: 0, warpCenterX: 0, warpCenterY: 0, cameraHeight: 0, cameraDolly: 0, cameraTruck: 0,
   mapScale: 1, juliaZoom: 1, mapPower: 1, mapArms: 0, mapTwist: 0, mapSpeed: 0, tunnelTwist: 0, mapPanX: 0, mapPanY: 0,
   mobiusPanX: 0, mobiusPanY: 0,
-  centerX: 0, centerY: 0, zoom: 1, panX: 0, panY: 0, twirl: 0,
+  centerX: 0, centerY: 0, zoom: 1, panX: 0, panY: 0, twirl: 0, mirrorHue: 0,
   blurMaskX: 0, blurMaskY: 0,
   trailTurn: 0, trailHue: 0, trailFlow: 0,
   particleGravity: 0,
@@ -1453,7 +1461,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   warp: ["warpOpacity", "warpAmount", "warpScale", "warpCellSize", "warpCellAngle", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle"],
   map: ["mapOpacity", "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl", "mandelDepth", "mandelEnd", "mandelSpeed", "mandelFade", "mandelSpread", "mandelInvert", "mandelEdge", "mandelEdgeWidth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle", "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
     "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness"],
-  kaleidoscope: ["foldOpacity", "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl"],
+  kaleidoscope: ["foldOpacity", "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl", "mirrorFade", "mirrorHue"],
   blur: ["blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel"],
   trails: ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"],
   smear: ["smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade"],
@@ -1633,6 +1641,8 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("panX", rand(-0.5, 0.5), rand(0.1, 0.4));
   set("panY", rand(-0.5, 0.5), rand(0.1, 0.4));
   set("twirl", Math.random() < 0.4 ? rand(-1.5, 1.5) : 0, rand(0.3, 1));
+  set("mirrorFade", Math.random() < 0.7 ? 0 : rand(0.05, 0.35), rand(0, 0.1));
+  set("mirrorHue", Math.random() < 0.75 ? 0 : rand(-40, 40), rand(0, 10));
   /* Whether an effect shows is set by the list (see EFFECT_CHANCE), so its strength is never 0 here. */
   set("blurAmount", rand(5, 30), rand(3, 15));
   set("blurMaskSize", rand(0.15, 0.6), rand(0.05, 0.2));

@@ -282,6 +282,9 @@ export interface FrameValues {
   rotation: number;
   zoom: number;
   twirl: number;
+  /** Each reflection's darkening (0 to 1, 1 = half as bright per mirror) and hue turn (radians per mirror). */
+  mirrorFade: number;
+  mirrorHue: number;
   panX: number;
   panY: number;
   trailMode: TrailMode;
@@ -1493,6 +1496,8 @@ export class KaleidoRenderer {
     gl.uniform1f(k.uniforms.u_rotation, v.rotation);
     gl.uniform1f(k.uniforms.u_zoom, v.zoom);
     gl.uniform1f(k.uniforms.u_twirl, v.twirl);
+    gl.uniform1f(k.uniforms.u_mirrorFade, Math.min(1, Math.max(0, v.mirrorFade)));
+    gl.uniform1f(k.uniforms.u_mirrorHue, v.mirrorHue);
     /**
      * The kaleidoscope's pan moves what it reads, so it belongs to the pass
      * that holds the kaleidoscope. With the kaleidoscope off, the pan is 0.

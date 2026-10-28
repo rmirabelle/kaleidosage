@@ -233,6 +233,9 @@ uniform float u_hyperSize;
 uniform float u_rotation;
 uniform float u_zoom;
 uniform float u_twirl;
+/* Each reflection's darkening (0 to 1) and hue turn (radians per mirror); see mirrorLight. */
+uniform float u_mirrorFade;
+uniform float u_mirrorHue;
 uniform vec2 u_offset;
 uniform int u_mapMode;
 uniform float u_mapMix;
@@ -1052,12 +1055,26 @@ vec2 foldAlt;
 float foldAltWeight;
 /** Set by fold(): how much the fold enlarges the picture at the point (1 for every type but Hyperbolic), for texture detail. */
 float foldStretch;
+/**
+ * Set by fold(): how many mirrors the picture at the point bounced off, for
+ * Mirror fade and Mirror hue (see mirrorLight). For the tile types it is
+ * the number of mirror lines between the point and one tile part that has
+ * no bounce: crossing a mirror line is one bounce.
+ */
+float foldBounces;
+
+/* How many mirror lines (at whole numbers of v) lie between v and the part from 0 to 1. */
+float linesTo(float v) { return abs(floor(v)); }
+
+/* How many bounces image j of m images around a center is from image 0, going the shorter way. */
+float aroundBounces(float j, float m) { return min(j, m - j); }
 
 vec2 fold(vec2 p) {
   float r = length(p);
   float a = atan(p.y, p.x) + u_rotation + u_twirl * r;
   foldAltWeight = 0.0;
   foldStretch = 1.0;
+  foldBounces = 0.0;
   /**
    * Hyperbolic (fold mode 4): the Poincare disk, Disk size in radius. Its
    * tiles get smaller and smaller toward the edge, and never reach it.
@@ -1086,8 +1103,12 @@ vec2 fold(vec2 p) {
     vec2 center = vec2(u_hyper.x, 0.0);
     float radius2 = u_hyper.y * u_hyper.y;
     float wedge = u_hyper.z;
+    /* The wedges around the center: each fold into the first one counts its bounces, and each circle mirror one more. */
+    float wedges = floor(TAU / wedge + 0.5);
     for (int i = 0; i < 64; i++) {
-      float angle = wedge - abs(mod(atan(z.y, z.x), 2.0 * wedge) - wedge);
+      float turned = mod(atan(z.y, z.x), TAU);
+      foldBounces += aroundBounces(min(floor(turned / wedge), wedges - 1.0), wedges);
+      float angle = wedge - abs(mod(turned, 2.0 * wedge) - wedge);
       z = vec2(cos(angle), sin(angle)) * length(z);
       vec2 v = z - center;
       float d2 = dot(v, v);
@@ -1095,6 +1116,7 @@ vec2 fold(vec2 p) {
       float k = radius2 / max(d2, 1e-12);
       z = center + v * k;
       foldStretch *= k;
+      foldBounces += 1.0;
     }
     return z * u_hyperSize / u_zoom;
   }
@@ -1124,6 +1146,14 @@ vec2 fold(vec2 p) {
       float seg = TAU / (t < 0.5 ? whole : whole + 1.0);
       float g = abs(mod(a, seg) - seg * 0.5) / (seg * 0.5);
       float s = abs(cos(PI * t));
+      /**
+       * The images are half wedges. Image 1 (from half a wedge to a whole
+       * one) is only turned, so it has no bounce. The count fades with the
+       * wedge pattern, so it is 0 at the rings, where the count changes.
+       */
+      float images = floor(2.0 * TAU / seg + 0.5);
+      float image = min(floor(mod(a, TAU) / (seg * 0.5)), images - 1.0);
+      foldBounces = aroundBounces(mod(image - 1.0 + images, images), images) * s;
       a = PI / u_segments * (0.5 + s * (g - 0.5));
     }
     return vec2(cos(a), sin(a)) * r / u_zoom;
@@ -1136,6 +1166,8 @@ vec2 fold(vec2 p) {
    */
   if (u_foldMode == 3) {
     vec2 cell = vec2(cos(a), sin(a)) * r / u_tileSize;
+    /* The mirror lines: middle lines and edges every half cell, and diagonals. The part with no bounce is 0 < y < x < 0.5 of the middle cell. */
+    foldBounces = linesTo(2.0 * cell.x) + linesTo(2.0 * cell.y) + linesTo(cell.x + cell.y) + linesTo(cell.x - cell.y);
     vec2 square = abs(cell - floor(cell + 0.5));
     if (square.y > square.x) square = square.yx;
     return square * u_tileSize / u_zoom;
@@ -1147,10 +1179,37 @@ vec2 fold(vec2 p) {
    * hexagon pattern. Both sets of mirrors include the cell edges, so
    * neighbor cells meet with no seam.
    */
-  vec2 local = hexLocal(vec2(cos(a), sin(a)) * r / u_tileSize);
+  vec2 plane = vec2(cos(a), sin(a)) * r / u_tileSize;
+  /**
+   * The mirror lines, in the cell grid's own frame (x and y swapped, see
+   * hexLocal): lines every half cell in three directions through the cell
+   * edges, and for hexagons also lines through the cell centers in the
+   * three directions between them. The part with no bounce is the first
+   * wedge of the middle cell.
+   */
+  vec2 q = plane.yx;
+  foldBounces = linesTo(2.0 * q.x) + linesTo(sqrt(3.0) * q.y - q.x) + linesTo(sqrt(3.0) * q.y + q.x);
+  if (u_foldMode == 2) foldBounces += linesTo(q.y * 2.0 / sqrt(3.0)) + linesTo(q.y / sqrt(3.0) - q.x) + linesTo(q.y / sqrt(3.0) + q.x);
+  vec2 local = hexLocal(plane);
   float seg = u_foldMode == 1 ? TAU / 3.0 : TAU / 6.0;
   float b = abs(mod(atan(local.y, local.x), seg) - seg * 0.5);
   return vec2(cos(b), sin(b)) * length(local) * u_tileSize / u_zoom;
+}
+
+/**
+ * Mirror fade and Mirror hue: the light of a picture that bounced off n
+ * mirrors. Each bounce keeps 1 - fade / 2 of the light and turns the hue by
+ * u_mirrorHue (a turn around the gray line, so gray stays gray). The
+ * colors may carry their cover (premultiplied); both steps keep it right.
+ */
+vec3 mirrorLight(vec3 c, float n) {
+  float angle = u_mirrorHue * n;
+  if (angle != 0.0) {
+    const vec3 gray = vec3(0.57735027);
+    float cs = cos(angle);
+    c = c * cs + cross(gray, c) * sin(angle) + gray * dot(gray, c) * (1.0 - cs);
+  }
+  return max(c, 0.0) * pow(1.0 - 0.5 * u_mirrorFade, n);
 }
 
 /** Both source images at a point, faded into each other by the image blend. An image that the blend does not show is not read. */
@@ -1351,6 +1410,7 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
       if (readShare[k] > 0.0) color += readShare[k] * sourceColor(readAt[k], readDetail[k]);
     }
   }
+  if (folded && foldBounces > 0.0) color.rgb = mirrorLight(color.rgb, foldBounces);
   /**
    * Depth fade: the far end of the tunnel or a spiral (its center), the Möbius pole, or Julia's most stretched places
    * fades to black, which makes it look deep. It works as fog: each step of

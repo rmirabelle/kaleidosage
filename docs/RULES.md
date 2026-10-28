@@ -376,7 +376,8 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Twirl's range comes on half the time.
 - Half of the random angle ranges run backward.
 - Segments come from 0, 3, 4, 5, 6, 8, 10, 12 or 16.
-- The random kaleidoscope type is Radial 60%, Triangle 20% or Hexagon 20%.
+- The random kaleidoscope type is Radial 50%, Triangle 12%, Hexagon 12%, Square 12% or Hyperbolic 14%.
+- Mirror fade comes on 30% of the time, and Mirror hue 25%.
 - A group's dice randomizes only that group's controls and modes.
 - Nudge moves each unlocked value by 2.5% of its slider, up or down.
 - Nudge keeps a 0 value at 0, so an off effect stays off.

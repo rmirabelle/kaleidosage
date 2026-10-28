@@ -31,11 +31,11 @@ export const EFFECT_COLUMNS: readonly (readonly FxStep[])[] = (() => {
 
 /** Radial mode uses segments; the tile modes use a tile size instead. */
 export const KALEIDOSCOPE_KEYS: Record<FoldMode, ParamKey[]> = {
-  0: ["segments", "panX", "panY", "rotation", "zoom", "twirl", "centerX", "centerY"],
-  1: ["tileSize", "panX", "panY", "rotation", "zoom", "twirl", "centerX", "centerY"],
-  2: ["tileSize", "panX", "panY", "rotation", "zoom", "twirl", "centerX", "centerY"],
-  3: ["tileSize", "panX", "panY", "rotation", "zoom", "twirl", "centerX", "centerY"],
-  4: ["hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "panX", "panY", "rotation", "zoom", "twirl", "centerX", "centerY"]
+  0: ["segments", "panX", "panY", "rotation", "zoom", "twirl", "centerX", "centerY", "mirrorFade", "mirrorHue"],
+  1: ["tileSize", "panX", "panY", "rotation", "zoom", "twirl", "centerX", "centerY", "mirrorFade", "mirrorHue"],
+  2: ["tileSize", "panX", "panY", "rotation", "zoom", "twirl", "centerX", "centerY", "mirrorFade", "mirrorHue"],
+  3: ["tileSize", "panX", "panY", "rotation", "zoom", "twirl", "centerX", "centerY", "mirrorFade", "mirrorHue"],
+  4: ["hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "panX", "panY", "rotation", "zoom", "twirl", "centerX", "centerY", "mirrorFade", "mirrorHue"]
 };
 export const FOLD_MODES = [[0, "Radial"], [1, "Triangle tiles"], [2, "Hexagon tiles"], [3, "Square tiles"], [4, "Hyperbolic"]] as const;
 
