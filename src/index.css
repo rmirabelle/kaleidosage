@@ -1370,8 +1370,9 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .perf-meter > span { display: block; height: 100%; border-radius: 2px; background: var(--perf-series); }
 .perf-meter.warning > span { background: var(--perf-warning); }
 .perf-meter.critical > span { background: var(--perf-critical); }
-.perf-passes { margin-top: 10px; }
-.perf-section-title { margin-bottom: 4px; color: var(--perf-ink-2); font-size: 11px; }
+.perf-passes { margin-top: 18px; }
+/* A heading over the step rows: larger, bold and lighter than the rows, as the panel header is. */
+.perf-section-title { margin-bottom: 6px; color: var(--perf-ink); font-size: 12.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .perf-pass { display: grid; grid-template-columns: 96px 1fr 38px; align-items: center; gap: 8px; padding: 2px 0; }
 .perf-pass-label { overflow: hidden; color: var(--perf-ink-2); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .perf-pass-track { display: block; height: 8px; }

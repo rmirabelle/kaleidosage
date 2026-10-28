@@ -3173,8 +3173,8 @@ void main() {
  * each copy turns around its upright line by Spin and then around its
  * level line by Tumble, seen with a little perspective. Each next copy has
  * turned less by the lag, as it is Delay later. A turned outline is its
- * corners turned, joined by straight lines (a ring is 48 of them), and
- * place s still goes evenly along the flat outline.
+ * corners turned, joined by straight lines, and place s still goes evenly
+ * along the flat outline. A turned ring is a true circle (see nearestRing).
  */
 export const OUTLINE_SHADER = `#version 300 es
 precision highp float;
@@ -3247,9 +3247,9 @@ vec3 stopColor(float t) {
 /* How many corners the outline has: a ring has none unless it is turned. */
 int cornerCount() { return u_shape == 0 ? RING_CORNERS : u_shape == 1 ? 4 : u_shape == 2 ? 3 : 2 * u_points; }
 
-/* The point at place s (0 to 1) along the flat outline of radius r. */
+/* The point at place s (0 to 1) along the flat outline of radius r. A ring is a true circle, also when it is turned. */
 vec2 outlinePoint(float s, float r) {
-  if (u_shape == 0 && !turned) return r * vec2(sin(TAU * s), cos(TAU * s));
+  if (u_shape == 0) return r * vec2(sin(TAU * s), cos(TAU * s));
   int corners = cornerCount();
   float h = fract(s);
   for (int k = 0; k < RING_CORNERS; k++) {
@@ -3267,9 +3267,55 @@ vec2 outlinePoint(float s, float r) {
  * Its distance in pixels (x) and its place (y, from a to b). Only the part
  * that shows counts, so its ends are round and its glow ends with it.
  */
+/* A turned ring's point at angle t (clockwise from the top) as it is seen, and how fast it moves as t grows (dP). */
+vec2 ringSeen(float t, float r, out vec2 dP) {
+  vec3 v = r * (sin(t) * turn3d[0] + cos(t) * turn3d[1]);
+  vec3 dv = r * (cos(t) * turn3d[0] - sin(t) * turn3d[1]);
+  float k = eye / (eye + v.z);
+  dP = dv.xy * k - v.xy * k * k * dv.z / eye;
+  return v.xy * k;
+}
+
+/**
+ * nearestShown for a turned ring: a true circle in its turned plane, seen
+ * with the perspective, so no corners show. The search starts at the angle
+ * where the pixel's line of sight meets the ring's plane, and on the far
+ * side of the ring, and moves each start a few steps toward the nearest
+ * point (each step goes along the ring's direction there). A found point
+ * on the part that shows counts, and so do the part's two ends; the
+ * nearest of these wins. A few steps for each pixel, not 48 sides.
+ */
+vec2 nearestRing(vec2 p, float r, float a, float b) {
+  vec3 normal = turn3d[2];
+  float toward = dot(normal, vec3(p, eye));
+  float start = atan(p.x, p.y);
+  if (abs(toward) > 1e-4) {
+    vec3 hit = vec3(0.0, 0.0, -eye) + vec3(p, eye) * (eye * normal.z / toward);
+    start = atan(dot(hit, turn3d[0]), dot(hit, turn3d[1]));
+  }
+  vec2 dP;
+  vec2 best = vec2(length(p - ringSeen(TAU * a, r, dP)), a);
+  float atB = length(p - ringSeen(TAU * b, r, dP));
+  if (atB < best.x) best = vec2(atB, b);
+  for (int seed = 0; seed < 2; seed++) {
+    float t = start + 0.5 * TAU * float(seed);
+    vec2 seen = vec2(0.0);
+    for (int i = 0; i < 4; i++) {
+      seen = ringSeen(t, r, dP);
+      t -= clamp(dot(seen - p, dP) / max(dot(dP, dP), 1e-6), -0.6, 0.6);
+    }
+    seen = ringSeen(t, r, dP);
+    float s = a + fract(fract(t / TAU) - a);
+    float d = length(p - seen);
+    if (s <= b && d < best.x) best = vec2(d, s);
+  }
+  return best;
+}
+
 vec2 nearestShown(vec2 p, float r, float a, float b) {
   if (b - a <= 1e-5) return vec2(1e9, a);
-  if (u_shape == 0 && !turned) {
+  if (u_shape == 0 && turned) return nearestRing(p, r, a, b);
+  if (u_shape == 0) {
     float s = a + fract(fract(atan(p.x, p.y) / TAU) - a);
     if (s <= b) return vec2(abs(length(p) - r), s);
     float da = length(p - outlinePoint(a, r));
