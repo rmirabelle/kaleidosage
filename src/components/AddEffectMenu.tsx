@@ -28,7 +28,8 @@ const EFFECT_NOTES: Record<FxStep, string> = {
   bloom: "Bright areas glow.",
   sharpen: "Makes edges and fine detail crisper.",
   color: "Tints the whole picture with a color.",
-  levels: "Sets the exposure and the black level."
+  levels: "Sets the exposure and the black level.",
+  mask: "A radial gradient of grays fades parts of the picture out."
 };
 
 /**

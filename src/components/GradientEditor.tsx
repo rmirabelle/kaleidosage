@@ -1,6 +1,6 @@
-import { useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { Engine } from "../engine/engine";
-import { MAX_GRADIENT_STOPS, gradientColorAt, rgbToHex, type GradientStop } from "../engine/params";
+import { MAX_GRADIENT_STOPS, gradientColorAt, hexToRgb, rgbToHex, type GradientStop } from "../engine/params";
 import { ColorPopup } from "./ColorPicker";
 
 /** How far below the bar a dragged stop must go to be removed, in pixels. */
@@ -15,6 +15,67 @@ const inOrder = (stops: readonly GradientStop[]) => [...stops].sort((a, b) => a.
 const cssGradient = (stops: readonly GradientStop[]) =>
   `linear-gradient(to right, ${inOrder(stops).map((stop) => `${stop.color} ${(stop.at * 100).toFixed(1)}%`).join(", ")})`;
 
+/** A gray's brightness, 0 to 100 (the average of its channels). */
+const grayLevel = (hex: string) => Math.round((hexToRgb(hex).reduce((sum, channel) => sum + channel, 0) / 3) * 100);
+/** The gray of brightness "level" (0 to 100). */
+const grayHex = (level: number) => {
+  const value = Math.round(Math.min(100, Math.max(0, level)) * 2.55) / 255;
+  return rgbToHex([value, value, value]);
+};
+
+/**
+ * A gray stop's popup: one slider from black to white, and its brightness
+ * in percent. It opens under the stop (above it when there is no room
+ * below). A press outside it closes it; Esc puts the gray back and closes.
+ */
+function GrayPopup({ anchor, color, onChange, onClose }: { anchor: HTMLElement; color: string; onChange: (color: string) => void; onClose: () => void }) {
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [level, setLevel] = useState(() => grayLevel(color));
+  const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
+  const initialRef = useRef(color);
+  const handlers = useRef({ onChange, onClose });
+  handlers.current = { onChange, onClose };
+  useLayoutEffect(() => {
+    const stop = anchor.getBoundingClientRect();
+    const popup = popupRef.current!.getBoundingClientRect();
+    const left = Math.max(8, Math.min(stop.left - popup.width / 2, window.innerWidth - popup.width - 8));
+    const below = stop.bottom + 6;
+    setPosition({ left, top: below + popup.height > window.innerHeight - 8 ? Math.max(8, stop.top - popup.height - 6) : below });
+  }, [anchor]);
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!popupRef.current?.contains(target) && !anchor.contains(target)) handlers.current.onClose();
+    };
+    /* Capture, so Esc does not also leave full screen. */
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      handlers.current.onChange(initialRef.current);
+      handlers.current.onClose();
+    };
+    window.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [anchor]);
+  const set = (next: number) => {
+    setLevel(next);
+    handlers.current.onChange(grayHex(next));
+  };
+  return (
+    <div ref={popupRef} className="color-popup gray-popup" style={position ?? { left: -9999, top: -9999 }}>
+      <div className="gray-popup-row">
+        <span className="gray-popup-swatch" style={{ background: grayHex(level) }} />
+        <input type="range" min={0} max={100} step={1} value={level} aria-label="Gray" onChange={(event) => set(Number(event.target.value))} />
+        <span className="gray-popup-value">{level}%</span>
+      </div>
+    </div>
+  );
+}
+
 /**
  * A gradient of the play state (the particles' life gradient,
  * state.particleStops, or the light cycles' state.cyclesStops): a bar that shows the
@@ -27,8 +88,11 @@ const cssGradient = (stops: readonly GradientStop[]) =>
  *
  * During a drag the stops keep their list order, so the dragged one keeps
  * its index; the engine always gets them in order of place.
+ *
+ * "gray" (the Opacity mask's state.maskStops): every stop is a gray from
+ * black to white, picked with a brightness slider, not a color picker.
  */
-export function GradientEditor({ engine, stateKey = "particleStops" }: { engine: Engine; stateKey?: "particleStops" | "cyclesStops" | "outlineStops" | "cameraStops" }) {
+export function GradientEditor({ engine, stateKey = "particleStops", gray = false }: { engine: Engine; stateKey?: "particleStops" | "cyclesStops" | "outlineStops" | "cameraStops" | "maskStops"; gray?: boolean }) {
   const [stops, setStops] = useState<GradientStop[]>(() => engine.state[stateKey].map((stop) => ({ ...stop })));
   /** The stop whose color picker is open. */
   const [picking, setPicking] = useState<number | null>(null);
@@ -57,7 +121,8 @@ export function GradientEditor({ engine, stateKey = "particleStops" }: { engine:
   const addAt = (event: ReactPointerEvent) => {
     if (event.button !== 0 || stops.length >= MAX_GRADIENT_STOPS) return;
     const at = placeAt(event.clientX);
-    const next = [...stops, { at, color: rgbToHex(gradientColorAt(stops, at)) }];
+    const color = rgbToHex(gradientColorAt(stops, at));
+    const next = [...stops, { at, color: gray ? grayHex(grayLevel(color)) : color }];
     write(next);
     setPicking(next.length - 1);
   };
@@ -110,7 +175,7 @@ export function GradientEditor({ engine, stateKey = "particleStops" }: { engine:
           ref={barRef}
           className={`gradient-bar ${full ? "full" : ""}`}
           style={{ background: cssGradient(stops) }}
-          data-tip={full ? `The gradient has the most stops (${MAX_GRADIENT_STOPS}). Drag a stop down to remove it.` : "Click to add a color stop here"}
+          data-tip={full ? `The gradient has the most stops (${MAX_GRADIENT_STOPS}). Drag a stop down to remove it.` : gray ? "Click to add a gray stop here" : "Click to add a color stop here"}
           onPointerDown={addAt}
         />
         {stops.map((stop, index) => (
@@ -119,8 +184,8 @@ export function GradientEditor({ engine, stateKey = "particleStops" }: { engine:
             ref={(element) => { handleRefs.current[index] = element; }}
             className={`gradient-stop ${picking === index ? "active" : ""} ${removing === index ? "removing" : ""}`}
             style={{ left: `${stop.at * 100}%`, ["--stop-color" as string]: stop.color }}
-            aria-label={`Color stop at ${Math.round(stop.at * 100)}%`}
-            data-tip={stops.length > 2 ? "Drag to move. Click to pick its color. Drag down or right-click to remove." : "Drag to move. Click to pick its color."}
+            aria-label={`${gray ? "Gray" : "Color"} stop at ${Math.round(stop.at * 100)}%`}
+            data-tip={`Drag to move. Click to pick its ${gray ? "gray" : "color"}.${stops.length > 2 ? " Drag down or right-click to remove." : ""}`}
             onPointerDown={(event) => drag(event, index)}
             onContextMenu={(event) => {
               event.preventDefault();
@@ -129,7 +194,16 @@ export function GradientEditor({ engine, stateKey = "particleStops" }: { engine:
           />
         ))}
       </div>
-      {picking !== null && stops[picking] && anchor && (
+      {picking !== null && stops[picking] && anchor && gray && (
+        <GrayPopup
+          key={picking}
+          anchor={anchor}
+          color={stops[picking].color}
+          onChange={(color) => write(stops.map((stop, other) => other === picking ? { ...stop, color } : stop))}
+          onClose={() => setPicking(null)}
+        />
+      )}
+      {picking !== null && stops[picking] && anchor && !gray && (
         <ColorPopup
           key={picking}
           anchor={anchor}

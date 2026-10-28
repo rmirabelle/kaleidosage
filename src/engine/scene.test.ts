@@ -17,6 +17,17 @@ describe("scene files", () => {
     expect(loaded.particleStops).toEqual(defaultGradientStops());
   });
 
+  it("keep the Opacity mask's grays, and a changed gray changes the fingerprint", () => {
+    const state = createPlayState();
+    state.maskStops = [{ at: 0, color: "#000000" }, { at: 0.4, color: "#808080" }, { at: 1, color: "#ffffff" }];
+    const loaded = createPlayState();
+    applyScene(serializeScene(createParams(), state, { image: IMAGE }), createParams(), loaded);
+    expect(loaded.maskStops).toEqual(state.maskStops);
+    expect(sceneFingerprint(createParams(), loaded, [])).toBe(sceneFingerprint(createParams(), state, []));
+    loaded.maskStops = [{ at: 0, color: "#000000" }, { at: 1, color: "#ffffff" }];
+    expect(sceneFingerprint(createParams(), loaded, [])).not.toBe(sceneFingerprint(createParams(), state, []));
+  });
+
   it("keep the light cycles' gradient, its color source and their blend mode", () => {
     const state = createPlayState();
     state.cyclesStops = [{ at: 0, color: "#00ff00" }, { at: 1, color: "#ff00ff" }];
@@ -142,7 +153,7 @@ describe("scene files", () => {
     /* Earlier versions of the app read a full order inside each kind: the list's order first. */
     const savedState = JSON.parse(text).state;
     expect(savedState.shapeStack).toEqual(["warp", "map", "kaleidoscope"]);
-    expect(savedState.pictureOrder).toEqual(["relief", "blur", "trails", "smear", "contours", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "bloom", "sharpen", "color", "levels", "picture", "outlines"]);
+    expect(savedState.pictureOrder).toEqual(["relief", "blur", "trails", "smear", "contours", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask"]);
 
     /* Scenes from before the effect list: every effect that is on and changes the picture, in their order. */
     const showing = { warpAmount: { value: 0.3 }, blurAmount: { value: 10 }, trailAmount: { value: 0.5 }, smearAmount: { value: 1 }, contourOpacity: { value: 1 }, reliefAmount: { value: 1 }, sharpen: { value: 1 } };

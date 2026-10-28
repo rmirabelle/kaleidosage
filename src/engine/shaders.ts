@@ -3246,6 +3246,53 @@ void main() {
 }`;
 
 /**
+ * Opacity mask: a radial gradient of grays over the picture. White keeps
+ * the picture, black clears it (its color and its cover, so what is under
+ * the picture shows: black on the screen), and the grays between keep part
+ * of it. The gradient runs from the center (place 0) to u_radius pixels
+ * away (place 1), and keeps the last stop past that. u_stretch makes the
+ * circle u_stretch times as wide as it is tall, turned by u_turn. u_amount
+ * mixes from no mask (0) to the whole mask (1).
+ */
+export const MASK_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_picture;
+uniform vec2 u_res;
+uniform vec2 u_center;
+uniform float u_radius;
+uniform float u_stretch;
+uniform float u_turn;
+uniform float u_amount;
+uniform int u_stopCount;
+uniform float u_stopAt[8];
+uniform float u_stopGray[8];
+
+/* The gray at place t, as gradientColorAt in params.ts. */
+float stopGray(float t) {
+  if (t <= u_stopAt[0]) return u_stopGray[0];
+  for (int i = 1; i < 8; i++) {
+    if (i >= u_stopCount) break;
+    if (t <= u_stopAt[i]) {
+      float span = u_stopAt[i] - u_stopAt[i - 1];
+      return mix(u_stopGray[i - 1], u_stopGray[i], span > 0.0 ? (t - u_stopAt[i - 1]) / span : 1.0);
+    }
+  }
+  return u_stopGray[clamp(u_stopCount - 1, 0, 7)];
+}
+
+void main() {
+  vec2 p = (v_uv - 0.5) * u_res - u_center;
+  float c = cos(u_turn);
+  float s = sin(u_turn);
+  p = mat2(c, -s, s, c) * p;
+  p.x /= u_stretch;
+  float keep = mix(1.0, clamp(stopGray(length(p) / u_radius), 0.0, 1.0), u_amount);
+  o = texture(u_picture, v_uv) * keep;
+}`;
+
+/**
  * Light shapes: glowing outlines (a ring, a square, a triangle or a star)
  * that draw themselves, in one pass over the picture. Each of u_count
  * copies has its own radius (smaller by u_spacing from the first) and its

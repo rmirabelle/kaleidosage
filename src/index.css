@@ -964,6 +964,13 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
   background: #242832;
   box-shadow: 0 14px 40px rgba(0,0,0,.55);
 }
+/* A gray stop's popup (Opacity mask): a swatch, a black-to-white slider and the percent. */
+.gray-popup { width: 240px; }
+.gray-popup-row { display: flex; align-items: center; gap: 8px; }
+.gray-popup-swatch { flex: 0 0 auto; width: 20px; height: 20px; border: 1px solid #555b6a; border-radius: 4px; }
+.gray-popup-row input[type=range] { flex: 1; min-width: 0; height: 14px; border-radius: 7px; background: linear-gradient(to right, #000, #fff); appearance: none; outline: none; }
+.gray-popup-row input[type=range]::-webkit-slider-thumb { appearance: none; width: 12px; height: 18px; border: 2px solid #fff; border-radius: 4px; background: #3b82f6; box-shadow: 0 1px 4px rgba(0,0,0,.6); }
+.gray-popup-value { flex: 0 0 auto; width: 36px; text-align: right; font-variant-numeric: tabular-nums; color: #cfd4de; font-size: 12px; }
 /* Saturation grows to the right; brightness grows upward. */
 .color-sv {
   position: relative;

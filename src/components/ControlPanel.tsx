@@ -82,6 +82,8 @@ const PICTURE_KEYS: ParamKey[] = ["pictureAmount", "pictureSize", "pictureX", "p
 const OUTLINE_KEYS: ParamKey[] = ["outlineAmount", "outlineRadius", "outlineCount", "outlineSpacing", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"];
 const OUTLINE_SHAPES = [[0, "Ring"], [1, "Square"], [2, "Triangle"], [3, "Star"]] as const;
 const OUTLINE_DRAWS = [[0, "Draw and erase"], [1, "Chase"], [2, "Whole"]] as const;
+/** The Opacity mask's sliders under its gradient (Strength is above it). */
+const MASK_KEYS: ParamKey[] = ["maskSize", "maskStretch", "maskTurn", "maskX", "maskY"];
 const LASER_KEYS: ParamKey[] = ["laserAmount", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"];
 const BLOOM_KEYS: ParamKey[] = ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"];
 const SHARPEN_KEYS: ParamKey[] = ["sharpen", "sharpenRadius"];
@@ -307,6 +309,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       },
       bloom: () => start("bloomAmount", 1),
       outlines: () => start("outlineAmount", 1),
+      mask: () => start("maskAmount", 1),
       picture: () => {
         start("pictureAmount", 1);
         /* An overlay shows nothing until it has an image or a video. */
@@ -434,6 +437,13 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     outlines: (grip) => (
       <Group engine={engine} group="outlines" title="Light shapes" grip={grip} {...accordion("outlines")}>
         <OutlineSection engine={engine} row={row} />
+      </Group>
+    ),
+    mask: (grip) => (
+      <Group engine={engine} group="mask" title="Opacity mask" grip={grip} {...accordion("mask")}>
+        {row("maskAmount")}
+        <GradientEditor engine={engine} stateKey="maskStops" gray />
+        {MASK_KEYS.map(row)}
       </Group>
     ),
     bloom: (grip) => (

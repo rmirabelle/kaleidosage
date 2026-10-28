@@ -1,7 +1,7 @@
 import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, OUTLINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, MASK_SHADER, OUTLINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 import { halveGrid, type TerrainData } from "./terrain";
 
 /** The blur mask: circle with a sharp or a blurred center, gradient, bright areas, dark areas, noise. */
@@ -22,7 +22,7 @@ export type ShapeStep = "warp" | "map" | "kaleidoscope";
 /** The kind of warp: noise, ripple, waves, swirl, bulge and pinch, cells. */
 export type WarpType = 0 | 1 | 2 | 3 | 4 | 5;
 /** The steps that change the drawn picture. The user sets their order. */
-export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines";
+export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask";
 /**
  * Any effect step. The user sets one order for all of them. Shape steps
  * that are next to each other run in one pass; a shape step after a
@@ -30,7 +30,7 @@ export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | 
  */
 export type FxStep = ShapeStep | PictureStep;
 export const SHAPE_STEPS: readonly ShapeStep[] = ["warp", "map", "kaleidoscope"];
-export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "bloom", "sharpen", "color", "levels", "picture", "outlines"];
+export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask"];
 
 /** Sharpen, Color and Levels, in the order FINISH_SHADER applies them (see drawFinish). */
 type FinishPart = "sharpen" | "color" | "levels";
@@ -613,6 +613,19 @@ export interface FrameValues {
   outlineStopAt: Float32Array;
   outlineStopColor: Float32Array;
   /**
+   * Opacity mask (see MASK_SHADER): strength (0 = off), the radius (screen
+   * heights), the stretch and its turn (radians), the center (parts of the
+   * screen from its center), and the gradient's stops as grays (0 to 1).
+   */
+  mask: number;
+  maskSize: number;
+  maskStretch: number;
+  maskTurn: number;
+  maskX: number;
+  maskY: number;
+  maskStopAt: Float32Array;
+  maskStopGray: Float32Array;
+  /**
    * Image or Video (see PICTURE_SHADER): opacity (0 = off), the blend, the size
    * (1 covers the screen), the center (a part of the screen size from the
    * screen center) and the turn in radians.
@@ -834,6 +847,7 @@ export class KaleidoRenderer {
   private readonly raysMix: Program;
   private readonly lasers: Program;
   private readonly outlines: Program;
+  private readonly mask: Program;
   private readonly pictureProgram: Program;
   /**
    * Where the steps draw what would go to the screen: the screen (null), or
@@ -946,6 +960,7 @@ export class KaleidoRenderer {
     this.raysMix = this.createProgram(RAYS_MIX_SHADER);
     this.lasers = this.createProgram(LASER_SHADER);
     this.outlines = this.createProgram(OUTLINE_SHADER);
+    this.mask = this.createProgram(MASK_SHADER);
     this.pictureProgram = this.createProgram(PICTURE_SHADER);
     this.bloomUp = this.createProgram(BLOOM_UP_SHADER);
     this.bloomMix = this.createProgram(BLOOM_SHADER);
@@ -1211,6 +1226,7 @@ export class KaleidoRenderer {
       rays: v.rays > 0,
       lasers: v.lasers > 0,
       outlines: v.outlines > 0,
+      mask: v.mask > 0,
       picture: v.picture > 0 && this.pictureSource !== null,
       bloom: v.bloom > 0,
       sharpen: v.sharpen > 0,
@@ -1344,6 +1360,7 @@ export class KaleidoRenderer {
         else if (step === "rays") this.drawRays(v, source, target, width, height);
         else if (step === "lasers") this.drawLasers(v, source, target, width, height);
         else if (step === "outlines") this.drawOutlines(v, source, target, width, height);
+        else if (step === "mask") this.drawMask(v, source, target, width, height);
         else if (step === "picture") this.drawPicture(v, source, target, width, height);
         else if (step === "sort") this.drawSort(v, source, target, width, height);
         else if (step === "bloom") this.drawBloom(v, source, target, width, height);
@@ -2866,6 +2883,28 @@ export class KaleidoRenderer {
     gl.uniform1f(l.uniforms.u_hue, v.laserHue);
     gl.uniform1f(l.uniforms.u_rainbow, v.laserRainbow);
     gl.uniform1f(l.uniforms.u_amount, Math.max(0, v.lasers));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /** Opacity mask: the picture times the mask's gray, color and cover both (MASK_SHADER). */
+  private drawMask(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+    const gl = this.gl;
+    const m = this.mask;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(m.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.uniform1i(m.uniforms.u_picture, 0);
+    gl.uniform2f(m.uniforms.u_res, width, height);
+    gl.uniform2f(m.uniforms.u_center, v.maskX * width, v.maskY * height);
+    gl.uniform1f(m.uniforms.u_radius, Math.max(1, v.maskSize * height));
+    gl.uniform1f(m.uniforms.u_stretch, Math.max(0.05, v.maskStretch));
+    gl.uniform1f(m.uniforms.u_turn, v.maskTurn);
+    gl.uniform1f(m.uniforms.u_amount, Math.min(1, Math.max(0, v.mask)));
+    gl.uniform1i(m.uniforms.u_stopCount, v.maskStopAt.length);
+    gl.uniform1fv(m.uniforms["u_stopAt[0]"], v.maskStopAt);
+    gl.uniform1fv(m.uniforms["u_stopGray[0]"], v.maskStopGray);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
