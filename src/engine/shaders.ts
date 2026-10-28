@@ -254,7 +254,7 @@ uniform float u_drosteSoftness;
 uniform float u_drosteRound;
 /* Droste spiral: the turn of the whole spiral, in radians. */
 uniform float u_drosteRotation;
-/* Droste spiral: the turn of the picture inside the frames, in radians. */
+/* Droste spiral: how much more each smaller copy turns than the copy around it, in radians. */
 uniform float u_drostePictureTurn;
 uniform float u_mapTwist;
 /* The direction of the axis that power, log spiral and tunnel fold over (see complexMap). */
@@ -547,43 +547,74 @@ float drosteAltWeight;
  * the circle's measure is never smaller than the rectangle's, so a point
  * inside a frame is always inside the picture.
  *
+ * Rotate (pre): each copy is also turned by u_drostePictureTurn more than
+ * the copy around it, so the frames twist inward like a tunnel. One copy
+ * inward is then a step of (-log s, turn) in L, not only of -log s. The
+ * spiral's beta and the travel follow that step, so the picture still
+ * meets itself and Travel still loops with no jump.
+ *
  * The edge blend: near a frame's outer edge, the point fades into the same
  * point one copy smaller (drosteAlt), which is what the other side of the
  * frame shows. At the frame both sides then show the same color, so the
  * hard edge becomes a soft fade.
  */
+float drosteMeasure(vec2 q, float aspect) {
+  float rectangle = max(abs(q.x) / (0.5 * aspect), abs(q.y) / 0.5);
+  float circle = length(q) / (0.5 * min(aspect, 1.0));
+  return mix(rectangle, circle, clamp(u_drosteRound, 0.0, 1.0));
+}
+
 vec2 drosteMap(vec2 z) {
   float size = clamp(u_drosteSize, 0.05, 0.95);
   float logS = -log(size);
+  float copyTurn = u_drostePictureTurn;
   vec2 wLog = vec2(log(max(length(z), 1e-6)), atan(z.y, z.x));
-  vec2 beta = vec2(1.0, -drosteArms * logS / TAU);
-  vec2 l = cmul(wLog, beta) - vec2(u_mapTravel, 0.0);
+  vec2 beta = vec2(1.0 - drosteArms * copyTurn / TAU, -drosteArms * logS / TAU);
+  vec2 l = cmul(wLog, beta) - u_mapTravel * vec2(1.0, -copyTurn / logS);
   vec2 q = exp(l.x) * vec2(cos(l.y), sin(l.y));
-  /* How far out the point is, by the frame's shape: 1 at the frame, "size" at its copy's frame. */
-  float aspect = u_imgRes.x / u_imgRes.y;
-  float rectangle = max(abs(q.x) / (0.5 * aspect), abs(q.y) / 0.5);
-  float circle = length(q) / (0.5 * min(aspect, 1.0));
-  float m = mix(rectangle, circle, clamp(u_drosteRound, 0.0, 1.0));
-  /* The whole number of copies (j) that brings m between size and 1. */
-  float j = 1.0 - ceil(log(max(m, 1e-12)) / log(size));
-  q *= pow(size, j);
-  drosteStretch = length(beta) * length(q) / max(length(z), 1e-6);
   /**
-   * The picture turns inside the frames: the frame was measured on the
-   * point before the turn, so the frames stay. A turn and a change of size
-   * do not affect each other, so the copies still meet.
+   * How far out the point is, by the frame's shape: 1 at the frame. Copy k
+   * (k inward from this frame) is the picture made size^k as large and
+   * turned by k turns, so the point in copy k's picture is q / size^k,
+   * turned back by k turns. The copy that shows is the deepest one whose
+   * frame holds the point. The rectangle lies between the circle inside
+   * it and the circle through its corners, so only the copies between
+   * those two circles' answers can be the one; with no turn this is the
+   * one copy that brings the measure between size and 1.
    */
-  q = turn(q, -u_drostePictureTurn);
+  float aspect = u_imgRes.x / u_imgRes.y;
+  float inner = length(q) / (0.5 * min(aspect, 1.0));
+  float outer = length(q) / length(vec2(0.5 * aspect, 0.5));
+  float sure = floor(-log(max(inner, 1e-12)) / logS);
+  float deepest = floor(-log(max(outer, 1e-12)) / logS);
+  float k = sure;
+  vec2 picture = turn(q * exp(sure * logS), -sure * copyTurn);
+  float m = drosteMeasure(picture, aspect);
+  for (int i = 0; i < 64; i++) {
+    float tryK = deepest - float(i);
+    if (tryK <= sure) break;
+    vec2 tried = turn(q * exp(tryK * logS), -tryK * copyTurn);
+    float tryM = drosteMeasure(tried, aspect);
+    if (tryM <= 1.0) {
+      k = tryK;
+      picture = tried;
+      m = tryM;
+      break;
+    }
+  }
+  q = picture;
+  drosteStretch = length(beta) * length(q) / max(length(z), 1e-6);
   /* The fade starts this far inside the frame, in log steps: at softness 1, at the copy's frame. */
   float band = clamp(u_drosteSoftness, 0.0, 1.0) * logS;
-  drosteAlt = q * size;
+  /* The same point in the copy around this one: one size larger, turned one turn less. */
+  drosteAlt = turn(q * size, copyTurn);
   /**
    * The pan moves the picture inside the frames (in picture heights), after
    * the size change, so the edge blend's point moves the same way.
    */
   q -= u_mapPan;
   drosteAlt -= u_mapPan;
-  drosteAltWeight = band > 0.0 ? smoothstep(-band, 0.0, log(max(m * pow(size, j), 1e-12))) : 0.0;
+  drosteAltWeight = band > 0.0 ? smoothstep(-band, 0.0, log(max(m, 1e-12))) : 0.0;
   return q;
 }
 

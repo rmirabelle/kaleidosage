@@ -518,8 +518,8 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   /** Droste spiral: turns the whole spiral and its frames around the map's center. */
   drosteRotation: { label: "Rotate (post)", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   /**
-   * Droste spiral: turns the picture inside the frames; the frames and the
-   * spiral stay. The picture's corners come in from outside it as it turns.
+   * Droste spiral: each smaller copy turns this much more than the copy
+   * around it, frame and all, so the frames twist inward like a tunnel.
    */
   drostePictureTurn: { label: "Rotate (pre)", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   mapTwist: { label: "Twist", min: -80, max: 80, step: 1, value: 0, unit: "°", drift: "wave", low: 10, high: 50, on: false },
