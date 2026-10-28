@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openFileDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { ArrowClockwise, ArrowCounterClockwise, ArrowsIn, ArrowsOut, Camera, Export, FilePlus, FilmStrip, FloppyDisk, FolderOpen, Gauge, HandPointing, Info, Playlist, Keyboard, Plus, SignOut, SlidersHorizontal, SpeakerSimpleHigh, Trash, X } from "@phosphor-icons/react";
+import { ArrowClockwise, ArrowCounterClockwise, ArrowsIn, ArrowsOut, Camera, Export, FilePlus, FilmStrip, FloppyDisk, FolderOpen, Gauge, HandPointing, Info, Playlist, Keyboard, Plus, SignOut, SlidersHorizontal, SpeakerSimpleHigh, Trash, VirtualReality, X } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { AboutDialog } from "./components/AboutDialog";
 import { ShortcutsDialog } from "./components/ShortcutsDialog";
@@ -30,6 +30,7 @@ import type { TerrainData } from "./engine/terrain";
 import { DocumentTabs, type DocumentTabInfo } from "./components/DocumentTabs";
 import { StageControls } from "./components/StageControls";
 import { Engine } from "./engine/engine";
+import { vrAvailable, watchVr } from "./engine/vr";
 import { createParams, createPlayState, nudgeParams, randomizeGroup, randomizeParams, resetEffects, type GroupKey, type Params, type PlayState } from "./engine/params";
 import { SettingsHistory } from "./engine/history";
 import { scenePosition } from "./engine/loop";
@@ -1571,6 +1572,25 @@ export default function App() {
     else if (document.fullscreenElement) await document.exitFullscreen();
   }, []);
 
+  /** Live VR (see vr.ts): whether a headset is ready (for a Quest: Quest Link is on), and whether it shows the picture now. */
+  const [vrReady, setVrReady] = useState(false);
+  const [inVr, setInVr] = useState(false);
+  useEffect(() => {
+    const check = () => void vrAvailable().then(setVrReady);
+    check();
+    return watchVr(check);
+  }, []);
+  const toggleVr = useCallback(() => {
+    if (!engine) return;
+    if (engine.inVr) {
+      engine.exitVr();
+      return;
+    }
+    engine.enterVr(() => setInVr(false)).then(() => setInVr(engine.inVr)).catch((error: unknown) => {
+      showError(`Could not show the picture in VR. ${error instanceof Error ? error.message : String(error)}`);
+    });
+  }, [engine, showError]);
+
   /** Puts a new, untitled scene in the engine: the large checkerboard, with every effect off. */
   const blankScene = useCallback(() => {
     if (!engine) return;
@@ -2322,9 +2342,10 @@ export default function App() {
       const run: Record<string, () => void> = {
         f: () => void toggleFullscreen(),
         f11: () => void toggleFullscreen(),
-        /* Esc plays the ranges that MIDI stopped; with none stopped, it leaves full screen. */
+        /* Esc plays the ranges that MIDI stopped; with none stopped, it leaves VR, then full screen. */
         escape: () => {
           if (engine?.anyHeld) engine.resumeAll();
+          else if (engine?.inVr) engine.exitVr();
           else void exitFullscreen();
         },
         h: () => setPanelOpen((open) => !open),
@@ -2424,7 +2445,9 @@ export default function App() {
         { label: midiPanelOpen && bottomTab === "audio" ? "Hide Audio Panel" : "Show Audio Panel", icon: <SpeakerSimpleHigh size={16} />, shortcut: "A", disabled: startScreen, run: toggleAudioPanel },
         { label: midiPanelOpen && bottomTab === "midi" ? "Hide MIDI Panel" : "Show MIDI Panel", icon: <MidiIcon size={15} />, shortcut: "M", disabled: startScreen, run: toggleMidiPanel },
         "separator",
-        { label: "Full Screen", icon: <ArrowsOut size={15} />, shortcut: "F", disabled: startScreen, run: () => void toggleFullscreen() }
+        { label: "Full Screen", icon: <ArrowsOut size={15} />, shortcut: "F", disabled: startScreen, run: () => void toggleFullscreen() },
+        /* VR needs a headset that is ready: for a Quest, Quest Link or Air Link must be on. */
+        { label: inVr ? "Exit VR" : "Enter VR", icon: <VirtualReality size={15} />, disabled: startScreen || (!vrReady && !inVr), run: toggleVr }
       ]
     },
     {
@@ -2552,11 +2575,11 @@ export default function App() {
         {/* The picture under its document tab; full screen hides the tab. */}
         <div className="document">
           {!fullscreen && !startScreen && !sceneListMode && <DocumentTabs tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} />}
-          <main className={`stage ${cursorIdle ? "cursor-idle" : ""}`}>
+          <main className={`stage ${cursorIdle ? "cursor-idle" : ""} ${inVr ? "in-vr" : ""}`}>
             <canvas ref={canvasRef} onDoubleClick={() => void toggleFullscreen()} />
             {engine && statsOpen && <StatsOverlay engine={engine} />}
             {engine && !startScreen && !fullscreen && (
-              <StageControls onFullscreen={() => void toggleFullscreen()} />
+              <StageControls onFullscreen={() => void toggleFullscreen()} onVr={vrReady || inVr ? toggleVr : null} inVr={inVr} />
             )}
             {fullscreen && (
               /* In full screen the title bar and toolbar are gone; these buttons show while the mouse moves. */

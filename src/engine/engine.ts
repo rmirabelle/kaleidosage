@@ -7,6 +7,7 @@ import { copyVideo, cueVideo, releaseVideo, seekVideo, syncVideo, videoLoopPlan,
 import { familyOf, intensityAt, positionAt, speedAt, travelAt, type Family, type SongScript } from "./songScript";
 import { LiveSound } from "./liveSound";
 import { isShown } from "./submodes";
+import { VR_SIZE, startVrSession, vrEyes, type XrFrame, type XrLayer, type XrSession, type XrSpace } from "./vr";
 
 /** While paused, how long the same frame values must last before the picture counts as still and frames stop (see needsDraw). */
 const SETTLE_MS = 1000;
@@ -254,18 +255,81 @@ export class Engine {
     for (const { resolve } of waiters) resolve();
   }
 
+  /**
+   * Live VR (see vr.ts): the headset's session, its view of the room, and
+   * its frame for the eyes. While it runs, the session times the frames,
+   * and the picture is square, VR_SIZE on each side.
+   */
+  private vr: { session: XrSession; space: XrSpace; layer: XrLayer } | null = null;
+
+  get inVr() {
+    return this.vr !== null;
+  }
+
+  /** Shows the picture around the viewer in the headset; "onEnd" runs when it stops (Exit VR, or the headset's own menu). */
+  async enterVr(onEnd: () => void) {
+    if (this.vr) return;
+    const session = await startVrSession();
+    try {
+      const layer = await this.renderer.xrLayer(session);
+      session.updateRenderState({ baseLayer: layer });
+      const space = await session.requestReferenceSpace("local");
+      /* Effects that work in pixels keep their look on the screen (see forExport). */
+      const screenHeight = this.renderer.canvasSize[1];
+      session.addEventListener("end", () => {
+        this.switchFrames(() => {
+          this.vr = null;
+          this.renderer.vrSize = null;
+          this.renderer.texelScale = 1;
+        });
+        onEnd();
+      }, { once: true });
+      this.switchFrames(() => {
+        this.vr = { session, space, layer };
+        this.renderer.vrSize = VR_SIZE;
+        if (screenHeight > 0) this.renderer.texelScale = VR_SIZE / screenHeight;
+      });
+    } catch (error) {
+      await session.end().catch(() => {});
+      throw error;
+    }
+  }
+
+  exitVr() {
+    void this.vr?.session.end().catch(() => {});
+  }
+
+  /** The next frame, from the headset in VR, else from the window. */
+  private requestFrame() {
+    return this.vr ? this.vr.session.requestAnimationFrame(this.frame) : requestAnimationFrame(this.frame);
+  }
+
+  private cancelFrame() {
+    if (this.vr) this.vr.session.cancelAnimationFrame(this.frameId);
+    else cancelAnimationFrame(this.frameId);
+    this.frameId = 0;
+  }
+
+  /** Makes "change" (into or out of VR) between frames: the next frame then comes from the new source, and draws. */
+  private switchFrames(change: () => void) {
+    const running = this.frameId !== 0;
+    this.cancelFrame();
+    change();
+    this.wake();
+    if (running) this.frameId = this.requestFrame();
+  }
+
   /** Videos this engine made itself (see forExport); dispose lets them go. */
   private readonly ownVideos: HTMLVideoElement[] = [];
 
   start() {
     if (this.frameId) return;
     this.lastTime = performance.now();
-    this.frameId = requestAnimationFrame(this.frame);
+    this.frameId = this.requestFrame();
   }
 
   stop() {
-    cancelAnimationFrame(this.frameId);
-    this.frameId = 0;
+    this.cancelFrame();
     /* No frame comes to start a crossfade from; the callers go on with no crossfade. */
     for (const { resolve } of this.fadeWaiters) resolve();
     this.fadeWaiters = [];
@@ -981,6 +1045,7 @@ export class Engine {
   /** Stops the render loop and frees the GPU context. The engine cannot be used after this. */
   dispose() {
     this.stop();
+    this.exitVr();
     if (this.fade) this.renderer.releaseFrame(this.fade.texture);
     this.fade = null;
     this.renderer.dispose();
@@ -1106,7 +1171,7 @@ export class Engine {
     this.renderer.updateVideos(true);
   }
 
-  private readonly frame = (now: number) => {
+  private readonly frame = (now: number, xrFrame?: XrFrame) => {
     const interval = now - this.lastTime;
     if (interval > 0) this.stats.frameMs += (Math.min(interval, 1000) - this.stats.frameMs) * 0.1;
     const elapsed = Math.min(interval / 1000, 0.1);
@@ -1130,6 +1195,8 @@ export class Engine {
       this.renderer.render(values);
       this.drawFade();
     }
+    /* The head moves, so the eyes draw every headset frame, also when the picture does not. */
+    if (this.vr && xrFrame) this.renderer.drawVr(this.vr.layer.framebuffer, vrEyes(xrFrame, this.vr.space, this.vr.layer), this.stats.drawing);
     this.stats.cpuMs += (performance.now() - renderStart - this.stats.cpuMs) * 0.1;
 
     if (this.snapshotWaiters.length) {
@@ -1138,7 +1205,7 @@ export class Engine {
       this.canvas.toBlob((blob) => waiters.forEach((resolve) => resolve(blob)), "image/png");
     }
     for (const listener of this.frameListeners) listener();
-    this.frameId = requestAnimationFrame(this.frame);
+    this.frameId = this.requestFrame();
   };
 
   /** Draws the picture for the current time. "animated" and "elapsed" are the times since the last frame (see step). */

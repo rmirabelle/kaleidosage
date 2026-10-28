@@ -1716,28 +1716,56 @@ void main() {
 }`;
 
 /**
- * 360 video export: wraps the square picture around the viewer as an
- * equirectangular frame (longitude across, latitude down). The picture's
- * center is straight ahead and, mirrored, straight behind. The distance from
- * the center is the angle from the front (or the back), so the edge of the
- * picture's inner circle is a ring around the viewer's sides, where the two
- * halves meet. Row 0 is straight up, so a plain read gives the top row first.
+ * The picture around the viewer, for the 360 video and live VR: the point
+ * of the square picture seen in the direction "dir" (a unit vector, x to
+ * the right, y up, z ahead or behind). The picture's center is straight
+ * ahead and, mirrored, straight behind. The distance from the center is the
+ * angle from the front (or the back), so the edge of the picture's inner
+ * circle is a ring around the viewer's sides, where the two halves meet.
+ */
+const SPHERE_UV_GLSL = `
+const float PI = 3.14159265358979;
+vec2 sphereUv(vec3 dir) {
+  float angle = acos(clamp(abs(dir.z), 0.0, 1.0));
+  float around = length(dir.xy);
+  vec2 side = around > 1e-6 ? dir.xy / around : vec2(0.0);
+  return 0.5 + 0.5 * side * (angle / (0.5 * PI));
+}`;
+
+/**
+ * 360 video export: wraps the square picture around the viewer (see
+ * sphereUv) as an equirectangular frame (longitude across, latitude down).
+ * Row 0 is straight up, so a plain read gives the top row first.
  */
 export const SPHERE_SHADER = `#version 300 es
 precision highp float;
 in vec2 v_uv;
 out vec4 o;
 uniform sampler2D u_tex;
-const float PI = 3.14159265358979;
+${SPHERE_UV_GLSL}
 void main() {
   float lon = (v_uv.x - 0.5) * 2.0 * PI;
   float lat = (0.5 - v_uv.y) * PI;
   vec3 dir = vec3(cos(lat) * sin(lon), sin(lat), cos(lat) * cos(lon));
-  float angle = acos(clamp(abs(dir.z), 0.0, 1.0));
-  float around = length(dir.xy);
-  vec2 side = around > 1e-6 ? dir.xy / around : vec2(0.0);
-  vec2 uv = 0.5 + 0.5 * side * (angle / (0.5 * PI));
-  o = vec4(texture(u_tex, uv).rgb, 1.0);
+  o = vec4(texture(u_tex, sphereUv(dir)).rgb, 1.0);
+}`;
+
+/**
+ * Live VR: one eye's view of the square picture around the viewer (see
+ * sphereUv). u_inverse turns a point of the eye's view (-1 to 1) into the
+ * direction it looks in: it is the inverse of the eye's projection times
+ * its turn (its place does not count, as the picture is very far away).
+ */
+export const VR_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform mat4 u_inverse;
+${SPHERE_UV_GLSL}
+void main() {
+  vec4 far = u_inverse * vec4(v_uv * 2.0 - 1.0, 1.0, 1.0);
+  o = vec4(texture(u_tex, sphereUv(normalize(far.xyz / far.w))).rgb, 1.0);
 }`;
 
 /**

@@ -171,10 +171,10 @@ export const HELP_TOPICS = {
       "Space plays or pauses; Shift + Space stops.",
       "Drag the bar to scrub the scene. The bar above counts down to the next scene.",
       "Full screen {fullscreen}, F, or a double-click on the picture plays full screen.",
-      "Esc leaves full screen.",
+      "Esc leaves VR or full screen.",
       "H hides the panels, so only the picture shows."
     ],
-    keywords: ["play", "pause", "stop", "full screen", "fullscreen", "space"]
+    keywords: ["play", "pause", "stop", "full screen", "fullscreen", "space", "vr", "quest", "headset"]
   },
   file: {
     title: "Projects",
@@ -195,11 +195,12 @@ export const HELP_TOPICS = {
     tips: [
       "Size: 16:9 for YouTube, 9:16 for TikTok, Reels and Shorts, 1:1 or 4:5 for Instagram.",
       "Size 360° makes a video that goes all around you in a Quest or another VR headset.",
+      "View, Enter VR shows the picture live around you in a headset (Quest: turn on Link).",
       "A video plays the ranges; audio sensors do not move in it.",
       "The video is made in the background; the app stays usable.",
       "PNG files go to Pictures, Kaleido Sage, unless you pick another folder."
     ],
-    keywords: ["png", "snapshot", "picture", "video", "mp4", "export", "loop"]
+    keywords: ["png", "snapshot", "picture", "video", "mp4", "export", "loop", "vr", "quest", "headset", "360"]
   }
 } as const satisfies Record<string, HelpTopic>;
 

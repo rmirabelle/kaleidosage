@@ -1,8 +1,9 @@
 import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER,BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, MASK_SHADER, OUTLINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, MASK_SHADER, OUTLINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 import { halveGrid, type TerrainData } from "./terrain";
+import type { VrEye, XrLayer, XrSession } from "./vr";
 
 /** The blur mask: circle with a sharp or a blurred center, gradient, bright areas, dark areas, noise. */
 export type BlurMask = 0 | 1 | 2 | 3 | 4 | 5;
@@ -896,10 +897,12 @@ export class KaleidoRenderer {
   private frameSize: [number, number] = [0, 0];
   /**
    * The size of one pixel for the effects that work in pixels (trail flow,
-   * relief, sharpen), in this canvas's pixels. Video export sets it, so the
-   * effects look the same as on the screen at another size.
+   * relief, sharpen), in this canvas's pixels. Video export and live VR set
+   * it, so the effects look the same as on the screen at another size.
    */
   texelScale = 1;
+  /** Live VR: the picture's square size while the headset shows it (see resizeCanvas), or null. */
+  vrSize: number | null = null;
 
   /** The canvas size in device pixels, as of the last frame. */
   get canvasSize(): [number, number] {
@@ -3104,6 +3107,57 @@ export class KaleidoRenderer {
     framebuffer: WebGLFramebuffer;
     size: [number, number];
   } | null = null;
+  /** Live VR: the eye pass and the copy of the canvas it reads (made when first used). */
+  private vrPass: { program: Program; source: WebGLTexture; framebuffer: WebGLFramebuffer; size: [number, number] } | null = null;
+
+  /** Live VR: makes the context ready for the headset, and returns the headset's frame to draw the eyes into. */
+  async xrLayer(session: XrSession): Promise<XrLayer> {
+    const gl = this.gl as WebGL2RenderingContext & { makeXRCompatible?: () => Promise<void> };
+    const Layer = (window as unknown as { XRWebGLLayer?: new (session: XrSession, gl: WebGL2RenderingContext) => XrLayer }).XRWebGLLayer;
+    if (!Layer || !gl.makeXRCompatible) throw new Error("This version of the app's web view cannot show VR.");
+    await gl.makeXRCompatible();
+    return new Layer(session, this.gl);
+  }
+
+  /**
+   * Live VR: draws each eye's view of the picture around the viewer
+   * (VR_SHADER) into the headset's frame. "fresh" says the canvas holds a
+   * new picture, which is copied first; otherwise the eyes look around the
+   * last copy, as the canvas is cleared once it is shown.
+   */
+  drawVr(framebuffer: WebGLFramebuffer | null, eyes: readonly VrEye[], fresh: boolean) {
+    const gl = this.gl;
+    const [width, height] = this.frameSize;
+    if (width === 0 || height === 0) return;
+    let pass = this.vrPass;
+    if (!pass || pass.size[0] !== width || pass.size[1] !== height) {
+      if (pass) {
+        gl.deleteTexture(pass.source);
+        gl.deleteFramebuffer(pass.framebuffer);
+      }
+      const program = pass?.program ?? this.createProgram(VR_SHADER);
+      const source = this.exportTarget(width, height, gl.LINEAR);
+      pass = { program, source: source.texture, framebuffer: source.framebuffer, size: [width, height] };
+      this.vrPass = pass;
+      fresh = true;
+    }
+    if (fresh) {
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, pass.framebuffer);
+      gl.blitFramebuffer(0, 0, width, height, 0, 0, width, height, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+    gl.useProgram(pass.program.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, pass.source);
+    gl.uniform1i(pass.program.uniforms.u_tex, 0);
+    for (const { viewport, inverse } of eyes) {
+      gl.viewport(viewport.x, viewport.y, viewport.width, viewport.height);
+      gl.uniformMatrix4fv(pass.program.uniforms.u_inverse, false, inverse);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
 
   /** Video export: a copy of the picture now on the canvas, as a texture. Free it with releaseFrame. */
   captureFrame(): WebGLTexture {
@@ -3452,7 +3506,7 @@ export class KaleidoRenderer {
   /** Matches the canvas to the displayed size (or the fixed size). A new size also resets the border. */
   private resizeCanvas() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const [width, height] = this.size ?? [Math.round(this.canvas.clientWidth * dpr), Math.round(this.canvas.clientHeight * dpr)];
+    const [width, height] = this.vrSize ? [this.vrSize, this.vrSize] : this.size ?? [Math.round(this.canvas.clientWidth * dpr), Math.round(this.canvas.clientHeight * dpr)];
     if (width === this.frameSize[0] && height === this.frameSize[1]) return;
     this.frameSize = [width, height];
     this.pad = -1;
