@@ -7,7 +7,7 @@ import { copyVideo, cueVideo, releaseVideo, seekVideo, syncVideo, videoLoopPlan,
 import { familyOf, intensityAt, positionAt, speedAt, travelAt, type Family, type SongScript } from "./songScript";
 import { LiveSound } from "./liveSound";
 import { isShown } from "./submodes";
-import { VR_SIZE, startVrSession, vrEyes, type XrFrame, type XrLayer, type XrSession, type XrSpace } from "./vr";
+import { DEFAULT_VR_SCREEN, VR_HEIGHT, startVrSession, vrEyes, type VrScreen, type XrFrame, type XrLayer, type XrSession, type XrSpace } from "./vr";
 
 /** While paused, how long the same frame values must last before the picture counts as still and frames stop (see needsDraw). */
 const SETTLE_MS = 1000;
@@ -258,9 +258,12 @@ export class Engine {
   /**
    * Live VR (see vr.ts): the headset's session, its view of the room, and
    * its frame for the eyes. While it runs, the session times the frames,
-   * and the picture is square, VR_SIZE on each side.
+   * and the picture is VR_HEIGHT pixels tall, in the screen's shape.
    */
   private vr: { session: XrSession; space: XrSpace; layer: XrLayer } | null = null;
+
+  /** Live VR: the virtual screen's size, distance and curve; a change shows at the next headset frame. */
+  vrScreen: VrScreen = { ...DEFAULT_VR_SCREEN };
 
   get inVr() {
     return this.vr !== null;
@@ -275,7 +278,8 @@ export class Engine {
       session.updateRenderState({ baseLayer: layer });
       const space = await session.requestReferenceSpace("local");
       /* Effects that work in pixels keep their look on the screen (see forExport). */
-      const screenHeight = this.renderer.canvasSize[1];
+      const [screenWidth, screenHeight] = this.renderer.canvasSize;
+      const aspect = screenWidth > 0 && screenHeight > 0 ? screenWidth / screenHeight : 16 / 9;
       session.addEventListener("end", () => {
         this.switchFrames(() => {
           this.vr = null;
@@ -286,8 +290,8 @@ export class Engine {
       }, { once: true });
       this.switchFrames(() => {
         this.vr = { session, space, layer };
-        this.renderer.vrSize = VR_SIZE;
-        if (screenHeight > 0) this.renderer.texelScale = VR_SIZE / screenHeight;
+        this.renderer.vrSize = [Math.round(VR_HEIGHT * aspect / 2) * 2, VR_HEIGHT];
+        if (screenHeight > 0) this.renderer.texelScale = VR_HEIGHT / screenHeight;
       });
     } catch (error) {
       await session.end().catch(() => {});
@@ -1196,7 +1200,7 @@ export class Engine {
       this.drawFade();
     }
     /* The head moves, so the eyes draw every headset frame, also when the picture does not. */
-    if (this.vr && xrFrame) this.renderer.drawVr(this.vr.layer.framebuffer, vrEyes(xrFrame, this.vr.space, this.vr.layer), this.stats.drawing);
+    if (this.vr && xrFrame) this.renderer.drawVr(this.vr.layer.framebuffer, vrEyes(xrFrame, this.vr.space, this.vr.layer), this.stats.drawing, this.vrScreen);
     this.stats.cpuMs += (performance.now() - renderStart - this.stats.cpuMs) * 0.1;
 
     if (this.snapshotWaiters.length) {

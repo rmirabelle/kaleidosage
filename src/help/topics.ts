@@ -195,7 +195,7 @@ export const HELP_TOPICS = {
     tips: [
       "Size: 16:9 for YouTube, 9:16 for TikTok, Reels and Shorts, 1:1 or 4:5 for Instagram.",
       "Size 360° makes a video that goes all around you in a Quest or another VR headset.",
-      "View, Enter VR shows the picture live around you in a headset (Quest: turn on Link).",
+      "View, Enter VR shows the picture live on a big screen in a headset (Quest: turn on Link).",
       "A video plays the ranges; audio sensors do not move in it.",
       "The video is made in the background; the app stays usable.",
       "PNG files go to Pictures, Kaleido Sage, unless you pick another folder."

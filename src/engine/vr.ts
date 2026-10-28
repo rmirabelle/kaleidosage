@@ -1,11 +1,11 @@
 /**
- * Live VR (WebXR): shows the picture around the viewer in a headset, such
- * as a Quest through Quest Link. The engine still draws the flat picture,
- * square, on its canvas; after each frame, each eye gets the part of it
- * that the eye looks at (VR_SHADER), with the same wrap as the 360 video.
- * The headset's session times the frames. Both eyes see the same picture,
- * very far away. On Windows the web view finds the headset only with WebXR
- * and OpenXR turned on (additionalBrowserArgs in tauri.conf.json).
+ * Live VR (WebXR): shows the picture on a large virtual screen in front of
+ * the viewer in a headset, such as a Quest through Quest Link. The engine
+ * still draws the flat picture on its canvas, VR_HEIGHT pixels tall; after
+ * each frame, each eye draws the screen (VR_SHADER) where it sits in the
+ * room. The headset's session times the frames. On Windows the web view
+ * finds the headset only with WebXR and OpenXR turned on
+ * (additionalBrowserArgs in tauri.conf.json).
  */
 
 /** The few WebXR types the app uses (TypeScript's DOM types have none). */
@@ -36,8 +36,29 @@ interface XrSystem extends EventTarget {
 
 const xrSystem = () => (navigator as Navigator & { xr?: XrSystem }).xr ?? null;
 
-/** The flat picture's size, in pixels on each side, while the headset shows it. */
-export const VR_SIZE = 2048;
+/** The flat picture's height in pixels while the headset shows it; its width keeps the screen's shape. */
+export const VR_HEIGHT = 1440;
+
+/**
+ * The virtual screen: its width and its distance from where the viewer
+ * started, in meters, and its curve (0 is flat; 1 curves it around the
+ * viewer, as part of a circle with the viewer at its center). Its height
+ * follows from the picture's shape. Its middle is at eye height.
+ */
+export interface VrScreen {
+  width: number;
+  distance: number;
+  curve: number;
+}
+
+export const DEFAULT_VR_SCREEN: VrScreen = { width: 4, distance: 3, curve: 0 };
+
+/** The slider limits of each setting. */
+export const VR_SCREEN_LIMITS: Record<keyof VrScreen, { min: number; max: number; step: number }> = {
+  width: { min: 0.5, max: 30, step: 0.1 },
+  distance: { min: 0.5, max: 30, step: 0.1 },
+  curve: { min: 0, max: 1, step: 0.01 }
+};
 
 /** True when the web view can show VR at all (with a headset that is ready). */
 export const vrSupported = () => xrSystem() !== null;
@@ -79,14 +100,12 @@ export function vrEyes(frame: XrFrame, space: XrSpace, layer: XrLayer): VrEye[] 
 }
 
 /**
- * The inverse of the eye's projection times its turn: the eye's view matrix
- * without its place, as the picture is very far away. All matrices are 4 by
- * 4, column by column, as WebGL has them.
+ * The inverse of the eye's projection times its view matrix: it turns a
+ * point of the eye's view back into the room. All matrices are 4 by 4,
+ * column by column, as WebGL has them.
  */
 export function eyeInverse(projection: ArrayLike<number>, view: ArrayLike<number>) {
-  const turn = Float32Array.from(view);
-  turn[12] = turn[13] = turn[14] = 0;
-  return invert(multiply(projection, turn));
+  return invert(multiply(projection, view));
 }
 
 export function multiply(a: ArrayLike<number>, b: ArrayLike<number>) {

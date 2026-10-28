@@ -29,6 +29,7 @@ import { TitleBar } from "./components/TitleBar";
 import type { TerrainData } from "./engine/terrain";
 import { DocumentTabs, type DocumentTabInfo } from "./components/DocumentTabs";
 import { StageControls } from "./components/StageControls";
+import { VrScreenCard } from "./components/VrScreenCard";
 import { Engine } from "./engine/engine";
 import { vrAvailable, vrSupported, watchVr } from "./engine/vr";
 
@@ -2595,6 +2596,7 @@ export default function App() {
           <main className={`stage ${cursorIdle ? "cursor-idle" : ""} ${inVr ? "in-vr" : ""}`}>
             <canvas ref={canvasRef} onDoubleClick={() => void toggleFullscreen()} />
             {engine && statsOpen && <StatsOverlay engine={engine} />}
+            {engine && inVr && <VrScreenCard engine={engine} />}
             {engine && !startScreen && !fullscreen && (
               <StageControls onFullscreen={() => void toggleFullscreen()} onVr={vrReady || inVr ? () => void toggleVr() : null} inVr={inVr} />
             )}

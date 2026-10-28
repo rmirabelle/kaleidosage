@@ -1751,10 +1751,15 @@ void main() {
 }`;
 
 /**
- * Live VR: one eye's view of the square picture around the viewer (see
- * sphereUv). u_inverse turns a point of the eye's view (-1 to 1) into the
- * direction it looks in: it is the inverse of the eye's projection times
- * its turn (its place does not count, as the picture is very far away).
+ * Live VR: one eye's view of the picture on a virtual screen in a dark
+ * room (see VrScreen in vr.ts). u_inverse turns a point of the eye's view
+ * (-1 to 1) back into the room, so each pixel's ray starts at the eye and
+ * goes out through the pixel. u_screen is the screen's width and height
+ * and its distance, in meters, and its curve. A flat screen stands across
+ * the view at that distance; a curved one is part of a circle, around a
+ * point behind it, of radius distance / curve. The screen's middle is at
+ * eye height, straight ahead of where the viewer started. Its edges are
+ * smoothed over about a pixel.
  */
 export const VR_SHADER = `#version 300 es
 precision highp float;
@@ -1762,10 +1767,46 @@ in vec2 v_uv;
 out vec4 o;
 uniform sampler2D u_tex;
 uniform mat4 u_inverse;
-${SPHERE_UV_GLSL}
+uniform vec4 u_screen;
+const vec3 ROOM = vec3(0.012, 0.013, 0.018);
 void main() {
-  vec4 far = u_inverse * vec4(v_uv * 2.0 - 1.0, 1.0, 1.0);
-  o = vec4(texture(u_tex, sphereUv(normalize(far.xyz / far.w))).rgb, 1.0);
+  vec2 view = v_uv * 2.0 - 1.0;
+  vec4 nearPoint = u_inverse * vec4(view, -1.0, 1.0);
+  vec4 farPoint = u_inverse * vec4(view, 1.0, 1.0);
+  vec3 origin = nearPoint.xyz / nearPoint.w;
+  vec3 dir = normalize(farPoint.xyz / farPoint.w - origin);
+  float width = u_screen.x;
+  float height = u_screen.y;
+  float dist = u_screen.z;
+  float curve = u_screen.w;
+  vec2 uv = vec2(-1.0);
+  if (curve < 0.001) {
+    if (dir.z < -1e-5) {
+      vec3 hit = origin + dir * ((-dist - origin.z) / dir.z);
+      uv = vec2(hit.x / width, hit.y / height) + 0.5;
+    }
+  } else {
+    float radius = dist / curve;
+    vec2 center = vec2(0.0, radius - dist);
+    vec2 from = origin.xz - center;
+    float a = dot(dir.xz, dir.xz);
+    float b = dot(from, dir.xz);
+    float c = dot(from, from) - radius * radius;
+    float discriminant = b * b - a * c;
+    if (a > 1e-8 && discriminant >= 0.0) {
+      float t = (-b + sqrt(discriminant)) / a;
+      if (t > 0.0) {
+        vec3 hit = origin + dir * t;
+        vec2 around = hit.xz - center;
+        uv = vec2(atan(around.x, -around.y) * radius / width, hit.y / height) + 0.5;
+      }
+    }
+  }
+  vec2 edge = min(uv, 1.0 - uv);
+  float pixel = max(fwidth(uv.x), fwidth(uv.y));
+  float cover = clamp(min(edge.x, edge.y) / max(pixel, 1e-6) + 0.5, 0.0, 1.0);
+  vec3 picture = texture(u_tex, clamp(uv, 0.0, 1.0)).rgb;
+  o = vec4(mix(ROOM, picture, cover), 1.0);
 }`;
 
 /**
