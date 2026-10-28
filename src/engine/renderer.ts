@@ -596,6 +596,8 @@ export interface FrameValues {
   outlineWidth: number;
   outlineGlow: number;
   outlineGlowSize: number;
+  /** Light shapes: the head's dot size (1 = as before; 0 = none). */
+  outlineEmitter: number;
   outlineFlow: number;
   outlineTurn: number;
   /** Light shapes in 3D: the first outline's Spin and Tumble angles, and how much less each next copy has turned (radians; see OUTLINE_SHADER). */
@@ -2892,6 +2894,8 @@ export class KaleidoRenderer {
     gl.uniform1f(l.uniforms.u_width, Math.max(0.25, v.outlineWidth * this.texelScale));
     gl.uniform1f(l.uniforms.u_glow, Math.max(0, v.outlineGlow));
     gl.uniform1f(l.uniforms.u_glowSize, Math.max(0.5, v.outlineGlowSize * this.texelScale));
+    /* Emitter 1 is a dot three line widths and 4 px (at 1080p) across. */
+    gl.uniform1f(l.uniforms.u_emitter, Math.max(0, v.outlineEmitter) * (Math.max(0.25, v.outlineWidth * this.texelScale) * 3 + 4 * height / 1080));
     gl.uniform1f(l.uniforms.u_shift, v.outlineFlow);
     gl.uniform1f(l.uniforms.u_amount, Math.max(0, v.outlines));
     gl.uniform1i(l.uniforms.u_stopCount, v.outlineStopAt.length);

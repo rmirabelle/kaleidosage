@@ -24,7 +24,7 @@ export const PARAM_KEYS = [
   "solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidFrost", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY",
   "raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY",
   "laserAmount", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY",
-  "outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineFlow", "outlineTurn", "outlineX", "outlineY",
+  "outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineX", "outlineY",
   "pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn", "pictureKey",
   "bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize",
   "sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel",
@@ -911,6 +911,8 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   outlineWidth: { label: "Width", min: 0.5, max: 12, step: 0.1, value: 2, unit: "px", drift: "wave", low: 1, high: 3, on: false },
   outlineGlow: { label: "Glow", min: 0, max: 4, step: 0.01, value: 1, drift: "wave", low: 0.5, high: 1.5, on: false },
   outlineGlowSize: { label: "Glow size", min: 2, max: 80, step: 0.1, scale: "log", value: 16, unit: "px", drift: "wave", low: 8, high: 30, on: false },
+  /** Light shapes: the size of the glowing dot at the head while an outline draws or chases (1 = three line widths and 4 px across, as before; 0 = no dot). */
+  outlineEmitter: { label: "Emitter", min: 0, max: 3, step: 0.01, value: 1, drift: "wave", low: 0.5, high: 1.5, on: false },
   outlineFlow: { label: "Color flow", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   outlineTurn: { label: "Turn", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "spin", low: -180, high: 180, on: false },
   /** Light shapes in 3D: Spin turns each outline around its upright line, Tumble around its level line, as speeds (as the 3D object). Each copy turns later by its Delay. */
@@ -1468,7 +1470,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   rays: ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"],
   picture: ["pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn", "pictureKey"],
   lasers: ["laserAmount", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"],
-  outlines: ["outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"],
+  outlines: ["outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"],
   bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
   sharpen: ["sharpen", "sharpenRadius"],
   color: ["overlayOpacity"],
@@ -1828,6 +1830,7 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("outlineWidth", rand(1, 3), rand(0, 0.8));
   set("outlineGlow", rand(0.4, 1.8), rand(0, 0.4));
   set("outlineGlowSize", rand(8, 30), rand(0, 5));
+  set("outlineEmitter", Math.random() < 0.2 ? 0 : rand(0.4, 1.6), rand(0, 0.3));
   set("outlineFlow", Math.random() < 0.5 ? 0 : rand(-0.3, 0.3), rand(0, 0.1));
   if (state && !state.locks.outlines) {
     const on = Math.random() < EFFECT_CHANCE.outlines;

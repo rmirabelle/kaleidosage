@@ -3167,7 +3167,8 @@ void main() {
  * it whole. The color is the gradient (u_stopAt, u_stopColor) at s, moved
  * along by u_shift, there and back once around the outline, so its ends
  * meet with no seam. The core, the glow and the head's spot are as in
- * LASER_SHADER, so the lights look the same. Sizes are in pixels.
+ * LASER_SHADER, so the lights look the same; the head's spot is u_emitter
+ * pixels across (0 = no spot). Sizes are in pixels.
  *
  * In 3D (u_turn3d: Spin, Spin's lag, Tumble, Tumble's lag, in radians),
  * each copy turns around its upright line by Spin and then around its
@@ -3198,6 +3199,8 @@ uniform int u_points;
 uniform float u_width;
 uniform float u_glow;
 uniform float u_glowSize;
+/* The size of the head's dot in pixels (0 = no dot). */
+uniform float u_emitter;
 uniform float u_shift;
 uniform float u_amount;
 uniform int u_stopCount;
@@ -3375,7 +3378,7 @@ void main() {
      * its radius, a little larger when it turns toward the eye; a flat ring
      * also has nothing to add far inside it.
      */
-    float reach = haze * 12.0 + u_width * 4.0 + 12.0;
+    float reach = max(haze * 12.0 + u_width * 4.0, u_emitter * 4.0) + 12.0;
     float far = length(p);
     if (far > (turned ? r * eye / max(eye - r, 1.0) : r) + reach) continue;
     if (u_shape == 0 && !turned && far < r - reach) continue;
@@ -3416,8 +3419,8 @@ void main() {
     glowSum += glow * shown;
     glowColor += color * glow * shown;
     /* The head's bright spot while the outline is drawn or chased. */
-    if (moving) {
-      float near = length(p - project(outlinePoint(b, r))) / (u_width * 3.0 + 4.0);
+    if (moving && u_emitter > 0.0) {
+      float near = length(p - project(outlinePoint(b, r))) / u_emitter;
       float headSpot = exp(-near * near);
       if (headSpot > spot) {
         spot = headSpot;

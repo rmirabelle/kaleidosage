@@ -1509,6 +1509,7 @@ export class Engine {
       outlineWidth: this.live("outlineWidth"),
       outlineGlow: this.live("outlineGlow"),
       outlineGlowSize: this.live("outlineGlowSize"),
+      outlineEmitter: this.live("outlineEmitter"),
       outlineFlow: this.state.outlineFlowTime,
       outlineTurn: this.live("outlineTurn") * DEGREES,
       /* Each copy is Delay draws later than the one before, so it turns that much time later (radians per copy). */

@@ -79,7 +79,7 @@ const PARTICLE_KEYS: ParamKey[] = ["particleLevel", "particleBackground", "parti
 const RAYS_KEYS: ParamKey[] = ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"];
 const PICTURE_KEYS: ParamKey[] = ["pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn", "pictureKey"];
 /** Light shapes' settings; OutlineSection hides Length but for Chase, and Points but for a star. */
-const OUTLINE_KEYS: ParamKey[] = ["outlineAmount", "outlineRadius", "outlineCount", "outlineSpacing", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"];
+const OUTLINE_KEYS: ParamKey[] = ["outlineAmount", "outlineRadius", "outlineCount", "outlineSpacing", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"];
 const OUTLINE_SHAPES = [[0, "Ring"], [1, "Square"], [2, "Triangle"], [3, "Star"]] as const;
 const OUTLINE_DRAWS = [[0, "Draw and erase"], [1, "Chase"], [2, "Whole"]] as const;
 const LASER_KEYS: ParamKey[] = ["laserAmount", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"];
@@ -997,7 +997,7 @@ function ParticleSection({ engine, row }: { engine: Engine; row: (key: ParamKey)
 function OutlineSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
   const [shape, setShape] = useState<OutlineShape>(engine.state.outlineShape);
   const [draw, setDraw] = useState<OutlineDraw>(engine.state.outlineDraw);
-  const keys = OUTLINE_KEYS.filter((key) => (key !== "outlineLength" || draw === 1) && (key !== "outlinePoints" || shape === 3));
+  const keys = OUTLINE_KEYS.filter((key) => (key !== "outlineLength" || draw === 1) && (key !== "outlineEmitter" || draw !== 2) && (key !== "outlinePoints" || shape === 3));
   return (
     <>
       <ModeSelect engine={engine} stateKey="outlineShape" options={OUTLINE_SHAPES} name="Shape" onChange={setShape} />
