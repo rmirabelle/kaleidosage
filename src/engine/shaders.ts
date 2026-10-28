@@ -3203,6 +3203,13 @@ uniform float u_amount;
 uniform int u_stopCount;
 uniform float u_stopAt[8];
 uniform vec3 u_stopColor[8];
+/**
+ * The outline at radius 1 (see outlineCorners in renderer.ts): its corners,
+ * and each corner's place along it (0 to 1, one more for the end). Worked
+ * out once per frame, not for each pixel.
+ */
+uniform vec2 u_corners[48];
+uniform float u_cornerAt[49];
 ${COVER_GLSL}
 const float TAU = 6.2831853;
 /* The corners of a turned ring. */
@@ -3240,41 +3247,18 @@ vec3 stopColor(float t) {
 /* How many corners the outline has: a ring has none unless it is turned. */
 int cornerCount() { return u_shape == 0 ? RING_CORNERS : u_shape == 1 ? 4 : u_shape == 2 ? 3 : 2 * u_points; }
 
-/* Corner k of a shape of radius r: on a circle, from the top, clockwise. A star's inner corners are at 0.45 r; a square stands level. */
-vec2 corner(int k, int corners, float r) {
-  float start = u_shape == 1 ? 0.5 : 0.0;
-  float a = TAU * (float(k) + start) / float(corners);
-  float rr = u_shape == 3 && (k % 2) == 1 ? r * 0.45 : r;
-  return rr * vec2(sin(a), cos(a));
-}
-
-/* The outline's length, in pixels. */
-float outlineLength(float r) {
-  if (u_shape == 0 && !turned) return TAU * r;
-  int corners = cornerCount();
-  float total = 0.0;
-  for (int k = 0; k < RING_CORNERS; k++) {
-    if (k >= corners) break;
-    total += length(corner((k + 1) % corners, corners, r) - corner(k, corners, r));
-  }
-  return total;
-}
-
-/* The point at place s (0 to 1) along the flat outline. */
-vec2 outlinePoint(float s, float r, float total) {
+/* The point at place s (0 to 1) along the flat outline of radius r. */
+vec2 outlinePoint(float s, float r) {
   if (u_shape == 0 && !turned) return r * vec2(sin(TAU * s), cos(TAU * s));
   int corners = cornerCount();
-  float walked = 0.0;
-  float h = fract(s) * total;
+  float h = fract(s);
   for (int k = 0; k < RING_CORNERS; k++) {
     if (k >= corners) break;
-    vec2 a = corner(k, corners, r);
-    vec2 ab = corner((k + 1) % corners, corners, r) - a;
-    float side = length(ab);
-    if (h <= walked + side || k == corners - 1) return a + ab * clamp((h - walked) / max(side, 1e-6), 0.0, 1.0);
-    walked += side;
+    float at0 = u_cornerAt[k];
+    float at1 = u_cornerAt[k + 1];
+    if (h <= at1 || k == corners - 1) return r * mix(u_corners[k], u_corners[(k + 1) % corners], clamp((h - at0) / max(at1 - at0, 1e-6), 0.0, 1.0));
   }
-  return corner(0, corners, r);
+  return r * u_corners[0];
 }
 
 /**
@@ -3283,29 +3267,27 @@ vec2 outlinePoint(float s, float r, float total) {
  * Its distance in pixels (x) and its place (y, from a to b). Only the part
  * that shows counts, so its ends are round and its glow ends with it.
  */
-vec2 nearestShown(vec2 p, float r, float total, float a, float b) {
+vec2 nearestShown(vec2 p, float r, float a, float b) {
   if (b - a <= 1e-5) return vec2(1e9, a);
   if (u_shape == 0 && !turned) {
     float s = a + fract(fract(atan(p.x, p.y) / TAU) - a);
     if (s <= b) return vec2(abs(length(p) - r), s);
-    float da = length(p - outlinePoint(a, r, total));
-    float db = length(p - outlinePoint(b, r, total));
+    float da = length(p - outlinePoint(a, r));
+    float db = length(p - outlinePoint(b, r));
     return da < db ? vec2(da, a) : vec2(db, b);
   }
   int corners = cornerCount();
   vec2 best = vec2(1e9, a);
-  float walked = 0.0;
+  /* Each corner is turned and seen once: a side's end is the next side's start. */
+  vec2 c0 = project(r * u_corners[0]);
   for (int k = 0; k < RING_CORNERS; k++) {
     if (k >= corners) break;
     /* The place along the side comes from the flat side; the distance from the side as it is seen. */
-    vec2 flat0 = corner(k, corners, r);
-    float side = length(corner((k + 1) % corners, corners, r) - flat0);
-    vec2 c0 = project(flat0);
-    vec2 ab = project(corner((k + 1) % corners, corners, r)) - c0;
+    vec2 c1 = project(r * u_corners[(k + 1) % corners]);
+    vec2 ab = c1 - c0;
     float seen = dot(ab, ab);
-    float s0 = walked / total;
-    float s1 = (walked + side) / total;
-    walked += side;
+    float s0 = u_cornerAt[k];
+    float s1 = u_cornerAt[k + 1];
     /* The side as it is, and one turn earlier, for a part across the top. */
     for (int w = -1; w <= 0; w++) {
       float lo = max(a, s0 + float(w));
@@ -3318,6 +3300,7 @@ vec2 nearestShown(vec2 p, float r, float total, float a, float b) {
       float d = length(p - c0 - ab * t);
       if (d < best.x) best = vec2(d, s0 + float(w) + t * span);
     }
+    c0 = c1;
   }
   return best;
 }
@@ -3340,6 +3323,16 @@ void main() {
     if (i >= u_count) break;
     float r = u_radius * (1.0 - u_spacing * float(i) / float(max(u_count - 1, 1)));
     if (r < 0.5) continue;
+    /**
+     * A copy too far from this pixel for its line, glow or head to show is
+     * skipped: what it would add is below exp(-12). The outline is inside
+     * its radius, a little larger when it turns toward the eye; a flat ring
+     * also has nothing to add far inside it.
+     */
+    float reach = haze * 12.0 + u_width * 4.0 + 12.0;
+    float far = length(p);
+    if (far > (turned ? r * eye / max(eye - r, 1.0) : r) + reach) continue;
+    if (u_shape == 0 && !turned && far < r - reach) continue;
     /* Spin turns the outline around its upright line, then Tumble around its level line. */
     float spinAngle = u_turn3d.x - u_turn3d.y * float(i);
     float tumbleAngle = u_turn3d.z - u_turn3d.w * float(i);
@@ -3349,7 +3342,6 @@ void main() {
     float st = sin(tumbleAngle);
     turn3d = mat3(1.0, 0.0, 0.0, 0.0, ct, st, 0.0, -st, ct) * mat3(cs, 0.0, ss, 0.0, 1.0, 0.0, -ss, 0.0, cs);
     float phase = fract(u_phase - u_delay * float(i));
-    float total = outlineLength(r);
     /**
      * The part that shows, from place a to place b. Drawing: from the top
      * to the head in the first half of the cycle, then from the eraser to
@@ -3367,7 +3359,7 @@ void main() {
       a = phase - u_length;
       b = phase;
     }
-    vec2 n = nearestShown(p, r, total, a, b);
+    vec2 n = nearestShown(p, r, a, b);
     /* A chased part is full at its head and fades to nothing at its tail. */
     float shown = u_draw == 1 ? clamp((n.y - a) / max(u_length, 1e-3), 0.0, 1.0) : 1.0;
     vec3 color = stopColor(around(n.y + u_shift));
@@ -3379,7 +3371,7 @@ void main() {
     glowColor += color * glow * shown;
     /* The head's bright spot while the outline is drawn or chased. */
     if (moving) {
-      float near = length(p - project(outlinePoint(b, r, total))) / (u_width * 3.0 + 4.0);
+      float near = length(p - project(outlinePoint(b, r))) / (u_width * 3.0 + 4.0);
       float headSpot = exp(-near * near);
       if (headSpot > spot) {
         spot = headSpot;

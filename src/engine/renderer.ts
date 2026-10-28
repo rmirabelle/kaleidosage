@@ -57,6 +57,39 @@ export function hyperbolicMirror(sides: number, corners: number, flow: number): 
   const center = Math.cos(meet) / Math.sqrt(Math.cos(meet) ** 2 - Math.sin(wedge) ** 2);
   return [center, Math.sqrt(center * center - 1), wedge, Math.min(0.95, Math.max(-0.95, flow))];
 }
+/** The most corners of a Light shapes outline: a turned ring's (see OUTLINE_SHADER). */
+const OUTLINE_CORNERS = 48;
+
+/**
+ * A Light shapes outline at radius 1, worked out once per frame, so the
+ * shader does not work it out again for each pixel: its corners (from the
+ * top, clockwise; a ring has 48, used when it is turned; a square stands
+ * level; a star's inner corners are at 0.45), each corner's place along
+ * the outline (0 at the top to 1 back at the top, by length), and the
+ * outline's length.
+ */
+export function outlineCorners(shape: number, points: number): { corners: Float32Array; at: Float32Array; length: number } {
+  /* A ring's length here is its 48 straight sides', as the shader draws a turned ring. */
+  const count = shape === 0 ? OUTLINE_CORNERS : shape === 1 ? 4 : shape === 2 ? 3 : 2 * points;
+  const start = shape === 1 ? 0.5 : 0;
+  const corners = new Float32Array(OUTLINE_CORNERS * 2);
+  for (let k = 0; k < count; k++) {
+    const a = (Math.PI * 2 * (k + start)) / count;
+    const r = shape === 3 && k % 2 === 1 ? 0.45 : 1;
+    corners[k * 2] = r * Math.sin(a);
+    corners[k * 2 + 1] = r * Math.cos(a);
+  }
+  const at = new Float32Array(OUTLINE_CORNERS + 1);
+  let length = 0;
+  for (let k = 0; k < count; k++) {
+    const next = (k + 1) % count;
+    length += Math.hypot(corners[next * 2] - corners[k * 2], corners[next * 2 + 1] - corners[k * 2 + 1]);
+    at[k + 1] = length;
+  }
+  for (let k = 1; k <= count; k++) at[k] /= length;
+  return { corners, at, length };
+}
+
 /** The most Light shapes copies: the shader draws at most this many (see OUTLINE_SHADER). */
 export const OUTLINE_COPIES = 24;
 /** The time smear's pattern: 0 linear, 1 rings, 2 sweep, 3 brightness, 4 noise (see SMEAR_SHADER). */
@@ -2851,7 +2884,11 @@ export class KaleidoRenderer {
     gl.uniform1f(l.uniforms.u_delay, v.outlineDelay);
     gl.uniform1f(l.uniforms.u_phase, v.outlinePhase);
     gl.uniform1f(l.uniforms.u_length, Math.min(1, Math.max(0.01, v.outlineLength)));
-    gl.uniform1i(l.uniforms.u_points, Math.min(12, Math.max(3, Math.round(v.outlinePoints))));
+    const points = Math.min(12, Math.max(3, Math.round(v.outlinePoints)));
+    gl.uniform1i(l.uniforms.u_points, points);
+    const outline = outlineCorners(v.outlineShape, points);
+    gl.uniform2fv(l.uniforms["u_corners[0]"], outline.corners);
+    gl.uniform1fv(l.uniforms["u_cornerAt[0]"], outline.at);
     gl.uniform1f(l.uniforms.u_width, Math.max(0.25, v.outlineWidth * this.texelScale));
     gl.uniform1f(l.uniforms.u_glow, Math.max(0, v.outlineGlow));
     gl.uniform1f(l.uniforms.u_glowSize, Math.max(0.5, v.outlineGlowSize * this.texelScale));
