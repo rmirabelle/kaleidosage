@@ -1391,7 +1391,7 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
   font-size: 22px;
   pointer-events: none;
 }
-.fatal-error { position: absolute; inset: 0; display: grid; place-items: center; padding: 40px; color: #fecaca; font-size: 15px; text-align: center; }
+.fatal-error { position: absolute; inset: 0; z-index: 40; background: rgba(10, 12, 18, 0.94); display: grid; place-items: center; padding: 40px; color: #fecaca; font-size: 15px; text-align: center; }
 
 .button {
   display: inline-flex;

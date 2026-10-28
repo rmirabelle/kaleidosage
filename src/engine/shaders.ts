@@ -1461,9 +1461,8 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
    * as the last spiral step, where the levels are set.
    */
   bool copyFade = spiralLast && u_mapMode == 8 && u_drosteFade > 0.0;
-  float readLight[5] = copyFade
-    ? float[5](drosteLight(level), drosteLight(level), drosteLight(level - 1.0), drosteLight(spiralLevel), drosteLight(spiralLevel - 1.0))
-    : float[5](1.0, 1.0, 1.0, 1.0, 1.0);
+  float readLight[5] = float[5](1.0, 1.0, 1.0, 1.0, 1.0);
+  if (copyFade) readLight = float[5](drosteLight(level), drosteLight(level), drosteLight(level - 1.0), drosteLight(spiralLevel), drosteLight(spiralLevel - 1.0));
   vec4 color = sourceColor(p, g);
   if (copyFade) color.rgb *= readLight[0];
   if (readShare[0] < 1.0) {
