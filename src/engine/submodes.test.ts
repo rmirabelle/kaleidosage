@@ -31,7 +31,7 @@ describe("submodes", () => {
   });
 
   it("names the submodes that show a slider, only when some hide it", () => {
-    expect(shownIn("tileSize")).toEqual(["Triangle tiles", "Hexagon tiles"]);
+    expect(shownIn("tileSize")).toEqual(["Triangle tiles", "Hexagon tiles", "Square tiles"]);
     expect(shownIn("panX")).toEqual([]);
     expect(shownIn("trailAmount")).toEqual([]);
   });

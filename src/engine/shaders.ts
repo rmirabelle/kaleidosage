@@ -1083,6 +1083,18 @@ vec2 fold(vec2 p) {
     return vec2(cos(a), sin(a)) * r / u_zoom;
   }
   /**
+   * Square tiles (fold mode 3): the turned plane is cut into square cells,
+   * Tile size across, and each cell is folded into one eighth of itself by
+   * mirrors along its middle lines and its diagonals. The cell edges are
+   * mirrors too, so neighbor cells meet with no seam.
+   */
+  if (u_foldMode == 3) {
+    vec2 cell = vec2(cos(a), sin(a)) * r / u_tileSize;
+    vec2 square = abs(cell - floor(cell + 0.5));
+    if (square.y > square.x) square = square.yx;
+    return square * u_tileSize / u_zoom;
+  }
+  /**
    * Tiles: the turned plane is cut into hexagon cells, and each cell is
    * folded around its center. Mirrors every 60 degrees (fold mode 1) make
    * equilateral triangles; mirrors every 30 degrees (mode 2) make the

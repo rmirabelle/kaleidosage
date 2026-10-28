@@ -1542,7 +1542,7 @@ function randomizeAll(params: Params, state?: PlayState) {
     state.fxOrder.forEach((step, index) => { if (state.locks[step]) next.splice(Math.min(index, next.length), 0, step); });
     state.fxOrder = next;
     const fold = Math.random();
-    state.foldMode = (fold < 0.6 ? 0 : fold < 0.8 ? 1 : 2) as FoldMode;
+    state.foldMode = (fold < 0.55 ? 0 : fold < 0.7 ? 1 : fold < 0.85 ? 2 : 3) as FoldMode;
   }
   /**
    * Sets the value and a drift range of +/- spread around it, kept inside

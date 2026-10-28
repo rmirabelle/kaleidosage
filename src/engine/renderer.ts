@@ -14,8 +14,8 @@ export type MapMode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 export type MandelPlace = 0 | 1 | 2 | 3 | 4 | 5;
 /** 0 = no warp, 1 = warp the screen (breaks the symmetry), 2 = warp the image (keeps it). */
 export type WarpMode = 0 | 1 | 2;
-/** 0 = radial wedges around one center, 1 = triangle tiles, 2 = hexagon tiles. */
-export type FoldMode = 0 | 1 | 2;
+/** 0 = radial wedges around one center, 1 = triangle tiles, 2 = hexagon tiles, 3 = square tiles. */
+export type FoldMode = 0 | 1 | 2 | 3;
 /** The steps that move pixels around, before anything is drawn. The user sets their order. */
 export type ShapeStep = "warp" | "map" | "kaleidoscope";
 

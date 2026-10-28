@@ -33,9 +33,10 @@ export const EFFECT_COLUMNS: readonly (readonly FxStep[])[] = (() => {
 export const KALEIDOSCOPE_KEYS: Record<FoldMode, ParamKey[]> = {
   0: ["segments", "panX", "panY", "rotation", "zoom", "twirl", "centerX", "centerY"],
   1: ["tileSize", "panX", "panY", "rotation", "zoom", "twirl", "centerX", "centerY"],
-  2: ["tileSize", "panX", "panY", "rotation", "zoom", "twirl", "centerX", "centerY"]
+  2: ["tileSize", "panX", "panY", "rotation", "zoom", "twirl", "centerX", "centerY"],
+  3: ["tileSize", "panX", "panY", "rotation", "zoom", "twirl", "centerX", "centerY"]
 };
-export const FOLD_MODES = [[0, "Radial"], [1, "Triangle tiles"], [2, "Hexagon tiles"]] as const;
+export const FOLD_MODES = [[0, "Radial"], [1, "Triangle tiles"], [2, "Hexagon tiles"], [3, "Square tiles"]] as const;
 
 /** The sliders each blur mask uses; the others are hidden. */
 export const BLUR_KEYS: Record<BlurMask, ParamKey[]> = {
