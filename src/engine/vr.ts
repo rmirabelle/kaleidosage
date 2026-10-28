@@ -39,6 +39,9 @@ const xrSystem = () => (navigator as Navigator & { xr?: XrSystem }).xr ?? null;
 /** The flat picture's size, in pixels on each side, while the headset shows it. */
 export const VR_SIZE = 2048;
 
+/** True when the web view can show VR at all (with a headset that is ready). */
+export const vrSupported = () => xrSystem() !== null;
+
 /** True when a VR headset is ready (for a Quest: Quest Link or Air Link is on). */
 export async function vrAvailable() {
   const xr = xrSystem();

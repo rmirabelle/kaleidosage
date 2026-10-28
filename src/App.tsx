@@ -30,7 +30,10 @@ import type { TerrainData } from "./engine/terrain";
 import { DocumentTabs, type DocumentTabInfo } from "./components/DocumentTabs";
 import { StageControls } from "./components/StageControls";
 import { Engine } from "./engine/engine";
-import { vrAvailable, watchVr } from "./engine/vr";
+import { vrAvailable, vrSupported, watchVr } from "./engine/vr";
+
+/** How often the app asks whether a VR headset is ready, in milliseconds. */
+const VR_CHECK_MS = 3000;
 import { createParams, createPlayState, nudgeParams, randomizeGroup, randomizeParams, resetEffects, type GroupKey, type Params, type PlayState } from "./engine/params";
 import { SettingsHistory } from "./engine/history";
 import { scenePosition } from "./engine/loop";
@@ -1575,20 +1578,34 @@ export default function App() {
   /** Live VR (see vr.ts): whether a headset is ready (for a Quest: Quest Link is on), and whether it shows the picture now. */
   const [vrReady, setVrReady] = useState(false);
   const [inVr, setInVr] = useState(false);
+  /* The headset's "devicechange" does not always come (Link can start after the app), so the app also asks again every few seconds. */
   useEffect(() => {
     const check = () => void vrAvailable().then(setVrReady);
     check();
-    return watchVr(check);
+    const timer = window.setInterval(check, VR_CHECK_MS);
+    const unwatch = watchVr(check);
+    return () => {
+      window.clearInterval(timer);
+      unwatch();
+    };
   }, []);
-  const toggleVr = useCallback(() => {
+  const toggleVr = useCallback(async () => {
     if (!engine) return;
     if (engine.inVr) {
       engine.exitVr();
       return;
     }
-    engine.enterVr(() => setInVr(false)).then(() => setInVr(engine.inVr)).catch((error: unknown) => {
-      showError(`Could not show the picture in VR. ${error instanceof Error ? error.message : String(error)}`);
-    });
+    try {
+      await engine.enterVr(() => setInVr(false));
+      setInVr(engine.inVr);
+    } catch (error) {
+      /* The usual reason is a headset that is not ready, so say how to make it ready. */
+      const ready = await vrAvailable();
+      setVrReady(ready);
+      showError(ready
+        ? `Could not show the picture in VR. ${error instanceof Error ? error.message : String(error)}`
+        : "No VR headset is ready. For a Quest, start Quest Link (or Air Link) in the headset, then try again.");
+    }
   }, [engine, showError]);
 
   /** Puts a new, untitled scene in the engine: the large checkerboard, with every effect off. */
@@ -2446,8 +2463,8 @@ export default function App() {
         { label: midiPanelOpen && bottomTab === "midi" ? "Hide MIDI Panel" : "Show MIDI Panel", icon: <MidiIcon size={15} />, shortcut: "M", disabled: startScreen, run: toggleMidiPanel },
         "separator",
         { label: "Full Screen", icon: <ArrowsOut size={15} />, shortcut: "F", disabled: startScreen, run: () => void toggleFullscreen() },
-        /* VR needs a headset that is ready: for a Quest, Quest Link or Air Link must be on. */
-        { label: inVr ? "Exit VR" : "Enter VR", icon: <VirtualReality size={15} />, disabled: startScreen || (!vrReady && !inVr), run: toggleVr }
+        /* With no headset ready, Enter VR says how to make one ready (see toggleVr). */
+        { label: inVr ? "Exit VR" : "Enter VR", icon: <VirtualReality size={15} />, disabled: startScreen || !vrSupported(), run: () => void toggleVr() }
       ]
     },
     {
@@ -2579,7 +2596,7 @@ export default function App() {
             <canvas ref={canvasRef} onDoubleClick={() => void toggleFullscreen()} />
             {engine && statsOpen && <StatsOverlay engine={engine} />}
             {engine && !startScreen && !fullscreen && (
-              <StageControls onFullscreen={() => void toggleFullscreen()} onVr={vrReady || inVr ? toggleVr : null} inVr={inVr} />
+              <StageControls onFullscreen={() => void toggleFullscreen()} onVr={vrReady || inVr ? () => void toggleVr() : null} inVr={inVr} />
             )}
             {fullscreen && (
               /* In full screen the title bar and toolbar are gone; these buttons show while the mouse moves. */
