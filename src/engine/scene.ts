@@ -303,7 +303,7 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   state.mapMode = mode(saved.mapMode, [1, 2, 3, 4, 5, 6, 7, 8, 9] as const) ?? state.mapMode;
   state.mandelPlace = mode(saved.mandelPlace, [0, 1, 2, 3, 4, 5] as const) ?? state.mandelPlace;
   /* Scenes from before the tile modes have no fold mode; they were radial. */
-  state.foldMode = mode(saved.foldMode, [0, 1, 2, 3] as const) ?? 0;
+  state.foldMode = mode(saved.foldMode, [0, 1, 2, 3, 4] as const) ?? 0;
   /**
    * The effect list is saved as "effects". Earlier scenes listed every
    * effect in one order ("fxOrder"), and before that the shape steps came

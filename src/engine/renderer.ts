@@ -14,8 +14,8 @@ export type MapMode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 export type MandelPlace = 0 | 1 | 2 | 3 | 4 | 5;
 /** 0 = no warp, 1 = warp the screen (breaks the symmetry), 2 = warp the image (keeps it). */
 export type WarpMode = 0 | 1 | 2;
-/** 0 = radial wedges around one center, 1 = triangle tiles, 2 = hexagon tiles, 3 = square tiles. */
-export type FoldMode = 0 | 1 | 2 | 3;
+/** 0 = radial wedges around one center, 1 = triangle tiles, 2 = hexagon tiles, 3 = square tiles, 4 = hyperbolic disk. */
+export type FoldMode = 0 | 1 | 2 | 3 | 4;
 /** The steps that move pixels around, before anything is drawn. The user sets their order. */
 export type ShapeStep = "warp" | "map" | "kaleidoscope";
 
@@ -39,6 +39,24 @@ const isFinishPart = (step: FxStep): step is FinishPart => (FINISH_PARTS as read
 export const isShapeStep = (step: FxStep): step is ShapeStep => (SHAPE_STEPS as readonly FxStep[]).includes(step);
 /** The most laser beams: the shader draws at most this many (see LASER_SHADER). */
 export const LASER_BEAMS = 32;
+/**
+ * The hyperbolic disk's mirrors (see fold in KALEIDO_SHADER), for tiles of
+ * "sides" sides with "corners" tiles at each corner (whole numbers, 3 to
+ * 12). The disk is a radius of 1; its mirrors are two lines through the
+ * center, pi / sides apart, and a circle at right angles to the disk's
+ * edge, at "center" on the x axis with "radius". Such tiles fit only when
+ * 1 / sides + 1 / corners is less than 1 / 2, so a smaller corner count
+ * goes up until they fit. Gives [center, radius, pi / sides, flow].
+ */
+export function hyperbolicMirror(sides: number, corners: number, flow: number): [number, number, number, number] {
+  const p = Math.min(12, Math.max(3, Math.round(sides)));
+  let q = Math.min(12, Math.max(3, Math.round(corners)));
+  while (1 / p + 1 / q >= 0.5 - 1e-9) q++;
+  const wedge = Math.PI / p;
+  const meet = Math.PI / q;
+  const center = Math.cos(meet) / Math.sqrt(Math.cos(meet) ** 2 - Math.sin(wedge) ** 2);
+  return [center, Math.sqrt(center * center - 1), wedge, Math.min(0.95, Math.max(-0.95, flow))];
+}
 /** The most Light shapes copies: the shader draws at most this many (see OUTLINE_SHADER). */
 export const OUTLINE_COPIES = 24;
 /** The time smear's pattern: 0 linear, 1 rings, 2 sweep, 3 brightness, 4 noise (see SMEAR_SHADER). */
@@ -143,6 +161,11 @@ export interface FrameValues {
   foldMode: FoldMode;
   /** The tile size in tile modes, in screen heights between neighbor cell centers. */
   tileSize: number;
+  /** The hyperbolic disk (fold mode 4): its sides and how many meet at a corner (whole numbers), its radius (screen heights) and its flow (-0.9 to 0.9). */
+  hyperSides: number;
+  hyperCorners: number;
+  hyperSize: number;
+  hyperFlow: number;
   warpMode: WarpMode;
   warpType: WarpType;
   /** Ripple, swirl and bulge: the center, in screen heights. Waves: the direction (radians). */
@@ -1428,6 +1451,8 @@ export class KaleidoRenderer {
     gl.uniform1f(k.uniforms.u_segments, v.segments);
     gl.uniform1i(k.uniforms.u_foldMode, v.foldMode);
     gl.uniform1f(k.uniforms.u_tileSize, Math.max(0.01, v.tileSize));
+    gl.uniform4fv(k.uniforms.u_hyper, hyperbolicMirror(v.hyperSides, v.hyperCorners, v.hyperFlow));
+    gl.uniform1f(k.uniforms.u_hyperSize, Math.max(0.01, v.hyperSize));
     gl.uniform1f(k.uniforms.u_rotation, v.rotation);
     gl.uniform1f(k.uniforms.u_zoom, v.zoom);
     gl.uniform1f(k.uniforms.u_twirl, v.twirl);

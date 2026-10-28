@@ -9,7 +9,7 @@ export const PARAM_KEYS = [
   "mandelDepth", "mandelEnd", "mandelSpeed", "mandelFade", "mandelSpread", "mandelInvert", "mandelEdge", "mandelEdgeWidth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle",
   "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
   "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness",
-  "segments", "tileSize", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl",
+  "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl",
   "blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel",
   "trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint",
   "smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade",
@@ -571,6 +571,10 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   segments: { label: "Segments", min: 0, max: 24, step: 1, value: 0, drift: "wave", low: 3, high: 8, on: false },
   /** Tile modes only: screen heights between neighbor cell centers. */
   tileSize: { label: "Tile size", min: 0.1, max: 2, step: 0.01, value: 0.5, drift: "wave", low: 0.3, high: 0.8, on: false },
+  hyperSides: { label: "Sides", min: 3, max: 12, step: 1, value: 5, drift: "wave", low: 4, high: 8, on: false },
+  hyperCorners: { label: "Per corner", min: 3, max: 12, step: 1, value: 4, drift: "wave", low: 4, high: 6, on: false },
+  hyperSize: { label: "Disk size", min: 0.2, max: 2, step: 0.01, value: 0.5, drift: "wave", low: 0.4, high: 0.8, on: false },
+  hyperFlow: { label: "Flow", min: -0.9, max: 0.9, step: 0.01, value: 0, drift: "wave", low: -0.5, high: 0.5, on: false },
   /** The center is a fraction of the screen size: -0.5 and 0.5 are the screen edges. */
   centerX: { label: "Offset X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.3, high: 0.3, on: false },
   centerY: { label: "Offset Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.25, high: 0.25, on: false },
@@ -953,7 +957,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
  * handles snap to it, and Ctrl + drag on a range handle mirrors around it.
  */
 export const NO_EFFECT: Partial<Record<ParamKey, number>> = {
-  warpCenterX: 0, warpCenterY: 0, cameraHeight: 0, cameraDolly: 0, cameraTruck: 0,
+  hyperFlow: 0, warpCenterX: 0, warpCenterY: 0, cameraHeight: 0, cameraDolly: 0, cameraTruck: 0,
   mapScale: 1, juliaZoom: 1, mapPower: 1, mapArms: 0, mapTwist: 0, mapSpeed: 0, tunnelTwist: 0, mapPanX: 0, mapPanY: 0,
   mobiusPanX: 0, mobiusPanY: 0,
   centerX: 0, centerY: 0, zoom: 1, panX: 0, panY: 0, twirl: 0,
@@ -1446,7 +1450,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   warp: ["warpOpacity", "warpAmount", "warpScale", "warpCellSize", "warpCellAngle", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle"],
   map: ["mapOpacity", "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl", "mandelDepth", "mandelEnd", "mandelSpeed", "mandelFade", "mandelSpread", "mandelInvert", "mandelEdge", "mandelEdgeWidth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle", "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
     "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness"],
-  kaleidoscope: ["foldOpacity", "segments", "tileSize", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl"],
+  kaleidoscope: ["foldOpacity", "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl"],
   blur: ["blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel"],
   trails: ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"],
   smear: ["smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade"],
@@ -1542,7 +1546,7 @@ function randomizeAll(params: Params, state?: PlayState) {
     state.fxOrder.forEach((step, index) => { if (state.locks[step]) next.splice(Math.min(index, next.length), 0, step); });
     state.fxOrder = next;
     const fold = Math.random();
-    state.foldMode = (fold < 0.55 ? 0 : fold < 0.7 ? 1 : fold < 0.85 ? 2 : 3) as FoldMode;
+    state.foldMode = (fold < 0.5 ? 0 : fold < 0.62 ? 1 : fold < 0.74 ? 2 : fold < 0.86 ? 3 : 4) as FoldMode;
   }
   /**
    * Sets the value and a drift range of +/- spread around it, kept inside
@@ -1639,6 +1643,10 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("trailTint", Math.random() < 0.6 ? 0 : rand(0.1, 0.5), rand(0, 0.15));
   if (state) state.trailColor = hslToHex(rand(0, 360), rand(0.6, 1), rand(0.3, 0.55));
   set("tileSize", rand(0.25, 0.9), rand(0.05, 0.2));
+  set("hyperSides", Math.round(rand(3, 8)), 0);
+  set("hyperCorners", Math.round(rand(3, 7)), 0);
+  set("hyperSize", rand(0.4, 1), rand(0.05, 0.2));
+  set("hyperFlow", Math.random() < 0.5 ? 0 : rand(-0.4, 0.4), rand(0.1, 0.5));
   set("trailHue", Math.random() < 0.3 ? rand(-3, 3) : 0, rand(0.5, 3));
   set("smearAmount", rand(0.6, 1), rand(0, 0.2));
   set("smearDelay", rand(0.3, 2), rand(0.1, 0.5));

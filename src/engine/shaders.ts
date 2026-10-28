@@ -227,6 +227,9 @@ uniform int u_picture;
 uniform float u_shapeOpacity[3];
 uniform int u_shapeBlend[3];
 uniform float u_tileSize;
+/* The hyperbolic disk (fold mode 4): the mirror circle's center on the x axis and its radius, the wedge angle (pi / sides), and the flow; then the disk radius. */
+uniform vec4 u_hyper;
+uniform float u_hyperSize;
 uniform float u_rotation;
 uniform float u_zoom;
 uniform float u_twirl;
@@ -1047,11 +1050,54 @@ vec4 sampleImage(sampler2D image, vec2 size, vec2 q, float g) {
  */
 vec2 foldAlt;
 float foldAltWeight;
+/** Set by fold(): how much the fold enlarges the picture at the point (1 for every type but Hyperbolic), for texture detail. */
+float foldStretch;
 
 vec2 fold(vec2 p) {
   float r = length(p);
   float a = atan(p.y, p.x) + u_rotation + u_twirl * r;
   foldAltWeight = 0.0;
+  foldStretch = 1.0;
+  /**
+   * Hyperbolic (fold mode 4): the Poincare disk, Disk size in radius. Its
+   * tiles get smaller and smaller toward the edge, and never reach it.
+   * Outside the disk, the point is mirrored into it in the disk's edge, so
+   * the outside shows the disk again. Flow then moves the point along the
+   * x axis the hyperbolic way (a Mobius map of the disk onto itself), so
+   * the tiles stream out of one side and into the other. Then mirrors fold
+   * the point into one tile's corner triangle: two lines through the
+   * center (pi / Sides apart) and a circle at right angles to the edge
+   * (see hyperbolicMirror in renderer.ts), until the circle no longer
+   * holds it. foldStretch follows how much each step enlarges the picture.
+   */
+  if (u_foldMode == 4) {
+    vec2 z = vec2(cos(a), sin(a)) * r / u_hyperSize;
+    float edge = dot(z, z);
+    if (edge > 1.0) {
+      z /= edge;
+      foldStretch /= edge;
+    }
+    float w = u_hyper.w;
+    vec2 top = z + vec2(w, 0.0);
+    vec2 bottom = vec2(1.0 + w * z.x, w * z.y);
+    float under = max(dot(bottom, bottom), 1e-8);
+    z = vec2(top.x * bottom.x + top.y * bottom.y, top.y * bottom.x - top.x * bottom.y) / under;
+    foldStretch *= (1.0 - w * w) / under;
+    vec2 center = vec2(u_hyper.x, 0.0);
+    float radius2 = u_hyper.y * u_hyper.y;
+    float wedge = u_hyper.z;
+    for (int i = 0; i < 64; i++) {
+      float angle = wedge - abs(mod(atan(z.y, z.x), 2.0 * wedge) - wedge);
+      z = vec2(cos(angle), sin(angle)) * length(z);
+      vec2 v = z - center;
+      float d2 = dot(v, v);
+      if (d2 >= radius2) break;
+      float k = radius2 / max(d2, 1e-12);
+      z = center + v * k;
+      foldStretch *= k;
+    }
+    return z * u_hyperSize / u_zoom;
+  }
   if (u_foldMode == 0) {
     /**
      * Radial: mirrored wedges around one center. A count between two whole
@@ -1276,7 +1322,7 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
    */
   vec2 measured = folded ? beforeFold : (spiralLast ? beforeSpiral : p);
   float detail = min(max(length(dFdx(measured)), length(dFdy(measured))), g0 * 4.0);
-  float g = max(detail * stretch, mapDetail) / (folded ? u_zoom : 1.0);
+  float g = max(detail * stretch * (folded ? foldStretch : 1.0), mapDetail) / (folded ? u_zoom : 1.0);
   /**
    * The picture reads, each with its point, detail and share: the point,
    * the radial crossfade's point, the Droste copy one size smaller (its detail
@@ -1285,7 +1331,7 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
    * call in a loop of run-time length (see the step loop).
    */
   float copySize = clamp(u_drosteSize, 0.05, 0.95);
-  float g2 = max(detail * spiralStretch, mapDetail) / (folded ? u_zoom : 1.0);
+  float g2 = max(detail * spiralStretch * (folded ? foldStretch : 1.0), mapDetail) / (folded ? u_zoom : 1.0);
   float fadeShare = fading ? fade : 0.0;
   float drosteShare = drosteWeight > 0.0 ? drosteWeight : 0.0;
   float altShare = spiralAltWeight > 0.0 ? spiralAltWeight : 0.0;
