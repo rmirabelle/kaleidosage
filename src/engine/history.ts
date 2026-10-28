@@ -7,7 +7,7 @@ const LIMIT = 200;
 
 type SavedParam = Pick<Param, "value" | "low" | "high" | "on" | "ease" | "custom" | "seconds" | "startTime">;
 type SavedState = Pick<PlayState, "groups" | "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode"
-  | "overlayColor" | "colorBlend" | "trailColor" | "smearShape" | "contourTone" | "contourBlend" | "cameraBlend" | "viewBlend" | "skyColor" | "cameraRepeat" | "cameraHeightSource" | "cameraColors" | "cameraStops" | "videoCrossfade" | "fxOrder" | "layerBlend" | "sound" | "particleStops" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "cyclesStops" | "solidShape" | "solidMap" | "solidBlend" | "solidKeep" | "mandelPlace" | "particleShape" | "outlineShape" | "outlineDraw" | "outlineStops" | "maskStops">;
+  | "overlayColor" | "colorBlend" | "trailColor" | "smearShape" | "contourTone" | "contourBlend" | "cameraBlend" | "viewBlend" | "skyColor" | "cameraRepeat" | "cameraHeightSource" | "cameraColors" | "cameraStops" | "videoCrossfade" | "fxOrder" | "layerBlend" | "sound" | "particleStops" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "cyclesStops" | "solidShape" | "solidMap" | "solidBlend" | "solidKeep" | "mandelPlace" | "particleShape" | "outlineShape" | "outlineDraw" | "outlineStops" | "maskMode" | "maskStops">;
 
 /** The settings at one step, and their fingerprint, to tell whether two steps differ. */
 interface Snapshot {
@@ -41,6 +41,7 @@ function take(params: Params, state: PlayState): Snapshot {
       outlineShape: state.outlineShape,
       outlineDraw: state.outlineDraw,
       outlineStops: state.outlineStops.map((stop) => ({ ...stop })),
+      maskMode: state.maskMode,
       maskStops: state.maskStops.map((stop) => ({ ...stop })),
       contourTone: state.contourTone,
       contourBlend: state.contourBlend,

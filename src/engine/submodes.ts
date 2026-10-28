@@ -1,5 +1,5 @@
 import type { ParamKey, PlayState } from "./params";
-import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, SmearShape, SolidMap, SolidShape, WarpType, MandelPlace } from "./renderer";
+import type { MaskMode, BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, SmearShape, SolidMap, SolidShape, WarpType, MandelPlace } from "./renderer";
 
 /** The effects in the Add effect menu, in menu order, with the names their groups show. */
 export const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
@@ -155,7 +155,11 @@ export const SOLID_SHAPES = [[0, "Sphere"], [1, "Cube"], [2, "Morph"], [3, "Blob
 export const SOLID_MAP_KEYS: Record<SolidMap, ParamKey[]> = { 0: ["solidTiles"], 1: ["solidBend", "solidFrost"], 2: [] };
 export const SOLID_MAPS = [[0, "Wrap"], [1, "Project"], [2, "Mirror"]] as const;
 
-export type SubmodeKey = "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape" | "cyclesMove" | "cyclesPaint" | "solidShape" | "solidMap";
+/** The Opacity mask's types, and the sliders each shows under the gradient (Strength always shows, above it). */
+export const MASK_MODES = [[0, "Brightness"], [1, "Radial"]] as const;
+export const MASK_KEYS: Record<MaskMode, ParamKey[]> = { 0: [], 1: ["maskSize", "maskStretch", "maskTurn", "maskX", "maskY"] };
+
+export type SubmodeKey = "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape" | "cyclesMove" | "cyclesPaint" | "solidShape" | "solidMap" | "maskMode";
 
 /** One submode menu: the play-state setting it sets, its choices (value and name), and the sliders each choice shows. */
 export interface Submode {
@@ -173,7 +177,8 @@ export const SUBMODES: readonly Submode[] = [
   { stateKey: "cyclesMove", options: CYCLE_MOVES, keys: CYCLE_KEYS },
   { stateKey: "cyclesPaint", options: CYCLE_PAINTS, keys: CYCLE_PAINT_KEYS },
   { stateKey: "solidShape", options: SOLID_SHAPES, keys: SOLID_SHAPE_KEYS },
-  { stateKey: "solidMap", options: SOLID_MAPS, keys: SOLID_MAP_KEYS }
+  { stateKey: "solidMap", options: SOLID_MAPS, keys: SOLID_MAP_KEYS },
+  { stateKey: "maskMode", options: MASK_MODES, keys: MASK_KEYS }
 ];
 
 /** The submode menu that shows or hides the slider, or undefined for a slider that always shows. */

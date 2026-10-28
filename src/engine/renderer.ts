@@ -148,6 +148,8 @@ export type ParticleBlend = 0 | 1;
 /** Light shapes (see OUTLINE_SHADER): the outline, 0 ring, 1 square, 2 triangle, 3 star; and how it draws, 0 draw and erase, 1 chase, 2 whole. */
 export type OutlineShape = 0 | 1 | 2 | 3;
 export type OutlineDraw = 0 | 1 | 2;
+/** Opacity mask (see MASK_SHADER): 0 by the picture's brightness, 1 a radial gradient. */
+export type MaskMode = 0 | 1;
 /** How each particle looks: 0 a soft dot, 1 a line along its motion, 2 a ring (see PARTICLE_QUAD_SHADER). */
 export type ParticleShape = 0 | 1 | 2;
 /** How the Image or Video effect's image or video goes over the picture: 0 normal (over, by its own cover), 1 screen, 2 add. */
@@ -613,11 +615,13 @@ export interface FrameValues {
   outlineStopAt: Float32Array;
   outlineStopColor: Float32Array;
   /**
-   * Opacity mask (see MASK_SHADER): strength (0 = off), the radius (screen
-   * heights), the stretch and its turn (radians), the center (parts of the
-   * screen from its center), and the gradient's stops as grays (0 to 1).
+   * Opacity mask (see MASK_SHADER): strength (0 = off), the type, then for
+   * Radial the radius (screen heights), the stretch and its turn (radians)
+   * and the center (parts of the screen from its center); and the
+   * gradient's stops as grays (0 to 1).
    */
   mask: number;
+  maskMode: MaskMode;
   maskSize: number;
   maskStretch: number;
   maskTurn: number;
@@ -2902,6 +2906,7 @@ export class KaleidoRenderer {
     gl.uniform1f(m.uniforms.u_stretch, Math.max(0.05, v.maskStretch));
     gl.uniform1f(m.uniforms.u_turn, v.maskTurn);
     gl.uniform1f(m.uniforms.u_amount, Math.min(1, Math.max(0, v.mask)));
+    gl.uniform1i(m.uniforms.u_mode, v.maskMode);
     gl.uniform1i(m.uniforms.u_stopCount, v.maskStopAt.length);
     gl.uniform1fv(m.uniforms["u_stopAt[0]"], v.maskStopAt);
     gl.uniform1fv(m.uniforms["u_stopGray[0]"], v.maskStopGray);

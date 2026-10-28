@@ -1,4 +1,4 @@
-import type { BlendMode, BlurMask, CameraColors, CameraHeightSource, CameraRepeat, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidShape, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
+import type { BlendMode, BlurMask, CameraColors, CameraHeightSource, CameraRepeat, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidShape, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, MaskMode, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
 
 export const PARAM_KEYS = [
   "cycle",
@@ -368,7 +368,12 @@ export interface PlayState {
   outlineStops: GradientStop[];
   outlineTime: number;
   outlineFlowTime: number;
-  /** Opacity mask (see MASK_SHADER): the grays from the center (0) out to Size (1); white keeps the picture, black clears it. */
+  /**
+   * Opacity mask (see MASK_SHADER): the type, and the grays along the
+   * gradient (Brightness: from dark to bright pixels; Radial: from the
+   * center out to Size). White keeps the picture, black clears it.
+   */
+  maskMode: MaskMode;
   maskStops: GradientStop[];
   /**
    * 3D Object (see SOLID_SHADER): the shape preset, how the picture goes onto
@@ -932,12 +937,13 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   outlineX: { label: "X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   outlineY: { label: "Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   /**
-   * Opacity mask (see MASK_SHADER): a radial gradient of grays sets how much
-   * of the picture stays (white all, black none, so what is under it shows).
-   * Strength mixes from no mask (0) to the full mask (1). Size is the
-   * gradient's radius in screen heights; Stretch makes it wider (above 1)
-   * or taller (below 1), and Turn turns that stretch. X and Y move the
-   * center (parts of the screen from its center).
+   * Opacity mask (see MASK_SHADER): a gradient of grays sets how much of
+   * the picture stays (white all, black none, so what is under it shows),
+   * by each pixel's brightness or by a radial gradient. Strength mixes from
+   * no mask (0) to the full mask (1). Radial only: Size is the gradient's
+   * radius in screen heights; Stretch makes it wider (above 1) or taller
+   * (below 1), and Turn turns that stretch. X and Y move the center (parts
+   * of the screen from its center).
    */
   maskAmount: { label: "Strength", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
   maskSize: { label: "Size", min: 0.05, max: 2, step: 0.01, value: 0.6, drift: "wave", low: 0.4, high: 0.8, on: false },
@@ -1074,7 +1080,7 @@ export function createPlayState(): PlayState {
     /* No effect is in the list at start-up, so every effect group is off. */
     groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false },
     locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1206,8 +1212,8 @@ export const defaultTerrainStops = (): GradientStop[] => [
 ];
 /** Light shapes' colors along the outline: the same color at both ends, so no seam shows at the top. */
 export const defaultOutlineStops = (): GradientStop[] => [{ at: 0, color: "#18e0ff" }, { at: 0.5, color: "#ff2bd6" }, { at: 1, color: "#18e0ff" }];
-/** The Opacity mask's grays: the picture stays whole to half the size, then fades out to the edge. */
-export const defaultMaskStops = (): GradientStop[] => [{ at: 0, color: "#ffffff" }, { at: 0.5, color: "#ffffff" }, { at: 1, color: "#000000" }];
+/** The Opacity mask's grays: dark pixels clear, bright pixels stay, with a soft step between. */
+export const defaultMaskStops = (): GradientStop[] => [{ at: 0, color: "#000000" }, { at: 0.2, color: "#000000" }, { at: 0.6, color: "#ffffff" }, { at: 1, color: "#ffffff" }];
 
 /**
  * The gradient's color at a place from 0 to 1, as red, green and blue from
@@ -1459,7 +1465,10 @@ export function resetEffects(params: Params, state: PlayState) {
     state.outlineDraw = fresh.outlineDraw;
     state.outlineStops = fresh.outlineStops;
   }
-  if (!state.locks.mask) state.maskStops = fresh.maskStops;
+  if (!state.locks.mask) {
+    state.maskMode = fresh.maskMode;
+    state.maskStops = fresh.maskStops;
+  }
   if (!state.locks.driver) {
     state.driverSource = fresh.driverSource;
     state.driverMode = fresh.driverMode;
@@ -1526,6 +1535,7 @@ const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   sort: ["sortOrder"],
   particles: ["particleBlend", "particleShape"],
   outlines: ["outlineShape", "outlineDraw"],
+  mask: ["maskMode"],
   picture: ["pictureBlend"],
   cycles: ["cyclesMove", "cyclesBlend", "cyclesPaint"],
   solid: ["solidShape", "solidMap", "solidBlend"],

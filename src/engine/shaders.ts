@@ -3246,13 +3246,15 @@ void main() {
 }`;
 
 /**
- * Opacity mask: a radial gradient of grays over the picture. White keeps
- * the picture, black clears it (its color and its cover, so what is under
- * the picture shows: black on the screen), and the grays between keep part
- * of it. The gradient runs from the center (place 0) to u_radius pixels
- * away (place 1), and keeps the last stop past that. u_stretch makes the
- * circle u_stretch times as wide as it is tall, turned by u_turn. u_amount
- * mixes from no mask (0) to the whole mask (1).
+ * Opacity mask: a gradient of grays sets how much of each pixel stays.
+ * White keeps the pixel, black clears it (its color and its cover, so what
+ * is under the picture shows: black on the screen), and the grays between
+ * keep part of it. u_mode 0 (Brightness): the pixel's own brightness is
+ * its place on the gradient, from black (0) to white (1), so the mask
+ * follows the picture as it moves. u_mode 1 (Radial): the place runs from
+ * the center (0) to u_radius pixels away (1), and keeps the last stop past
+ * that; u_stretch makes the circle u_stretch times as wide as it is tall,
+ * turned by u_turn. u_amount mixes from no mask (0) to the whole mask (1).
  */
 export const MASK_SHADER = `#version 300 es
 precision highp float;
@@ -3265,9 +3267,11 @@ uniform float u_radius;
 uniform float u_stretch;
 uniform float u_turn;
 uniform float u_amount;
+uniform int u_mode;
 uniform int u_stopCount;
 uniform float u_stopAt[8];
 uniform float u_stopGray[8];
+${COVER_GLSL}
 
 /* The gray at place t, as gradientColorAt in params.ts. */
 float stopGray(float t) {
@@ -3283,13 +3287,21 @@ float stopGray(float t) {
 }
 
 void main() {
-  vec2 p = (v_uv - 0.5) * u_res - u_center;
-  float c = cos(u_turn);
-  float s = sin(u_turn);
-  p = mat2(c, -s, s, c) * p;
-  p.x /= u_stretch;
-  float keep = mix(1.0, clamp(stopGray(length(p) / u_radius), 0.0, 1.0), u_amount);
-  o = texture(u_picture, v_uv) * keep;
+  vec4 picture = texture(u_picture, v_uv);
+  float place;
+  if (u_mode == 0) {
+    /* The brightness of the color without its cover. */
+    place = dot(clamp(straight(picture), 0.0, 1.0), vec3(0.2126, 0.7152, 0.0722));
+  } else {
+    vec2 p = (v_uv - 0.5) * u_res - u_center;
+    float c = cos(u_turn);
+    float s = sin(u_turn);
+    p = mat2(c, -s, s, c) * p;
+    p.x /= u_stretch;
+    place = length(p) / u_radius;
+  }
+  float keep = mix(1.0, clamp(stopGray(place), 0.0, 1.0), u_amount);
+  o = picture * keep;
 }`;
 
 /**

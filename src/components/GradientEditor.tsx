@@ -91,8 +91,9 @@ function GrayPopup({ anchor, color, onChange, onClose }: { anchor: HTMLElement; 
  *
  * "gray" (the Opacity mask's state.maskStops): every stop is a gray from
  * black to white, picked with a brightness slider, not a color picker.
+ * "ends" names the bar's two ends, under it.
  */
-export function GradientEditor({ engine, stateKey = "particleStops", gray = false }: { engine: Engine; stateKey?: "particleStops" | "cyclesStops" | "outlineStops" | "cameraStops" | "maskStops"; gray?: boolean }) {
+export function GradientEditor({ engine, stateKey = "particleStops", gray = false, ends }: { engine: Engine; stateKey?: "particleStops" | "cyclesStops" | "outlineStops" | "cameraStops" | "maskStops"; gray?: boolean; ends?: readonly [string, string] }) {
   const [stops, setStops] = useState<GradientStop[]>(() => engine.state[stateKey].map((stop) => ({ ...stop })));
   /** The stop whose color picker is open. */
   const [picking, setPicking] = useState<number | null>(null);
@@ -194,6 +195,7 @@ export function GradientEditor({ engine, stateKey = "particleStops", gray = fals
           />
         ))}
       </div>
+      {ends && <div className="gradient-ends"><span>{ends[0]}</span><span>{ends[1]}</span></div>}
       {picking !== null && stops[picking] && anchor && gray && (
         <GrayPopup
           key={picking}

@@ -12,8 +12,8 @@ import { loadTerrain } from "../lib/terrain";
 import type { TerrainData } from "../engine/terrain";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
-import { BLUR_KEYS, BLUR_MASKS, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
-import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
+import { BLUR_KEYS, BLUR_MASKS, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
+import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, MaskMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ContextMenu } from "./ContextMenu";
@@ -82,8 +82,6 @@ const PICTURE_KEYS: ParamKey[] = ["pictureAmount", "pictureSize", "pictureX", "p
 const OUTLINE_KEYS: ParamKey[] = ["outlineAmount", "outlineRadius", "outlineCount", "outlineSpacing", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"];
 const OUTLINE_SHAPES = [[0, "Ring"], [1, "Square"], [2, "Triangle"], [3, "Star"]] as const;
 const OUTLINE_DRAWS = [[0, "Draw and erase"], [1, "Chase"], [2, "Whole"]] as const;
-/** The Opacity mask's sliders under its gradient (Strength is above it). */
-const MASK_KEYS: ParamKey[] = ["maskSize", "maskStretch", "maskTurn", "maskX", "maskY"];
 const LASER_KEYS: ParamKey[] = ["laserAmount", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"];
 const BLOOM_KEYS: ParamKey[] = ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"];
 const SHARPEN_KEYS: ParamKey[] = ["sharpen", "sharpenRadius"];
@@ -441,9 +439,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     ),
     mask: (grip) => (
       <Group engine={engine} group="mask" title="Opacity mask" grip={grip} {...accordion("mask")}>
-        {row("maskAmount")}
-        <GradientEditor engine={engine} stateKey="maskStops" gray />
-        {MASK_KEYS.map(row)}
+        <MaskSection engine={engine} row={row} />
       </Group>
     ),
     bloom: (grip) => (
@@ -891,7 +887,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "outlineShape" | "outlineDraw" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange }: {
@@ -1015,6 +1011,22 @@ function OutlineSection({ engine, row }: { engine: Engine; row: (key: ParamKey) 
       {keys.map((key) => key === "outlineFlow"
         ? <Fragment key={key}><GradientEditor engine={engine} stateKey="outlineStops" />{row(key)}</Fragment>
         : row(key))}
+    </>
+  );
+}
+
+/**
+ * The Opacity mask's settings: the Type menu, Strength, the gradient of
+ * grays (its ends named for the type), then Radial's own sliders.
+ */
+function MaskSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
+  const [mode, setMode] = useState<MaskMode>(engine.state.maskMode);
+  return (
+    <>
+      <ModeSelect engine={engine} stateKey="maskMode" options={MASK_MODES} name="Type" onChange={setMode} />
+      {row("maskAmount")}
+      <GradientEditor engine={engine} stateKey="maskStops" gray ends={mode === 0 ? ["Dark", "Bright"] : ["Center", "Edge"]} />
+      {MASK_KEYS[mode].map(row)}
     </>
   );
 }

@@ -964,6 +964,8 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
   background: #242832;
   box-shadow: 0 14px 40px rgba(0,0,0,.55);
 }
+/* The names of a gradient bar's two ends (Opacity mask), under its stops. */
+.gradient-ends { display: flex; justify-content: space-between; margin-top: 2px; font-size: 11px; color: var(--muted, #8a91a0); }
 /* A gray stop's popup (Opacity mask): a swatch, a black-to-white slider and the percent. */
 .gray-popup { width: 240px; }
 .gray-popup-row { display: flex; align-items: center; gap: 8px; }

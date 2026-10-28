@@ -1524,6 +1524,7 @@ export class Engine {
       outlineStopAt: new Float32Array(this.state.outlineStops.map((stop) => stop.at)),
       outlineStopColor: new Float32Array(this.state.outlineStops.flatMap((stop) => hexToRgb(stop.color))),
       mask: on.mask ? this.live("maskAmount") : 0,
+      maskMode: this.state.maskMode,
       maskSize: this.live("maskSize"),
       maskStretch: this.live("maskStretch"),
       maskTurn: this.live("maskTurn") * DEGREES,
