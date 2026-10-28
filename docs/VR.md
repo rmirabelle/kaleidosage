@@ -5,9 +5,17 @@ live on a large virtual screen in a dark room, in a VR headset. Sliders,
 MIDI and sound keep working. Esc, Exit VR or the headset's own menu ends it.
 
 While VR runs, the VR screen card (bottom left of the picture) sets the
-screen's Width and Distance in meters, and its Curve (0% flat, 100% part of
-a circle around you). The app keeps the last settings. To bring the screen
-in front of you again, hold the headset's Meta button.
+screen's Shape (16:9, 21:9, 4:3, 1:1), its Width and Distance in meters,
+and its Curve (0% flat, 100% part of a circle around you). The shape is
+the setting's, not the desktop picture's. The app keeps the last settings.
+
+In the headset, the controllers do the same:
+
+- Right stick forward or back: the screen moves away or near.
+- Right stick right or left: the screen gets wider or narrower.
+- Left stick forward or back: more or less curve.
+- A: the next shape. B: reset (16:9, 4 m wide, 3 m away, flat).
+- Hold the Meta button to bring the screen in front of you again.
 
 The 360° size in Export Video still makes a video that wraps the picture
 all around the viewer; live VR uses the screen, as a full wrap made the
@@ -28,7 +36,8 @@ subject too large.
   (`VrScreen`), and works out each eye's matrix. The headset's session
   times the frames while VR runs.
 - The engine draws the flat picture `VR_HEIGHT` (1440) pixels tall, in the
-  screen's shape; the PC screen shows it letterboxed.
+  screen's shape; the PC screen shows it letterboxed. Each headset frame,
+  `moveVrScreen` applies the controllers first.
 - `KaleidoRenderer.drawVr` copies each new picture (with mipmaps, so a far
   screen does not shimmer) and draws each eye with `VR_SHADER`, which
   follows each pixel's ray from the eye to the flat or curved screen.

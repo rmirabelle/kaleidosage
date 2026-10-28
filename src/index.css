@@ -437,6 +437,10 @@ button { border: 0; }
 .vr-card-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; color: #a9aebb; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
 .vr-card-reset { margin-left: auto; padding: 1px 8px; border: 1px solid #343846; border-radius: 9px; color: #a9aebb; background: none; font-size: 10px; letter-spacing: .04em; cursor: pointer; }
 .vr-card-reset:hover { color: #eceef2; border-color: #4a4f60; }
+.vr-card-shapes { display: flex; gap: 4px; margin-top: 6px; }
+.vr-card-shape { flex: 1; padding: 3px 0; border: 1px solid #343846; border-radius: 6px; color: #a9aebb; background: none; font-size: 11px; font-variant-numeric: tabular-nums; cursor: pointer; }
+.vr-card-shape:hover { color: #eceef2; border-color: #4a4f60; }
+.vr-card-shape.active { color: #eceef2; border-color: #3987e5; background: rgba(57,135,229,.18); }
 .vr-card-row { margin-top: 6px; }
 .vr-card-label { display: flex; justify-content: space-between; color: #a9aebb; }
 .vr-card-label span { color: #eceef2; font-variant-numeric: tabular-nums; }

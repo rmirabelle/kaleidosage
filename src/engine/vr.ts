@@ -22,7 +22,13 @@ export type XrSpace = object;
 export interface XrFrame {
   getViewerPose(space: XrSpace): { views: readonly XrView[] } | null;
 }
+/** A controller: its thumbstick is axes 2 and 3, and A (or X) and B (or Y) are buttons 4 and 5 ("xr-standard"). */
+export interface XrInputSource {
+  handedness: "left" | "right" | "none";
+  gamepad?: { axes: readonly number[]; buttons: readonly { pressed: boolean }[] } | null;
+}
 export interface XrSession extends EventTarget {
+  readonly inputSources: Iterable<XrInputSource>;
   updateRenderState(state: { baseLayer: XrLayer }): void;
   requestReferenceSpace(type: "local"): Promise<XrSpace>;
   requestAnimationFrame(callback: (time: number, frame: XrFrame) => void): number;
@@ -36,29 +42,104 @@ interface XrSystem extends EventTarget {
 
 const xrSystem = () => (navigator as Navigator & { xr?: XrSystem }).xr ?? null;
 
-/** The flat picture's height in pixels while the headset shows it; its width keeps the screen's shape. */
+/** The flat picture's height in pixels while the headset shows it; its width follows from the screen's shape. */
 export const VR_HEIGHT = 1440;
+
+/** The screen shapes, width to height; A on the right controller goes to the next one. */
+export const VR_SHAPES = [
+  { label: "16:9", aspect: 16 / 9 },
+  { label: "21:9", aspect: 21 / 9 },
+  { label: "4:3", aspect: 4 / 3 },
+  { label: "1:1", aspect: 1 }
+] as const;
 
 /**
  * The virtual screen: its width and its distance from where the viewer
- * started, in meters, and its curve (0 is flat; 1 curves it around the
- * viewer, as part of a circle with the viewer at its center). Its height
- * follows from the picture's shape. Its middle is at eye height.
+ * started, in meters, its curve (0 is flat; 1 curves it around the viewer,
+ * as part of a circle with the viewer at its center), and its shape (width
+ * to height, one of VR_SHAPES). Its middle is at eye height.
  */
 export interface VrScreen {
   width: number;
   distance: number;
   curve: number;
+  aspect: number;
 }
 
-export const DEFAULT_VR_SCREEN: VrScreen = { width: 4, distance: 3, curve: 0 };
+export const DEFAULT_VR_SCREEN: VrScreen = { width: 4, distance: 3, curve: 0, aspect: 16 / 9 };
+
+/** The settings with a slider. */
+export type VrScreenSlider = "width" | "distance" | "curve";
 
 /** The slider limits of each setting. */
-export const VR_SCREEN_LIMITS: Record<keyof VrScreen, { min: number; max: number; step: number }> = {
+export const VR_SCREEN_LIMITS: Record<VrScreenSlider, { min: number; max: number; step: number }> = {
   width: { min: 0.5, max: 30, step: 0.1 },
   distance: { min: 0.5, max: 30, step: 0.1 },
   curve: { min: 0, max: 1, step: 0.01 }
 };
+
+/** The picture's size in pixels for a screen of this shape. */
+export const vrPictureSize = (aspect: number): [number, number] => [Math.round((VR_HEIGHT * aspect) / 2) * 2, VR_HEIGHT];
+
+/** The shape in VR_SHAPES nearest to "aspect" (a stored shape may be any number). */
+export const nearestShape = (aspect: number) => VR_SHAPES.reduce((best, shape) => Math.abs(shape.aspect - aspect) < Math.abs(best.aspect - aspect) ? shape : best);
+
+/** The controllers as the screen controls read them: each stick (x to the right, y down, -1 to 1) and the right controller's A and B. */
+export interface VrControls {
+  right: [number, number];
+  left: [number, number];
+  next: boolean;
+  reset: boolean;
+}
+
+export function readVrControls(sources: Iterable<XrInputSource>): VrControls {
+  const controls: VrControls = { right: [0, 0], left: [0, 0], next: false, reset: false };
+  for (const source of sources) {
+    const pad = source.gamepad;
+    if (!pad || source.handedness === "none") continue;
+    const stick: [number, number] = [pad.axes[2] ?? 0, pad.axes[3] ?? 0];
+    if (source.handedness === "left") {
+      controls.left = stick;
+    } else {
+      controls.right = stick;
+      controls.next = pad.buttons[4]?.pressed ?? false;
+      controls.reset = pad.buttons[5]?.pressed ?? false;
+    }
+  }
+  return controls;
+}
+
+/** Stick moves smaller than this do nothing, as a stick at rest is seldom exactly at 0. */
+const DEAD_ZONE = 0.15;
+const live = (value: number) => Math.abs(value) < DEAD_ZONE ? 0 : Math.sign(value) * (Math.abs(value) - DEAD_ZONE) / (1 - DEAD_ZONE);
+const clamp = (key: VrScreenSlider, value: number) => Math.min(VR_SCREEN_LIMITS[key].max, Math.max(VR_SCREEN_LIMITS[key].min, value));
+/** At full tilt the curve changes by this much each second. */
+const CURVE_PER_SECOND = 0.5;
+
+/**
+ * The screen after "seconds" of the controllers: the right stick pushed
+ * forward moves the screen away and pulled back brings it near, and to
+ * the right makes it wider; at full tilt each doubles or halves in a
+ * second. The left stick forward curves the screen more. A press of A goes
+ * to the next shape, and B resets the screen ("before" are the controls of
+ * the last frame, so a held button counts once). With no change, the
+ * result is "screen" itself.
+ */
+export function moveVrScreen(screen: VrScreen, controls: VrControls, before: VrControls | null, seconds: number): VrScreen {
+  if (controls.reset && !before?.reset) return { ...DEFAULT_VR_SCREEN };
+  const [turn, push] = controls.right.map(live);
+  const bend = live(controls.left[1]);
+  const width = clamp("width", screen.width * 2 ** (turn * seconds));
+  const distance = clamp("distance", screen.distance * 2 ** (-push * seconds));
+  const curve = clamp("curve", screen.curve - bend * CURVE_PER_SECOND * seconds);
+  let aspect = screen.aspect;
+  if (controls.next && !before?.next) {
+    const index = VR_SHAPES.indexOf(nearestShape(aspect));
+    aspect = VR_SHAPES[(index + 1) % VR_SHAPES.length].aspect;
+  }
+  if (width === screen.width && distance === screen.distance && curve === screen.curve && aspect === screen.aspect) return screen;
+  return { width, distance, curve, aspect };
+}
 
 /** True when the web view can show VR at all (with a headset that is ready). */
 export const vrSupported = () => xrSystem() !== null;

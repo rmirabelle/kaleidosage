@@ -7,7 +7,7 @@ import { copyVideo, cueVideo, releaseVideo, seekVideo, syncVideo, videoLoopPlan,
 import { familyOf, intensityAt, positionAt, speedAt, travelAt, type Family, type SongScript } from "./songScript";
 import { LiveSound } from "./liveSound";
 import { isShown } from "./submodes";
-import { DEFAULT_VR_SCREEN, VR_HEIGHT, startVrSession, vrEyes, type VrScreen, type XrFrame, type XrLayer, type XrSession, type XrSpace } from "./vr";
+import { DEFAULT_VR_SCREEN, VR_HEIGHT, moveVrScreen, readVrControls, startVrSession, vrEyes, vrPictureSize, type VrControls, type VrScreen, type XrFrame, type XrLayer, type XrSession, type XrSpace } from "./vr";
 
 /** While paused, how long the same frame values must last before the picture counts as still and frames stop (see needsDraw). */
 const SETTLE_MS = 1000;
@@ -259,11 +259,32 @@ export class Engine {
    * Live VR (see vr.ts): the headset's session, its view of the room, and
    * its frame for the eyes. While it runs, the session times the frames,
    * and the picture is VR_HEIGHT pixels tall, in the screen's shape.
+   * "controls" are the controllers as of the last headset frame.
    */
-  private vr: { session: XrSession; space: XrSpace; layer: XrLayer } | null = null;
+  private vr: { session: XrSession; space: XrSpace; layer: XrLayer; controls: VrControls | null } | null = null;
 
-  /** Live VR: the virtual screen's size, distance and curve; a change shows at the next headset frame. */
-  vrScreen: VrScreen = { ...DEFAULT_VR_SCREEN };
+  private screen: VrScreen = { ...DEFAULT_VR_SCREEN };
+  /** Live VR: called when the controllers change the screen, so the VR screen card can follow. */
+  onVrScreen: ((screen: VrScreen) => void) | null = null;
+
+  /** Live VR: the virtual screen's size, distance, curve and shape; a change shows at the next headset frame. */
+  get vrScreen() {
+    return this.screen;
+  }
+
+  set vrScreen(screen: VrScreen) {
+    this.screen = screen;
+    if (this.vr) this.applyVrShape();
+  }
+
+  /** The picture takes the screen's shape (and a paused picture draws again at the new size). */
+  private applyVrShape() {
+    const [width, height] = vrPictureSize(this.screen.aspect);
+    const now = this.renderer.vrSize;
+    if (now && now[0] === width && now[1] === height) return;
+    this.renderer.vrSize = [width, height];
+    this.wake();
+  }
 
   get inVr() {
     return this.vr !== null;
@@ -278,8 +299,7 @@ export class Engine {
       session.updateRenderState({ baseLayer: layer });
       const space = await session.requestReferenceSpace("local");
       /* Effects that work in pixels keep their look on the screen (see forExport). */
-      const [screenWidth, screenHeight] = this.renderer.canvasSize;
-      const aspect = screenWidth > 0 && screenHeight > 0 ? screenWidth / screenHeight : 16 / 9;
+      const screenHeight = this.renderer.canvasSize[1];
       session.addEventListener("end", () => {
         this.switchFrames(() => {
           this.vr = null;
@@ -289,8 +309,8 @@ export class Engine {
         onEnd();
       }, { once: true });
       this.switchFrames(() => {
-        this.vr = { session, space, layer };
-        this.renderer.vrSize = [Math.round(VR_HEIGHT * aspect / 2) * 2, VR_HEIGHT];
+        this.vr = { session, space, layer, controls: null };
+        this.applyVrShape();
         if (screenHeight > 0) this.renderer.texelScale = VR_HEIGHT / screenHeight;
       });
     } catch (error) {
@@ -1191,6 +1211,17 @@ export class Engine {
     this.syncDriverVideo(paused);
     this.syncPictureVideo(paused);
     if (this.renderer.updateVideos()) this.wake();
+
+    /* In VR the controllers move the screen (see moveVrScreen), before this frame draws at its shape. */
+    if (this.vr && xrFrame) {
+      const controls = readVrControls(this.vr.session.inputSources);
+      const moved = moveVrScreen(this.screen, controls, this.vr.controls, elapsed);
+      this.vr.controls = controls;
+      if (moved !== this.screen) {
+        this.vrScreen = moved;
+        this.onVrScreen?.(moved);
+      }
+    }
 
     const renderStart = performance.now();
     const values = this.frameValues(animated, elapsed);
