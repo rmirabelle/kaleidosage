@@ -27,14 +27,15 @@ const safeFileName = (title: string) => title
 /**
  * Asks where to save an export. The dialog starts in the folder used last,
  * or in Pictures\Kaleido Sage. The file name is "title" when one is given,
- * else a dated name. Returns null when the user cancels.
+ * else a dated name, with "suffix" before the extension. Returns null when
+ * the user cancels.
  */
-export async function chooseExportPath(kind: ExportKind, title = ""): Promise<string | null> {
+export async function chooseExportPath(kind: ExportKind, title = "", suffix = ""): Promise<string | null> {
   let folder: string | null = null;
   try { folder = localStorage.getItem(FOLDER_KEY); } catch { /* Remembering is a convenience only. */ }
   if (!folder) folder = await invoke<string>("default_export_folder").catch(() => null);
   const titled = safeFileName(title);
-  const name = titled ? `${titled}.${kind}` : snapshotFileName(new Date(), kind);
+  const name = titled ? `${titled}${suffix}.${kind}` : snapshotFileName(new Date(), kind).replace(/(\.[^.]+)$/, `${suffix}$1`);
   let path = await save({ title: TITLES[kind], defaultPath: folder ? `${folder}\\${name}` : name, filters: [FILTERS[kind]] });
   if (!path) return null;
   if (!path.toLowerCase().endsWith(`.${kind}`)) path += `.${kind}`;
@@ -54,9 +55,10 @@ export async function writeExport(path: string, blob: Blob) {
  * to its place in the file; the parts go one after the other. "flush"
  * waits for the parts sent so far and throws the first failure. "finish"
  * keeps the file; "discard" removes it (a stopped or failed export).
+ * "spherical" marks the finished file as a 360 video.
  */
-export async function openExportFile(path: string) {
-  const id = await invoke<number>("begin_export", { path });
+export async function openExportFile(path: string, spherical = false) {
+  const id = await invoke<number>("begin_export", { path, spherical });
   let queue: Promise<void> = Promise.resolve();
   let failure: unknown = null;
   const flush = async () => {

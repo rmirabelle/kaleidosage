@@ -106,6 +106,11 @@ export function ExportVideoDialog({ engine, screenSize, onCancel, onExport }: Pr
               ))}
             </div>
           </div>
+          {sizeId === "sphere" && (
+            <p className="video-note">
+              The picture goes all around you: its center is in front of you, and its mirror image is behind you. Copy the file to the headset and open it in its video player.
+            </p>
+          )}
           <div className="video-row">
             <span className="video-label">Length</span>
             <div className="video-choices" role="radiogroup" aria-label="Length">

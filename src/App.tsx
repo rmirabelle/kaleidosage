@@ -822,7 +822,9 @@ export default function App() {
     setVideoDialogOpen(false);
     if (!engine || videoJobRef.current) return;
     const title = options.style === "title" ? options.title : "";
-    const path = isTauri() ? await chooseExportPath("mp4", title) : "kaleido.mp4";
+    /* Headset players also know a 360 video by "_360" at the end of its name. */
+    const sphere = options.size === "sphere";
+    const path = isTauri() ? await chooseExportPath("mp4", title, sphere ? "_360" : "") : "kaleido.mp4";
     if (!path) return;
     const controller = new AbortController();
     const size = videoDimensions(options.size, screenAspect());
@@ -836,7 +838,7 @@ export default function App() {
       setVideoJob((current) => current?.controller === controller ? { ...current, progress: fraction } : current);
     };
     /* In the app the video goes to its file while it is made (see openExportFile); a stopped or failed export removes the file. */
-    const file = isTauri() ? await openExportFile(path).catch((error: unknown) => {
+    const file = isTauri() ? await openExportFile(path, sphere).catch((error: unknown) => {
       showError(`Could not make the video. ${error instanceof Error ? error.message : String(error)}`);
       return null;
     }) : null;

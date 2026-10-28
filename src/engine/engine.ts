@@ -995,6 +995,7 @@ export class Engine {
   drawFrameOver(texture: WebGLTexture, alpha: number) { this.renderer.drawFrameOver(texture, alpha); }
   drawOverlay(alpha: number) { this.renderer.drawOverlay(alpha); }
   startRead() { return this.renderer.startRead(); }
+  startSphereRead(width: number, height: number) { return this.renderer.startSphereRead(width, height); }
 
   /** Calls the listener after each frame. Returns a function that removes it. */
   onFrame(listener: () => void) {

@@ -20,6 +20,9 @@ import { getAppVersion } from "./updater";
  *   and the warp flow change a little so they repeat in the video; a noise
  *   or cell warp that flows, a tunnel that flies, or a camera that flies, never repeats, so the
  *   last moment of the video crossfades into the moment before the first frame.
+ * - 360: the picture is drawn square, as tall as the video, and wrapped
+ *   around the viewer (see SPHERE_SHADER); the file is marked as a 360
+ *   video (see export_stream.rs), so a headset player shows it all around.
  */
 
 export type VideoStyle = "title" | "loop";
@@ -27,14 +30,15 @@ export type VideoStyle = "title" | "loop";
 export type VideoQuality = "standard" | "high" | "best";
 export type VideoFps = 30 | 60;
 /** "screen" keeps the picture's shape on the screen; the others are fixed sizes for video sites. */
-export type VideoSizeId = "screen" | "landscape" | "vertical" | "square" | "portrait";
+export type VideoSizeId = "screen" | "landscape" | "vertical" | "square" | "portrait" | "sphere";
 
 /** The fixed video sizes, in pixels, with the sites that use them. */
 export const VIDEO_SIZES: { id: Exclude<VideoSizeId, "screen">; ratio: string; sites: string; width: number; height: number }[] = [
   { id: "landscape", ratio: "16:9", sites: "YouTube", width: 1920, height: 1080 },
   { id: "vertical", ratio: "9:16", sites: "TikTok, Reels, Shorts", width: 1080, height: 1920 },
   { id: "square", ratio: "1:1", sites: "Instagram square", width: 1080, height: 1080 },
-  { id: "portrait", ratio: "4:5", sites: "Instagram feed", width: 1080, height: 1350 }
+  { id: "portrait", ratio: "4:5", sites: "Instagram feed", width: 1080, height: 1350 },
+  { id: "sphere", ratio: "360°", sites: "Quest, VR headsets", width: 4096, height: 2048 }
 ];
 
 export interface VideoOptions {
@@ -62,6 +66,8 @@ const KEY_FRAME_SECONDS = 2;
 const LEVEL_42 = ["avc1.64002A", "avc1.4D402A", "avc1.42E02A"];
 /** Level 5.1 allows the high bit rates of High and Best. */
 const LEVEL_51 = ["avc1.640033", "avc1.4D4033", "avc1.42E033"];
+/** Level 5.2 allows frames larger than 1080p, such as the 360 video's 4096 by 2048, at 60 frames a second. */
+const LEVEL_52 = ["avc1.640034", "avc1.4D4034", "avc1.42E034"];
 
 /**
  * Each quality: the H.264 quantizer for a fixed picture quality (lower is
@@ -119,7 +125,8 @@ export const formatLength = (seconds: number) => {
  */
 async function pickEncoder(width: number, height: number, fps: VideoFps, quality: VideoQuality) {
   if (typeof VideoEncoder === "undefined") throw new Error("This version of the app's web view cannot encode video.");
-  const { quantizer, bitsPerPixel, codecs } = QUALITIES[quality];
+  const { quantizer, bitsPerPixel } = QUALITIES[quality];
+  const codecs = width * height > MAX_WIDTH * MAX_HEIGHT ? LEVEL_52 : QUALITIES[quality].codecs;
   const bitrate = Math.round(width * height * fps * bitsPerPixel);
   const accelerations: HardwareAcceleration[] = ["prefer-hardware", "no-preference"];
   const attempts: { config: VideoEncoderConfig; quantizer: number | null }[] = [];
@@ -186,14 +193,14 @@ function wrapLines(context: CanvasRenderingContext2D, text: string, maxWidth: nu
  * and two lines in a right column: "made with Kaleido Sage™" (the name in
  * light blue, the ™ small) and a small "Kaleido Sage v0.3 - Robert
  * Mirabelle". The rest of the canvas stays clear. Sizes are in hundredths of
- * the video height.
+ * the video height, times "scale".
  */
-async function titleOverlay(width: number, height: number, title: string) {
+async function titleOverlay(width: number, height: number, title: string, scale = 1) {
   const card = document.createElement("canvas");
   card.width = width;
   card.height = height;
   const context = card.getContext("2d")!;
-  const unit = Math.min(height, width * 0.75) / 100;
+  const unit = (Math.min(height, width * 0.75) / 100) * scale;
   const font = (size: number, weight: number) => `${weight} ${Math.round(size * unit)}px "Segoe UI", system-ui, sans-serif`;
   /** The version as major.minor ("0.3"), or nothing when the app cannot tell. */
   const version = await getAppVersion().then((full) => full.split(".").slice(0, 2).join(".")).catch(() => "");
@@ -230,7 +237,7 @@ async function titleOverlay(width: number, height: number, title: string) {
 
   /** The title wraps to stay within most of the video width; it is never narrower than the credit box needs. */
   context.font = font(TITLE, 750);
-  const titleLines = title.trim() ? wrapLines(context, title.trim(), Math.max(width * 0.7, creditWidth)) : [];
+  const titleLines = title.trim() ? wrapLines(context, title.trim(), Math.max(width * 0.7 * scale, creditWidth)) : [];
   const titleLineHeight = TITLE * LINE * unit;
   const titleHeight = titleLines.length * titleLineHeight;
   const titleWidth = Math.max(0, ...titleLines.map((line) => context.measureText(line).width));
@@ -349,7 +356,10 @@ export async function encodeVideo(
 ): Promise<Blob | null> {
   const { width, height } = size;
   const fps = options.fps;
-  const engine = await source.forExport(width, height);
+  /* A 360 video draws a square picture as tall as the video, then wraps it around the viewer. */
+  const sphere = options.size === "sphere";
+  const frameWidth = sphere ? height : width;
+  const engine = await source.forExport(frameWidth, height);
   const tail: WebGLTexture[] = [];
   try {
     const { params, state } = engine;
@@ -405,7 +415,8 @@ export async function encodeVideo(
     state.time = -(lead + 1) * substeps * animatedStep;
     state.clock = -(lead + 1) * substeps * realStep;
 
-    const overlay = options.style === "title" ? await titleOverlay(width, height, options.title) : null;
+    /* In a 360 video the title box is half the size, so it sits in front of the viewer and does not wrap far around. */
+    const overlay = options.style === "title" ? await titleOverlay(frameWidth, height, options.title, sphere ? 0.5 : 1) : null;
     const { config, quantizer } = await pickEncoder(width, height, fps, options.quality);
     /**
      * With a file, the MP4 goes to it in parts as it is made (see
@@ -486,7 +497,7 @@ export async function encodeVideo(
         if (into >= 0) engine.drawFrameOver(tail[into], smoothstep(into / (fadeFrames - 1)));
         const titleShows = overlay ? titleAlpha(shown / fps, seconds, options.fadeOutMs) : 0;
         if (titleShows > 0) engine.drawOverlay(titleShows);
-        reads.push({ finish: engine.startRead(), shown });
+        reads.push({ finish: sphere ? engine.startSphereRead(width, height) : engine.startRead(), shown });
         if (reads.length >= READS_AHEAD) await encodeOldest();
         await pause(index);
       }

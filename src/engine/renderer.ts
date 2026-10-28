@@ -1,7 +1,7 @@
 import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, MASK_SHADER, OUTLINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER,BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, MASK_SHADER, OUTLINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 import { halveGrid, type TerrainData } from "./terrain";
 
 /** The blur mask: circle with a sharp or a blurred center, gradient, bright areas, dark areas, noise. */
@@ -3091,7 +3091,19 @@ export class KaleidoRenderer {
   /** Video export: the overlay pass, the title box texture, and the frame reader (made when first used). */
   private overlayProgram: Program | null = null;
   private overlayTexture: WebGLTexture | null = null;
-  private reader: { framebuffer: WebGLFramebuffer; texture: WebGLTexture; size: [number, number]; free: WebGLBuffer[] } | null = null;
+  private reader: { framebuffer: WebGLFramebuffer; texture: WebGLTexture; size: [number, number] } | null = null;
+  /** Video export: the buffers frames are read into, each "bytes" long, that no read uses now. */
+  private readBuffers: { bytes: number; free: WebGLBuffer[] } = { bytes: 0, free: [] };
+  /** 360 video export: the sphere pass, the copy of the canvas it reads, and the frame it draws (made when first used). */
+  private sphere: {
+    program: Program;
+    source: WebGLTexture;
+    sourceFramebuffer: WebGLFramebuffer;
+    sourceSize: [number, number];
+    texture: WebGLTexture;
+    framebuffer: WebGLFramebuffer;
+    size: [number, number];
+  } | null = null;
 
   /** Video export: a copy of the picture now on the canvas, as a texture. Free it with releaseFrame. */
   captureFrame(): WebGLTexture {
@@ -3178,28 +3190,99 @@ export class KaleidoRenderer {
       if (this.reader) {
         gl.deleteFramebuffer(this.reader.framebuffer);
         gl.deleteTexture(this.reader.texture);
-        for (const buffer of this.reader.free) gl.deleteBuffer(buffer);
       }
-      const texture = gl.createTexture()!;
-      gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, width, height);
-      const framebuffer = gl.createFramebuffer()!;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
-      this.reader = { framebuffer, texture, size: [width, height], free: [] };
+      const { texture, framebuffer } = this.exportTarget(width, height, gl.NEAREST);
+      this.reader = { framebuffer, texture, size: [width, height] };
     }
     const reader = this.reader;
     /* The canvas has its first row at the bottom; the copy flips it, so the read gives the top row first. */
     gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
     gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, reader.framebuffer);
     gl.blitFramebuffer(0, 0, width, height, 0, height, width, 0, gl.COLOR_BUFFER_BIT, gl.NEAREST);
-    let buffer = reader.free.pop();
+    return this.readBack(reader.framebuffer, width, height);
+  }
+
+  /**
+   * 360 video export: as startRead, but first wraps the picture now on the
+   * canvas around the viewer (SPHERE_SHADER) into a frame "width" by
+   * "height" (twice as wide as it is tall).
+   */
+  startSphereRead(width: number, height: number): (into: Uint8Array) => Promise<void> {
+    const gl = this.gl;
+    const [frameWidth, frameHeight] = this.frameSize;
+    let sphere = this.sphere;
+    if (!sphere || sphere.size[0] !== width || sphere.size[1] !== height || sphere.sourceSize[0] !== frameWidth || sphere.sourceSize[1] !== frameHeight) {
+      if (sphere) {
+        gl.deleteTexture(sphere.source);
+        gl.deleteFramebuffer(sphere.sourceFramebuffer);
+        gl.deleteTexture(sphere.texture);
+        gl.deleteFramebuffer(sphere.framebuffer);
+      }
+      const program = sphere?.program ?? this.createProgram(SPHERE_SHADER);
+      const source = this.exportTarget(frameWidth, frameHeight, gl.LINEAR);
+      const target = this.exportTarget(width, height, gl.NEAREST);
+      sphere = {
+        program,
+        source: source.texture,
+        sourceFramebuffer: source.framebuffer,
+        sourceSize: [frameWidth, frameHeight],
+        texture: target.texture,
+        framebuffer: target.framebuffer,
+        size: [width, height]
+      };
+      this.sphere = sphere;
+    }
+    /* The canvas cannot be read as a texture, so the pass reads a copy of it. */
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, sphere.sourceFramebuffer);
+    gl.blitFramebuffer(0, 0, frameWidth, frameHeight, 0, 0, frameWidth, frameHeight, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, sphere.framebuffer);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(sphere.program.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, sphere.source);
+    gl.uniform1i(sphere.program.uniforms.u_tex, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    return this.readBack(sphere.framebuffer, width, height);
+  }
+
+  /** Video export: a texture "width" by "height" with a framebuffer that draws into it. */
+  private exportTarget(width: number, height: number, filter: number) {
+    const gl = this.gl;
+    const texture = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, width, height);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const framebuffer = gl.createFramebuffer()!;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return { texture, framebuffer };
+  }
+
+  /**
+   * Video export: starts reading "framebuffer" (its first row first) into
+   * a buffer in the background. The returned function waits until the read
+   * is done and writes the pixels into "into".
+   */
+  private readBack(framebuffer: WebGLFramebuffer, width: number, height: number): (into: Uint8Array) => Promise<void> {
+    const gl = this.gl;
+    const bytes = width * height * 4;
+    if (this.readBuffers.bytes !== bytes) {
+      for (const buffer of this.readBuffers.free) gl.deleteBuffer(buffer);
+      this.readBuffers = { bytes, free: [] };
+    }
+    const pool = this.readBuffers;
+    let buffer = pool.free.pop();
     if (!buffer) {
       buffer = gl.createBuffer()!;
       gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buffer);
-      gl.bufferData(gl.PIXEL_PACK_BUFFER, width * height * 4, gl.STREAM_READ);
+      gl.bufferData(gl.PIXEL_PACK_BUFFER, bytes, gl.STREAM_READ);
     }
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, reader.framebuffer);
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, framebuffer);
     gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buffer);
     gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, 0);
     gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
@@ -3218,7 +3301,7 @@ export class KaleidoRenderer {
       gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pixels);
       gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, into);
       gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
-      reader.free.push(pixels);
+      pool.free.push(pixels);
     };
   }
 

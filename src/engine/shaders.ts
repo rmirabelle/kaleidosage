@@ -1716,6 +1716,31 @@ void main() {
 }`;
 
 /**
+ * 360 video export: wraps the square picture around the viewer as an
+ * equirectangular frame (longitude across, latitude down). The picture's
+ * center is straight ahead and, mirrored, straight behind. The distance from
+ * the center is the angle from the front (or the back), so the edge of the
+ * picture's inner circle is a ring around the viewer's sides, where the two
+ * halves meet. Row 0 is straight up, so a plain read gives the top row first.
+ */
+export const SPHERE_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+const float PI = 3.14159265358979;
+void main() {
+  float lon = (v_uv.x - 0.5) * 2.0 * PI;
+  float lat = (0.5 - v_uv.y) * PI;
+  vec3 dir = vec3(cos(lat) * sin(lon), sin(lat), cos(lat) * cos(lon));
+  float angle = acos(clamp(abs(dir.z), 0.0, 1.0));
+  float around = length(dir.xy);
+  vec2 side = around > 1e-6 ? dir.xy / around : vec2(0.0);
+  vec2 uv = 0.5 + 0.5 * side * (angle / (0.5 * PI));
+  o = vec4(texture(u_tex, uv).rgb, 1.0);
+}`;
+
+/**
  * Pass 4: final effects on the whole picture. Sharpen is an unsharp mask:
  * it adds back the difference between each pixel and a small blur around
  * it (u_radius pixels). Color overlay blends one color over the picture
