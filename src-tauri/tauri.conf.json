@@ -24,6 +24,7 @@
         "shadow": true,
         "skipTaskbar": true,
         "dragDropEnabled": false,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --enable-features=WebXR,OpenXR",
         "backgroundColor": "#262a34"
       },
       {
@@ -38,6 +39,7 @@
         "transparent": false,
         "shadow": true,
         "dragDropEnabled": false,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --enable-features=WebXR,OpenXR",
         "backgroundColor": "#000000"
       }
     ],
