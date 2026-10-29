@@ -563,7 +563,7 @@ export interface FrameValues {
    * (screen pixels), the glow and its size (screen pixels), the emitter
    * dot's size (times its normal size, which grows with the beam width), the fade along a beam, the first hue (0 to 1), how far the
    * hues go around the wheel, and the source (a part of the screen size
-   * from the screen center).
+   * from the screen center); then the opacity and the blend mode of the light on the picture.
    */
   lasers: number;
   laserCount: number;
@@ -581,6 +581,8 @@ export interface FrameValues {
   laserRainbow: number;
   laserX: number;
   laserY: number;
+  laserOpacity: number;
+  laserBlend: LayerBlend;
   /**
    * Light shapes (see OUTLINE_SHADER): strength (0 = off), the outline and
    * how it draws, the copies (count, radius in screen heights, spacing,
@@ -2890,6 +2892,8 @@ export class KaleidoRenderer {
     gl.uniform1f(l.uniforms.u_hue, v.laserHue);
     gl.uniform1f(l.uniforms.u_rainbow, v.laserRainbow);
     gl.uniform1f(l.uniforms.u_amount, Math.max(0, v.lasers));
+    gl.uniform1f(l.uniforms.u_opacity, Math.min(1, Math.max(0, v.laserOpacity)));
+    gl.uniform1i(l.uniforms.u_blend, v.laserBlend);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 

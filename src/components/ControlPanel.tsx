@@ -82,7 +82,7 @@ const PICTURE_KEYS: ParamKey[] = ["pictureAmount", "pictureSize", "pictureX", "p
 const OUTLINE_KEYS: ParamKey[] = ["outlineAmount", "outlineRadius", "outlineCount", "outlineSpacing", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"];
 const OUTLINE_SHAPES = [[0, "Ring"], [1, "Square"], [2, "Triangle"], [3, "Star"]] as const;
 const OUTLINE_DRAWS = [[0, "Draw and erase"], [1, "Chase"], [2, "Whole"]] as const;
-const LASER_KEYS: ParamKey[] = ["laserAmount", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"];
+const LASER_KEYS: ParamKey[] = ["laserAmount", "laserOpacity", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"];
 const BLOOM_KEYS: ParamKey[] = ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"];
 const SHARPEN_KEYS: ParamKey[] = ["sharpen", "sharpenRadius"];
 const COLOR_KEYS: ParamKey[] = ["overlayOpacity"];
@@ -429,7 +429,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     ),
     lasers: (grip) => (
       <Group engine={engine} group="lasers" title="Lasers" grip={grip} {...accordion("lasers")}>
-        {LASER_KEYS.map(row)}
+        <SplitRows keys={LASER_KEYS} row={row} blend={<ModeSelect engine={engine} stateKey="laserBlend" options={LAYER_BLENDS} name="Blend" />} />
       </Group>
     ),
     outlines: (grip) => (
@@ -887,7 +887,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange }: {

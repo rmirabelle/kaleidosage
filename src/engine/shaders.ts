@@ -3282,6 +3282,19 @@ uniform float u_fade;
 uniform float u_hue;
 uniform float u_rainbow;
 uniform float u_amount;
+uniform float u_opacity;
+uniform int u_blend;
+/* The same layer blends as the shape steps' (see blendLayer in KALEIDO_SHADER). */
+vec3 blendLayer(vec3 base, vec3 top, int mode) {
+  if (mode == 1) return 1.0 - (1.0 - base) * (1.0 - top);
+  if (mode == 2) return base * top;
+  if (mode == 3) return mix(2.0 * base * top, 1.0 - 2.0 * (1.0 - base) * (1.0 - top), step(0.5, base));
+  if (mode == 4) return abs(base - top);
+  if (mode == 5) return max(base, top);
+  if (mode == 6) return min(base, top);
+  if (mode == 7) return min(base + top, 1.0);
+  return top;
+}
 ${COVER_GLSL}
 /* A fully saturated color of hue h (0 to 1). */
 vec3 hueColor(float h) { return clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0); }
@@ -3336,7 +3349,22 @@ void main() {
   float glowMax = u_glow;
   if (glowSum > 0.0) light += glowColor / glowSum * glowMax * (1.0 - exp(-glowSum / max(glowMax, 1e-4)));
   light += (spotColor + 0.5) * spot * (0.5 + min(u_glow, 1.0));
-  o = addLight(texture(u_picture, v_uv), u_amount * light);
+  light *= u_amount;
+  vec4 picture = texture(u_picture, v_uv);
+  /* Add (7): the light adds with no limit, so Bloom can pick up the bright cores. */
+  if (u_blend == 7) {
+    o = addLight(picture, light * u_opacity);
+    return;
+  }
+  /**
+   * The other modes: the light is a layer whose cover is its brightest part
+   * (up to 1) and whose color is the light at full brightness.
+   */
+  float cover = clamp(max(light.r, max(light.g, light.b)), 0.0, 1.0);
+  vec3 top = cover > 1e-4 ? clamp(light / cover, 0.0, 1.0) : vec3(0.0);
+  vec3 base = straight(picture);
+  float mark = cover * u_opacity;
+  o = covered(mix(base, blendLayer(base, top, u_blend), mark), mix(picture.a, 1.0, mark));
 }`;
 
 /**

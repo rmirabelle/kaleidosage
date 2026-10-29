@@ -23,7 +23,7 @@ export const PARAM_KEYS = [
   "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY",
   "solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidFrost", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY",
   "raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY",
-  "laserAmount", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY",
+  "laserAmount", "laserOpacity", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY",
   "outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineX", "outlineY",
   "pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn", "pictureKey",
   "bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize",
@@ -356,6 +356,8 @@ export interface PlayState {
    */
   cyclesMove: CycleMove;
   cyclesBlend: LayerBlend;
+  /** How the lasers' light goes onto the picture; Add (7) adds it as light, with no limit, so Bloom can pick it up. */
+  laserBlend: LayerBlend;
   cyclesPaint: CyclePaint;
   cyclesStops: GradientStop[];
   /**
@@ -895,6 +897,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * already move.
    */
   laserAmount: { label: "Strength", min: 0, max: 3, step: 0.01, value: 0, drift: "wave", low: 0.6, high: 1.5, on: false },
+  laserOpacity: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0.5, high: 1, on: false },
   laserCount: { label: "Beams", min: 1, max: 32, step: 1, value: 26, drift: "wave", low: 6, high: 16, on: false },
   laserSpread: { label: "Spread", min: 0, max: 180, step: 1, value: 180, unit: "°", drift: "wave", low: 0, high: 180, on: true, ease: "organic" },
   laserSweep: { label: "Sweep", min: -90, max: 90, step: 1, value: 60, unit: "°", drift: "wave", low: 0, high: 13, on: true, ease: "random" },
@@ -1082,7 +1085,7 @@ export function createPlayState(): PlayState {
     /* No effect is in the list at start-up, so every effect group is off. */
     groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false },
     locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1444,6 +1447,7 @@ export function resetEffects(params: Params, state: PlayState) {
     state.cameraStops = fresh.cameraStops;
   }
   if (!state.locks.sort) state.sortOrder = fresh.sortOrder;
+  if (!state.locks.lasers) state.laserBlend = fresh.laserBlend;
   if (!state.locks.picture) state.pictureBlend = fresh.pictureBlend;
   if (!state.locks.particles) {
     state.particleBlend = fresh.particleBlend;
@@ -1509,7 +1513,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   cycles: ["cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead", "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY"],
   rays: ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"],
   picture: ["pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn", "pictureKey"],
-  lasers: ["laserAmount", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"],
+  lasers: ["laserAmount", "laserOpacity", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"],
   outlines: ["outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"],
   mask: ["maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY"],
   bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
@@ -1540,6 +1544,7 @@ const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   mask: ["maskMode"],
   picture: ["pictureBlend"],
   cycles: ["cyclesMove", "cyclesBlend", "cyclesPaint"],
+  lasers: ["laserBlend"],
   solid: ["solidShape", "solidMap", "solidBlend"],
   driver: ["driverSource", "driverMode"],
   color: ["overlayColor", "colorBlend"]
@@ -1717,6 +1722,7 @@ function randomizeAll(params: Params, state?: PlayState) {
     state.particleBlend = (Math.random() < 0.7 ? 0 : 1) as ParticleBlend;
     state.cyclesMove = (Math.random() < 0.6 ? 0 : 1) as CycleMove;
     state.cyclesBlend = (Math.random() < 0.7 ? 7 : Math.floor(Math.random() * 8)) as LayerBlend;
+    state.laserBlend = (Math.random() < 0.8 ? 7 : Math.floor(Math.random() * 8)) as LayerBlend;
     state.cyclesPaint = Math.floor(Math.random() * 4) as CyclePaint;
     state.solidShape = Math.floor(Math.random() * 10) as SolidShape;
     state.solidMap = Math.floor(Math.random() * 3) as SolidMap;

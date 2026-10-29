@@ -1601,6 +1601,8 @@ export class Engine {
       laserRainbow: this.live("laserRainbow"),
       laserX: this.live("laserX"),
       laserY: this.live("laserY"),
+      laserOpacity: this.live("laserOpacity"),
+      laserBlend: this.state.laserBlend,
       outlines: on.outlines ? this.live("outlineAmount") : 0,
       outlineShape: this.state.outlineShape,
       outlineDraw: this.state.outlineDraw,

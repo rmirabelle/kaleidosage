@@ -23,7 +23,7 @@ const ROLES: Partial<Record<ParamKey, CommonRole>> = {
   zoom: "zoom", mapScale: "zoom", juliaZoom: "zoom", mobiusZoom: "zoom", solidSize: "zoom",
   rotation: "rotation", mapAngle: "rotation", mobiusTurn: "rotation", drosteRotation: "rotation",
   foldOpacity: "opacity", mapOpacity: "opacity", warpOpacity: "opacity", smearAmount: "opacity", contourOpacity: "opacity",
-  driverAmount: "opacity", viewAmount: "opacity", cameraAmount: "opacity", sortAmount: "opacity", particleAmount: "opacity", cyclesAmount: "opacity", solidAmount: "opacity", overlayOpacity: "opacity"
+  driverAmount: "opacity", viewAmount: "opacity", cameraAmount: "opacity", sortAmount: "opacity", particleAmount: "opacity", cyclesAmount: "opacity", laserOpacity: "opacity", solidAmount: "opacity", overlayOpacity: "opacity"
 };
 
 /** The kind of common setting that "key" is, or undefined for a setting of its effect's own. */
