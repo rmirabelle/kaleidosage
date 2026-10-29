@@ -1,4 +1,4 @@
-import type { BlendMode, BlurMask, CameraColors, CameraHeightSource, CameraRepeat, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidShape, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, MaskMode, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
+import type { BlendMode, BlurMask, CameraColors, CameraHeightSource, CameraRepeat, ColorFill, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidShape, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, MaskMode, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
 
 export const PARAM_KEYS = [
   "cycle",
@@ -31,7 +31,8 @@ export const PARAM_KEYS = [
   /* Last, so the settings before it keep their seeds (see createParams). */
   "viewAmount",
   "outlineSpin", "outlineTumble",
-  "maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY"
+  "maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY",
+  "colorAngle", "colorShift", "colorRepeat", "colorSize", "colorStretch", "colorTurn", "colorX", "colorY"
 ] as const;
 export type ParamKey = typeof PARAM_KEYS[number];
 
@@ -315,6 +316,9 @@ export interface PlayState {
   /** The color overlay color, as "#rrggbb", and how it combines with the picture (see blendLayer in FINISH_SHADER). */
   overlayColor: string;
   colorBlend: LayerBlend;
+  /** The Color effect's fill: the one overlay color, or a linear or radial gradient of colorStops (see FINISH_SHADER). */
+  colorFill: ColorFill;
+  colorStops: GradientStop[];
   /** The color the trails are tinted toward (see trailTint), as "#rrggbb". */
   trailColor: string;
   /** The time smear's pattern of delays (see SMEAR_SHADER). */
@@ -988,6 +992,22 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   sharpenRadius: { label: "Sharpen radius", min: 0.5, max: 4, step: 0.1, value: 1, unit: "px", drift: "wave", low: 0.8, high: 2.5, on: false },
   /** Color overlay: the opacity of state.overlayColor, blended over the whole picture. */
   overlayOpacity: { label: "Color overlay", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.5, on: false },
+  /**
+   * The Color effect's gradient (see state.colorFill). Linear: Angle turns
+   * it, and it spans the screen at any angle. Radial: Size is its radius in
+   * screen heights, Stretch makes it wider (above 1) or taller (below 1),
+   * Turn turns that stretch, and X and Y move the center (parts of the
+   * screen from its center). Repeat is how many times the colors go out and
+   * back over that span, and Shift moves them along it.
+   */
+  colorAngle: { label: "Angle", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  colorShift: { label: "Shift", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 1, ease: "linear", on: false },
+  colorRepeat: { label: "Repeat", min: 0.25, max: 8, step: 0.01, scale: "log", value: 1, drift: "wave", low: 1, high: 3, on: false },
+  colorSize: { label: "Size", min: 0.05, max: 2, step: 0.01, value: 0.9, drift: "wave", low: 0.6, high: 1.2, on: false },
+  colorStretch: { label: "Stretch", min: 0.25, max: 4, step: 0.01, scale: "log", value: 1, drift: "wave", low: 0.8, high: 1.25, on: false },
+  colorTurn: { label: "Turn", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "spin", low: -180, high: 180, on: false },
+  colorX: { label: "X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
+  colorY: { label: "Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   /** Exposure is in stops: each -1 halves the brightness of every color, so all colors move toward black together. */
   exposure: { label: "Exposure", min: -6, max: 3, step: 0.05, value: 0, unit: " EV", drift: "wave", low: -1.5, high: 0, on: false },
   /** Colors at or below the black level become black; the rest stretch so white stays white. */
@@ -1011,6 +1031,7 @@ export const NO_EFFECT: Partial<Record<ParamKey, number>> = {
   solidSpin: 0, solidTumble: 0, solidTilt: 0, solidX: 0, solidY: 0,
   outlineSpin: 0, outlineTumble: 0,
   raysX: 0, raysY: 0,
+  colorX: 0, colorY: 0,
   exposure: 0
 };
 
@@ -1089,7 +1110,7 @@ export function createPlayState(): PlayState {
     /* No effect is in the list at start-up, so every effect group is off. */
     groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false },
     locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1223,6 +1244,9 @@ export const defaultTerrainStops = (): GradientStop[] => [
 export const defaultOutlineStops = (): GradientStop[] => [{ at: 0, color: "#18e0ff" }, { at: 0.5, color: "#ff2bd6" }, { at: 1, color: "#18e0ff" }];
 /** The Opacity mask's grays: dark pixels clear, bright pixels stay, with a soft step between. */
 export const defaultMaskStops = (): GradientStop[] => [{ at: 0, color: "#000000" }, { at: 0.2, color: "#000000" }, { at: 0.6, color: "#ffffff" }, { at: 1, color: "#ffffff" }];
+
+/** The Color effect's gradient: from the overlay's orange through pink to blue. */
+export const defaultColorStops = (): GradientStop[] => [{ at: 0, color: "#ff7a1a" }, { at: 0.5, color: "#ff2a8a" }, { at: 1, color: "#2a6cff" }];
 
 /**
  * The gradient's color at a place from 0 to 1, as red, green and blue from
@@ -1361,6 +1385,8 @@ export function randomizeParams(params: Params, state?: PlayState) {
     foldMode: state.foldMode,
     overlayColor: state.overlayColor,
     colorBlend: state.colorBlend,
+    colorFill: state.colorFill,
+    colorStops: state.colorStops,
     skyColor: state.skyColor
   };
   randomizeAll(params, state);
@@ -1376,6 +1402,8 @@ export function randomizeParams(params: Params, state?: PlayState) {
     if (state.locks.color) {
       state.overlayColor = keptState.overlayColor;
       state.colorBlend = keptState.colorBlend;
+      state.colorFill = keptState.colorFill;
+      state.colorStops = keptState.colorStops;
     }
     if (state.locks.camera) state.skyColor = keptState.skyColor;
   }
@@ -1486,6 +1514,8 @@ export function resetEffects(params: Params, state: PlayState) {
   if (!state.locks.color) {
     state.overlayColor = fresh.overlayColor;
     state.colorBlend = fresh.colorBlend;
+    state.colorFill = fresh.colorFill;
+    state.colorStops = fresh.colorStops;
   }
   for (const step of ["warp", "map", "kaleidoscope"] as const) if (!state.locks[step]) state.layerBlend[step] = 0;
   /* The unlocked effects leave the list (their groups are off now); the locked ones stay, in their order. */
@@ -1522,7 +1552,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   mask: ["maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY"],
   bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
   sharpen: ["sharpen", "sharpenRadius"],
-  color: ["overlayOpacity"],
+  color: ["overlayOpacity", "colorAngle", "colorShift", "colorRepeat", "colorSize", "colorStretch", "colorTurn", "colorX", "colorY"],
   levels: ["exposure", "blackLevel"]
 };
 
@@ -1551,7 +1581,7 @@ const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   lasers: ["laserBlend"],
   solid: ["solidShape", "solidMap", "solidBlend"],
   driver: ["driverSource", "driverMode"],
-  color: ["overlayColor", "colorBlend"]
+  color: ["overlayColor", "colorBlend", "colorFill", "colorStops"]
 };
 
 /**
@@ -1898,4 +1928,19 @@ function randomizeAll(params: Params, state?: PlayState) {
   /* Last, so the random values before them stay as they were before them. */
   set("outlineSpin", Math.random() < 0.6 ? 0 : (Math.random() < 0.5 ? -1 : 1) * rand(2, 12), rand(0, 3));
   set("outlineTumble", Math.random() < 0.7 ? 0 : rand(-6, 6), rand(0, 2));
+  /* The Color effect's gradient, last for the same reason: half the time the one color, else a gradient of 2 or 3 random colors. */
+  if (state) {
+    const fill = Math.random();
+    state.colorFill = (fill < 0.5 ? 0 : fill < 0.75 ? 1 : 2) as ColorFill;
+    const count = Math.random() < 0.5 ? 2 : 3;
+    state.colorStops = Array.from({ length: count }, (_, index) => ({ at: index / (count - 1), color: hslToHex(rand(0, 360), rand(0.5, 1), rand(0.35, 0.6)) }));
+  }
+  setAngle("colorAngle", 0.3);
+  set("colorShift", rand(0, 1), rand(0, 0.5));
+  set("colorRepeat", rand(0.5, 2), rand(0.1, 0.5));
+  set("colorSize", rand(0.4, 1.2), rand(0.05, 0.2));
+  set("colorStretch", Math.random() < 0.6 ? 1 : rand(0.6, 1.6), rand(0, 0.2));
+  set("colorTurn", rand(-180, 180), rand(0, 30));
+  set("colorX", Math.random() < 0.5 ? 0 : rand(-0.3, 0.3), rand(0.05, 0.2));
+  set("colorY", Math.random() < 0.5 ? 0 : rand(-0.25, 0.25), rand(0.05, 0.2));
 }

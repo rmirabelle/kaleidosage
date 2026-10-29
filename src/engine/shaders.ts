@@ -2907,6 +2907,27 @@ uniform vec3 u_overlay;
 uniform float u_overlayOpacity;
 /* How the overlay color combines with the picture (see blendLayer). */
 uniform int u_overlayBlend;
+/**
+ * The overlay's fill: 0 the one color u_overlay; 1 a linear gradient along
+ * u_direction, across the whole screen at any angle; 2 a radial gradient
+ * from u_center (pixels from the screen center) out to u_size pixels,
+ * u_stretch times as wide as it is tall, turned by u_turn. u_repeat and
+ * u_shift then move the place on the gradient, out and back, as the light
+ * cycles' gradient does.
+ */
+uniform int u_fill;
+uniform vec2 u_res;
+uniform vec2 u_direction;
+uniform vec2 u_center;
+uniform float u_size;
+uniform float u_stretch;
+uniform float u_turn;
+uniform float u_shift;
+uniform float u_repeat;
+/* The gradient's stops (2 to 8), in order of place: each stop's place from 0 to 1, and its color. */
+uniform int u_stopCount;
+uniform float u_stopAt[8];
+uniform vec3 u_stopColor[8];
 
 /* The same layer blends as the shape steps' (see blendLayer in KALEIDO_SHADER). */
 vec3 blendLayer(vec3 base, vec3 top, int mode) {
@@ -2920,6 +2941,41 @@ vec3 blendLayer(vec3 base, vec3 top, int mode) {
   return top;
 }
 ${COVER_GLSL}
+
+/* The gradient's color at t (0 to 1), as gradientColorAt in params.ts. */
+vec3 gradientColor(float t) {
+  if (t <= u_stopAt[0]) return u_stopColor[0];
+  for (int i = 1; i < 8; i++) {
+    if (i >= u_stopCount) break;
+    if (t <= u_stopAt[i]) {
+      float span = u_stopAt[i] - u_stopAt[i - 1];
+      return mix(u_stopColor[i - 1], u_stopColor[i], span > 0.0 ? (t - u_stopAt[i - 1]) / span : 1.0);
+    }
+  }
+  return u_stopColor[clamp(u_stopCount - 1, 0, 7)];
+}
+
+/* The overlay's color at this pixel (see u_fill). */
+vec3 overlayColor() {
+  if (u_fill == 0) return u_overlay;
+  vec2 p = (v_uv - 0.5) * u_res;
+  float g;
+  if (u_fill == 1) {
+    /* Half the screen's extent along the direction, so the gradient spans the screen at any angle. */
+    float half_ = 0.5 * (abs(u_direction.x) * u_res.x + abs(u_direction.y) * u_res.y);
+    g = dot(p, u_direction) / half_ * 0.5 + 0.5;
+  } else {
+    p -= u_center;
+    float c = cos(u_turn);
+    float s = sin(u_turn);
+    p = mat2(c, -s, s, c) * p;
+    p.x /= u_stretch;
+    g = length(p) / u_size;
+  }
+  /* Out and back: 0 to 1 on even trips, 1 to 0 on odd ones; a shift of 1 is one whole trip out and back. */
+  float x = g * u_repeat + 2.0 * u_shift;
+  return gradientColor(1.0 - abs(1.0 - 2.0 * fract(x * 0.5)));
+}
 
 void main() {
   /**
@@ -2942,7 +2998,7 @@ void main() {
       color += u_sharpen * (color - around);
     }
     color = clamp(color, 0.0, 1.0);
-    color = mix(color, blendLayer(color, u_overlay, u_overlayBlend), u_overlayOpacity);
+    if (u_overlayOpacity > 0.0) color = mix(color, blendLayer(color, overlayColor(), u_overlayBlend), u_overlayOpacity);
     color *= exp2(u_exposure);
     color = max(color - u_black, 0.0) / (1.0 - u_black);
     o = vec4(clamp(color, 0.0, 1.0), 1.0);
@@ -2960,7 +3016,7 @@ void main() {
   }
   float cover = picture.a;
   vec3 color = straight(vec4(clamp(picture.rgb, 0.0, cover), cover));
-  color = mix(color, blendLayer(color, u_overlay, u_overlayBlend), u_overlayOpacity);
+  if (u_overlayOpacity > 0.0) color = mix(color, blendLayer(color, overlayColor(), u_overlayBlend), u_overlayOpacity);
   color *= exp2(u_exposure);
   color = max(color - u_black, 0.0) / (1.0 - u_black);
   o = covered(clamp(color, 0.0, 1.0), cover);

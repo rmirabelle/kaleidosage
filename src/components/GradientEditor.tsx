@@ -93,7 +93,7 @@ function GrayPopup({ anchor, color, onChange, onClose }: { anchor: HTMLElement; 
  * black to white, picked with a brightness slider, not a color picker.
  * "ends" names the bar's two ends, under it.
  */
-export function GradientEditor({ engine, stateKey = "particleStops", gray = false, ends }: { engine: Engine; stateKey?: "particleStops" | "cyclesStops" | "outlineStops" | "cameraStops" | "maskStops"; gray?: boolean; ends?: readonly [string, string] }) {
+export function GradientEditor({ engine, stateKey = "particleStops", gray = false, ends }: { engine: Engine; stateKey?: "particleStops" | "cyclesStops" | "outlineStops" | "cameraStops" | "maskStops" | "colorStops"; gray?: boolean; ends?: readonly [string, string] }) {
   const [stops, setStops] = useState<GradientStop[]>(() => engine.state[stateKey].map((stop) => ({ ...stop })));
   /** The stop whose color picker is open. */
   const [picking, setPicking] = useState<number | null>(null);

@@ -327,7 +327,7 @@ function ParamRow({ engine, paramKey, readout, marker, singleMarker, after, badg
         </span>
       </div>
       <div className="panel-row-control">
-        {paramKey === "overlayOpacity" && <ColorSwatch engine={engine} stateKey="overlayColor" label="Overlay color" />}
+        {paramKey === "overlayOpacity" && engine.state.colorFill === 0 && <ColorSwatch engine={engine} stateKey="overlayColor" label="Overlay color" />}
         {paramKey === "trailTint" && <ColorSwatch engine={engine} stateKey="trailColor" label="Trail color" />}
         {paramKey === "cameraSky" && <ColorSwatch engine={engine} stateKey="skyColor" label="Sky color" />}
         {paramKey === "contourHue" && <ToneChips tone={tone} onChange={pickTone} />}

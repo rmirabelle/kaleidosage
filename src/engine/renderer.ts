@@ -176,6 +176,8 @@ export type OutlineShape = 0 | 1 | 2 | 3 | 4;
 export type OutlineDraw = 0 | 1 | 2;
 /** Opacity mask (see MASK_SHADER): 0 by the picture's brightness, 1 a radial gradient. */
 export type MaskMode = 0 | 1;
+/** The Color effect's fill (see FINISH_SHADER): 0 one color, 1 a linear gradient, 2 a radial gradient. */
+export type ColorFill = 0 | 1 | 2;
 /** How each particle looks: 0 a soft dot, 1 a line along its motion, 2 a ring (see PARTICLE_QUAD_SHADER). */
 export type ParticleShape = 0 | 1 | 2;
 /** How the Image or Video effect's image or video goes over the picture: 0 normal (over, by its own cover), 1 screen, 2 add. */
@@ -350,6 +352,24 @@ export interface FrameValues {
   overlayColor: [number, number, number];
   overlayOpacity: number;
   colorBlend: LayerBlend;
+  /**
+   * The overlay's fill (see FINISH_SHADER): Linear runs at colorAngle
+   * (radians); Radial runs out from colorX, colorY (parts of the screen
+   * from its center) to colorSize (screen heights), colorStretch times as
+   * wide as tall, turned by colorTurn (radians). Both repeat colorRepeat
+   * times and move by colorShift. Then the gradient's stops.
+   */
+  colorFill: ColorFill;
+  colorAngle: number;
+  colorShift: number;
+  colorRepeat: number;
+  colorSize: number;
+  colorStretch: number;
+  colorTurn: number;
+  colorX: number;
+  colorY: number;
+  colorStopAt: Float32Array;
+  colorStopColor: Float32Array;
   /** Time smear: strength (0 = off), the longest delay in seconds, the pattern, its angle (radians) and how many bands it repeats. */
   smear: number;
   smearDelay: number;
@@ -3450,6 +3470,18 @@ export class KaleidoRenderer {
     gl.uniform3f(f.uniforms.u_overlay, ...v.overlayColor);
     gl.uniform1f(f.uniforms.u_overlayOpacity, parts.includes("color") ? v.overlayOpacity : 0);
     gl.uniform1i(f.uniforms.u_overlayBlend, v.colorBlend);
+    gl.uniform1i(f.uniforms.u_fill, v.colorFill);
+    gl.uniform2f(f.uniforms.u_res, width, height);
+    gl.uniform2f(f.uniforms.u_direction, Math.cos(v.colorAngle), Math.sin(v.colorAngle));
+    gl.uniform2f(f.uniforms.u_center, v.colorX * width, v.colorY * height);
+    gl.uniform1f(f.uniforms.u_size, Math.max(1, v.colorSize * height));
+    gl.uniform1f(f.uniforms.u_stretch, Math.max(0.05, v.colorStretch));
+    gl.uniform1f(f.uniforms.u_turn, v.colorTurn);
+    gl.uniform1f(f.uniforms.u_shift, v.colorShift);
+    gl.uniform1f(f.uniforms.u_repeat, v.colorRepeat);
+    gl.uniform1i(f.uniforms.u_stopCount, v.colorStopAt.length);
+    gl.uniform1fv(f.uniforms["u_stopAt[0]"], v.colorStopAt);
+    gl.uniform3fv(f.uniforms["u_stopColor[0]"], v.colorStopColor);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 

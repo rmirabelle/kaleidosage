@@ -1,5 +1,5 @@
 import type { ParamKey, PlayState } from "./params";
-import type { MaskMode, BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, SmearShape, SolidMap, SolidShape, WarpType, MandelPlace } from "./renderer";
+import type { ColorFill, MaskMode, BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, SmearShape, SolidMap, SolidShape, WarpType, MandelPlace } from "./renderer";
 
 /** The effects in the Add effect menu, in menu order, with the names their groups show. */
 export const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
@@ -159,7 +159,15 @@ export const SOLID_MAPS = [[0, "Wrap"], [1, "Project"], [2, "Mirror"]] as const;
 export const MASK_MODES = [[0, "Brightness"], [1, "Radial"]] as const;
 export const MASK_KEYS: Record<MaskMode, ParamKey[]> = { 0: [], 1: ["maskSize", "maskStretch", "maskTurn", "maskX", "maskY"] };
 
-export type SubmodeKey = "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape" | "cyclesMove" | "cyclesPaint" | "solidShape" | "solidMap" | "maskMode";
+/** The Color effect's fills, and the gradient sliders each shows (Color overlay always shows, under Common). */
+export const COLOR_FILLS = [[0, "Solid"], [1, "Linear"], [2, "Radial"]] as const;
+export const COLOR_FILL_KEYS: Record<ColorFill, ParamKey[]> = {
+  0: [],
+  1: ["colorAngle", "colorShift", "colorRepeat"],
+  2: ["colorSize", "colorStretch", "colorTurn", "colorX", "colorY", "colorShift", "colorRepeat"]
+};
+
+export type SubmodeKey = "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape" | "cyclesMove" | "cyclesPaint" | "solidShape" | "solidMap" | "maskMode" | "colorFill";
 
 /** One submode menu: the play-state setting it sets, its choices (value and name), and the sliders each choice shows. */
 export interface Submode {
@@ -193,7 +201,8 @@ export const SUBMODES: readonly Submode[] = [
   { stateKey: "cyclesPaint", options: CYCLE_PAINTS, keys: CYCLE_PAINT_KEYS },
   { stateKey: "solidShape", options: SOLID_SHAPES, keys: SOLID_SHAPE_KEYS },
   { stateKey: "solidMap", options: SOLID_MAPS, keys: SOLID_MAP_KEYS },
-  { stateKey: "maskMode", options: MASK_MODES, keys: MASK_KEYS }
+  { stateKey: "maskMode", options: MASK_MODES, keys: MASK_KEYS },
+  { stateKey: "colorFill", options: COLOR_FILLS, keys: COLOR_FILL_KEYS }
 ];
 
 /** The submode menu that shows or hides the slider, or undefined for a slider that always shows. */

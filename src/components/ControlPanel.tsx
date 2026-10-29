@@ -12,8 +12,8 @@ import { loadTerrain } from "../lib/terrain";
 import type { TerrainData } from "../engine/terrain";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
-import { BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
-import type { BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, MaskMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
+import { COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
+import type { BlurMask, ColorFill, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, MaskMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ContextMenu } from "./ContextMenu";
@@ -451,7 +451,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     ),
     color: (grip) => (
       <Group engine={engine} group="color" title="Color" grip={grip} {...accordion("color")}>
-        <SplitRows keys={COLOR_KEYS} row={row} blend={<ColorBlend engine={engine} />} />
+        <ColorSection engine={engine} row={row} />
       </Group>
     ),
     levels: (grip) => (
@@ -1115,6 +1115,41 @@ function KeepBackground({ engine }: { engine: Engine }) {
       />
       Freeze background
     </label>
+  );
+}
+
+/**
+ * The Color effect: its fill (the one color, or a linear or radial
+ * gradient), the gradient and its sliders, then Blend and Color overlay.
+ * The rows remount when the fill changes, so the overlay's swatch shows for
+ * Solid only.
+ */
+function ColorSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
+  const [fill, setFill] = useState<ColorFill>(engine.state.colorFill);
+  const pick = (next: ColorFill) => {
+    engine.state.colorFill = next;
+    setFill(next);
+  };
+  const choices: readonly (readonly [ColorFill, string, string])[] = [
+    [0, "Solid", "One color over the whole picture"],
+    [1, "Linear", "A gradient across the screen, at Angle"],
+    [2, "Radial", "A gradient out from the center"]
+  ];
+  return (
+    <>
+      <div className="panel-select-row panel-select-named cycles-paint-row">
+        <span className="panel-row-name">Fill</span>
+        <div className="panel-buttons">
+          {choices.map(([value, name, tip]) => (
+            <button key={name} className={`panel-button text-only ${fill === value ? "active" : ""}`} aria-pressed={fill === value} data-tip={tip} onClick={() => pick(value)}>{name}</button>
+          ))}
+        </div>
+      </div>
+      {fill !== 0 && <GradientEditor engine={engine} stateKey="colorStops" ends={fill === 1 ? ["Start", "End"] : ["Center", "Edge"]} />}
+      <Fragment key={fill}>
+        <SplitRows keys={[...COLOR_FILL_KEYS[fill], ...COLOR_KEYS]} row={row} blend={<ColorBlend engine={engine} />} />
+      </Fragment>
+    </>
   );
 }
 
