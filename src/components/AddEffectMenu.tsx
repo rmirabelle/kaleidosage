@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus } from "@phosphor-icons/react";
 import type { FxStep } from "../engine/renderer";
-import { EFFECT_COLUMNS, EFFECT_NAMES, effectName } from "../engine/submodes";
+import { EFFECT_COLUMNS, EFFECT_NAMES, EFFECT_TYPES, effectName } from "../engine/submodes";
 
 /** One short line on what each effect does, in its preview. */
 const EFFECT_NOTES: Record<FxStep, string> = {
@@ -219,6 +219,7 @@ function AddEffectList({ button, taken, onPick, onClose }: {
   const activeName = effectName(activeStep);
   const activeInList = !canPick(active);
   const thumbnails = THUMBNAILS[activeStep] ?? [];
+  const typeCount = EFFECT_TYPES[activeStep]?.length ?? thumbnails.length;
   return (
     <>
       <div
@@ -268,7 +269,7 @@ function AddEffectList({ button, taken, onPick, onClose }: {
               {thumbnails.map((url, shown) => (
                 <img key={url} src={url} alt="" draggable={false} className={shown === tick % thumbnails.length ? "shown" : ""} />
               ))}
-              {thumbnails.length > 1 && <span className="add-effect-badge types">{thumbnails.length} Types</span>}
+              {typeCount > 1 && <span className="add-effect-badge types">{typeCount} Types</span>}
             </span>
           )}
           <span className="add-effect-name">{activeName}</span>

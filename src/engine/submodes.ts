@@ -168,6 +168,21 @@ export interface Submode {
   keys: Readonly<Record<number, readonly ParamKey[]>>;
 }
 
+export const OUTLINE_SHAPES = [[0, "Ring"], [1, "Square"], [2, "Triangle"], [3, "Star"]] as const;
+export const TRAIL_MODES = [[1, "Mix (smoky)"], [2, "Lighten (glowing)"]] as const;
+export const DRIVER_SOURCES = [[0, "Caustics"], [1, "Smoke"], [2, "Ink"], [3, "Fire"], [4, "Ripples"], [5, "Video"]] as const;
+
+/**
+ * The effects whose Add menu preview shows one thumbnail per type, and
+ * their type menus. The menu's "N Types" badge counts these, not the
+ * thumbnails, so a new type counts before its thumbnail is made. A new
+ * type also needs its thumbnail in src/assets/fx (see AddEffectMenu).
+ */
+export const EFFECT_TYPES: Partial<Record<FxStep, readonly (readonly [number, string])[]>> = {
+  kaleidoscope: FOLD_MODES, map: MAP_MODES, warp: WARP_TYPES, blur: BLUR_MASKS,
+  trails: TRAIL_MODES, driver: DRIVER_SOURCES, outlines: OUTLINE_SHAPES
+};
+
 export const SUBMODES: readonly Submode[] = [
   { stateKey: "foldMode", options: FOLD_MODES, keys: KALEIDOSCOPE_KEYS },
   { stateKey: "warpType", options: WARP_TYPES, keys: WARP_KEYS },
