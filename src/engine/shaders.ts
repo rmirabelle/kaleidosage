@@ -488,13 +488,13 @@ vec2 seamlessSpiral(vec2 l, float k, float n) {
 
 /**
  * The point the Möbius map works on, from the point after the map zoom. The
- * rotation turns the whole picture (the pan too) around the screen center.
- * The map's pole is at a / |a|^2 (a is the Möbius point), so moving by it
- * puts the pole at the screen center, and the pan then moves the pole from there.
+ * rotation turns the whole picture around the screen center. The map's pole
+ * is at a / |a|^2 (a is the Möbius point), so moving by it puts the pole at
+ * the screen center. The pan comes after the map (see complexMap).
  */
 vec2 mobiusInput(vec2 z) {
   vec2 a = u_mapPoint;
-  return turn(z, -u_mobiusTurn) - u_mobiusPan + a / max(dot(a, a), 1e-4);
+  return turn(z, -u_mobiusTurn) + a / max(dot(a, a), 1e-4);
 }
 
 /**
@@ -795,8 +795,11 @@ vec2 complexMap(vec2 p) {
     depthDistance = length(c - u_mapPoint / max(dot(u_mapPoint, u_mapPoint), 1e-4));
     vec2 a = u_mapPoint;
     w = cdiv(c - a, vec2(1.0, 0.0) - cmul(vec2(a.x, -a.y), c));
-    /* Then the turn and the twist (which turns more with distance), and the zoom. */
-    w = turn(w, u_mobiusRotation + u_mobiusTwist * length(w)) / u_mobiusZoom;
+    /**
+     * Then the turn and the twist (which turns more with distance), the zoom,
+     * and the pan, which moves the picture through the map's shape.
+     */
+    w = turn(w, u_mobiusRotation + u_mobiusTwist * length(w)) / u_mobiusZoom - u_mobiusPan;
   } else if (u_mapMode == 3) {
     /**
      * Julia: z = z^2 + c, a few steps, stopping when the point passes a size
