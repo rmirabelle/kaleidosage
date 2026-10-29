@@ -175,8 +175,15 @@ const darkStage: Draw = (context, width, height) => {
   context.putImageData(pixels, 0, 0);
 };
 
+/** Solid Black: a plain black background, so only the added effects show. */
+const solidBlack: Draw = (context, width, height) => {
+  context.fillStyle = "#000";
+  context.fillRect(0, 0, width, height);
+};
+
 export const PATTERNS: Pattern[] = [
   { id: "dark-stage", label: "Dark Stage", group: "Templates", draw: darkStage },
+  { id: "solid-black", label: "Solid Black", group: "Templates", draw: solidBlack },
   { id: "checker-large", label: "Checkerboard, large", group: "Repeating", draw: checkerboard(120) },
   { id: "checker-fine", label: "Checkerboard, fine", group: "Repeating", draw: checkerboard(24) },
   { id: "dots", label: "Dot grid", group: "Repeating", draw: dotGrid(120) },
