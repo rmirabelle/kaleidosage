@@ -890,24 +890,26 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * along its length (0 = not at all). Color is the first beam's hue;
    * Rainbow spreads the beams' hues around the color wheel. The source is a
    * part of the screen size from the screen center: -0.5 and 0.5 are the
-   * screen edges, so the start-up source is the middle of the bottom edge.
+   * screen edges; the start-up source is on the center line, a little
+   * above the screen center. When Lasers is added, its Spread and Sweep
+   * already move.
    */
   laserAmount: { label: "Strength", min: 0, max: 3, step: 0.01, value: 0, drift: "wave", low: 0.6, high: 1.5, on: false },
-  laserCount: { label: "Beams", min: 1, max: 32, step: 1, value: 12, drift: "wave", low: 6, high: 16, on: false },
-  laserSpread: { label: "Spread", min: 0, max: 180, step: 1, value: 60, unit: "°", drift: "wave", low: 20, high: 100, on: false },
-  laserSweep: { label: "Sweep", min: -90, max: 90, step: 1, value: 60, unit: "°", drift: "wave", low: -30, high: 90, on: false },
-  laserSweepDelay: { label: "Sweep delay", min: 0, max: 0.5, step: 0.01, value: 0, unit: " s", drift: "wave", low: 0.02, high: 0.15, on: false },
-  laserBase: { label: "Base width", min: 0, max: 2, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.5, on: false },
+  laserCount: { label: "Beams", min: 1, max: 32, step: 1, value: 26, drift: "wave", low: 6, high: 16, on: false },
+  laserSpread: { label: "Spread", min: 0, max: 180, step: 1, value: 180, unit: "°", drift: "wave", low: 0, high: 180, on: true, ease: "organic" },
+  laserSweep: { label: "Sweep", min: -90, max: 90, step: 1, value: 60, unit: "°", drift: "wave", low: 0, high: 13, on: true, ease: "random" },
+  laserSweepDelay: { label: "Sweep delay", min: 0, max: 0.5, step: 0.01, value: 0.07, unit: " s", drift: "wave", low: 0.02, high: 0.15, on: false },
+  laserBase: { label: "Base width", min: 0, max: 2, step: 0.01, value: 0.12, drift: "wave", low: 0, high: 0.87, on: false, ease: "organic" },
   laserBaseAngle: { label: "Turn", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "wave", low: -20, high: 20, on: false },
   laserWidth: { label: "Width", min: 0.5, max: 12, step: 0.1, value: 1.5, unit: "px", drift: "wave", low: 1, high: 3, on: false },
-  laserGlow: { label: "Glow", min: 0, max: 4, step: 0.01, value: 0.5, drift: "wave", low: 0.3, high: 1.5, on: false },
-  laserEmitter: { label: "Emitter", min: 0, max: 3, step: 0.01, value: 1, drift: "wave", low: 0.5, high: 1.5, on: false },
-  laserGlowSize: { label: "Glow size", min: 2, max: 80, step: 0.1, scale: "log", value: 10, unit: "px", drift: "wave", low: 6, high: 24, on: false },
-  laserFade: { label: "Fade", min: 0, max: 1, step: 0.01, value: 0.3, drift: "wave", low: 0.1, high: 0.6, on: false },
-  laserHue: { label: "Color", min: 0, max: 360, step: 1, value: 120, unit: "°", drift: "spin", low: 0, high: 360, on: false },
-  laserRainbow: { label: "Rainbow", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.5, on: false },
+  laserGlow: { label: "Glow", min: 0, max: 4, step: 0.01, value: 0.47, drift: "wave", low: 0.3, high: 1.5, on: false },
+  laserEmitter: { label: "Emitter", min: 0, max: 3, step: 0.01, value: 0.31, drift: "wave", low: 0.5, high: 1.5, on: false },
+  laserGlowSize: { label: "Glow size", min: 2, max: 80, step: 0.1, scale: "log", value: 10.1, unit: "px", drift: "wave", low: 6, high: 24, on: false },
+  laserFade: { label: "Fade", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.1, high: 0.6, on: false },
+  laserHue: { label: "Color", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  laserRainbow: { label: "Rainbow", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0, high: 0.5, on: false },
   laserX: { label: "Source X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.3, high: 0.3, on: false },
-  laserY: { label: "Source Y", min: -0.5, max: 0.5, step: 0.01, value: -0.5, drift: "wave", low: -0.5, high: -0.3, on: false },
+  laserY: { label: "Source Y", min: -0.5, max: 0.5, step: 0.01, value: 0.2, drift: "wave", low: -0.5, high: -0.3, on: false },
   /**
    * Light shapes (see OUTLINE_SHADER): glowing outlines that draw
    * themselves. Count copies, each smaller by Spacing and later in the draw

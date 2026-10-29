@@ -299,7 +299,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       rays: () => start("raysAmount", 1.5),
       lasers: () => {
         if (engine.params.laserAmount.value !== 0 || engine.params.laserAmount.on) return;
-        start("laserAmount", 1);
+        start("laserAmount", 1.74);
         /* The fan sweeps up and down, as in a laser show. */
         const sweep = engine.params.laserSweep;
         const { low, high } = sweep.low !== sweep.high ? sweep : createParams().laserSweep;
