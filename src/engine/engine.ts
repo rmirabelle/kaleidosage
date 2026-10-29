@@ -1611,6 +1611,7 @@ export class Engine {
       outlineCount: this.live("outlineCount"),
       outlineRadius: this.live("outlineRadius"),
       outlineSpacing: this.live("outlineSpacing"),
+      outlineCopyFade: this.live("outlineCopyFade"),
       outlineDelay: this.live("outlineDelay"),
       outlinePhase: this.state.outlineTime,
       outlineSnakeTime: this.state.outlineSnakeTime,

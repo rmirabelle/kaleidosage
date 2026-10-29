@@ -3466,6 +3466,8 @@ uniform int u_shape;
 uniform int u_count;
 uniform float u_radius;
 uniform float u_spacing;
+/* How much dimmer the last copy is; the copies between dim in even steps. */
+uniform float u_copyFade;
 uniform float u_delay;
 uniform float u_phase;
 uniform int u_draw;
@@ -3696,6 +3698,8 @@ void main() {
     vec2 n = nearestShown(p, r, a, b);
     /* A chased part is full at its head and fades to nothing at its tail; a snake's last 60% toward its tail fades. */
     float shown = u_shape == 4 ? clamp(n.y / 0.6, 0.0, 1.0) : u_draw == 1 ? clamp((n.y - a) / max(u_length, 1e-3), 0.0, 1.0) : 1.0;
+    float copyLight = 1.0 - u_copyFade * float(i) / float(max(u_count - 1, 1));
+    shown *= copyLight;
     vec3 color = stopColor(around(n.y + u_shift));
     float across = n.x / u_width;
     float core = exp(-4.0 * across * across);
@@ -3706,7 +3710,7 @@ void main() {
     /* The head's bright spot while the outline is drawn or chased. */
     if (moving && u_emitter > 0.0) {
       float near = length(p - project(outlinePoint(b, r))) / u_emitter;
-      float headSpot = exp(-near * near);
+      float headSpot = exp(-near * near) * copyLight;
       if (headSpot > spot) {
         spot = headSpot;
         spotColor = stopColor(around(b + u_shift));

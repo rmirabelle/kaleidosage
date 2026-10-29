@@ -622,6 +622,8 @@ export interface FrameValues {
   outlineCount: number;
   outlineRadius: number;
   outlineSpacing: number;
+  /** How much dimmer the last copy is (0 to 1); the copies between dim in even steps. */
+  outlineCopyFade: number;
   outlineDelay: number;
   outlinePhase: number;
   /** The Snake's clock (see snakePoint). */
@@ -2966,6 +2968,7 @@ export class KaleidoRenderer {
     gl.uniform1i(l.uniforms.u_count, Math.min(OUTLINE_COPIES, Math.max(1, Math.round(v.outlineCount))));
     gl.uniform1f(l.uniforms.u_radius, Math.max(0, v.outlineRadius) * height);
     gl.uniform1f(l.uniforms.u_spacing, Math.min(1, Math.max(0, v.outlineSpacing)));
+    gl.uniform1f(l.uniforms.u_copyFade, Math.min(1, Math.max(0, v.outlineCopyFade)));
     gl.uniform1f(l.uniforms.u_delay, v.outlineDelay);
     gl.uniform1f(l.uniforms.u_phase, v.outlinePhase);
     gl.uniform1f(l.uniforms.u_length, Math.min(1, Math.max(0.01, v.outlineLength)));
