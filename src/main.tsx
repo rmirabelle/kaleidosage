@@ -60,6 +60,19 @@ if (import.meta.hot) {
     };
   }
   report("window loaded");
+
+  /**
+   * Start-up timing: when the main window shows, and each task that blocks
+   * the page for 200 ms or more in the first minute, in ms from page start.
+   */
+  const startup = new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      if (entry.entryType === "mark" && entry.name === "main window shown") report(`startup: main window shown at ${Math.round(entry.startTime)} ms`);
+      if (entry.entryType === "longtask" && entry.duration >= 200) report(`startup: page blocked ${Math.round(entry.duration)} ms at ${Math.round(entry.startTime)} ms`);
+    }
+  });
+  startup.observe({ entryTypes: ["mark", "longtask"] });
+  setTimeout(() => startup.disconnect(), 60000);
 }
 
 /** A crash shows its error and a Reload button instead of a blank window, and goes to the dev log. */

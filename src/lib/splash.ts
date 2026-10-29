@@ -34,6 +34,7 @@ export async function revealMainWindow() {
     new Promise((resolve) => setTimeout(resolve, 100))
   ]);
   await main.show();
+  performance.mark("main window shown");
   await main.setFocus();
   const splash = await Window.getByLabel("splash");
   await splash?.close();
