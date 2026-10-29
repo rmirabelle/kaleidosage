@@ -1132,7 +1132,7 @@ function ColorSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =>
   };
   const choices: readonly (readonly [ColorFill, string, string])[] = [
     [0, "Solid", "One color over the whole picture"],
-    [1, "Linear", "A gradient across the screen, at Angle"],
+    [1, "Linear", "A gradient in one direction, at Angle, Size back and ahead of its center"],
     [2, "Radial", "A gradient out from the center"]
   ];
   return (

@@ -993,11 +993,12 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   /** Color overlay: the opacity of state.overlayColor, blended over the whole picture. */
   overlayOpacity: { label: "Color overlay", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.5, on: false },
   /**
-   * The Color effect's gradient (see state.colorFill). Linear: Angle turns
-   * it, and it spans the screen at any angle. Radial: Size is its radius in
-   * screen heights, Stretch makes it wider (above 1) or taller (below 1),
-   * Turn turns that stretch, and X and Y move the center (parts of the
-   * screen from its center). Repeat is how many times the colors go out and
+   * The Color effect's gradient (see state.colorFill). Size is in screen
+   * heights, so the gradient keeps its size when the screen gets wider:
+   * Linear runs from Size behind its center to Size ahead of it, at Angle;
+   * Radial runs from its center out to Size, Stretch makes it wider (above
+   * 1) or taller (below 1), and Turn turns that stretch. X and Y move the
+   * center (parts of the screen from its center). Repeat is how many times the colors go out and
    * back over that span, and Shift moves them along it.
    */
   colorAngle: { label: "Angle", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },

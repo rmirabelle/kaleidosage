@@ -163,7 +163,7 @@ export const MASK_KEYS: Record<MaskMode, ParamKey[]> = { 0: [], 1: ["maskSize", 
 export const COLOR_FILLS = [[0, "Solid"], [1, "Linear"], [2, "Radial"]] as const;
 export const COLOR_FILL_KEYS: Record<ColorFill, ParamKey[]> = {
   0: [],
-  1: ["colorAngle", "colorShift", "colorRepeat"],
+  1: ["colorAngle", "colorSize", "colorX", "colorY", "colorShift", "colorRepeat"],
   2: ["colorSize", "colorStretch", "colorTurn", "colorX", "colorY", "colorShift", "colorRepeat"]
 };
 

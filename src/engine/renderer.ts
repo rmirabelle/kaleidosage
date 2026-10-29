@@ -353,10 +353,11 @@ export interface FrameValues {
   overlayOpacity: number;
   colorBlend: LayerBlend;
   /**
-   * The overlay's fill (see FINISH_SHADER): Linear runs at colorAngle
-   * (radians); Radial runs out from colorX, colorY (parts of the screen
-   * from its center) to colorSize (screen heights), colorStretch times as
-   * wide as tall, turned by colorTurn (radians). Both repeat colorRepeat
+   * The overlay's fill (see FINISH_SHADER), about colorX, colorY (parts
+   * of the screen from its center): Linear runs at colorAngle (radians),
+   * colorSize (screen heights) back and ahead; Radial runs out to
+   * colorSize, colorStretch times as wide as tall, turned by colorTurn
+   * (radians). Both repeat colorRepeat
    * times and move by colorShift. Then the gradient's stops.
    */
   colorFill: ColorFill;

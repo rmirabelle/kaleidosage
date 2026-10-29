@@ -2909,9 +2909,11 @@ uniform float u_overlayOpacity;
 uniform int u_overlayBlend;
 /**
  * The overlay's fill: 0 the one color u_overlay; 1 a linear gradient along
- * u_direction, across the whole screen at any angle; 2 a radial gradient
- * from u_center (pixels from the screen center) out to u_size pixels,
- * u_stretch times as wide as it is tall, turned by u_turn. u_repeat and
+ * u_direction, from u_size pixels behind u_center (pixels from the screen
+ * center) to u_size pixels ahead of it; 2 a radial gradient from u_center
+ * out to u_size pixels, u_stretch times as wide as it is tall, turned by
+ * u_turn. u_size is in screen heights, so the gradient keeps its size
+ * when the screen gets wider or narrower. u_repeat and
  * u_shift then move the place on the gradient, out and back, as the light
  * cycles' gradient does.
  */
@@ -2958,14 +2960,11 @@ vec3 gradientColor(float t) {
 /* The overlay's color at this pixel (see u_fill). */
 vec3 overlayColor() {
   if (u_fill == 0) return u_overlay;
-  vec2 p = (v_uv - 0.5) * u_res;
+  vec2 p = (v_uv - 0.5) * u_res - u_center;
   float g;
   if (u_fill == 1) {
-    /* Half the screen's extent along the direction, so the gradient spans the screen at any angle. */
-    float half_ = 0.5 * (abs(u_direction.x) * u_res.x + abs(u_direction.y) * u_res.y);
-    g = dot(p, u_direction) / half_ * 0.5 + 0.5;
+    g = dot(p, u_direction) / u_size * 0.5 + 0.5;
   } else {
-    p -= u_center;
     float c = cos(u_turn);
     float s = sin(u_turn);
     p = mat2(c, -s, s, c) * p;
