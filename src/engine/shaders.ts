@@ -3436,7 +3436,10 @@ void main() {
  * is exact; the other shapes are their corners joined by straight lines.
  * u_draw: 0 draws the outline from the top, then erases it from the top; 1
  * a part u_length long chases around it, brightest at its head; 2 shows
- * it whole. The color is the gradient (u_stopAt, u_stopColor) at s, moved
+ * it whole. A snake (u_shape 4) is an open path that wanders and never
+ * repeats (its corners come from renderer.ts each frame); u_draw does not
+ * count for it: all of it shows, brightest at its head, fading toward its
+ * tail. The color is the gradient (u_stopAt, u_stopColor) at s, moved
  * along by u_shift, there and back once around the outline, so its ends
  * meet with no seam. The core, the glow and the head's spot are as in
  * LASER_SHADER, so the lights look the same; the head's spot is u_emitter
@@ -3519,19 +3522,23 @@ vec3 stopColor(float t) {
   return u_stopColor[clamp(u_stopCount - 1, 0, 7)];
 }
 
-/* How many corners the outline has: a ring has none unless it is turned. */
-int cornerCount() { return u_shape == 0 ? RING_CORNERS : u_shape == 1 ? 4 : u_shape == 2 ? 3 : 2 * u_points; }
+/* How many corners the outline has: a ring has none unless it is turned; a snake has 48 along its path. */
+int cornerCount() { return u_shape == 0 || u_shape == 4 ? RING_CORNERS : u_shape == 1 ? 4 : u_shape == 2 ? 3 : 2 * u_points; }
+
+/* How many sides: a closed outline has one back to its first corner; a snake (open) does not. */
+int sideCount() { return u_shape == 4 ? cornerCount() - 1 : cornerCount(); }
 
 /* The point at place s (0 to 1) along the flat outline of radius r. A ring is a true circle, also when it is turned. */
 vec2 outlinePoint(float s, float r) {
   if (u_shape == 0) return r * vec2(sin(TAU * s), cos(TAU * s));
   int corners = cornerCount();
-  float h = fract(s);
+  int sides = sideCount();
+  float h = u_shape == 4 ? clamp(s, 0.0, 1.0) : fract(s);
   for (int k = 0; k < RING_CORNERS; k++) {
-    if (k >= corners) break;
+    if (k >= sides) break;
     float at0 = u_cornerAt[k];
     float at1 = u_cornerAt[k + 1];
-    if (h <= at1 || k == corners - 1) return r * mix(u_corners[k], u_corners[(k + 1) % corners], clamp((h - at0) / max(at1 - at0, 1e-6), 0.0, 1.0));
+    if (h <= at1 || k == sides - 1) return r * mix(u_corners[k], u_corners[(k + 1) % corners], clamp((h - at0) / max(at1 - at0, 1e-6), 0.0, 1.0));
   }
   return r * u_corners[0];
 }
@@ -3598,11 +3605,12 @@ vec2 nearestShown(vec2 p, float r, float a, float b) {
     return da < db ? vec2(da, a) : vec2(db, b);
   }
   int corners = cornerCount();
+  int sides = sideCount();
   vec2 best = vec2(1e9, a);
   /* Each corner is turned and seen once: a side's end is the next side's start. */
   vec2 c0 = project(r * u_corners[0]);
   for (int k = 0; k < RING_CORNERS; k++) {
-    if (k >= corners) break;
+    if (k >= sides) break;
     /* The place along the side comes from the flat side; the distance from the side as it is seen. */
     vec2 c1 = project(r * u_corners[(k + 1) % corners]);
     vec2 ab = c1 - c0;
@@ -3652,7 +3660,9 @@ void main() {
      */
     float reach = max(haze * 12.0 + u_width * 4.0, u_emitter * 4.0) + 12.0;
     float far = length(p);
-    if (far > (turned ? r * eye / max(eye - r, 1.0) : r) + reach) continue;
+    /* A snake goes up to 1.6 radii across (see snakePoint in renderer.ts). */
+    float extent = u_shape == 4 ? 1.6 * r : r;
+    if (far > (turned ? extent * eye / max(eye - extent, 1.0) : extent) + reach) continue;
     if (u_shape == 0 && !turned && far < r - reach) continue;
     /* Spin turns the outline around its upright line, then Tumble around its level line. */
     float spinAngle = u_turn3d.x - u_turn3d.y * float(i);
@@ -3671,7 +3681,10 @@ void main() {
     float a = 0.0;
     float b = 1.0;
     bool moving = false;
-    if (u_draw == 0) {
+    if (u_shape == 4) {
+      /* A snake crawls on and on: all of it shows, from the tail (0) to the head (1). */
+      moving = true;
+    } else if (u_draw == 0) {
       moving = phase < 0.5;
       if (moving) b = phase * 2.0;
       else a = phase * 2.0 - 1.0;
@@ -3681,8 +3694,8 @@ void main() {
       b = phase;
     }
     vec2 n = nearestShown(p, r, a, b);
-    /* A chased part is full at its head and fades to nothing at its tail. */
-    float shown = u_draw == 1 ? clamp((n.y - a) / max(u_length, 1e-3), 0.0, 1.0) : 1.0;
+    /* A chased part is full at its head and fades to nothing at its tail; a snake's last 60% toward its tail fades. */
+    float shown = u_shape == 4 ? clamp(n.y / 0.6, 0.0, 1.0) : u_draw == 1 ? clamp((n.y - a) / max(u_length, 1e-3), 0.0, 1.0) : 1.0;
     vec3 color = stopColor(around(n.y + u_shift));
     float across = n.x / u_width;
     float core = exp(-4.0 * across * across);

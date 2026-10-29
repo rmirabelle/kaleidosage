@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { outlineCorners } from "./renderer";
+import { outlineCorners, snakePoint } from "./renderer";
 
 describe("outlineCorners", () => {
   it("puts a level square's corners a quarter of the way apart, from the top right", () => {
@@ -15,6 +15,16 @@ describe("outlineCorners", () => {
     expect(at[48]).toBeCloseTo(1);
     expect(length).toBeLessThan(Math.PI * 2);
     expect(length).toBeGreaterThan(Math.PI * 2 * 0.99);
+  });
+
+  it("runs a snake's 48 corners from its tail to its head, open, with its head at the clock time", () => {
+    const { corners, at } = outlineCorners(4, 5, 7.5, 0.4);
+    const [x, y] = snakePoint(7.5);
+    expect(corners[94]).toBeCloseTo(x);
+    expect(corners[95]).toBeCloseTo(y);
+    expect(at[0]).toBe(0);
+    expect(at[47]).toBeCloseTo(1);
+    for (let k = 1; k < 48; k++) expect(at[k]).toBeGreaterThan(at[k - 1]);
   });
 
   it("puts a star's inner corners at 0.45", () => {

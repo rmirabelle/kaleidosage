@@ -995,16 +995,19 @@ function ParticleSection({ engine, row }: { engine: Engine; row: (key: ParamKey)
 /**
  * Light shapes' settings: the Shape and Draw menus, then the sliders, with
  * the colors along the outline (a gradient) above Color flow. Length shows
- * only for Chase, and Points only for a star.
+ * only for Chase and Snake, and Points only for a star.
  */
 function OutlineSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
   const [shape, setShape] = useState<OutlineShape>(engine.state.outlineShape);
   const [draw, setDraw] = useState<OutlineDraw>(engine.state.outlineDraw);
-  const keys = OUTLINE_KEYS.filter((key) => (key !== "outlineLength" || draw === 1) && (key !== "outlineEmitter" || draw !== 2) && (key !== "outlinePoints" || shape === 3));
+  /* A snake always crawls, as a chase does, so the Draw menu and Delay do not count for it. */
+  const snake = shape === 4;
+  const crawls = draw === 1 || snake;
+  const keys = OUTLINE_KEYS.filter((key) => (key !== "outlineLength" || crawls) && (key !== "outlineEmitter" || draw !== 2 || snake) && (key !== "outlinePoints" || shape === 3) && (key !== "outlineDelay" || !snake));
   return (
     <>
       <ModeSelect engine={engine} stateKey="outlineShape" options={OUTLINE_SHAPES} name="Shape" onChange={setShape} />
-      <ModeSelect engine={engine} stateKey="outlineDraw" options={OUTLINE_DRAWS} name="Draw" onChange={setDraw} />
+      {!snake && <ModeSelect engine={engine} stateKey="outlineDraw" options={OUTLINE_DRAWS} name="Draw" onChange={setDraw} />}
       {keys.map((key) => key === "outlineFlow"
         ? <Fragment key={key}><GradientEditor engine={engine} stateKey="outlineStops" />{row(key)}</Fragment>
         : row(key))}

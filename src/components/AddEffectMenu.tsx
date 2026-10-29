@@ -23,7 +23,7 @@ const EFFECT_NOTES: Record<FxStep, string> = {
   cycles: "Light cycles race and leave lines in the picture's colors.",
   rays: "Light rays stream out from bright areas.",
   lasers: "A fan of laser beams sweeps from one point.",
-  outlines: "Glowing rings, squares, triangles or stars draw themselves.",
+  outlines: "Glowing rings, squares, triangles or stars draw themselves, or a snake crawls.",
   picture: "Lays an image or a video over the picture.",
   bloom: "Bright areas glow.",
   sharpen: "Makes edges and fine detail crisper.",

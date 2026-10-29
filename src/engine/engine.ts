@@ -990,6 +990,7 @@ export class Engine {
     this.state.driverTime = 0;
     this.state.outlineTime = 0;
     this.state.outlineFlowTime = 0;
+    this.state.outlineSnakeTime = 0;
     this.state.solidSpinTurns = 0;
     this.state.solidTumbleTurns = 0;
     this.state.outlineSpinTurns = 0;
@@ -1134,6 +1135,7 @@ export class Engine {
     /* Light shapes: one draw cycle takes Draw time seconds; the colors flow by Color flow turns a second. */
     this.state.outlineTime = (this.state.outlineTime + animated / Math.max(0.05, this.live("outlineDrawTime"))) % 1;
     this.state.outlineFlowTime = (this.state.outlineFlowTime + animated * this.live("outlineFlow") + 1) % 1;
+    this.state.outlineSnakeTime += animated / Math.max(0.05, this.live("outlineDrawTime"));
     /* The 3D Object's spin and tumble are speeds in turns per minute, added up the same way. */
     this.state.solidSpinTurns = (this.state.solidSpinTurns + animated * this.live("solidSpin") / 60) % 1;
     this.state.solidTumbleTurns = (this.state.solidTumbleTurns + animated * this.live("solidTumble") / 60) % 1;
@@ -1611,6 +1613,7 @@ export class Engine {
       outlineSpacing: this.live("outlineSpacing"),
       outlineDelay: this.live("outlineDelay"),
       outlinePhase: this.state.outlineTime,
+      outlineSnakeTime: this.state.outlineSnakeTime,
       outlineLength: this.live("outlineLength"),
       outlinePoints: this.live("outlinePoints"),
       outlineWidth: this.live("outlineWidth"),
