@@ -353,6 +353,30 @@ files in it is "Tracks" (part 7), so one word means one thing.
   playlist, then closes its scenes, takes its files out of the Files list
   and shows the start screen. The audio settings stay as they are.
 
+## 9. Output (added 2026-10-29)
+
+The Output menu, under Input in the Playlist's toolbar, picks the speaker
+that plays the files (`src/lib/audioOutput.ts`). Default output follows
+Windows. The reason: a stream to another room (CastSage, with Sunshine)
+sends one device, a virtual cable, while the PC's other sounds stay on
+the desktop speakers at their own volume.
+
+- The files' AudioContext plays to the pick with `setSinkId`. The audio
+  element's own `setSinkId` does nothing here, because
+  `createMediaElementSource` takes its sound into the graph.
+- The webview names its speakers, and allows `setSinkId` to one of them,
+  only while the page may use the microphone. Rust saves "allow" for the
+  app's own origin in the WebView2 profile, with no question
+  (`src-tauri/src/output_choice.rs`, ICoreWebView2Profile4
+  `SetPermissionState`). The page never captures sound, so Windows shows
+  no microphone icon.
+- The pick is kept by name (localStorage `kaleidosage.output`), because
+  the webview's speaker ids differ between the dev and the installed app.
+  A speaker that is not connected leaves the sound on the default device,
+  with a note under the menu.
+- The analysis taps the graph before the speaker, so the pick does not
+  change what the settings follow.
+
 ## Order of work
 
 1. Rust capture and the Audio panel with meters only. Check that the

@@ -344,6 +344,8 @@ button { border: 0; }
 .scene-input-row .dropdown-button { flex: 1; min-width: 0; }
 /* A full-width line under the menu, across the toolbar's side padding. */
 .playlist-transport > .scene-input-row { margin: 0 -10px; padding: 0 10px 8px; border-bottom: 1px solid #3a3e4d; }
+/* Input and Output are one group: the line goes under Output only. */
+.playlist-transport > .scene-input-row:has(+ .scene-input-row) { padding-bottom: 0; border-bottom: 0; }
 .scene-hold-bar > .scene-input-row { margin: 0 -8px 8px; padding: 0 8px 8px; border-bottom: 1px solid #3a3e4d; }
 .scene-countdown i { transition: width .1s linear; }
 .audio-meter-well.scene-countdown i.soon { background: #f5c542; }
@@ -432,6 +434,8 @@ button { border: 0; }
 .stage canvas.camera-dragging { cursor: grabbing; }
 /* In VR the picture has a fixed size (see vr.ts); the screen shows all of it. */
 .stage.in-vr canvas { object-fit: contain; }
+/* While casting, the canvas is the Show screen's size (see cast.ts): the preview keeps its shape. */
+.stage.casting canvas { object-fit: contain; }
 /* The VR screen settings, at the bottom left of the picture while VR runs (see VrScreenCard). */
 .vr-card { position: absolute; z-index: 5; left: 12px; bottom: 12px; width: 260px; box-sizing: border-box; padding: 10px 12px; border: 1px solid rgba(57,61,77,.85); border-radius: 10px; color: #eceef2; background: rgba(16,18,24,.86); backdrop-filter: blur(6px); box-shadow: 0 10px 30px rgba(0,0,0,.45); font-size: 12px; }
 .vr-card-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; color: #a9aebb; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }

@@ -1,10 +1,12 @@
 import { convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
 import type { VideoFile } from "./videos";
 import { isFileCopy } from "./kaleidoFile";
+import { audioOutput } from "./audioOutput";
 
 /**
  * The tracks (see docs/AUDIO.md, part 7): audio files that the app plays
- * itself, through the speakers, one after the other, and round again. The
+ * itself, through the speakers (the Output menu's pick, see
+ * audioOutput.ts), one after the other, and round again. The
  * same sound goes to the analysis: an AudioWorklet tap mixes it to mono
  * and posts it in blocks to "onSamples". A Kaleido Sage file keeps the
  * tracks while Files is the input (see kaleidoFile.ts): the list starts
@@ -263,6 +265,8 @@ class TrackList {
       silent.connect(context.destination);
       this.context = context;
       this.audio = audio;
+      /* The Output menu's speaker (see audioOutput.ts), before the first sound. */
+      await audioOutput.attach(context);
     })();
     return this.ready;
   }

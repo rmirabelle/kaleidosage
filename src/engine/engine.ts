@@ -323,14 +323,45 @@ export class Engine {
     void this.vr?.session.end().catch(() => {});
   }
 
-  /** The next frame, from the headset in VR, else from the window. */
+  /**
+   * Cast (see src/lib/cast.ts): the Show window, which times the frames
+   * while it shows the picture on another screen. A minimized main window
+   * gets no frames, so the show must not depend on it. The picture is then
+   * the Show screen's size, and the canvas in the main window is a preview.
+   */
+  private cast: { window: Window } | null = null;
+  /** The window that the waiting frame was asked from, so a cast that starts or stops cancels the right one. */
+  private frameWindow: Window = window;
+
+  get casting() {
+    return this.cast !== null;
+  }
+
+  /**
+   * Starts a cast to "target", the Show window, at its size in pixels, or
+   * stops it (null). Effects that work in pixels keep their look, as in VR.
+   */
+  castTo(target: { window: Window; size: [number, number] } | null) {
+    const screenHeight = this.renderer.castSize ? 0 : this.renderer.canvasSize[1];
+    this.switchFrames(() => {
+      this.cast = target ? { window: target.window } : null;
+      this.renderer.castSize = target?.size ?? null;
+      if (!target) this.renderer.texelScale = 1;
+      else if (screenHeight > 0) this.renderer.texelScale = target.size[1] / screenHeight;
+    });
+  }
+
+  /** The next frame, from the headset in VR, else from the Show window while casting, else from the main window. */
   private requestFrame() {
-    return this.vr ? this.vr.session.requestAnimationFrame(this.frame) : requestAnimationFrame(this.frame);
+    if (this.vr) return this.vr.session.requestAnimationFrame(this.frame);
+    this.frameWindow = this.cast?.window ?? window;
+    return this.frameWindow.requestAnimationFrame(this.frame);
   }
 
   private cancelFrame() {
     if (this.vr) this.vr.session.cancelAnimationFrame(this.frameId);
-    else cancelAnimationFrame(this.frameId);
+    /* A Show window that has closed has no frame to cancel. */
+    else try { this.frameWindow.cancelAnimationFrame(this.frameId); } catch { /* Nothing waits. */ }
     this.frameId = 0;
   }
 

@@ -955,6 +955,8 @@ export class KaleidoRenderer {
   texelScale = 1;
   /** Live VR: the picture's size in pixels while the headset shows it (see resizeCanvas), or null. */
   vrSize: [number, number] | null = null;
+  /** Cast: the picture's size in pixels while the Show window shows it (see Engine.castTo), or null. */
+  castSize: [number, number] | null = null;
 
   /** The canvas size in device pixels, as of the last frame. */
   get canvasSize(): [number, number] {
@@ -3586,7 +3588,7 @@ export class KaleidoRenderer {
   /** Matches the canvas to the displayed size (or the fixed size). A new size also resets the border. */
   private resizeCanvas() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const [width, height] = this.vrSize ?? this.size ?? [Math.round(this.canvas.clientWidth * dpr), Math.round(this.canvas.clientHeight * dpr)];
+    const [width, height] = this.vrSize ?? this.castSize ?? this.size ?? [Math.round(this.canvas.clientWidth * dpr), Math.round(this.canvas.clientHeight * dpr)];
     if (width === this.frameSize[0] && height === this.frameSize[1]) return;
     this.frameSize = [width, height];
     this.pad = -1;

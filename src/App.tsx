@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openFileDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { ArrowClockwise, ArrowCounterClockwise, ArrowsIn, ArrowsOut, Camera, Export, FilePlus, FilmStrip, FloppyDisk, FolderOpen, Gauge, HandPointing, Info, Playlist, Keyboard, Plus, SignOut, SlidersHorizontal, SpeakerSimpleHigh, Trash, VirtualReality, X } from "@phosphor-icons/react";
+import { ArrowClockwise, ArrowCounterClockwise, ArrowsIn, ArrowsOut, Camera, Export, Screencast, FilePlus, FilmStrip, FloppyDisk, FolderOpen, Gauge, HandPointing, Info, Playlist, Keyboard, Plus, SignOut, SlidersHorizontal, SpeakerSimpleHigh, Trash, VirtualReality, X } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { AboutDialog } from "./components/AboutDialog";
 import { ShortcutsDialog } from "./components/ShortcutsDialog";
@@ -70,6 +70,7 @@ import { isVideoPath, isVideoType, loadVideoBlob, loadVideoFile, stageVideoBlob,
 import { checkForUpdate, getAppVersion, type UpdateInfo } from "./lib/updater";
 import { encodeVideo, videoDimensions, videoSize, type VideoOptions } from "./lib/videoExport";
 import { attachCameraDrag } from "./lib/cameraDrag";
+import { cast, screenLabel, type CastScreen } from "./lib/cast";
 
 const MIDI_PANEL_HEIGHT_KEY = "kaleidosage.midi-panel-height";
 /** The MIDI panel's height limits, in pixels; it opens at its last height, or DEFAULT. */
@@ -1607,6 +1608,32 @@ export default function App() {
     }
   }, [engine, showError]);
 
+  /**
+   * Cast (see cast.ts): the picture full screen on another screen, in the
+   * Show window, while this window stays free. "screen" picks the screen
+   * first (the View menu lists them when there are several).
+   */
+  const casting = useSyncExternalStore((listener) => cast.subscribe(listener), () => cast.on);
+  const castScreens = useSyncExternalStore((listener) => cast.subscribe(listener), () => cast.screens);
+  const toggleCast = useCallback(async (screen?: CastScreen) => {
+    if (!engine || engine.inVr) return;
+    if (screen) {
+      cast.pick(screen);
+      if (cast.on) return;
+    }
+    await cast.toggle(engine);
+    if (cast.status.state === "error") showError(`Could not cast. ${cast.status.message}`);
+  }, [engine, showError]);
+  useEffect(() => {
+    void cast.refreshScreens();
+    /* Screens come and go while the app runs (a projector, a virtual screen). */
+    const refresh = () => void cast.refreshScreens();
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, []);
+  /* A new engine (or none) ends the cast of the old one. */
+  useEffect(() => () => cast.stop(), [engine]);
+
   /** Puts a new, untitled scene in the engine: the large checkerboard, with every effect off. */
   const blankScene = useCallback(() => {
     if (!engine) return;
@@ -2368,6 +2395,7 @@ export default function App() {
         m: toggleMidiPanel,
         a: toggleAudioPanel,
         p: () => setStatsOpen((open) => !open),
+        c: () => void toggleCast(),
         /* With Song follow on (also while Hold is on, or while the song is analyzed), Space and Shift+Space run the song (the Playlist card's controls), not the scene. */
         " ": songFollow.enabled && audioInput.settings.kind === "tracks"
           ? (event.shiftKey ? () => tracks.stop() : () => {
@@ -2386,7 +2414,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [aboutOpen, shortcutsOpen, welcome, closeScene, crossfadeToDoc, engine, exitFullscreen, newFile, newScene, openRequest, videoDialogOpen, searchSlot, openFile, randomize, redo, saveFile, startScreen, stop, switchByStep, toggleAudioPanel, toggleFullscreen, toggleMidiPanel, togglePause, undo]);
+  }, [aboutOpen, shortcutsOpen, welcome, closeScene, crossfadeToDoc, engine, exitFullscreen, newFile, newScene, openRequest, videoDialogOpen, searchSlot, openFile, randomize, redo, saveFile, startScreen, stop, switchByStep, toggleAudioPanel, toggleCast, toggleFullscreen, toggleMidiPanel, togglePause, undo]);
 
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
@@ -2463,7 +2491,13 @@ export default function App() {
         "separator",
         { label: "Full Screen", icon: <ArrowsOut size={15} />, shortcut: "F", disabled: startScreen, run: () => void toggleFullscreen() },
         /* With no headset ready, Enter VR says how to make one ready (see toggleVr). */
-        { label: inVr ? "Exit VR" : "Enter VR", icon: <VirtualReality size={15} />, disabled: startScreen || !vrSupported(), run: () => void toggleVr() }
+        { label: inVr ? "Exit VR" : "Enter VR", icon: <VirtualReality size={15} />, disabled: startScreen || casting || !vrSupported(), run: () => void toggleVr() },
+        /* Cast goes to the other screen; with several other screens, each has its own item. */
+        ...(casting
+          ? [{ label: "Stop Cast", icon: <Screencast size={15} />, shortcut: "C", run: () => void toggleCast() }]
+          : castScreens.filter((screen) => !screen.current).length > 1
+            ? castScreens.filter((screen) => !screen.current).map((screen) => ({ label: `Cast to ${screenLabel(screen)}`, icon: <Screencast size={15} />, disabled: startScreen || inVr, run: () => void toggleCast(screen) }))
+            : [{ label: "Cast", icon: <Screencast size={15} />, shortcut: "C", disabled: startScreen || inVr, run: () => void toggleCast() }])
       ]
     },
     {
@@ -2591,12 +2625,12 @@ export default function App() {
         {/* The picture under its document tab; full screen hides the tab. */}
         <div className="document">
           {!fullscreen && !startScreen && !sceneListMode && <DocumentTabs tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} />}
-          <main className={`stage ${cursorIdle ? "cursor-idle" : ""} ${inVr ? "in-vr" : ""}`}>
+          <main className={`stage ${cursorIdle ? "cursor-idle" : ""} ${inVr ? "in-vr" : ""} ${casting ? "casting" : ""}`}>
             <canvas ref={canvasRef} onDoubleClick={() => void toggleFullscreen()} />
             {engine && statsOpen && <StatsOverlay engine={engine} />}
             {engine && inVr && <VrScreenCard engine={engine} />}
             {engine && !startScreen && !fullscreen && (
-              <StageControls onFullscreen={() => void toggleFullscreen()} onVr={vrUsed || inVr ? () => void toggleVr() : null} inVr={inVr} />
+              <StageControls onFullscreen={() => void toggleFullscreen()} onVr={(vrUsed || inVr) && !casting ? () => void toggleVr() : null} inVr={inVr} onCast={!inVr && (casting || castScreens.some((screen) => !screen.current)) ? () => void toggleCast() : null} casting={casting} />
             )}
             {fullscreen && (
               /* In full screen the title bar and toolbar are gone; these buttons show while the mouse moves. */

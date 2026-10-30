@@ -1,7 +1,9 @@
 mod browse;
+mod cast;
 mod export_stream;
 mod files;
 mod file_archive;
+mod output_choice;
 mod sound_capture;
 mod screen;
 pub mod song_analysis;
@@ -45,6 +47,29 @@ fn end_splash_after_time_limit(app: tauri::AppHandle) {
     });
 }
 
+/**
+ * The main window, from its entry in tauri.conf.json ("create": false), made
+ * here so that it can open the Show window with window.open (see cast.rs).
+ */
+fn build_main_window(app: &tauri::AppHandle) -> tauri::Result<()> {
+    let config = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|window| window.label == "main")
+        .cloned()
+        .expect("tauri.conf.json has the main window");
+    let handle = app.clone();
+    tauri::WebviewWindowBuilder::from_config(app, &config)?
+        .on_new_window(move |url, features| match cast::show_window(&handle, &url, features) {
+            Some(window) => tauri::webview::NewWindowResponse::Create { window },
+            None => tauri::webview::NewWindowResponse::Deny,
+        })
+        .build()?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Full screen is not restored: the app always starts in a window.
@@ -57,6 +82,7 @@ pub fn run() {
         .manage(video_stream::Uploads::default())
         .manage(export_stream::Exports::default())
         .manage(sound_capture::SoundCapture::default())
+        .manage(cast::CastTarget::default())
         .on_page_load(|webview, payload| sound_capture::stop_on_page_load(webview, payload))
         .register_asynchronous_uri_scheme_protocol("video", |ctx, request, responder| {
             let id = request.uri().path().trim_start_matches('/');
@@ -71,13 +97,22 @@ pub fn run() {
             // The splash window is always centered, so its state is not saved.
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(window_state_flags)
-                .with_denylist(&["splash"])
+                .with_denylist(&["splash", cast::SHOW_LABEL])
                 .build(),
         )
         .setup(|app| {
+            build_main_window(app.handle())?;
             end_splash_after_time_limit(app.handle().clone());
             file_archive::clean_at_start();
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            /* The Show window (see cast.rs) closes with the main window, so the app can end. */
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                if let Some(show) = window.app_handle().get_webview_window(cast::SHOW_LABEL) {
+                    let _ = show.destroy();
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             browse::list_browse_directory,
@@ -112,6 +147,11 @@ pub fn run() {
             sound_capture::sound_devices,
             sound_capture::sound_start,
             sound_capture::sound_stop,
+            output_choice::allow_output_choice,
+            cast::cast_screens,
+            cast::cast_target,
+            cast::cast_place,
+            cast::cast_close,
             files::log_frontend_error,
             updater::check_for_update,
             updater::download_and_run_installer,

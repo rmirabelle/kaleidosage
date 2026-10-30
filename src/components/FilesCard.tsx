@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { CaretDoubleLeft, CaretDoubleRight, Plus, SpeakerHigh, Trash, Waveform, X } from "@phosphor-icons/react";
+import { AudioOutputMenu } from "./AudioOutputMenu";
 import { MediaIcon } from "./MediaIcon";
 import { placeSeek } from "./Slider";
 import { FLOOR_DB } from "../engine/audio";
@@ -178,7 +179,8 @@ function FollowButton() {
 const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
 
 /**
- * The Playlist card's play toolbar, at its bottom: a level meter of the
+ * The Playlist card's play toolbar, at its bottom: the Input menu, the
+ * Output menu (the speaker that plays the files), a level meter of the
  * music (gray under the Threshold, which a line marks, as in the Audio
  * panel's meters; see ThresholdMeter), then on one line Stop (back to the start of the file),
  * Play or Pause, a bar to seek in the file drawn like the effects'
@@ -224,6 +226,7 @@ function PlaylistTransport({ count, input }: { count: number; input: ReactNode }
   return (
     <div className="playlist-transport" aria-label="Music controls">
       {input}
+      <AudioOutputMenu />
       <ThresholdMeter level={level} threshold={threshold} />
       <div className="playlist-transport-row">
         <div className="panel-buttons">

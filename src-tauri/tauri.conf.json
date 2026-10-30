@@ -29,6 +29,7 @@
       },
       {
         "label": "main",
+        "create": false,
         "title": "Kaleido Sage",
         "width": 1280,
         "height": 800,

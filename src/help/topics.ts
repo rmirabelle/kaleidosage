@@ -132,9 +132,10 @@ export const HELP_TOPICS = {
       "The {x} removes a file from the list.",
       "Your changes turn Hold on, so the scene stays. Click Hold, save or pick a tab to go on.",
       "Play, Pause and Stop at the bottom run the music only; the bar seeks in the file.",
-      "The trash can {trash} removes every file from the list; the files on disk stay."
+      "The trash can {trash} removes every file from the list; the files on disk stay.",
+      "Output picks the speaker for the files, for example a virtual cable for a stream."
     ],
-    keywords: ["files", "tracks", "songs", "music", "mp3", "wav", "flac", "play"]
+    keywords: ["files", "tracks", "songs", "music", "mp3", "wav", "flac", "play", "output", "speaker", "cable", "stream"]
   },
   "audio.sensors": {
     title: "Audio sensors",
@@ -171,10 +172,10 @@ export const HELP_TOPICS = {
       "Space plays or pauses; Shift + Space stops.",
       "Drag the bar to scrub the scene. The bar above counts down to the next scene.",
       "Full screen {fullscreen}, F, or a double-click on the picture plays full screen.",
-      "Esc leaves VR or full screen.",
+      "Esc leaves VR or full screen. C casts the picture to your other screen.",
       "H hides the panels, so only the picture shows."
     ],
-    keywords: ["play", "pause", "stop", "full screen", "fullscreen", "space", "vr", "quest", "headset"]
+    keywords: ["play", "pause", "stop", "full screen", "fullscreen", "space", "vr", "quest", "headset", "cast", "projector", "screen", "stream"]
   },
   file: {
     title: "Projects",
