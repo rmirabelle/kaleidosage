@@ -2621,7 +2621,7 @@ export default function App() {
             </div>
             {sceneListShown && followOn && (
               <div className="song-map-dock">
-                <SongMapPanel sceneCount={docs.length} activeScene={docs.findIndex((doc) => doc.id === activeId)} held={sceneHeld} onSlicePick={pickSlice} tip={songTip} onTip={setSongTip} />
+                <SongMapPanel sceneCount={docs.length} activeScene={docs.findIndex((doc) => doc.id === activeId)} sceneNames={tabs.map((tab) => tab.fileName.replace(/\.ksage$/i, ""))} held={sceneHeld} onSlicePick={pickSlice} tip={songTip} onTip={setSongTip} />
               </div>
             )}
           </div>

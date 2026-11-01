@@ -2272,8 +2272,9 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .song-map-slice:hover { filter: brightness(1.15); }
 /* The selected slice (the one that plays, or the last one clicked): a red outline and a red glow. */
 .song-map-slice.selected { z-index: 1; box-shadow: inset 0 0 0 2px #e53935, inset 0 0 18px rgba(229,57,53,.45); }
-/* The tag at a slice's top left: its scene number, or KEEP on a slice that keeps the scene before it. */
-.song-map-tags { position: absolute; top: 6px; left: 6px; display: flex; gap: 4px; }
+/* The tag at a slice's top left: its scene's name, cut with "…" where the slice is too narrow. */
+.song-map-tags { position: absolute; top: 6px; right: 6px; left: 6px; display: flex; gap: 4px; min-width: 0; }
+.song-map-tags .song-map-scene-tag { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 10px; letter-spacing: 0; text-transform: none; }
 /* The Hit mark sits in the middle of its slice. */
 .song-map-center-tags { position: absolute; top: 50%; left: 50%; display: flex; gap: 4px; transform: translate(-50%, -50%); white-space: nowrap; pointer-events: none; }
 .song-map-scene-tag { padding: 1px 5px; border-radius: 3px; color: #fff; background: rgba(20,22,28,.7); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }

@@ -102,8 +102,9 @@ function UseBadge({ use }: { use: SongUse[] }) {
  * lights up in the same color as the selected slice. Its card has a title
  * bar like the Source card's, with Sort A–Z, which puts the scenes in name
  * order (that is then the order they play in). Under it, a search box shows
- * only the scenes whose names have the text; the numbers stay the scenes'
- * places, and no drag starts while the list is filtered. With Files as the
+ * only the scenes whose names have the text, and no drag starts while the
+ * list is filtered. The rows have no numbers: the Song Map's slices show
+ * the scenes' names. With Files as the
  * input, each row has a badge with the number of songs that use the scene
  * (see UseBadge).
  */
@@ -196,7 +197,6 @@ export function SceneList({ tabs, activeId, onSelect, onClose, onReorder, onRena
                   setMenu({ id: tab.id, left: event.clientX, top: event.clientY });
                 }}
               >
-                <span className="scene-list-number">{index + 1}</span>
                 {renaming?.id === tab.id ? (
                   <input
                     className="scene-list-rename"

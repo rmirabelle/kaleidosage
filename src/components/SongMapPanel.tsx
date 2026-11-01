@@ -74,15 +74,18 @@ const SCENES_TIP = "Assign a scene to a selected slice by Ctrl+clicking on a sce
 /**
  * "sceneCount": the number of scenes (tabs) that the schedule goes round.
  * "activeScene": the tab index of the scene selected in the scene list.
+ * "sceneNames": the scenes' names, by tab index: a slice's tag shows the
+ * name of its scene, cut with "…" when the slice is too narrow.
  * "held": true while Scene Hold keeps the scene; the slice that plays then
  * shows a HOLD mark (it loops in the music). The mark only shows the state:
  * a click on the slice still plays it.
  * "onSlicePick": a click on a slice, with its place in the schedule.
  * "tip": the tip to show (see SongTip); "onTip" moves to the next one.
  */
-export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick, tip, onTip }: {
+export function SongMapPanel({ sceneCount, activeScene, sceneNames = [], held, onSlicePick, tip, onTip }: {
   sceneCount: number;
   activeScene: number;
+  sceneNames?: readonly string[];
   held: boolean;
   onSlicePick: (slice: ScheduledSlice) => void;
   tip: SongTip;
@@ -363,23 +366,23 @@ export function SongMapPanel({ sceneCount, activeScene, held, onSlicePick, tip, 
                 }}
               >
                 {/**
-                  * Only a slice with a picked scene has a number: a slice with no pick changes nothing.
-                  * With one scene, each slice with no pick shows a dark 1: that scene plays on all of
-                  * them, and no pick is kept, so Auto Fill still has the slices to fill once a second
-                  * scene comes.
+                  * Only a slice with a picked scene has a scene name: a slice with no pick changes
+                  * nothing. With one scene, each slice with no pick shows its name, dark: that scene
+                  * plays on all of them, and no pick is kept, so Auto Fill still has the slices to
+                  * fill once a second scene comes.
                   */}
                 {scenes[i]?.scene == null && sceneCount === 1 && (
                   <span className="song-map-tags">
-                    <span className="song-map-scene-tag current" data-tip="Scene 1 plays here: it is the only scene. Add scenes to pick one for each slice">1</span>
+                    <span className="song-map-scene-tag current" data-tip={`${sceneNames[0] ?? "Scene 1"} plays here: it is the only scene. Add scenes to pick one for each slice`}>{sceneNames[0] ?? "1"}</span>
                   </span>
                 )}
                 {scenes[i]?.scene != null && (
                   <span className="song-map-tags">
                     <span
                       className={`song-map-scene-tag picked ${scenes[i].scene === activeScene ? "current" : ""}`}
-                      data-tip={`Scene ${scenes[i].scene! + 1} comes in here${scenes[i].scene === activeScene ? "; it is the scene selected in the scene list" : ""}`}
+                      data-tip={`${sceneNames[scenes[i].scene!] ?? `Scene ${scenes[i].scene! + 1}`} comes in here${scenes[i].scene === activeScene ? "; it is the scene selected in the scene list" : ""}`}
                     >
-                      {scenes[i].scene! + 1}
+                      {sceneNames[scenes[i].scene!] ?? scenes[i].scene! + 1}
                     </span>
                   </span>
                 )}
