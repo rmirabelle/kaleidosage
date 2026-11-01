@@ -76,6 +76,14 @@ export const MAP_KEYS: Record<MapMode, ParamKey[]> = {
   8: ["mapSpeed", "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drostePictureTurn", "drosteRotation", "mapPanX", "mapPanY", "mapMix"],
   9: ["mandelDepth", "mandelEnd", "mandelSpeed", "mandelFade", "mandelSpread", "mandelInvert", "mandelEdge", "mandelEdgeWidth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle", "mapAngle", "mapPanX", "mapPanY", "mapMix"]
 };
+/**
+ * Sliders that have an effect only while another slider is above 0, so the
+ * panel hides them while it is at 0: each Softness and its Darkness, and
+ * the Mandelbrot's Softness and its Terraces.
+ */
+export const NEEDS_ABOVE_ZERO: Partial<Record<ParamKey, ParamKey>> = {
+  mapFogSoftness: "mapFog", juliaFogSoftness: "juliaFog", mobiusFogSoftness: "mobiusFog", mandelSoftness: "mandelTerraces"
+};
 export const MAP_MODES = [[8, "Droste spiral"], [2, "Möbius"], [3, "Julia"], [9, "Mandelbrot"], [4, "Log spiral"], [5, "Sine"], [6, "Tunnel"], [7, "Seamless spiral"], [1, "Power (z^n)"]] as const;
 
 /**

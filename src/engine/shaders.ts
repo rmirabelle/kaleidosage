@@ -771,11 +771,12 @@ vec2 complexMap(vec2 p) {
   depthDistance = 1e9;
   if (u_mapMode == 0) return p;
   /**
-   * The pan moves the map's center on the screen (in screen units, whatever
-   * the zoom). The Droste spiral uses the pan inside its frames instead (see
-   * drosteMap), and has no zoom.
+   * The Mandelbrot's pan moves the view over the set (in screen units,
+   * whatever the zoom). The other maps pan the picture after the map (see
+   * the end), so the map's shape stays in place. The Droste spiral pans
+   * inside its frames (see drosteMap), and has no zoom.
    */
-  vec2 z = u_mapMode == 8 ? p : (p - u_mapPan) / u_mapScale;
+  vec2 z = u_mapMode == 8 ? p : (p - (u_mapMode == 9 ? u_mapPan : vec2(0.0))) / u_mapScale;
   vec2 w = z;
   /**
    * The point turned by the rotation, which turns the whole map. With a
@@ -1014,6 +1015,8 @@ vec2 complexMap(vec2 p) {
   }
   /* Roll and twist for the maps with no seam to keep (see mapRoll). */
   if (u_mapMode == 1 || u_mapMode == 3 || u_mapMode == 5) w = turn(w, u_mapRoll + u_mapCurl * length(w));
+  /* The pan moves the picture through the map's shape, as Möbius's does (Möbius sends a zero u_mapPan). */
+  if (u_mapMode != 8 && u_mapMode != 9) w -= u_mapPan;
   if (u_mapMode == 8) drosteAlt = mix(p, drosteAlt, u_mapMix);
   return mix(p, w, u_mapMix);
 }

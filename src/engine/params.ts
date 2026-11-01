@@ -549,7 +549,11 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   mapSpeed: { label: "Speed", min: -2, max: 2, step: 0.01, value: 0.15, drift: "wave", low: 0.1, high: 0.5, on: false },
   /** Tunnel only: how far the wall turns per tube length, so the tube becomes a spiral. Log spiral keeps its own wider twist. */
   tunnelTwist: { label: "Twist", min: -2, max: 2, step: 0.001, value: 0, unit: "°", drift: "wave", low: -0.5, high: 0.5, on: false },
-  /** Moves the map's center on the screen, for every map but Möbius (which has its own pan). */
+  /**
+   * Moves the picture through the map's shape, which stays in place, for
+   * every map but Möbius (which has its own pan). The Mandelbrot's moves
+   * the view over the set.
+   */
   mapPanX: { label: "Pan X", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -0.35, high: 0.35, on: false },
   mapPanY: { label: "Pan Y", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -0.35, high: 0.35, on: false },
   /**

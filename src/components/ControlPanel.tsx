@@ -12,7 +12,7 @@ import { loadTerrain } from "../lib/terrain";
 import type { TerrainData } from "../engine/terrain";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
-import { COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
+import { COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
 import type { BlurMask, ColorFill, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, MaskMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -936,13 +936,27 @@ function WarpSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => 
   );
 }
 
+/**
+ * The sliders of NEEDS_ABOVE_ZERO that have no effect now, joined by commas
+ * (a string, so an unchanged list does not draw the panel again): the
+ * slider they need is at 0, with no range and no audio switch.
+ */
+function idleKeys(engine: Engine) {
+  const inUse = (key: ParamKey) => engine.params[key].value > 0 || Boolean(engine.params[key].on) || engine.soundOn(key);
+  return (Object.keys(NEEDS_ABOVE_ZERO) as ParamKey[]).filter((key) => !inUse(NEEDS_ABOVE_ZERO[key]!)).join(",");
+}
+
 function MapSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
   const [mode, setMode] = useState<MapMode>(engine.state.mapMode);
+  /* Checked each frame, as a slider, MIDI, a scene or Undo can each move the needed slider. */
+  const [idle, setIdle] = useState(() => idleKeys(engine));
+  useEffect(() => engine.onFrame(() => setIdle(idleKeys(engine))), [engine]);
+  const hidden = idle.split(",");
   return (
     <>
       <ModeSelect engine={engine} stateKey="mapMode" options={MAP_MODES} name="Type" onChange={setMode} />
       {mode === 9 && <ModeSelect engine={engine} stateKey="mandelPlace" options={MANDEL_PLACES} name="Place" />}
-      <SplitRows keys={[...MAP_KEYS[mode], OPACITY_KEY.map]} row={row} blend={<LayerBlend engine={engine} step="map" />} />
+      <SplitRows keys={[...MAP_KEYS[mode].filter((key) => !hidden.includes(key)), OPACITY_KEY.map]} row={row} blend={<LayerBlend engine={engine} step="map" />} />
     </>
   );
 }
