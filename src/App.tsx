@@ -529,10 +529,10 @@ export default function App() {
   /**
    * A new song analysis, an edit of a song map, or Song follow turned on or
    * off is a change too: Save keeps it (see songFollow.ts). The tracks count
-   * only while Files is the input, as Save keeps them only then.
+   * unless the Input is Nothing, as Save keeps them then (see saveFile).
    */
   const fileNow = useCallback(() => {
-    const paths = audioInput.settings.kind === "tracks" ? tracks.list.map((track) => track.path) : [];
+    const paths = audioInput.settings.kind !== "none" ? tracks.list.map((track) => track.path) : [];
     return `${fileFingerprint(fileScenes(), paths, fileAudio(), panelLayout.filesWidth)} ${songFollow.analyzedCount(paths)} ${songFollow.edits} ${songFollow.enabled}`;
   }, [fileAudio, fileScenes]);
   const fileChanged = useCallback(() => docsRef.current.length > 0 && fileNow() !== fileSavedRef.current, [fileNow]);
@@ -559,6 +559,8 @@ export default function App() {
     name: string;
     save: () => Promise<boolean>;
   } | null>(null);
+  /** The open "Save without the audio files?" question of Save with Input Nothing (see saveFile): the answer (true to save). */
+  const [dropTracksQuestion, setDropTracksQuestion] = useState<{ answer: (go: boolean) => void } | null>(null);
   /**
    * The open "Replace scenes?" question of Import Scene(s): the imported
    * scenes' names that the project has too, and the answer.
@@ -1728,15 +1730,17 @@ export default function App() {
 
   /**
    * Save: writes the open file (see kaleidoFile.ts) with a copy of each
-   * scene, in tab order, and, while Files is the input, of each track, so
-   * the file can move to another PC. With any other input, the track list
-   * empties first, so tracks from an earlier Files input never go into the
-   * file. A new blank scene with no changes is left out, unless it is the
-   * only one. Save As (or a file never saved) asks for a file name first.
-   * Returns true when the file was saved.
+   * scene, in tab order, and of each track, so the file can move to another
+   * PC. A switch of the Input never empties the track list: only a Save
+   * with Input Nothing does, and it asks first (Cancel saves nothing). A new
+   * blank scene with no changes is left out, unless it is the only one.
+   * Save As (or a file never saved) asks for a file name first. Returns
+   * true when the file was saved.
    */
   const saveFile = useCallback(async (saveAs = false): Promise<boolean> => {
     if (!engine || !isTauri() || docsRef.current.length === 0) return false;
+    const dropTracks = audioInput.settings.kind === "none" && tracks.list.length > 0;
+    if (dropTracks && !await new Promise<boolean>((answer) => setDropTracksQuestion({ answer }))) return false;
     const current = filePathRef.current;
     const first = docsRef.current[0];
     const firstName = docFileName(first.id === activeIdRef.current ? scenePathRef.current : first.path, first.untitled).replace(/\.ksage$/i, "");
@@ -1745,7 +1749,7 @@ export default function App() {
       : await saveDialog({ defaultPath: current ?? `${firstName}.${FILE_EXTENSION}`, filters: [{ name: "Kaleido Sage project", extensions: [FILE_EXTENSION] }] });
     if (!path) return false;
     try {
-      if (audioInput.settings.kind !== "tracks") tracks.clear();
+      if (dropTracks) tracks.clear();
       showStatus(tracks.list.length ? "Saving the project and its scenes and audio files…" : "Saving the project and its scenes…", 0, undefined, true);
       /**
        * Each scene goes in as it is now, from the engine or from its tab's
@@ -2875,6 +2879,22 @@ export default function App() {
           onCancel={() => {
             saveQuestion.answer(false);
             setSaveQuestion(null);
+          }}
+        />
+      )}
+      {dropTracksQuestion && (
+        <ConfirmDialog
+          title="Save without the audio files?"
+          message={`The Input is Nothing, so the project saves with no audio files. ${tracks.list.length === 1 ? "The 1 file in the playlist goes" : `All ${tracks.list.length} files in the playlist go`} out of the list, with their Song Maps. To keep them, click Cancel and set the Input to Files first.`}
+          confirmLabel="Save without them"
+          confirmIcon={<FloppyDisk size={16} weight="bold" />}
+          onConfirm={() => {
+            dropTracksQuestion.answer(true);
+            setDropTracksQuestion(null);
+          }}
+          onCancel={() => {
+            dropTracksQuestion.answer(false);
+            setDropTracksQuestion(null);
           }}
         />
       )}
