@@ -27,6 +27,8 @@ export interface KeptImage {
 /** One open tab: its file, unsaved mark, settings (scene text), images and Driver video. */
 export interface KeptDoc {
   id: number;
+  /** The scene's ID (see SceneDoc.sceneId); missing in a snapshot from before the IDs. */
+  sceneId?: string;
   path: string | null;
   untitled: number;
   dirty: boolean;

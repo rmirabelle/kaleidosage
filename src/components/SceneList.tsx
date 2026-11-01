@@ -19,15 +19,15 @@ const sliceSelected = () => songFollow.enabled && songFollow.selection !== null;
 /** A song that uses a scene: its name, and how many of its Song Map slices picked the scene. */
 interface SongUse { name: string; slices: number }
 
-/** For each scene (by tab index), the songs of the playlist whose Song Map picked it, in playlist order. */
-function sceneUse(sceneCount: number): SongUse[][] {
-  const use: SongUse[][] = Array.from({ length: sceneCount }, () => []);
+/** For each scene ID, the songs of the playlist whose Song Map picked it, in playlist order. */
+function sceneUse(): Map<string, SongUse[]> {
+  const use = new Map<string, SongUse[]>();
   for (const track of tracks.list) {
-    const counts = new Map<number, number>();
+    const counts = new Map<string, number>();
     for (const slice of songFollow.analysisFor(track.path)?.mapEdits ?? []) {
-      if (slice.scene !== undefined && slice.scene >= 0 && slice.scene < sceneCount) counts.set(slice.scene, (counts.get(slice.scene) ?? 0) + 1);
+      if (slice.scene !== undefined) counts.set(slice.scene, (counts.get(slice.scene) ?? 0) + 1);
     }
-    for (const [scene, slices] of counts) use[scene].push({ name: track.name, slices });
+    for (const [scene, slices] of counts) use.set(scene, [...(use.get(scene) ?? []), { name: track.name, slices }]);
   }
   return use;
 }
@@ -118,7 +118,7 @@ export function SceneList({ tabs, activeId, onSelect, onClose, onReorder, onRena
   const [renaming, setRenaming] = useState<{ id: number; value: string } | null>(null);
   const [filter, setFilter] = useState("");
   const baseName = (tab: Props["tabs"][number]) => tab.fileName.replace(/\.ksage$/i, "");
-  const use = showUse ? sceneUse(tabs.length) : [];
+  const use = showUse ? sceneUse() : new Map<string, SongUse[]>();
   const query = filter.trim().toLowerCase();
   const shown = tabs.map((tab, index) => ({ tab, index })).filter(({ tab }) => !query || baseName(tab).toLowerCase().includes(query));
   const nameOrder = [...tabs].sort((a, b) => byName(baseName(a), baseName(b))).map((tab) => tab.id);
@@ -169,7 +169,7 @@ export function SceneList({ tabs, activeId, onSelect, onClose, onReorder, onRena
           )}
         </label>
         <ol ref={drag.listRef} className={`scene-list-items ${picking ? "picking" : ""}`} role="listbox" aria-label="Scenes">
-          {shown.map(({ tab, index }) => {
+          {shown.map(({ tab }) => {
             const active = tab.id === activeId;
             return (
               <li
@@ -218,7 +218,7 @@ export function SceneList({ tabs, activeId, onSelect, onClose, onReorder, onRena
                 ) : (
                   <span className="scene-list-name">{baseName(tab)}{tab.dirty && <span className="titlebar-dirty">*</span>}</span>
                 )}
-                {showUse && <UseBadge use={use[index] ?? []} />}
+                {showUse && <UseBadge use={use.get(tab.sceneId) ?? []} />}
                 <button
                   className="scene-list-close"
                   onPointerDown={(event) => event.stopPropagation()}

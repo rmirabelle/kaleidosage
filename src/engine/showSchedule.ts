@@ -25,15 +25,20 @@ export interface ScheduledSlice {
   runStart: number;
 }
 
-/** Each song's slices with their picked scenes, for the songs in playlist order (null: no plan yet). */
-export function scheduleShow(plans: readonly (SongPlan | null)[], sceneCount: number): ScheduledSlice[][] {
+/**
+ * Each song's slices with their picked scenes, for the songs in playlist
+ * order (null: no plan yet). "sceneIds": the scenes' IDs in tab order; a
+ * pick of a scene that is not there is no pick.
+ */
+export function scheduleShow(plans: readonly (SongPlan | null)[], sceneIds: readonly string[]): ScheduledSlice[][] {
+  const places = new Map(sceneIds.map((id, index) => [id, index]));
   return plans.map((plan) => {
-    const parts: readonly { start: number; tier: Tier | null; scene?: number }[] = plan?.parts ?? [{ start: 0, tier: null }];
+    const parts: readonly { start: number; tier: Tier | null; scene?: string }[] = plan?.parts ?? [{ start: 0, tier: null }];
     const drops = new Set(plan?.drops.map((drop) => drop.time) ?? []);
     let lastPick: number | null = null;
     let runStart = -1;
     return parts.map((part, index) => {
-      const scene = part.scene !== undefined && part.scene >= 0 && part.scene < sceneCount ? part.scene : null;
+      const scene = part.scene !== undefined ? places.get(part.scene) ?? null : null;
       if (scene !== null) {
         lastPick = scene;
         runStart = part.start;

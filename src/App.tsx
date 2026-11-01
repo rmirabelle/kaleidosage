@@ -64,7 +64,7 @@ import { mapOf, planSong } from "./engine/songPlan";
 import { fillScenes } from "./engine/songMapEdits";
 import { helpSettings } from "./lib/helpSettings";
 import { RANGE_ON_EVENT } from "./lib/pointerEvents";
-import { FILE_EXTENSION, fileFingerprint, isFileCopy, matchingScenes, openKaleidoFile, readManifest, saveKaleidoFile, type FileAudio } from "./lib/kaleidoFile";
+import { FILE_EXTENSION, fileFingerprint, isFileCopy, matchingScenes, newSceneId, openKaleidoFile, readManifest, saveKaleidoFile, type FileAudio } from "./lib/kaleidoFile";
 import { revealMainWindow } from "./lib/splash";
 import { isVideoPath, isVideoType, loadVideoBlob, loadVideoFile, stageVideoBlob, type VideoFile } from "./lib/videos";
 import { checkForUpdate, getAppVersion, type UpdateInfo } from "./lib/updater";
@@ -118,6 +118,8 @@ let nextImageId = 1;
  */
 interface SceneDoc {
   id: number;
+  /** The scene's ID, which the project file keeps (see FileManifest.sceneIds): a song map slice picks its scene by it. */
+  sceneId: string;
   /** The scene file, or null for a scene that was never saved. */
   path: string | null;
   /** For a scene that was never saved: 1 shows "Untitled Scene", 2 "Untitled Scene 2", and so on. */
@@ -172,7 +174,8 @@ const songsToFill = new Set<string>();
  * gets the scene after the last pick of the song before it in the list, so
  * the scenes go on through the show and do not start again at each song.
  */
-function fillAddedSongs(sceneCount: number) {
+function fillAddedSongs(sceneIds: readonly string[]) {
+  const sceneCount = sceneIds.length;
   for (const path of [...songsToFill]) {
     const analysis = songFollow.analysisFor(path);
     if (!analysis) continue;
@@ -180,9 +183,12 @@ function fillAddedSongs(sceneCount: number) {
     const index = tracks.list.findIndex((track) => track.path === path);
     if (sceneCount < 2 || index < 0 || analysis.mapEdits) continue;
     const before = tracks.list.slice(0, index).reverse()
-      .map((track) => songFollow.analysisFor(track.path)?.mapEdits?.at(-1)?.scene)
-      .find((scene) => scene !== undefined);
-    songFollow.editMap(path, fillScenes(mapOf(planSong(analysis)), before === undefined ? 0 : (before + 1) % sceneCount, sceneCount));
+      .map((track) => {
+        const scene = songFollow.analysisFor(track.path)?.mapEdits?.at(-1)?.scene;
+        return scene === undefined ? -1 : sceneIds.indexOf(scene);
+      })
+      .find((place) => place >= 0);
+    songFollow.editMap(path, fillScenes(mapOf(planSong(analysis)), before === undefined ? 0 : (before + 1) % sceneCount, sceneIds));
   }
 }
 
@@ -606,15 +612,13 @@ export default function App() {
     engine?.setPicture(picture?.source ?? null);
   }, [engine]);
 
-  /** "replaced": scenes that took the place of others (old id to new id), so their song map picks go to the new scene. */
-  const writeDocs = useCallback((next: SceneDoc[], replaced?: ReadonlyMap<number, number>) => {
+  const writeDocs = useCallback((next: SceneDoc[]) => {
     const before = docsRef.current;
     docsRef.current = next;
     setDocs(next);
-    /* A scene that moved or closed: the song map slices that picked it follow it, or go back to the show's order (see songFollow.moveScenes). */
-    const place = new Map(next.map((doc, index) => [doc.id, index]));
-    const placeOf = (doc: SceneDoc | undefined) => doc ? place.get(replaced?.get(doc.id) ?? doc.id) : undefined;
-    if (before.some((doc, index) => placeOf(doc) !== index)) songFollow.moveScenes((index) => placeOf(before[index]) ?? null);
+    /* A scene that closed: the song map slices that picked it go back to the show's order (see songFollow.keepScenes). */
+    const kept = new Set(next.map((doc) => doc.sceneId));
+    if (before.some((doc) => !kept.has(doc.sceneId))) songFollow.keepScenes(kept);
   }, []);
 
   const selectDocId = useCallback((id: number | null) => {
@@ -638,7 +642,7 @@ export default function App() {
     /* Above every open tab's id: a dev hot update of this file starts nextDocId at 1 again while the tabs stay, and two tabs with one id break the tab bar. */
     const id = Math.max(nextDocId, ...docsRef.current.map((doc) => doc.id + 1));
     nextDocId = id + 1;
-    writeDocs([...docsRef.current, { id, path: null, untitled, dirty: false }]);
+    writeDocs([...docsRef.current, { id, sceneId: newSceneId(), path: null, untitled, dirty: false }]);
     selectDocId(id);
     historyRef.current = new SettingsHistory(engine.params, engine.state);
   }, [engine, selectDocId, writeDocs]);
@@ -1067,7 +1071,7 @@ export default function App() {
    * the start of the track (see showSchedule.ts).
    */
   const startShow = useCallback(() => {
-    const scheduled = songFollow.enabled ? songFollow.schedule(docsRef.current.length)[tracks.index]?.[0]?.scene ?? 0 : 0;
+    const scheduled = songFollow.enabled ? songFollow.schedule(docsRef.current.map((doc) => doc.sceneId))[tracks.index]?.[0]?.scene ?? 0 : 0;
     const first = docsRef.current[scheduled] ?? docsRef.current[0];
     if (!engine || !first) return;
     if (first.id !== activeIdRef.current) switchToDoc(first.id);
@@ -1407,7 +1411,7 @@ export default function App() {
       const jumped = last < 0 || early < last - 0.25 || early > last + 0.5;
       const time = jumped ? Math.max(early, tracks.position) : Math.max(early, last);
       last = time;
-      const slice = sliceAt(songFollow.schedule(docsRef.current.length)[tracks.index] ?? [], time);
+      const slice = sliceAt(songFollow.schedule(docsRef.current.map((doc) => doc.sceneId))[tracks.index] ?? [], time);
       if (!slice) return;
       /* The pick is part of the run, so a scene picked for the slice that plays comes in at once. */
       const run = `${tracks.index} ${slice.runStart} ${slice.lastPick}`;
@@ -1760,6 +1764,8 @@ export default function App() {
       const docDirty = (doc: SceneDoc) => doc.id === activeIdRef.current ? fingerprint() !== savedFingerprintRef.current : doc.dirty;
       const keepBlank = !docsRef.current.some((doc) => docPath(doc) !== null || docDirty(doc));
       const scenes: string[] = [];
+      /* Each saved scene's ID, in the same order: the song maps pick scenes by them. */
+      const sceneIds: string[] = [];
       let activeScene = 0;
       const projectName = fileNameOf(path).replace(/\.ksage$/i, "");
       let unnamed = 0;
@@ -1772,6 +1778,7 @@ export default function App() {
         if (active) activeScene = scenes.length;
         if (isFileCopy(scenePath) && !dirtyNow) {
           scenes.push(scenePath!);
+          sceneIds.push(doc.sceneId);
           continue;
         }
         /* A scene with no name yet takes the project's name: "Cool", then "Cool 2" and so on. */
@@ -1790,13 +1797,15 @@ export default function App() {
           writeDocs(docsRef.current.map((candidate) => candidate.id === doc.id ? { ...candidate, path: target, dirty: false } : candidate));
         }
         scenes.push(target);
+        sceneIds.push(doc.sceneId);
       }
       await saveKaleidoFile(path, {
         audio: fileAudio(),
         activeScene,
         filesWidth: panelLayout.filesWidth,
         trackSeconds: tracks.list.map((track) => tracks.lengthOf(track.path)),
-        songFollow: songFollow.enabled
+        songFollow: songFollow.enabled,
+        sceneIds
       }, scenes, tracks.list.map((track) => track.path), tracks.list.map((track) => songFollow.analysisText(track.path)));
     } catch (error) {
       showError(`Could not save the project. ${String(error)}`);
@@ -1883,8 +1892,12 @@ export default function App() {
         await openScenePath(scene);
       }
       setLoading({ title, detail: "Audio files and settings…", progress: 1 });
+      /* The scenes take the IDs the file kept, so the song maps' picks find them; with a scene that did not open, the places would not match, and they keep new ones. */
+      const ids = manifest.sceneIds;
+      if (ids && ids.length === docsRef.current.length) writeDocs(docsRef.current.map((doc, index) => ({ ...doc, sceneId: ids[index] })));
       /* The song analyses the file kept go first, so Song follow needs none for these tracks. */
-      opened.analyses?.forEach((text, index) => { if (text && opened.tracks[index]) songFollow.preload(opened.tracks[index], text); });
+      const sceneIds = docsRef.current.map((doc) => doc.sceneId);
+      opened.analyses?.forEach((text, index) => { if (text && opened.tracks[index]) songFollow.preload(opened.tracks[index], text, sceneIds); });
       tracks.replace(opened.tracks);
       /* The lengths the file kept, so the Files footer has its play time at once. */
       if (manifest.trackSeconds) tracks.setLengths(manifest.trackSeconds);
@@ -1959,12 +1972,12 @@ export default function App() {
         const old = replace ? byName.get(sceneName(scene).toLowerCase()) : undefined;
         await openScenePath(scene);
         const added = activeIdRef.current;
-        /* Replace: the new scene takes the old one's place in the list, and the old one goes. Each old scene is replaced once. */
+        /* Replace: the new scene takes the old one's place in the list and its ID, so the song map picks go to it, and the old one goes. Each old scene is replaced once. */
         if (old === undefined || added === null || old === added || !docsRef.current.some((doc) => doc.id === old)) continue;
         byName.delete(sceneName(scene).toLowerCase());
         const newDoc = docsRef.current.find((doc) => doc.id === added)!;
         storedRef.current.delete(old);
-        writeDocs(docsRef.current.filter((doc) => doc.id !== added).map((doc) => doc.id === old ? newDoc : doc), new Map([[old, added]]));
+        writeDocs(docsRef.current.filter((doc) => doc.id !== added).map((doc) => doc.id === old ? { ...newDoc, sceneId: doc.sceneId } : doc));
         replaced++;
       }
       const parts = [`Imported ${scenes.length === 1 ? "1 scene" : `${scenes.length} scenes`}`];
@@ -2073,7 +2086,7 @@ export default function App() {
         if (doc.id === activeIdRef.current) {
           const driver = driverRef.current;
           return [{
-            id: doc.id, path: scenePathRef.current, untitled: doc.untitled, dirty: fingerprint() !== savedFingerprintRef.current,
+            id: doc.id, sceneId: doc.sceneId, path: scenePathRef.current, untitled: doc.untitled, dirty: fingerprint() !== savedFingerprintRef.current,
             scene: serializeScene(engine.params, engine.state, { image: KEPT_IMAGE }),
             images: [keepImage(imagesRef.current[0]), keepImage(imagesRef.current[1])],
             driver: driver ? { video: driver.videoFile, name: driver.name } : null,
@@ -2090,7 +2103,7 @@ export default function App() {
           keptText.set(stored, scene);
         }
         return [{
-          id: doc.id, path: doc.path, untitled: doc.untitled, dirty: doc.dirty, scene,
+          id: doc.id, sceneId: doc.sceneId, path: doc.path, untitled: doc.untitled, dirty: doc.dirty, scene,
           images: [keepImage(stored.images[0]), keepImage(stored.images[1])],
           driver: stored.driver ? { video: stored.driver.videoFile, name: stored.driver.name } : null,
           picture: keepImage(stored.picture),
@@ -2136,6 +2149,8 @@ export default function App() {
       }
     };
     const restore = async () => {
+      /* Each kept tab's scene ID; a snapshot from before the IDs gets new ones, and its song map picks (tab indexes) go to them (see songFollow.preload). */
+      const keptIds = kept.docs.map((keptDoc) => keptDoc.sceneId ?? newSceneId());
       const loaded: { doc: SceneDoc; params: Params; state: PlayState; images: [SlotImage, SlotImage | null]; driver: DriverVideo | null; picture: SlotImage | null; terrain: TerrainData | null; openGroup: string | null }[] = [];
       for (const keptDoc of kept.docs) {
         const params = createParams();
@@ -2156,7 +2171,7 @@ export default function App() {
         }
         const picture = keptDoc.picture ? await loadKeptImage(keptDoc.picture) : null;
         const terrain = keptDoc.terrain ? await keptTerrain(keptDoc.terrain) : null;
-        loaded.push({ doc: { id: keptDoc.id, path: keptDoc.path, untitled: keptDoc.untitled, dirty: keptDoc.dirty }, params, state, images: [first, second], driver, picture, terrain, openGroup: keptDoc.openGroup });
+        loaded.push({ doc: { id: keptDoc.id, sceneId: keptIds[kept.docs.indexOf(keptDoc)], path: keptDoc.path, untitled: keptDoc.untitled, dirty: keptDoc.dirty }, params, state, images: [first, second], driver, picture, terrain, openGroup: keptDoc.openGroup });
       }
       if (loaded.length === 0 || activeIdRef.current !== null) return;
       /* Each tab's Undo history is made on the engine's settings, as addDoc makes it, starting from that scene. */
@@ -2181,7 +2196,7 @@ export default function App() {
          */
         for (const [path, key] of Object.entries(kept.file.analyses ?? {})) {
           const text = await keptAnalysisText(key).catch(() => null);
-          if (text) songFollow.preload(path, text);
+          if (text) songFollow.preload(path, text, keptIds);
         }
         if (kept.file.tracks.length) tracks.replace(kept.file.tracks);
         if (kept.file.songFollow !== undefined) songFollow.setEnabled(kept.file.songFollow);
@@ -2243,7 +2258,7 @@ export default function App() {
     const stopFollow = songFollow.subscribe(apply);
     const stopTracks = tracks.subscribe(apply);
     /* A song added to the project gets its song map filled once its analysis is done (see fillAddedSongs). */
-    const stopFill = songFollow.subscribe(() => fillAddedSongs(docsRef.current.length));
+    const stopFill = songFollow.subscribe(() => fillAddedSongs(docsRef.current.map((doc) => doc.sceneId)));
     return () => {
       stopFollow();
       stopTracks();
@@ -2529,8 +2544,8 @@ export default function App() {
   const inputInPlaylist = sceneListShown && tracksActive && !filesCollapsed;
   const inputMenu = <AudioInputMenu tip={inputTip} onTipDone={() => setInputTip(false)} onPick={pickInput} />;
   const tabs: DocumentTabInfo[] = docs.map((doc) => doc.id === activeId
-    ? { id: doc.id, fileName: docFileName(scenePath, doc.untitled), path: scenePath, dirty }
-    : { id: doc.id, fileName: docFileName(doc.path, doc.untitled), path: doc.path, dirty: doc.dirty });
+    ? { id: doc.id, sceneId: doc.sceneId, fileName: docFileName(scenePath, doc.untitled), path: scenePath, dirty }
+    : { id: doc.id, sceneId: doc.sceneId, fileName: docFileName(doc.path, doc.untitled), path: doc.path, dirty: doc.dirty });
   const sceneFileName = tabs.find((tab) => tab.id === activeId)?.fileName ?? "Untitled Scene";
 
   return (
@@ -2574,7 +2589,7 @@ export default function App() {
           {sceneListShown && tracksActive && <FilesCard onAddTracks={() => void pickTracks()} input={inputInPlaylist ? inputMenu : null} addTip={filesTip} onAddTipDone={endFilesTip} />}
           <div className="sidebar-stack">
             <div className="sidebar-columns">
-              {sceneListShown && <SceneList tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} onPick={(id) => songFollow.pickScene(docsRef.current.findIndex((doc) => doc.id === id))} showUse={tracksActive} />}
+              {sceneListShown && <SceneList tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} onPick={(id) => { const doc = docsRef.current.find((each) => each.id === id); if (doc) songFollow.pickScene(doc.sceneId); }} showUse={tracksActive} />}
               {/* The left panel: the Source section, then the Designer (the effects). */}
               {engine && !startScreen && panelOpen && (
                 <ControlPanel
@@ -2621,7 +2636,7 @@ export default function App() {
             </div>
             {sceneListShown && followOn && (
               <div className="song-map-dock">
-                <SongMapPanel sceneCount={docs.length} activeScene={docs.findIndex((doc) => doc.id === activeId)} sceneNames={tabs.map((tab) => tab.fileName.replace(/\.ksage$/i, ""))} held={sceneHeld} onSlicePick={pickSlice} tip={songTip} onTip={setSongTip} />
+                <SongMapPanel sceneIds={docs.map((doc) => doc.sceneId)} activeScene={docs.findIndex((doc) => doc.id === activeId)} sceneNames={tabs.map((tab) => tab.fileName.replace(/\.ksage$/i, ""))} held={sceneHeld} onSlicePick={pickSlice} tip={songTip} onTip={setSongTip} />
               </div>
             )}
           </div>

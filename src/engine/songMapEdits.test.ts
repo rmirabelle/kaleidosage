@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { changeSlice, deleteSlice, fillScenes, mergeWithNext, moveDivider, moveScenes, splitAt } from "./songMapEdits";
+import { changeSlice, deleteSlice, fillScenes, keepScenes, mergeWithNext, moveDivider, pickedById, splitAt } from "./songMapEdits";
 import { mapOf, planSong, type MapSlice } from "./songPlan";
 import type { SongAnalysis } from "./songScript";
 
@@ -20,21 +20,29 @@ describe("song map edits", () => {
   });
 
   it("picks a scene for a slice, even the first, and clears it", () => {
-    expect(changeSlice(slices, 0, { scene: 4 })[0]).toEqual({ ...slices[0], scene: 4 });
-    expect(changeSlice(changeSlice(slices, 1, { scene: 2 }), 1, { scene: undefined })[1]).toEqual(slices[1]);
-    expect(changeSlice(changeSlice(slices, 1, { scene: 2 }), 1, { tier: 3 })[1]).toEqual({ ...slices[1], tier: 3, scene: 2 });
+    expect(changeSlice(slices, 0, { scene: "s4" })[0]).toEqual({ ...slices[0], scene: "s4" });
+    expect(changeSlice(changeSlice(slices, 1, { scene: "s2" }), 1, { scene: undefined })[1]).toEqual(slices[1]);
+    expect(changeSlice(changeSlice(slices, 1, { scene: "s2" }), 1, { tier: 3 })[1]).toEqual({ ...slices[1], tier: 3, scene: "s2" });
   });
 
   it("fills the slices with no pick with the next scenes, and keeps the picks", () => {
-    expect(fillScenes(changeSlice(slices, 1, { scene: 7 }), 2, 9).map((slice) => slice.scene)).toEqual([2, 7, 8]);
-    expect(fillScenes(slices, 8, 9).map((slice) => slice.scene)).toEqual([8, 0, 1]);
+    const ids = Array.from({ length: 9 }, (_, index) => `s${index}`);
+    expect(fillScenes(changeSlice(slices, 1, { scene: "s7" }), 2, ids).map((slice) => slice.scene)).toEqual(["s2", "s7", "s8"]);
+    expect(fillScenes(slices, 8, ids).map((slice) => slice.scene)).toEqual(["s8", "s0", "s1"]);
+    /* A pick of a scene that is gone counts as none. */
+    expect(fillScenes(changeSlice(slices, 1, { scene: "gone" }), 0, ids).map((slice) => slice.scene)).toEqual(["s0", "s1", "s2"]);
   });
 
-  it("moves picked scenes with the scene order, and drops a pick whose scene is gone", () => {
-    const picked = changeSlice(changeSlice(slices, 0, { scene: 0 }), 2, { scene: 3 });
-    expect(moveScenes(picked, (index) => index).length).toBe(3);
-    expect(moveScenes(picked, (index) => index)).toBe(picked);
-    expect(moveScenes(picked, (index) => (index === 0 ? null : index - 1))).toEqual([slices[0], slices[1], { ...slices[2], scene: 2 }]);
+  it("drops a pick whose scene is gone, and keeps the others", () => {
+    const picked = changeSlice(changeSlice(slices, 0, { scene: "a" }), 2, { scene: "b" });
+    expect(keepScenes(picked, new Set(["a", "b"]))).toBe(picked);
+    expect(keepScenes(picked, new Set(["b"]))).toEqual([slices[0], slices[1], { ...slices[2], scene: "b" }]);
+  });
+
+  it("turns the tab indexes of a map saved before the scene IDs into IDs", () => {
+    const old = [{ ...slices[0], scene: 1 }, slices[1], { ...slices[2], scene: 5 }] as unknown as MapSlice[];
+    expect(pickedById(old, ["a", "b"])).toEqual([{ ...slices[0], scene: "b" }, slices[1], slices[2]]);
+    expect(pickedById(slices, ["a"])).toBe(slices);
   });
 
   it("deletes a slice: the slice before it grows into its place", () => {
@@ -101,9 +109,9 @@ describe("an edited song map", () => {
   });
 
   it("keeps a picked scene with its slice", () => {
-    const plan = planSong({ ...analysis, mapEdits: changeSlice(slices, 2, { scene: 4 }) });
-    expect(plan.parts[2].scene).toBe(4);
+    const plan = planSong({ ...analysis, mapEdits: changeSlice(slices, 2, { scene: "s4" }) });
+    expect(plan.parts[2].scene).toBe("s4");
     expect(plan.drops.map((drop) => drop.time)).toEqual([20]);
-    expect(mapOf(plan)[2].scene).toBe(4);
+    expect(mapOf(plan)[2].scene).toBe("s4");
   });
 });

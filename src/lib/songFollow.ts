@@ -1,5 +1,5 @@
 import { scheduleShow, type ScheduledSlice } from "../engine/showSchedule";
-import { changeSlice, moveScenes } from "../engine/songMapEdits";
+import { changeSlice, keepScenes, pickedById } from "../engine/songMapEdits";
 import { mapOf, planSong, type MapSlice } from "../engine/songPlan";
 import { compileScript, type SongAnalysis, type SongScript } from "../engine/songScript";
 import { ANALYSIS_VERSION, analyzeSong } from "./songAnalysis";
@@ -130,8 +130,8 @@ class SongFollow {
     this.changed();
   }
 
-  /** Picks this scene (a tab index) for the selected slice: it plays that scene from now on (see showSchedule.ts). */
-  pickScene(scene: number) {
+  /** Picks this scene (its ID) for the selected slice: it plays that scene from now on (see showSchedule.ts). */
+  pickScene(scene: string) {
     const selection = this.selection;
     const analysis = selection && this.analyses.get(selection.path);
     if (!selection || !analysis) return;
@@ -141,28 +141,30 @@ class SongFollow {
   }
 
   /**
-   * After a change of the scene order (a drag, or a closed scene): each
-   * picked scene follows its scene to its new tab index, and a slice whose
-   * scene is gone goes back to the show's order (see moveScenes).
+   * After a scene closed: a slice that picked a scene not in "kept" (the
+   * IDs of the scenes that are left) goes back to the show's order (see
+   * keepScenes). A pick follows its scene through a change of the order by
+   * itself, as it picks the scene by its ID.
    */
-  moveScenes(place: (index: number) => number | null) {
+  keepScenes(kept: ReadonlySet<string>) {
     for (const [path, analysis] of this.analyses) {
       if (!analysis.mapEdits) continue;
-      const moved = moveScenes(analysis.mapEdits, place);
-      if (moved !== analysis.mapEdits) this.editMap(path, [...moved]);
+      const left = keepScenes(analysis.mapEdits, kept);
+      if (left !== analysis.mapEdits) this.editMap(path, [...left]);
     }
   }
 
   /**
    * The show's scene schedule (see showSchedule.ts) for the tracks in list
-   * order and this many scenes: each track's slices with their scenes. A
-   * track with no script yet counts as one slice. Made again only when a
-   * script, the track list or the number of scenes changes.
+   * order and the scenes with these IDs, in tab order: each track's slices
+   * with their scenes' tab indexes. A track with no script yet counts as
+   * one slice. Made again only when a script, the track list or the scenes
+   * change.
    */
-  schedule(sceneCount: number) {
-    const key = `${this.version} ${tracks.version} ${sceneCount}`;
+  schedule(sceneIds: readonly string[]) {
+    const key = `${this.version} ${tracks.version} ${sceneIds.join()}`;
     if (this.scheduled.key !== key) {
-      this.scheduled = { key, slices: scheduleShow(tracks.list.map((track) => this.made.get(track.path)?.plan ?? null), sceneCount) };
+      this.scheduled = { key, slices: scheduleShow(tracks.list.map((track) => this.made.get(track.path)?.plan ?? null), sceneIds) };
     }
     return this.scheduled.slices;
   }
@@ -176,12 +178,15 @@ class SongFollow {
   /**
    * Takes a track's analysis from a playlist file (see analysisText). One
    * from another version of the analysis, or one that cannot be read, is
-   * left out: the track is analyzed again.
+   * left out: the track is analyzed again. "sceneIds": the open scenes' IDs
+   * in tab order, for a map saved before the IDs, whose picks are tab
+   * indexes (see pickedById).
    */
-  preload(path: string, text: string) {
+  preload(path: string, text: string, sceneIds: readonly string[]) {
     try {
       const analysis = JSON.parse(text) as SongAnalysis;
       if (analysis?.version !== ANALYSIS_VERSION || !Array.isArray(analysis.beats) || !Array.isArray(analysis.sections)) return;
+      if (analysis.mapEdits) analysis.mapEdits = [...pickedById(analysis.mapEdits, sceneIds)];
       this.analyses.set(path, analysis);
       this.scripts.set(path, Promise.resolve().then(() => {
         const script = compileScript(analysis);

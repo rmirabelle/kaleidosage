@@ -33,7 +33,7 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
  * the song's name show the map of the song before or after it in the
  * playlist, and do nothing else. The slices (the song's parts) are each
  * colored by their mood, with a red lightning mark where a hit starts one, and
- * show the number of the scene the user picked for them, in amber, with
+ * show the name of the scene the user picked for them, in amber, with
  * an outline for the scene selected in the scene list; a slice with no
  * pick has no number, as it changes nothing (see showSchedule.ts). At
  * first no slice is selected, and the slice tools are off. While a slice is selected, a Ctrl+click
@@ -72,7 +72,7 @@ const EDIT_TIP = "Edit the selected slice. Changing its Mood controls how the sc
 const SCENES_TIP = "Assign a scene to a selected slice by Ctrl+clicking on a scene in the Scenes list. Click Auto Fill to auto-assign scenes to unassigned slices.";
 
 /**
- * "sceneCount": the number of scenes (tabs) that the schedule goes round.
+ * "sceneIds": the IDs of the scenes (tabs) that the schedule goes round, in tab order.
  * "activeScene": the tab index of the scene selected in the scene list.
  * "sceneNames": the scenes' names, by tab index: a slice's tag shows the
  * name of its scene, cut with "…" when the slice is too narrow.
@@ -82,8 +82,8 @@ const SCENES_TIP = "Assign a scene to a selected slice by Ctrl+clicking on a sce
  * "onSlicePick": a click on a slice, with its place in the schedule.
  * "tip": the tip to show (see SongTip); "onTip" moves to the next one.
  */
-export function SongMapPanel({ sceneCount, activeScene, sceneNames = [], held, onSlicePick, tip, onTip }: {
-  sceneCount: number;
+export function SongMapPanel({ sceneIds, activeScene, sceneNames = [], held, onSlicePick, tip, onTip }: {
+  sceneIds: readonly string[];
   activeScene: number;
   sceneNames?: readonly string[];
   held: boolean;
@@ -93,7 +93,8 @@ export function SongMapPanel({ sceneCount, activeScene, sceneNames = [], held, o
 }) {
   const version = useSyncExternalStore(subscribeFollow, followVersion);
   useSyncExternalStore(subscribeTracks, tracksVersion);
-  const schedule = songFollow.enabled ? songFollow.schedule(sceneCount) : [];
+  const sceneCount = sceneIds.length;
+  const schedule = songFollow.enabled ? songFollow.schedule(sceneIds) : [];
   /** The song that the arrows picked to show, or null for the song that plays. */
   const [viewed, setViewed] = useState<string | null>(null);
   const playingPath = songFollow.enabled ? songFollow.currentPath ?? "" : "";
@@ -256,8 +257,11 @@ export function SongMapPanel({ sceneCount, activeScene, sceneNames = [], held, o
         <button
           className="panel-button song-map-fill"
           /* With one scene, every slice plays it anyway. */
-          disabled={sceneCount <= 1 || slices.every((candidate) => candidate.scene !== undefined)}
-          onClick={() => apply(fillScenes(slices, slices[0]?.scene ?? Math.max(0, activeScene), sceneCount))}
+          disabled={sceneCount <= 1 || slices.every((candidate) => candidate.scene !== undefined && sceneIds.includes(candidate.scene))}
+          onClick={() => {
+            const first = slices[0]?.scene === undefined ? -1 : sceneIds.indexOf(slices[0].scene);
+            apply(fillScenes(slices, first >= 0 ? first : Math.max(0, activeScene), sceneIds));
+          }}
           data-tip="Click to automatically switch to the next available scene each time a new slice is played. This applies only to slices where a specific scene isn't yet selected."
         >
           <ListNumbers size={15} /> Auto Fill

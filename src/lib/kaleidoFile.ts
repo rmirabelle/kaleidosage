@@ -33,12 +33,21 @@ export interface FileManifest {
   trackSeconds?: (number | null)[];
   /** True when Song follow was on at the save (see songFollow.ts): the file opens with it on. */
   songFollow?: boolean;
+  /**
+   * Each scene's ID, in tab order: a song map's slice picks its scene by
+   * this ID (see MapSlice.scene). Missing in a file from before the IDs,
+   * whose picks are tab indexes (see songFollow.preload).
+   */
+  sceneIds?: string[];
 }
 
 /** kaleidosage.json, without the scene and track entries, which the Rust side adds. */
-export function writeManifest({ audio, activeScene, filesWidth, trackSeconds, songFollow }: FileManifest): string {
-  return JSON.stringify({ app: "KaleidoSage", kind: "file", version: FILE_VERSION, audio, activeScene, ...(filesWidth ? { layout: { filesWidth } } : {}), ...(trackSeconds ? { trackSeconds } : {}), ...(songFollow !== undefined ? { songFollow } : {}) });
+export function writeManifest({ audio, activeScene, filesWidth, trackSeconds, songFollow, sceneIds }: FileManifest): string {
+  return JSON.stringify({ app: "KaleidoSage", kind: "file", version: FILE_VERSION, audio, activeScene, ...(filesWidth ? { layout: { filesWidth } } : {}), ...(trackSeconds ? { trackSeconds } : {}), ...(songFollow !== undefined ? { songFollow } : {}), ...(sceneIds ? { sceneIds } : {}) });
 }
+
+/** A new scene ID (see FileManifest.sceneIds). */
+export const newSceneId = () => crypto.randomUUID();
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -47,7 +56,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
  * left out, so the app keeps its own; a file from a newer version still
  * opens.
  */
-export function readManifest(text: string): { audio: Partial<FileAudio>; activeScene: number; filesWidth?: number; trackSeconds?: (number | null)[]; songFollow?: boolean } {
+export function readManifest(text: string): { audio: Partial<FileAudio>; activeScene: number; filesWidth?: number; trackSeconds?: (number | null)[]; songFollow?: boolean; sceneIds?: string[] } {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -68,12 +77,17 @@ export function readManifest(text: string): { audio: Partial<FileAudio>; activeS
   const trackSeconds = Array.isArray(parsed.trackSeconds)
     ? parsed.trackSeconds.map((seconds) => typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0 ? seconds : null)
     : undefined;
+  /* The IDs only when each is a text and none is there twice: else the scenes get new ones. */
+  const sceneIds = Array.isArray(parsed.sceneIds) && parsed.sceneIds.every((id) => typeof id === "string" && id !== "") && new Set(parsed.sceneIds).size === parsed.sceneIds.length
+    ? parsed.sceneIds as string[]
+    : undefined;
   return {
     audio,
     activeScene,
     ...(typeof filesWidth === "number" && filesWidth > 0 ? { filesWidth } : {}),
     ...(trackSeconds ? { trackSeconds } : {}),
-    ...(typeof parsed.songFollow === "boolean" ? { songFollow: parsed.songFollow } : {})
+    ...(typeof parsed.songFollow === "boolean" ? { songFollow: parsed.songFollow } : {}),
+    ...(sceneIds ? { sceneIds } : {})
   };
 }
 

@@ -7,6 +7,8 @@ import { useDragReorder } from "./useDragReorder";
 
 export interface DocumentTabInfo {
   id: number;
+  /** The scene's ID, by which the song maps pick it (see MapSlice.scene). */
+  sceneId: string;
   /** The scene's name (its copy's file name, with .ksage), or "Untitled Scene" (with a number after the first) for a scene that was never saved. */
   fileName: string;
   /** The scene's copy in the temp folder (see kaleidoFile.ts); null for a scene that was never saved. */

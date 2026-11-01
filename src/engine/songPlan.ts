@@ -25,8 +25,8 @@ export interface Part {
   tier: Tier;
   /** The part's mean intensity (0 to 1, see SongAnalysis.curves.intensity). */
   intensity: number;
-  /** The scene the user picked for this part (see MapSlice.scene). */
-  scene?: number;
+  /** The ID of the scene the user picked for this part (see MapSlice.scene). */
+  scene?: string;
 }
 
 export interface Drop {
@@ -50,11 +50,13 @@ export interface MapSlice {
   tier: Tier;
   drop: boolean;
   /**
-   * The tab index of the scene the user picked for this slice (a Ctrl+click
-   * in the scene list, or Fill). Missing: the slice keeps the scene of the
-   * slice before it (see showSchedule.ts).
+   * The ID of the scene the user picked for this slice (a Ctrl+click in the
+   * scene list, or Fill; see FileManifest.sceneIds), so the pick stays with
+   * its scene when the scenes change order. Missing: the slice keeps the
+   * scene of the slice before it (see showSchedule.ts). A saved map from
+   * before the IDs has tab indexes here (see songFollow.preload).
    */
-  scene?: number;
+  scene?: string;
 }
 
 /** A place where a new slice starts: the start of each part after the first, with a cut on a drop. Which scene each slice plays is the show schedule's (see showSchedule.ts). */

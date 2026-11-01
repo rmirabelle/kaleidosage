@@ -24,37 +24,57 @@ export function changeSlice(slices: readonly MapSlice[], index: number, change: 
 /**
  * Fill (the Song Map toolbar): picks a scene for each slice that has none,
  * so the song plays a new scene at each slice: the scene after the one of
- * the slice before it, in tab order ("first": the scene of the first slice
- * when it has no pick). The slices with a pick keep it, and the order goes
- * on from them.
+ * the slice before it, in tab order ("first": the tab index of the scene
+ * of the first slice when it has no pick). "sceneIds": the scenes' IDs in
+ * tab order. The slices with a pick keep it, and the order goes on from
+ * them; a pick of a scene that is not there counts as none.
  */
-export function fillScenes(slices: readonly MapSlice[], first: number, sceneCount: number): MapSlice[] {
-  const count = Math.max(1, sceneCount);
+export function fillScenes(slices: readonly MapSlice[], first: number, sceneIds: readonly string[]): MapSlice[] {
+  const count = sceneIds.length;
+  if (count === 0) return [...slices];
   let before = first - 1;
   return slices.map((slice) => {
-    const scene = slice.scene ?? (before + 1) % count;
-    before = scene;
-    return slice.scene === undefined ? { ...slice, scene } : slice;
+    const place = slice.scene === undefined ? -1 : sceneIds.indexOf(slice.scene);
+    if (place >= 0) {
+      before = place;
+      return slice;
+    }
+    before = (before + 1) % count;
+    return { ...slice, scene: sceneIds[before] };
   });
 }
 
 /**
- * The slices after a change of the scene order: "place" gives each old
- * tab index its new one, or null for a scene that is gone (its slices go
- * back to the show's order). Returns the same list when nothing changes.
+ * The slices with only the picks of these scenes: a pick of a scene that
+ * is gone goes, and its slice goes back to the show's order. Returns the
+ * same list when nothing changes.
  */
-export function moveScenes(slices: readonly MapSlice[], place: (index: number) => number | null): readonly MapSlice[] {
-  let moved = false;
-  const next = slices.map((slice) => {
-    if (slice.scene === undefined) return slice;
-    const scene = place(slice.scene);
-    if (scene === slice.scene) return slice;
-    moved = true;
+export function keepScenes(slices: readonly MapSlice[], kept: ReadonlySet<string>): readonly MapSlice[] {
+  if (slices.every((slice) => slice.scene === undefined || kept.has(slice.scene))) return slices;
+  return slices.map((slice) => {
+    if (slice.scene === undefined || kept.has(slice.scene)) return slice;
     const rest = { ...slice };
     delete rest.scene;
-    return scene === null ? rest : { ...rest, scene };
+    return rest;
   });
-  return moved ? next : slices;
+}
+
+/**
+ * A map saved before the scene IDs has tab indexes for its picks: each
+ * becomes the ID of the scene at that tab ("sceneIds", in tab order), and
+ * a pick of a tab that is not there goes. Returns the same list when it has
+ * no tab indexes.
+ */
+export function pickedById(slices: readonly MapSlice[], sceneIds: readonly string[]): readonly MapSlice[] {
+  const old = (scene: unknown) => typeof scene === "number";
+  if (!slices.some((slice) => old(slice.scene))) return slices;
+  return slices.map((slice) => {
+    if (!old(slice.scene)) return slice;
+    const rest = { ...slice };
+    delete rest.scene;
+    const id = sceneIds[slice.scene as unknown as number];
+    return id === undefined ? rest : { ...rest, scene: id };
+  });
 }
 
 /**
