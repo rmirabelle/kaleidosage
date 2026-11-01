@@ -2570,7 +2570,7 @@ export default function App() {
           {sceneListShown && tracksActive && <FilesCard onAddTracks={() => void pickTracks()} input={inputInPlaylist ? inputMenu : null} addTip={filesTip} onAddTipDone={endFilesTip} />}
           <div className="sidebar-stack">
             <div className="sidebar-columns">
-              {sceneListShown && <SceneList tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} onPick={(id) => songFollow.pickScene(docsRef.current.findIndex((doc) => doc.id === id))} />}
+              {sceneListShown && <SceneList tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} onPick={(id) => songFollow.pickScene(docsRef.current.findIndex((doc) => doc.id === id))} showUse={tracksActive} />}
               {/* The left panel: the Source section, then the Designer (the effects). */}
               {engine && !startScreen && panelOpen && (
                 <ControlPanel

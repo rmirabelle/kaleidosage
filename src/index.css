@@ -397,6 +397,20 @@ button { border: 0; }
 .scene-list-close { flex: 0 0 auto; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 4px; color: inherit; background: transparent; opacity: 0; cursor: pointer; }
 .scene-list-item:hover .scene-list-close, .scene-list-item.active .scene-list-close, .scene-list-close:focus-visible { opacity: .6; }
 .scene-list-close:hover { background: rgba(255,255,255,.2); opacity: 1 !important; }
+/* The filter box under the Scenes title (see SceneList): the Open dialog's search box, a little smaller. */
+.open-search.scene-list-search { flex: 0 0 auto; height: 26px; margin: 6px 6px 0; }
+/* The number of songs that use a scene (see UseBadge): a small gray pill; dim with no song. */
+.scene-use-badge { flex: 0 0 auto; min-width: 18px; padding: 1px 5px; border-radius: 9px; color: #e2e5ee; background: #3d4252; font-size: 10.5px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; cursor: help; }
+.scene-use-badge.unused { color: #6f7686; background: transparent; cursor: inherit; }
+.scene-list-item.active .scene-use-badge { background: rgba(255,255,255,.22); }
+.scene-list-item.active .scene-use-badge.unused { color: #c9d4ff; background: transparent; }
+/* The box with the songs, at the right of the badge while the mouse is over it. */
+.toolbar-dropdown.scene-use-pop { position: fixed; z-index: 150; min-width: 180px; max-width: 320px; padding: 8px 10px; pointer-events: none; }
+.scene-use-pop-title { margin-bottom: 6px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.scene-use-pop ol { margin: 0; padding: 0; list-style: none; }
+.scene-use-pop li { display: flex; gap: 12px; justify-content: space-between; padding: 2px 0; color: #e2e5ee; font-size: 12.5px; }
+.scene-use-pop-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.scene-use-pop-slices { flex: 0 0 auto; color: #6f7686; font-variant-numeric: tabular-nums; }
 .stage { position: relative; flex: 1; min-width: 0; min-height: 0; background: #000; }
 
 /* The open scenes as tab buttons above the picture: the selected one bright blue with white text. */

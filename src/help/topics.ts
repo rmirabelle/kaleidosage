@@ -41,11 +41,11 @@ export const HELP_TOPICS = {
       "Keys 1 to 9 select the tab with that number, also in full screen.",
       "Ctrl + Tab selects the next tab.",
       "Ctrl + Shift + Tab selects the tab before.",
-      "The {x} on a tab takes the scene out of the project.",
-      "A middle click on a tab takes the scene out of the project.",
+      "The {x} on a tab, or a middle click on it, takes the scene out of the project.",
       "Drag a tab to move it; the scenes play in tab order.",
       "Double-click a tab, or right-click it and pick Rename, to rename a saved scene.",
-      "With Files as the input, the scenes are a list at the left, not tabs."
+      "With Files as the input, the scenes are a list at the left, not tabs.",
+      "A scene's badge in the list counts the songs that use it; point at it to see them."
     ],
     keywords: ["scene", "tab", "rename", "crossfade", "switch", "document", "new scene", "open scene"]
   },
