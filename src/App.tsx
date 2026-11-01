@@ -1733,6 +1733,21 @@ export default function App() {
   }, [engine, restoreDoc, startScreen, writeDocs]);
 
   /**
+   * Remove All Scenes (the trash can in the scene list's title bar, after
+   * its question): every scene goes out of the open file, and one new blank
+   * scene takes their place, so the file, its playlist and its audio
+   * settings stay. The song maps' picks go with their scenes.
+   */
+  const removeAllScenes = useCallback(() => {
+    if (!engine || startScreen || docsRef.current.length === 0) return;
+    const old = docsRef.current.map((doc) => doc.id);
+    newScene();
+    const added = activeIdRef.current;
+    for (const id of old) storedRef.current.delete(id);
+    writeDocs(docsRef.current.filter((doc) => doc.id === added));
+  }, [engine, newScene, startScreen, writeDocs]);
+
+  /**
    * Save: writes the open file (see kaleidoFile.ts) with a copy of each
    * scene, in tab order, and of each track, so the file can move to another
    * PC. A switch of the Input never empties the track list: only a Save
@@ -2589,7 +2604,7 @@ export default function App() {
           {sceneListShown && tracksActive && <FilesCard onAddTracks={() => void pickTracks()} input={inputInPlaylist ? inputMenu : null} addTip={filesTip} onAddTipDone={endFilesTip} />}
           <div className="sidebar-stack">
             <div className="sidebar-columns">
-              {sceneListShown && <SceneList tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} onPick={(id) => { const doc = docsRef.current.find((each) => each.id === id); if (doc) songFollow.pickScene(doc.sceneId); }} showUse={tracksActive} />}
+              {sceneListShown && <SceneList tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} onPick={(id) => { const doc = docsRef.current.find((each) => each.id === id); if (doc) songFollow.pickScene(doc.sceneId); }} showUse={tracksActive} onRemoveAll={removeAllScenes} />}
               {/* The left panel: the Source section, then the Designer (the effects). */}
               {engine && !startScreen && panelOpen && (
                 <ControlPanel

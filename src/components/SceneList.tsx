@@ -1,6 +1,7 @@
 import { useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { MagnifyingGlass, PencilSimple, SortAscending, Trash, X } from "@phosphor-icons/react";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { ContextMenu } from "./ContextMenu";
 import { help } from "../help/topics";
 import type { DocumentTabInfo } from "./DocumentTabs";
@@ -48,6 +49,8 @@ interface Props {
   onPick: (id: number) => void;
   /** With Files as the input: each scene shows how many songs of the playlist use it (see sceneUse). */
   showUse?: boolean;
+  /** The trash can in the title bar, after its question: every scene goes out of the project (see App's removeAllScenes). */
+  onRemoveAll: () => void;
 }
 
 /**
@@ -93,8 +96,9 @@ function UseBadge({ use }: { use: SongUse[] }) {
  * the Source and FX column (see .sidebar): in Files mode it takes the place
  * of the tabs, which would fill many rows for a long show. The scenes play
  * from the top down. A press selects a scene; a drag moves it to another
- * place (see useDragReorder); the trash button or a middle click takes it out of the
- * file. A right-click opens a menu: Rename (the name turns into a text box:
+ * place (see useDragReorder); a middle click takes it out of the file. The
+ * trash can in the title bar asks, then takes every scene out, as the
+ * Playlist's does with the files. A right-click opens a menu: Rename (the name turns into a text box:
  * Enter keeps the new name, Esc does not) and Remove Scene. While a slice of the
  * Song Map is selected, Ctrl+click picks a scene for it and shows that
  * scene, as a plain click does: as long as Ctrl
@@ -108,7 +112,8 @@ function UseBadge({ use }: { use: SongUse[] }) {
  * input, each row has a badge with the number of songs that use the scene
  * (see UseBadge).
  */
-export function SceneList({ tabs, activeId, onSelect, onClose, onReorder, onRename, onPick, showUse = false }: Props) {
+export function SceneList({ tabs, activeId, onSelect, onClose, onReorder, onRename, onPick, showUse = false, onRemoveAll }: Props) {
+  const [removeAsked, setRemoveAsked] = useState(false);
   const drag = useDragReorder(tabs.map((tab) => tab.id), onReorder);
   const canPick = useSyncExternalStore(subscribeFollow, sliceSelected);
   useSyncExternalStore(subscribeFollow, followVersion);
@@ -144,6 +149,9 @@ export function SceneList({ tabs, activeId, onSelect, onClose, onReorder, onRena
               aria-label="Sort the scenes A–Z"
             >
               <SortAscending size={14} />
+            </button>
+            <button className="button secondary small icon-only" disabled={tabs.length === 0} onClick={() => setRemoveAsked(true)} data-tip="Remove every scene from the project" aria-label="Remove every scene from the project">
+              <Trash size={14} />
             </button>
           </span>
         </div>
@@ -219,15 +227,6 @@ export function SceneList({ tabs, activeId, onSelect, onClose, onReorder, onRena
                   <span className="scene-list-name">{baseName(tab)}{tab.dirty && <span className="titlebar-dirty">*</span>}</span>
                 )}
                 {showUse && <UseBadge use={use.get(tab.sceneId) ?? []} />}
-                <button
-                  className="scene-list-close"
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={() => onClose(tab.id)}
-                  data-tip={active ? "Remove the scene from the project `Ctrl+w`" : "Remove the scene from the project"}
-                  aria-label={`Remove ${tab.fileName}`}
-                >
-                  <Trash size={12} weight="bold" />
-                </button>
               </li>
             );
           })}
@@ -243,6 +242,19 @@ export function SceneList({ tabs, activeId, onSelect, onClose, onReorder, onRena
                 { label: "Remove Scene", icon: <Trash size={14} />, run: () => onClose(menu.id) }
               ];
             })()}
+          />,
+          document.body
+        )}
+        {removeAsked && createPortal(
+          <ConfirmDialog
+            title="Remove every scene?"
+            message={`${tabs.length === 1 ? "The 1 scene goes" : `All ${tabs.length} scenes go`} out of the project, and one new blank scene takes their place. The playlist stays; the Song Map picks of these scenes go. The project file on disk does not change until you save it.`}
+            confirmLabel="Remove all"
+            onCancel={() => setRemoveAsked(false)}
+            onConfirm={() => {
+              setRemoveAsked(false);
+              onRemoveAll();
+            }}
           />,
           document.body
         )}
