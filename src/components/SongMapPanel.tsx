@@ -4,6 +4,7 @@ import { changeSlice, deleteSlice, fillScenes, mergeWithNext, moveDivider, split
 import { TIER_NAMES, mapOf, planSong, type MapSlice, type Tier } from "../engine/songPlan";
 import type { ScheduledSlice } from "../engine/showSchedule";
 import { songFollow } from "../lib/songFollow";
+import { megabytes, songModels } from "../lib/songModels";
 import { tracks } from "../lib/tracks";
 import { placeSeek } from "./Slider";
 import { EmptyState } from "./EmptyState";
@@ -93,6 +94,7 @@ export function SongMapPanel({ sceneIds, activeScene, sceneNames = [], held, onS
 }) {
   const version = useSyncExternalStore(subscribeFollow, followVersion);
   useSyncExternalStore(subscribeTracks, tracksVersion);
+  const modelProgress = useSyncExternalStore(songModels.subscribe, () => songModels.progress);
   const sceneCount = sceneIds.length;
   const schedule = songFollow.enabled ? songFollow.schedule(sceneIds) : [];
   /** The song that the arrows picked to show, or null for the song that plays. */
@@ -202,8 +204,14 @@ export function SongMapPanel({ sceneIds, activeScene, sceneNames = [], held, onS
           <>
             {title}
             <div className="song-map-body">
-              {/* The analysis runs in one step, with no progress to show, so the bar moves without a measure. A failed analysis shows in the Playlist card. */}
-              {songFollow.status.state === "error" && path === playingPath ? (
+              {/* The analysis runs in one step, with no progress to show, so the bar moves without a measure; the first song's model download has a measure. A failed analysis shows in the Playlist card. */}
+              {modelProgress ? (
+                <div className="song-map-analyzing" role="status">
+                  <p>Downloading the song analysis files: {megabytes(modelProgress.downloaded)} of {megabytes(modelProgress.total)} MB…</p>
+                  <div className="loading-bar"><div style={{ width: `${(modelProgress.downloaded / Math.max(1, modelProgress.total)) * 100}%` }} /></div>
+                  <small>The app does this only once.</small>
+                </div>
+              ) : songFollow.status.state === "error" && path === playingPath ? (
                 <p className="song-map-wait">This song could not be analyzed, so it has no map.</p>
               ) : (
                 <div className="song-map-analyzing" role="status">

@@ -7,6 +7,7 @@ mod output_choice;
 mod sound_capture;
 mod screen;
 pub mod song_analysis;
+mod song_models;
 pub mod song_sections;
 mod updater;
 mod video_import;
@@ -83,6 +84,7 @@ pub fn run() {
         .manage(export_stream::Exports::default())
         .manage(sound_capture::SoundCapture::default())
         .manage(cast::CastTarget::default())
+        .manage(song_models::ModelDownload::default())
         .on_page_load(|webview, payload| sound_capture::stop_on_page_load(webview, payload))
         .register_asynchronous_uri_scheme_protocol("video", |ctx, request, responder| {
             let id = request.uri().path().trim_start_matches('/');
@@ -144,6 +146,7 @@ pub fn run() {
             files::cursor_position,
             screen::screen_color_at_cursor,
             song_analysis::analyze_song,
+            song_models::ensure_song_models,
             sound_capture::sound_devices,
             sound_capture::sound_start,
             sound_capture::sound_stop,

@@ -9,6 +9,7 @@ import { THRESHOLD_DB, audioInput } from "../lib/audioInput";
 import { panelLayout } from "../lib/panelLayout";
 import { formatPlayTime, tracks } from "../lib/tracks";
 import { songFollow, type FollowStatus } from "../lib/songFollow";
+import { songModels } from "../lib/songModels";
 import { help } from "../help/topics";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { PointerTip } from "./PointerTip";
@@ -20,8 +21,9 @@ const subscribeFollow = (listener: () => void) => songFollow.subscribe(listener)
 const followVersion = () => songFollow.version;
 
 /** The Follow button's tip: what Follow does, and where the analysis of the track stands. */
-function followTip(enabled: boolean, status: FollowStatus) {
+function followTip(enabled: boolean, status: FollowStatus, downloading: boolean) {
   if (!enabled) return "Song follow: analyze the track that plays, and let the music move the picture in place of the audio links";
+  if (downloading) return "Song follow is on: downloading the song analysis files. The app does this only once.";
   switch (status.state) {
     case "analyzing": return `Song follow is on: analyzing ${status.name}…`;
     case "ready": return `Song follow is on: the picture follows ${status.name} (${Math.round(status.tempo)} BPM). Click to turn it off.`;
@@ -160,13 +162,14 @@ export function FilesCard({ onAddTracks, input, addTip, onAddTipDone }: {
 /** Song follow on or off (see songFollow.ts). It pulses while the track is being analyzed. */
 function FollowButton() {
   useSyncExternalStore(subscribeFollow, followVersion);
+  const downloading = useSyncExternalStore(songModels.subscribe, () => songModels.progress !== null);
   const { enabled, status } = songFollow;
   return (
     <button
       className={`panel-button icon ${enabled ? "active" : ""} ${enabled && status.state === "analyzing" ? "analyzing" : ""}`}
       aria-pressed={enabled}
       onClick={() => songFollow.toggle()}
-      data-tip={followTip(enabled, status)}
+      data-tip={followTip(enabled, status, downloading)}
       aria-label="Song follow"
     >
       <Waveform size={16} weight={enabled ? "fill" : "regular"} />

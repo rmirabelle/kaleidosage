@@ -40,7 +40,7 @@ These items are optional:
 
 | To use | You need |
 |---|---|
-| Random photos, photo search, Terrain, update checks | An internet connection |
+| Random photos, photo search, Terrain, update checks, the first use of Song Follow | An internet connection |
 | Live sound | Sound from your PC, a microphone or a line input |
 | MIDI control | A MIDI controller |
 | Cast | A second screen, a projector or a virtual display |
@@ -126,17 +126,7 @@ Windows cannot capture the sound of one app only. The PC input hears all sound o
 
 Add songs to the Playlist, and the app analyzes each song and cuts it into sections. The Song Map shows these sections as slices. **Auto Fill** picks a scene for each slice, and you can change any pick. The show then moves from scene to scene with the song.
 
-Song analysis needs three model files that the installer does not include. To add them:
-
-1. Download [`fetch-models.ps1`](https://github.com/rmirabelle/kaleidosage/blob/main/fetch-models.ps1).
-2. Open PowerShell in the folder that holds the file.
-3. Run this command:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\fetch-models.ps1
-```
-
-All other features work without these files.
+The first time the app analyzes a song, it downloads the song analysis files, about 81 MB, and shows the progress in the Song Map. It does this only once. If you never use Song Follow, the app downloads nothing.
 
 ### MIDI
 
@@ -220,6 +210,7 @@ Kaleido Sage has no account and no ads. It connects to the internet only to:
 - Check for updates and download them (GitHub)
 - Get random and searched photos (Wikimedia Commons, NASA)
 - Get land and satellite data for the Terrain effect (Amazon Web Services, NASA)
+- Download the song analysis files, the first time you use Song Follow (GitHub, Hugging Face)
 
 Sound capture stays on your PC. The app does not send your sound, pictures or projects anywhere.
 

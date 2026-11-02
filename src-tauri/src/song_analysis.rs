@@ -1,14 +1,15 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use beat_this::{BeatThis, RtenRuntime};
 use ebur128::{EbuR128, Mode};
 use realfft::RealFftPlanner;
 use serde::Serialize;
 
+use crate::song_models::model_folder;
 use crate::song_sections::{find_sections, Section, LINKSEG_MODEL};
 use tauri::{
     ipc::{InvokeBody, Request},
-    AppHandle, Manager,
+    AppHandle,
 };
 
 /**
@@ -29,8 +30,8 @@ const AUDIBLE_LUFS: f32 = -60.0;
 const FLUX_LEAD: f32 = 0.014;
 const FORMAT_VERSION: u32 = 2;
 
-const MEL_MODEL: &str = "mel_spectrogram.onnx";
-const BEAT_MODEL: &str = "beat_this.onnx";
+pub const MEL_MODEL: &str = "mel_spectrogram.onnx";
+pub const BEAT_MODEL: &str = "beat_this.onnx";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -87,17 +88,10 @@ pub struct Hit {
     pub strength: f32,
 }
 
-/// The folder for the beat models: %LOCALAPPDATA%\com.robmirabelle.kaleidosage\models.
-fn model_folder(app: &AppHandle) -> Result<PathBuf, String> {
-    app.path()
-        .app_local_data_dir()
-        .map(|folder| folder.join("models"))
-        .map_err(|error| format!("Could not find the app data folder: {error}"))
-}
-
 /**
  * Analyzes a song. The raw request body is mono float32 samples, little
- * endian, at SAMPLE_RATE.
+ * endian, at SAMPLE_RATE. The page first gets the models in place (see
+ * song_models.rs).
  */
 #[tauri::command]
 pub async fn analyze_song(app: AppHandle, request: Request<'_>) -> Result<SongAnalysis, String> {
@@ -119,7 +113,7 @@ pub async fn analyze_song(app: AppHandle, request: Request<'_>) -> Result<SongAn
 pub fn analyze(samples: &[f32], models: &Path) -> anyhow::Result<SongAnalysis> {
     for model in [MEL_MODEL, BEAT_MODEL, LINKSEG_MODEL] {
         if !models.join(model).is_file() {
-            anyhow::bail!("{} is missing (run fetch-models.ps1)", models.join(model).display());
+            anyhow::bail!("{} is missing", models.join(model).display());
         }
     }
     let mut tracker = BeatThis::new(&RtenRuntime, &models.join(MEL_MODEL), &models.join(BEAT_MODEL))?;

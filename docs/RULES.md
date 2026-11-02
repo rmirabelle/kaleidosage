@@ -811,7 +811,12 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 
 - Follow the song analyzes mp3, wav, flac, ogg, opus, m4a and aac files.
 - The analysis needs three model files in the app data `models` folder.
-- A missing model file stops the analysis with "run fetch-models.ps1".
+- The installer does not hold the model files. The first song to analyze downloads them, about 81 MB, once.
+- A song that opens with its analysis in the project downloads nothing.
+- Song follow off downloads nothing.
+- The Song Map shows the download's progress in megabytes.
+- The app checks each downloaded file's SHA-256 and keeps only a file that passes.
+- A failed download shows in the Playlist card; playing the song tries again.
 - The Beat This! model finds the beats and bar starts.
 - The app drops beats in silence.
 - The tempo comes from the mean beat spacing.
