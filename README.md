@@ -92,7 +92,7 @@ Photos from Wikimedia Commons have their own licenses. Check the license before 
 
 For the best result, use a picture at least 4K wide with many small, repeating details. Ceilings, domes, mosaics, stained glass and fractal art all work well.
 
-### 24 effects
+### Effects
 
 Add effects in any order. The picture goes through the list from top to bottom.
 
