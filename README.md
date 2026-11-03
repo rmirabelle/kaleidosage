@@ -72,7 +72,7 @@ Go to **Windows Settings > Apps > Installed apps**, find **Kaleido Sage**, and c
 2. Point at a source slot and pick a picture: **Random**, **Search**, **Open** or **Pattern**. You can also drop a file on the window or paste an image with `Ctrl+V`.
 3. In the **FX** panel, click **New** and pick **Kaleidoscope**.
 4. Click the range button on a setting. The value now moves between two handles.
-5. Press `A` to open the Audio panel and pick an **Input**. Then click the speaker beside a setting, and the setting moves with the sound.
+5. In the play controls at the bottom of the left panel, open the **Input** menu and pick a sound source. Speakers then show beside the settings. Click a speaker, and that setting moves with the sound.
 6. Press `F` to play full screen.
 
 Press `X` at any time for new random settings on every unlocked effect. Press `?` to see every key and mouse gesture. The line at the bottom of the window explains the control under your mouse.
