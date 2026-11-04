@@ -58,6 +58,49 @@ export function hyperbolicMirror(sides: number, corners: number, flow: number): 
   const center = Math.cos(meet) / Math.sqrt(Math.cos(meet) ** 2 - Math.sin(wedge) ** 2);
   return [center, Math.sqrt(center * center - 1), wedge, Math.min(0.95, Math.max(-0.95, flow))];
 }
+
+/** The most patterns in the Hyperbolic crossfade: both counts between two whole numbers. */
+const HYPERBOLIC_PATTERNS = 4;
+
+/** A count's whole number below, the one above, and how far the crossfade has gone. It holds near each whole number. */
+function hyperbolicCount(count: number): { low: number; high: number; part: number } {
+  const value = Math.min(12, Math.max(3, count));
+  const low = Math.floor(value);
+  const part = Math.min(1, Math.max(0, (value - low - 0.2) / 0.6));
+  return { low, high: Math.min(12, low + 1), part: part * part * (3 - 2 * part) };
+}
+
+/**
+ * The Hyperbolic patterns to mix for a live Sides and Per corner (see fold in
+ * KALEIDO_SHADER). Tiles fit only at whole numbers, so counts between whole
+ * numbers crossfade the whole-number patterns around them. A pattern with no
+ * share is left out, and two pairs that give the same tiles (a corner count
+ * too small goes up) count as one, so they cost one fold and do not change
+ * the picture. Gives four numbers per pattern (see hyperbolicMirror), each
+ * pattern's share, and the pattern count.
+ */
+export function hyperbolicCrossfade(sides: number, corners: number, flow: number): { mirrors: Float32Array; shares: Float32Array; count: number } {
+  const across = hyperbolicCount(sides);
+  const around = hyperbolicCount(corners);
+  const patterns: { mirror: number[]; share: number }[] = [];
+  for (const [side, sideShare] of [[across.low, 1 - across.part], [across.high, across.part]]) {
+    for (const [corner, cornerShare] of [[around.low, 1 - around.part], [around.high, around.part]]) {
+      const share = sideShare * cornerShare;
+      if (share <= 0) continue;
+      const mirror = hyperbolicMirror(side, corner, flow);
+      const same = patterns.find((pattern) => pattern.mirror[0] === mirror[0] && pattern.mirror[2] === mirror[2]);
+      if (same) same.share += share;
+      else patterns.push({ mirror, share });
+    }
+  }
+  const mirrors = new Float32Array(HYPERBOLIC_PATTERNS * 4);
+  const shares = new Float32Array(HYPERBOLIC_PATTERNS);
+  patterns.forEach((pattern, index) => {
+    mirrors.set(pattern.mirror, index * 4);
+    shares[index] = pattern.share;
+  });
+  return { mirrors, shares, count: patterns.length };
+}
 /** The most corners of a Light shapes outline: a turned ring's (see OUTLINE_SHADER). */
 const OUTLINE_CORNERS = 48;
 
@@ -224,7 +267,7 @@ export interface FrameValues {
   foldMode: FoldMode;
   /** The tile size in tile modes, in screen heights between neighbor cell centers. */
   tileSize: number;
-  /** The hyperbolic disk (fold mode 4): its sides and how many meet at a corner (whole numbers), its radius (screen heights) and its flow (-0.9 to 0.9). */
+  /** The hyperbolic disk (fold mode 4): its sides and how many meet at a corner (see hyperbolicCrossfade), its radius (screen heights) and its flow (-0.9 to 0.9). */
   hyperSides: number;
   hyperCorners: number;
   hyperSize: number;
@@ -1569,7 +1612,10 @@ export class KaleidoRenderer {
     gl.uniform1f(k.uniforms.u_segments, v.segments);
     gl.uniform1i(k.uniforms.u_foldMode, v.foldMode);
     gl.uniform1f(k.uniforms.u_tileSize, Math.max(0.01, v.tileSize));
-    gl.uniform4fv(k.uniforms.u_hyper, hyperbolicMirror(v.hyperSides, v.hyperCorners, v.hyperFlow));
+    const hyperbolic = hyperbolicCrossfade(v.hyperSides, v.hyperCorners, v.hyperFlow);
+    gl.uniform4fv(k.uniforms["u_hyper[0]"], hyperbolic.mirrors);
+    gl.uniform4fv(k.uniforms.u_hyperShare, hyperbolic.shares);
+    gl.uniform1i(k.uniforms.u_hyperCount, hyperbolic.count);
     gl.uniform1f(k.uniforms.u_hyperSize, Math.max(0.01, v.hyperSize));
     gl.uniform1f(k.uniforms.u_rotation, v.rotation);
     gl.uniform1f(k.uniforms.u_zoom, v.zoom);

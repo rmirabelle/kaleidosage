@@ -289,7 +289,8 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Terrain height shows its tick but does not snap.
 - Camera Lens is a focal length on a 35 mm camera, 7 to 300 mm, and snaps at 14, 18, 24, 35, 50, 85, 135 and 200 mm. A scene from before it opens with the same view.
 - Every angle setting with a whole turn (0 to 360°, or -180 to 180°) snaps at each 45°.
-- Segments and Droste spirals snap to whole numbers.
+- Segments, Droste spirals, and Hyperbolic Sides and Per corner snap to whole numbers.
+- A Hyperbolic Sides or Per corner range holds each whole-number pattern, then crossfades to the next one.
 - A log slider has 1000 equal-ratio positions.
 - A double-click on a setting name sets its default.
 - With a range on, a double-click on the name sets the full range.

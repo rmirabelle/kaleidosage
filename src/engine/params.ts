@@ -591,6 +591,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   segments: { label: "Segments", min: 0, max: 24, step: 1, value: 0, drift: "wave", low: 3, high: 8, on: false },
   /** Tile modes only: screen heights between neighbor cell centers. */
   tileSize: { label: "Tile size", min: 0.1, max: 2, step: 0.01, value: 0.5, drift: "wave", low: 0.3, high: 0.8, on: false },
+  /** The handles are whole numbers; a drifting count crossfades between their patterns (see hyperbolicCrossfade in renderer.ts). */
   hyperSides: { label: "Sides", min: 3, max: 12, step: 1, value: 5, drift: "wave", low: 4, high: 8, on: false },
   hyperCorners: { label: "Per corner", min: 3, max: 12, step: 1, value: 4, drift: "wave", low: 4, high: 6, on: false },
   hyperSize: { label: "Disk size", min: 0.2, max: 2, step: 0.01, value: 0.5, drift: "wave", low: 0.4, high: 0.8, on: false },

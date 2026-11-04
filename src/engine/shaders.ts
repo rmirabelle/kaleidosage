@@ -227,8 +227,15 @@ uniform int u_picture;
 uniform float u_shapeOpacity[3];
 uniform int u_shapeBlend[3];
 uniform float u_tileSize;
-/* The hyperbolic disk (fold mode 4): the mirror circle's center on the x axis and its radius, the wedge angle (pi / sides), and the flow; then the disk radius. */
-uniform vec4 u_hyper;
+/**
+ * The hyperbolic disk (fold mode 4). Each pattern in the crossfade has the
+ * mirror circle's center on the x axis and its radius, the wedge angle
+ * (pi / sides), and the flow. u_hyperShare holds each pattern's share of the
+ * picture (see hyperbolicCrossfade in renderer.ts). Then the disk radius.
+ */
+uniform vec4 u_hyper[4];
+uniform vec4 u_hyperShare;
+uniform int u_hyperCount;
 uniform float u_hyperSize;
 uniform float u_rotation;
 uniform float u_zoom;
@@ -1085,11 +1092,16 @@ vec4 sampleImage(sampler2D image, vec2 size, vec2 q, float g) {
  * it into mirrored wedges or tiles, and zooms it into image space.
  */
 /**
- * Set by fold() between 0 and 0.5 radial segments: the point with no fold,
- * and how much of its picture to mix in (see the crossfade in fold).
+ * Set by fold() during a crossfade: how many more points it made, each with
+ * its stretch and bounces, and every point's share of the picture (the main
+ * point first). Radial between 0 and 0.5 segments adds the point with no
+ * fold. Hyperbolic between two whole numbers adds up to three patterns.
  */
-vec2 foldAlt;
-float foldAltWeight;
+int foldAlts;
+vec2 foldAltPoint[3];
+float foldAltStretch[3];
+float foldAltBounces[3];
+vec4 foldShares;
 /** Set by fold(): how much the fold enlarges the picture at the point (1 for every type but Hyperbolic), for texture detail. */
 float foldStretch;
 /**
@@ -1109,7 +1121,7 @@ float aroundBounces(float j, float m) { return min(j, m - j); }
 vec2 fold(vec2 p) {
   float r = length(p);
   float a = atan(p.y, p.x) + u_rotation + u_twirl * r;
-  foldAltWeight = 0.0;
+  foldAlts = 0;
   foldStretch = 1.0;
   foldBounces = 0.0;
   /**
@@ -1123,6 +1135,9 @@ vec2 fold(vec2 p) {
    * center (pi / Sides apart) and a circle at right angles to the edge
    * (see hyperbolicMirror in renderer.ts), until the circle no longer
    * holds it. foldStretch follows how much each step enlarges the picture.
+   * Tiles fit only at whole numbers, so a count between two whole numbers
+   * folds the point once for each whole-number pattern, and the picture
+   * mixes those patterns by their shares.
    */
   if (u_foldMode == 4) {
     vec2 z = vec2(cos(a), sin(a)) * r / u_hyperSize;
@@ -1131,31 +1146,51 @@ vec2 fold(vec2 p) {
       z /= edge;
       foldStretch /= edge;
     }
-    float w = u_hyper.w;
+    float w = u_hyper[0].w;
     vec2 top = z + vec2(w, 0.0);
     vec2 bottom = vec2(1.0 + w * z.x, w * z.y);
     float under = max(dot(bottom, bottom), 1e-8);
     z = vec2(top.x * bottom.x + top.y * bottom.y, top.y * bottom.x - top.x * bottom.y) / under;
     foldStretch *= (1.0 - w * w) / under;
-    vec2 center = vec2(u_hyper.x, 0.0);
-    float radius2 = u_hyper.y * u_hyper.y;
-    float wedge = u_hyper.z;
-    /* The wedges around the center: each fold into the first one counts its bounces, and each circle mirror one more. */
-    float wedges = floor(TAU / wedge + 0.5);
-    for (int i = 0; i < 64; i++) {
-      float turned = mod(atan(z.y, z.x), TAU);
-      foldBounces += aroundBounces(min(floor(turned / wedge), wedges - 1.0), wedges);
-      float angle = wedge - abs(mod(turned, 2.0 * wedge) - wedge);
-      z = vec2(cos(angle), sin(angle)) * length(z);
-      vec2 v = z - center;
-      float d2 = dot(v, v);
-      if (d2 >= radius2) break;
-      float k = radius2 / max(d2, 1e-12);
-      z = center + v * k;
-      foldStretch *= k;
-      foldBounces += 1.0;
+    vec2 start = z;
+    float startStretch = foldStretch;
+    vec2 first = z;
+    foldAlts = u_hyperCount - 1;
+    foldShares = u_hyperShare;
+    for (int n = 0; n < u_hyperCount; n++) {
+      vec2 center = vec2(u_hyper[n].x, 0.0);
+      float radius2 = u_hyper[n].y * u_hyper[n].y;
+      float wedge = u_hyper[n].z;
+      /* The wedges around the center: each fold into the first one counts its bounces, and each circle mirror one more. */
+      float wedges = floor(TAU / wedge + 0.5);
+      float grown = startStretch;
+      float bounces = 0.0;
+      z = start;
+      for (int i = 0; i < 64; i++) {
+        float turned = mod(atan(z.y, z.x), TAU);
+        bounces += aroundBounces(min(floor(turned / wedge), wedges - 1.0), wedges);
+        float angle = wedge - abs(mod(turned, 2.0 * wedge) - wedge);
+        z = vec2(cos(angle), sin(angle)) * length(z);
+        vec2 v = z - center;
+        float d2 = dot(v, v);
+        if (d2 >= radius2) break;
+        float k = radius2 / max(d2, 1e-12);
+        z = center + v * k;
+        grown *= k;
+        bounces += 1.0;
+      }
+      vec2 folded = z * u_hyperSize / u_zoom;
+      if (n == 0) {
+        first = folded;
+        foldStretch = grown;
+        foldBounces = bounces;
+      } else {
+        foldAltPoint[n - 1] = folded;
+        foldAltStretch[n - 1] = grown;
+        foldAltBounces[n - 1] = bounces;
+      }
     }
-    return z * u_hyperSize / u_zoom;
+    return first;
   }
   if (u_foldMode == 0) {
     /**
@@ -1174,8 +1209,12 @@ vec2 fold(vec2 p) {
      * from 0.5 to 1 one segment grows out of the rings as above.
      */
     if (u_segments > 0.0 && u_segments < 0.5) {
-      foldAlt = vec2(cos(a), sin(a)) * r / u_zoom;
-      foldAltWeight = 0.5 + 0.5 * cos(PI * u_segments / 0.5);
+      float noFold = 0.5 + 0.5 * cos(PI * u_segments / 0.5);
+      foldAlts = 1;
+      foldAltPoint[0] = vec2(cos(a), sin(a)) * r / u_zoom;
+      foldAltStretch[0] = 1.0;
+      foldAltBounces[0] = 0.0;
+      foldShares = vec4(1.0 - noFold, noFold, 0.0, 0.0);
       a = PI;
     } else if (u_segments >= 0.5) {
       float whole = floor(u_segments);
@@ -1249,6 +1288,12 @@ vec3 mirrorLight(vec3 c, float n) {
   return max(c, 0.0) * pow(1.0 - 0.5 * u_mirrorFade, n);
 }
 
+/* A picture read with the light of its mirror bounces. */
+vec4 afterBounces(vec4 c, float n) {
+  if (n > 0.0) c.rgb = mirrorLight(c.rgb, n);
+  return c;
+}
+
 /** Both source images at a point, faded into each other by the image blend. An image that the blend does not show is not read. */
 vec4 sourceColor(vec2 q, float g) {
   if (u_picture == 1) return sampleImage(u_img, u_imgRes, q, g);
@@ -1310,10 +1355,10 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
    * steps (before a 3D Object or another picture step) has no spiral.
    */
   bool spiralLast = (u_mapMode == 7 || u_mapMode == 8) && (skip & 2) == 0 && u_spiralPass == 1;
-  /* During the radial crossfade (see fold), a second point, with no fold, goes through the later steps too. */
-  bool fading = false;
-  vec2 p2 = p;
-  float fade = 0.0;
+  /* During a fold's crossfade (see fold), its other points go through the later steps too. */
+  int fades = 0;
+  vec2 fadeP[3] = vec2[3](p, p, p);
+  vec4 shares = vec4(1.0, 0.0, 0.0, 0.0);
   /* The Möbius or Julia map's exact stretch, as texture detail (see mobiusStretch and juliaStretch). */
   float mapDetail = 0.0;
   float farDistance = 1e9;
@@ -1354,19 +1399,19 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
     if (shapeStep == 0) {
       if (u_warpMode != 0) {
         p += warpOffset(p);
-        if (fading) p2 += warpOffset(p2);
+        for (int k = 0; k < fades; k++) fadeP[k] += warpOffset(fadeP[k]);
       }
     } else if (shapeStep == 1) {
       if (spiralLast && !spiralStep) continue;
       if (u_mapMode == 2) mapDetail = g0 * mobiusStretch(p);
       if (spiralStep) beforeSpiral = p;
-      /* The points to map: the point, the radial crossfade's point, and the higher spiral count's point. */
-      int points = 1 + (fading ? 1 : 0) + (spiralFade > 0.0 ? 1 : 0);
+      /* The points to map: the point, the fold crossfade's points, and the higher spiral count's point. */
+      int points = 1 + fades + (spiralFade > 0.0 ? 1 : 0);
       for (int k = 0; k < points; k++) {
-        bool second = k == 1 && fading;
+        bool second = k >= 1 && k <= fades;
         bool higher = k > 0 && !second;
         drosteArms = higher ? spiralWhole + 1.0 : spiralWhole;
-        vec2 q = complexMap(k == 0 ? p : (second ? p2 : beforeSpiral));
+        vec2 q = complexMap(k == 0 ? p : (second ? fadeP[k - 1] : beforeSpiral));
         if (k == 0) {
           p = q;
           farDistance = depthDistance;
@@ -1379,7 +1424,7 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
             drosteWeight = drosteAltWeight;
           }
         } else if (second) {
-          p2 = q;
+          fadeP[k - 1] = q;
         } else {
           spiralP = q;
           spiralAlt = drosteAlt;
@@ -1402,10 +1447,10 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
       beforeFold = p;
       p = fold(p);
       folded = true;
-      if (foldAltWeight > 0.0) {
-        fading = true;
-        p2 = foldAlt;
-        fade = foldAltWeight;
+      if (foldAlts > 0) {
+        fades = foldAlts;
+        for (int k = 0; k < fades; k++) fadeP[k] = foldAltPoint[k];
+        shares = foldShares;
       }
     }
   }
@@ -1420,34 +1465,43 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
   float detail = min(max(length(dFdx(measured)), length(dFdy(measured))), g0 * 4.0);
   float g = max(detail * stretch * (folded ? foldStretch : 1.0), mapDetail) / (folded ? u_zoom : 1.0);
   /**
-   * The picture reads, each with its point, detail and share: the point,
-   * the radial crossfade's point, the Droste copy one size smaller (its detail
-   * smaller by the copy size), and the higher spiral count's point with its
-   * own copy. The shares are the old chain of mixes multiplied out. One
-   * call in a loop of run-time length (see the step loop).
+   * The picture reads, each with its point, detail, share and mirror
+   * bounces: the point, the fold crossfade's points, the Droste copy one size
+   * smaller (its detail smaller by the copy size), and the higher spiral
+   * count's point with its own copy. The shares are the old chain of mixes
+   * multiplied out. One call in a loop of run-time length (see the step loop).
    */
   float copySize = clamp(u_drosteSize, 0.05, 0.95);
   float g2 = max(detail * spiralStretch * (folded ? foldStretch : 1.0), mapDetail) / (folded ? u_zoom : 1.0);
-  float fadeShare = fading ? fade : 0.0;
+  float bounces = folded ? foldBounces : 0.0;
+  float fadeDetail[3] = float[3](g, g, g);
+  float fadeBounces[3] = float[3](0.0, 0.0, 0.0);
+  for (int k = 0; k < fades; k++) {
+    fadeDetail[k] = max(detail * stretch * foldAltStretch[k], mapDetail) / u_zoom;
+    fadeBounces[k] = foldAltBounces[k];
+  }
   float drosteShare = drosteWeight > 0.0 ? drosteWeight : 0.0;
   float altShare = spiralAltWeight > 0.0 ? spiralAltWeight : 0.0;
-  vec2 readAt[5] = vec2[5](p, p2, drosteP, spiralP, spiralAlt);
-  float readDetail[5] = float[5](g, g, g * copySize, g2, g2 * copySize);
-  float readShare[5] = float[5](
-    (1.0 - fadeShare) * (1.0 - drosteShare) * (1.0 - spiralFade),
-    fadeShare * (1.0 - drosteShare) * (1.0 - spiralFade),
+  float kept = (1.0 - drosteShare) * (1.0 - spiralFade);
+  vec2 readAt[7] = vec2[7](p, fadeP[0], fadeP[1], fadeP[2], drosteP, spiralP, spiralAlt);
+  float readDetail[7] = float[7](g, fadeDetail[0], fadeDetail[1], fadeDetail[2], g * copySize, g2, g2 * copySize);
+  float readShare[7] = float[7](
+    shares.x * kept,
+    shares.y * kept,
+    shares.z * kept,
+    shares.w * kept,
     drosteShare * (1.0 - spiralFade),
     (1.0 - altShare) * spiralFade,
     altShare * spiralFade);
-  int reads = spiralFade > 0.0 ? 5 : 3;
-  vec4 color = sourceColor(p, g);
+  float readBounces[7] = float[7](bounces, fadeBounces[0], fadeBounces[1], fadeBounces[2], bounces, bounces, bounces);
+  int reads = spiralFade > 0.0 ? 7 : 5;
+  vec4 color = afterBounces(sourceColor(p, g), bounces);
   if (readShare[0] < 1.0) {
     color *= readShare[0];
     for (int k = 1; k < reads; k++) {
-      if (readShare[k] > 0.0) color += readShare[k] * sourceColor(readAt[k], readDetail[k]);
+      if (readShare[k] > 0.0) color += readShare[k] * afterBounces(sourceColor(readAt[k], readDetail[k]), readBounces[k]);
     }
   }
-  if (folded && foldBounces > 0.0) color.rgb = mirrorLight(color.rgb, foldBounces);
   /**
    * Depth fade: the far end of the tunnel or a spiral (its center), the Möbius pole, or Julia's most stretched places
    * fades to black, which makes it look deep. It works as fog: each step of
