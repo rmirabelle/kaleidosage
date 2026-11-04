@@ -56,12 +56,15 @@ function dotGrid(spacing: number): Draw {
   };
 }
 
+/** The hue goes once around across. The brightness goes up and back down, so the repeat meets itself both ways. */
 function colorGrid(tile: number): Draw {
   return (context, width, height) => {
     const columns = Math.ceil(width / tile);
-    for (let row = 0; row * tile < height; row++) {
+    const rows = Math.ceil(height / tile);
+    for (let row = 0; row < rows; row++) {
+      const brightness = 1 - Math.abs((2 * row) / rows - 1);
       for (let column = 0; column < columns; column++) {
-        context.fillStyle = `hsl(${(column / columns) * 360} 90% ${row % 2 ? 30 : 50}%)`;
+        context.fillStyle = `hsl(${(column / columns) * 360} 90% ${10 + 80 * brightness}%)`;
         context.fillRect(column * tile, row * tile, tile, tile);
       }
     }

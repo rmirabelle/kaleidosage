@@ -78,11 +78,13 @@ def dot_grid(spacing: int) -> Image.Image:
 def color_grid(tile: int) -> Image.Image:
     image = Image.new("RGB", (WIDTH, HEIGHT))
     draw = ImageDraw.Draw(image)
-    columns = WIDTH // tile + 1
-    for row in range(HEIGHT // tile + 1):
+    columns, rows = WIDTH // tile, HEIGHT // tile
+    for row in range(rows):
+        lightness = 0.1 + 0.8 * (1 - abs(2 * row / rows - 1))
         for column in range(columns):
             x, y = column * tile, row * tile
-            draw.rectangle([x, y, x + tile - 1, y + tile - 1], fill=hue(column / columns, 0.9, 0.95 - 0.5 * (row % 2)))
+            r, g, b = colorsys.hls_to_rgb(column / columns, lightness, 0.9)
+            draw.rectangle([x, y, x + tile - 1, y + tile - 1], fill=(int(r * 255), int(g * 255), int(b * 255)))
     return image
 
 
@@ -144,7 +146,7 @@ def main() -> None:
     save(diagonal_stripes(40), "stripes-diagonal.png")
     save(rings(36), "rings.png")
     save(dot_grid(96), "dot-grid.png")
-    save(color_grid(160), "color-grid.png")
+    save(color_grid(120), "color-grid.png")
     save(color_clouds(), "color-clouds.png")
     save(random_shapes(2500), "random-shapes.png")
     save(scattered_lines(1800), "scattered-lines.png")
