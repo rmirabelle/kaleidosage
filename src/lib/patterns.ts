@@ -58,13 +58,11 @@ function dotGrid(spacing: number): Draw {
 
 function colorGrid(tile: number): Draw {
   return (context, width, height) => {
-    context.fillStyle = "#fff";
-    context.fillRect(0, 0, width, height);
     const columns = Math.ceil(width / tile);
     for (let row = 0; row * tile < height; row++) {
       for (let column = 0; column < columns; column++) {
         context.fillStyle = `hsl(${(column / columns) * 360} 90% ${row % 2 ? 30 : 50}%)`;
-        context.fillRect(column * tile + 4, row * tile + 4, tile - 8, tile - 8);
+        context.fillRect(column * tile, row * tile, tile, tile);
       }
     }
   };

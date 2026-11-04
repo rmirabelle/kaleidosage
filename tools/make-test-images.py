@@ -76,13 +76,13 @@ def dot_grid(spacing: int) -> Image.Image:
 
 
 def color_grid(tile: int) -> Image.Image:
-    image = Image.new("RGB", (WIDTH, HEIGHT), (255, 255, 255))
+    image = Image.new("RGB", (WIDTH, HEIGHT))
     draw = ImageDraw.Draw(image)
     columns = WIDTH // tile + 1
     for row in range(HEIGHT // tile + 1):
         for column in range(columns):
             x, y = column * tile, row * tile
-            draw.rectangle([x + 4, y + 4, x + tile - 5, y + tile - 5], fill=hue(column / columns, 0.9, 0.95 - 0.5 * (row % 2)))
+            draw.rectangle([x, y, x + tile - 1, y + tile - 1], fill=hue(column / columns, 0.9, 0.95 - 0.5 * (row % 2)))
     return image
 
 
