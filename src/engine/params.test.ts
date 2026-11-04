@@ -464,10 +464,15 @@ describe("effect order", () => {
     state.locks.trails = true;
     const firsts = new Set<string>();
     for (let round = 0; round < 60; round++) {
-      /* The locked effect keeps its place, or comes last when the new list is shorter than that. */
+      /**
+       * The locked effect keeps its place, or comes last when the new list is
+       * shorter than that. Light shapes is the exception: when Randomize picks
+       * it, it goes after everything, also after the locked effect.
+       */
       const place = state.fxOrder.indexOf("trails");
       randomizeParams(createParams(), state);
-      expect(state.fxOrder.indexOf("trails")).toBe(Math.min(place, state.fxOrder.length - 1));
+      const others = state.fxOrder.filter((step) => step !== "outlines");
+      expect(state.fxOrder.indexOf("trails")).toBe(Math.min(place, others.length - 1));
       expect(new Set(state.fxOrder).size).toBe(state.fxOrder.length);
       /* An effect in the list is on, and one that is not is off. */
       for (const step of ["warp", "map", "kaleidoscope", "blur", "smear", "contours", "relief", "sharpen", "color", "levels"] as const) {
