@@ -3477,8 +3477,10 @@ void main() {
  * Dome: the picture on the inside of a dome, as if projected there, seen from
  * below. The dome is half a sphere of radius 1 around the origin, with its top
  * on +z. The eye is under the middle of the rim, EYE below the rim's level, and
- * looks u_tilt above level (90 degrees is straight up). The lens puts the rim
- * u_size screen heights from the screen's center when the view is straight up.
+ * looks u_tilt above level: 90 degrees is straight up, and past that the view
+ * goes on over the top, so at 180 degrees the dome hangs down from the rim on
+ * the screen. The lens puts the rim u_size screen heights from the screen's
+ * center when the view is straight up.
  * The picture's center is at the dome's top, and the rim is the largest circle
  * that fits in the picture. Equal steps along the dome are equal steps in the
  * picture, so near the eye (the rim) the picture looks large and far away (the

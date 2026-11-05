@@ -971,12 +971,12 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   maskX: { label: "X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   maskY: { label: "Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   /**
-   * Dome (see DOME_SHADER): Tilt is the view above level, and 90 degrees looks
-   * straight up. Dome size is the rim's distance from the screen's center
+   * Dome (see DOME_SHADER): Tilt is the view above level. 90 degrees looks
+   * straight up, and at 180 degrees the dome hangs down on the screen. Dome size is the rim's distance from the screen's center
    * when the view is straight up, in screen heights.
    */
   domeAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
-  domeTilt: { label: "Tilt", min: 0, max: 90, step: 1, value: 90, unit: "°", drift: "wave", low: 50, high: 90, on: false },
+  domeTilt: { label: "Tilt", min: 0, max: 180, step: 1, value: 90, unit: "°", drift: "wave", low: 50, high: 90, on: false },
   domeSize: { label: "Dome size", min: 0.2, max: 1.5, step: 0.01, value: 0.5, drift: "wave", low: 0.4, high: 0.8, on: false },
   /**
    * Image or Video (see PICTURE_SHADER): an image or a video of the scene's own
@@ -1910,7 +1910,7 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("solidLevels", Math.round(rand(2, 4)), rand(0, 1));
   set("innerTwirl", Math.random() < 0.7 ? 0 : rand(-3, 3), rand(0.3, 1));
   set("domeAmount", rand(0.8, 1), rand(0, 0.1));
-  set("domeTilt", rand(40, 90), rand(0, 15));
+  set("domeTilt", rand(40, 140), rand(0, 15));
   set("domeSize", rand(0.4, 1), rand(0, 0.15));
   /* Light rays and bloom together make every bright area shine; when Randomize picks both, each gets less. */
   if (state?.fxOrder.includes("rays") && state.fxOrder.includes("bloom")) {

@@ -242,7 +242,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Only the drawn part of an outline glows, and its ends are round.
 - Random all puts Light shapes at the end of the list when it picks it.
 - Dome shows the picture on the inside of a dome, seen from below. The picture's center is at the dome's top, and black shows past the rim.
-- Dome Tilt: 90° looks straight up, and a lower value looks forward, so the rim crosses the screen.
+- Dome Tilt: 90° looks straight up. Toward 0° the dome rises above the rim on the screen, and toward 180° it hangs down below the rim.
 - Dome size is the rim's distance from the screen's center when the view is straight up, in screen heights.
 - Random all never adds Dome, but the Dome group's dice sets its sliders.
 - Adding Image or Video with no image or video opens the Open dialog for one.
