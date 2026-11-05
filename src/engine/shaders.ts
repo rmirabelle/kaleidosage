@@ -3732,8 +3732,8 @@ void main() {
 }`;
 
 /**
- * Light shapes: glowing outlines (a ring, a square, a triangle or a star)
- * that draw themselves, in one pass over the picture. Each of u_count
+ * Light shapes: glowing outlines (a ring, a square, a triangle or a Radial
+ * shape with u_points sides) that draw themselves, in one pass over the picture. Each of u_count
  * copies has its own radius (smaller by u_spacing from the first) and its
  * own place in the draw cycle (later by u_delay). For each pixel, each
  * copy finds the nearest point of its outline and that point's place s
@@ -3830,7 +3830,7 @@ vec3 stopColor(float t) {
 }
 
 /* How many corners the outline has: a ring has none unless it is turned; a snake has 48 along its path. */
-int cornerCount() { return u_shape == 0 || u_shape == 4 ? RING_CORNERS : u_shape == 1 ? 4 : u_shape == 2 ? 3 : 2 * u_points; }
+int cornerCount() { return u_shape == 0 || u_shape == 4 ? RING_CORNERS : u_shape == 1 ? 4 : u_shape == 2 ? 3 : u_points; }
 
 /* How many sides: a closed outline has one back to its first corner; a snake (open) does not. */
 int sideCount() { return u_shape == 4 ? cornerCount() - 1 : cornerCount(); }

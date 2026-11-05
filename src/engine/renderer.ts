@@ -124,7 +124,7 @@ export function snakePoint(t: number): [number, number] {
  * A Light shapes outline at radius 1, worked out once per frame, so the
  * shader does not work it out again for each pixel: its corners (from the
  * top, clockwise; a ring has 48, used when it is turned; a square stands
- * level; a star's inner corners are at 0.45), each corner's place along
+ * level; Radial has "points" corners, one straight up), each corner's place along
  * the outline (0 at the top to 1 back at the top, by length), and the
  * outline's length. A snake (shape 4) is open: 48 corners along its path
  * from the tail (place 0, "length" times SNAKE_SPAN earlier) to the head
@@ -133,7 +133,7 @@ export function snakePoint(t: number): [number, number] {
 export function outlineCorners(shape: number, points: number, snakeTime = 0, snakeLength = 0.35): { corners: Float32Array; at: Float32Array; length: number } {
   const snake = shape === 4;
   /* A ring's length here is its 48 straight sides', as the shader draws a turned ring. */
-  const count = shape === 0 || snake ? OUTLINE_CORNERS : shape === 1 ? 4 : shape === 2 ? 3 : 2 * points;
+  const count = shape === 0 || snake ? OUTLINE_CORNERS : shape === 1 ? 4 : shape === 2 ? 3 : points;
   const start = shape === 1 ? 0.5 : 0;
   const corners = new Float32Array(OUTLINE_CORNERS * 2);
   for (let k = 0; k < count; k++) {
@@ -142,9 +142,8 @@ export function outlineCorners(shape: number, points: number, snakeTime = 0, sna
       continue;
     }
     const a = (Math.PI * 2 * (k + start)) / count;
-    const r = shape === 3 && k % 2 === 1 ? 0.45 : 1;
-    corners[k * 2] = r * Math.sin(a);
-    corners[k * 2 + 1] = r * Math.cos(a);
+    corners[k * 2] = Math.sin(a);
+    corners[k * 2 + 1] = Math.cos(a);
   }
   const at = new Float32Array(OUTLINE_CORNERS + 1);
   /* A closed outline has a side back to its first corner; a snake does not. */
@@ -214,7 +213,7 @@ export type DriverMode = 0 | 1 | 2;
 export type SortOrder = 0 | 1;
 /** How the particles combine with the picture: 0 glow (they add their light), 1 normal (they cover it). */
 export type ParticleBlend = 0 | 1;
-/** Light shapes (see OUTLINE_SHADER): the outline, 0 ring, 1 square, 2 triangle, 3 star; and how it draws, 0 draw and erase, 1 chase, 2 whole. */
+/** Light shapes (see OUTLINE_SHADER): the outline, 0 ring, 1 square, 2 triangle, 3 Radial, 4 snake; and how it draws, 0 draw and erase, 1 chase, 2 whole. */
 export type OutlineShape = 0 | 1 | 2 | 3 | 4;
 export type OutlineDraw = 0 | 1 | 2;
 /** Opacity mask (see MASK_SHADER): 0 by the picture's brightness, 1 a radial gradient. */
@@ -680,7 +679,7 @@ export interface FrameValues {
    * Light shapes (see OUTLINE_SHADER): strength (0 = off), the outline and
    * how it draws, the copies (count, radius in screen heights, spacing,
    * delay), the place in the draw cycle (0 to 1), the chase length, the
-   * star's points, the line width and glow (pixels at 1080p), the color
+   * Radial shape's sides, the line width and glow (pixels at 1080p), the color
    * flow (0 to 1), the turn (radians) and the center (parts of the screen
    * from its center), and the gradient's stops.
    */
@@ -3138,7 +3137,7 @@ export class KaleidoRenderer {
     gl.uniform1f(l.uniforms.u_delay, v.outlineDelay);
     gl.uniform1f(l.uniforms.u_phase, v.outlinePhase);
     gl.uniform1f(l.uniforms.u_length, Math.min(1, Math.max(0.01, v.outlineLength)));
-    const points = Math.min(12, Math.max(3, Math.round(v.outlinePoints)));
+    const points = Math.min(24, Math.max(3, Math.round(v.outlinePoints)));
     gl.uniform1i(l.uniforms.u_points, points);
     const outline = outlineCorners(v.outlineShape, points, v.outlineSnakeTime, Math.min(1, Math.max(0.01, v.outlineLength)));
     gl.uniform2fv(l.uniforms["u_corners[0]"], outline.corners);

@@ -933,7 +933,8 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * Light shapes (see OUTLINE_SHADER): glowing outlines that draw
    * themselves. Count copies, each smaller by Spacing and later in the draw
    * by Delay (a part of a draw). Draw time is the seconds for one draw;
-   * Length is the chased part (Chase only); Points is the star's. Width and
+   * Length is the chased part (Chase only); Sides is the Radial shape's (the
+   * key stays outlinePoints, so saved scenes keep their value). Width and
    * Glow size are pixels at 1080p. Color flow moves the colors along the
    * outline, in turns per second.
    */
@@ -946,7 +947,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   outlineDelay: { label: "Delay", min: 0, max: 1, step: 0.01, value: 0.15, drift: "wave", low: 0.05, high: 0.3, on: false },
   outlineDrawTime: { label: "Draw time", min: 0.25, max: 20, step: 0.01, scale: "log", value: 3, unit: "s", drift: "wave", low: 2, high: 5, on: false },
   outlineLength: { label: "Length", min: 0.02, max: 1, step: 0.01, value: 0.35, drift: "wave", low: 0.2, high: 0.6, on: false },
-  outlinePoints: { label: "Points", min: 3, max: 12, step: 1, value: 5, drift: "wave", low: 4, high: 8, on: false },
+  outlinePoints: { label: "Sides", min: 3, max: 24, step: 1, value: 5, drift: "wave", low: 4, high: 8, on: false },
   outlineWidth: { label: "Width", min: 0.5, max: 12, step: 0.1, value: 2, unit: "px", drift: "wave", low: 1, high: 3, on: false },
   outlineGlow: { label: "Glow", min: 0, max: 4, step: 0.01, value: 1, drift: "wave", low: 0.5, high: 1.5, on: false },
   outlineGlowSize: { label: "Glow size", min: 2, max: 80, step: 0.1, scale: "log", value: 16, unit: "px", drift: "wave", low: 8, high: 30, on: false },

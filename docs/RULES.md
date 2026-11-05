@@ -234,7 +234,8 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - A saved scene keeps its loaded real terrain (heights and picture) while Terrain is in the list with Real terrain heights or Terrain picture colors, so it opens with no internet. A new Load is an unsaved change.
 - Terrain Colors Terrain picture paints the land with the loaded picture; with none, it uses Height colors.
 - Terrain Colors: Picture (as before) or Height colors, a gradient from the lowest land (left) to the highest (right): valley green, grass, rock, stone, snow by default.
-- Light shapes draws glowing outlines: a ring, a square, a triangle or a star (Points sets its points).
+- Light shapes draws glowing outlines: a ring, a square, a triangle, a Radial shape or a snake. Sides shows only for Radial, and is its number of sides, from 3 to 24. One corner points straight up.
+- Scenes with the old Light shapes Star open with the Radial shape, and its Points value becomes Sides.
 - Light shapes Draw: Draw and erase draws the outline from the top, then erases it from the top; Chase sends a part of Length around it, brightest at its head; Whole shows it all.
 - Light shapes has Count copies, each smaller by Spacing and later in its draw by Delay. One draw takes Draw time seconds.
 - Light shapes colors come from a gradient along the outline, there and back once around it, so its ends meet with no seam; Color flow moves them along it.

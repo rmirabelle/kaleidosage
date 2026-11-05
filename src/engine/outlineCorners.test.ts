@@ -27,9 +27,14 @@ describe("outlineCorners", () => {
     for (let k = 1; k < 48; k++) expect(at[k]).toBeGreaterThan(at[k - 1]);
   });
 
-  it("puts a star's inner corners at 0.45", () => {
-    const { corners, at } = outlineCorners(3, 5);
-    expect(Math.hypot(corners[2], corners[3])).toBeCloseTo(0.45);
-    expect(at[10]).toBeCloseTo(1);
+  it("gives Radial one corner for each side, all at radius 1, with one straight up", () => {
+    for (const sides of [3, 5, 24]) {
+      const { corners, at } = outlineCorners(3, sides);
+      expect(corners[0]).toBeCloseTo(0);
+      expect(corners[1]).toBeCloseTo(1);
+      for (let k = 0; k < sides; k++) expect(Math.hypot(corners[k * 2], corners[k * 2 + 1])).toBeCloseTo(1);
+      expect(at[1]).toBeCloseTo(1 / sides);
+      expect(at[sides]).toBeCloseTo(1);
+    }
   });
 });
