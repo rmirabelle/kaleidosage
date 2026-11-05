@@ -1,5 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { outlineCorners, snakePoint } from "./renderer";
+import { outlineCorners, outlineGlowStep, outlineTurns, snakePoint } from "./renderer";
+
+describe("outlineTurns", () => {
+  /* The matrix of copy i, by columns, used on a point. */
+  const turn = (turns: Float32Array, i: number, [x, y, z]: number[]) => [0, 1, 2].map((row) => turns[i * 9 + row] * x + turns[i * 9 + 3 + row] * y + turns[i * 9 + 6 + row] * z);
+
+  it("leaves a copy with no turn as it is", () => {
+    /* "+ 0" makes -0 into 0. */
+    expect([...outlineTurns(0, 0, 0, 0).slice(0, 9)].map((value) => value + 0)).toEqual([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+  });
+
+  it("turns by Spin around the upright line first, then by Tumble around the level line, each copy less by the lag", () => {
+    const turns = outlineTurns(1, 0.25, 0.5, 0.1);
+    const spin = 1 - 0.25 * 3;
+    const tumble = 0.5 - 0.1 * 3;
+    const [x, y, z] = [0.3, -0.7, 0.2];
+    /* Spin about y, then tumble about x, as in OUTLINE_SHADER. */
+    const sx = Math.cos(spin) * x - Math.sin(spin) * z;
+    const sz = Math.sin(spin) * x + Math.cos(spin) * z;
+    const expected = [sx, Math.cos(tumble) * y - Math.sin(tumble) * sz, Math.sin(tumble) * y + Math.cos(tumble) * sz];
+    turn(turns, 3, [x, y, z]).forEach((value, k) => expect(value).toBeCloseTo(expected[k]));
+  });
+});
+
+describe("outlineGlowStep", () => {
+  it("makes a glow pixel at most a quarter of the haze across, and at most 4 pixels", () => {
+    expect([2.5, 7.9, 8, 15.9, 16, 60].map(outlineGlowStep)).toEqual([1, 1, 2, 2, 4, 4]);
+  });
+});
 
 describe("outlineCorners", () => {
   it("puts a level square's corners a quarter of the way apart, from the top right", () => {

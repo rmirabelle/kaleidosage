@@ -1,7 +1,7 @@
 import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, BUBBLE_SHADER, MASK_SHADER, OUTLINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, BUBBLE_SHADER, MASK_SHADER, OUTLINE_SHADER, OUTLINE_GLOW_SHADER, OUTLINE_LINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 import { halveGrid, type TerrainData } from "./terrain";
 import type { VrEye, VrScreen, XrLayer, XrSession } from "./vr";
 
@@ -133,7 +133,7 @@ export function snakePoint(t: number): [number, number] {
  * along its path from the tail (place 0, "length" times SNAKE_SPAN earlier) to
  * the head (place 1, at clock time "snakeTime").
  */
-export function outlineCorners(shape: number, points: number, snakeTime = 0, snakeLength = 0.35, inner = 1): { corners: Float32Array; at: Float32Array; length: number; groups: Float32Array } {
+export function outlineCorners(shape: number, points: number, snakeTime = 0, snakeLength = 0.35, inner = 1): { corners: Float32Array; at: Float32Array; length: number; groups: Float32Array; bound: [number, number, number] } {
   const snake = shape === 4;
   /* A ring's length here is its 48 straight sides', as the shader draws a turned ring. */
   const count = shape === 0 || snake ? OUTLINE_CORNERS : shape === 1 ? 4 : shape === 2 ? 3 : 2 * points;
@@ -159,7 +159,35 @@ export function outlineCorners(shape: number, points: number, snakeTime = 0, sna
     at[k + 1] = length;
   }
   for (let k = 1; k <= sides; k++) at[k] /= Math.max(length, 1e-9);
-  return { corners, at, length, groups: outlineGroups(corners, count, sides) };
+  return { corners, at, length, groups: outlineGroups(corners, count, sides), bound: outlineBound(corners, count) };
+}
+
+/** A circle around all of an outline's corners, as center x, center y and radius (see u_bound in OUTLINE_SHADER). */
+function outlineBound(corners: Float32Array, count: number): [number, number, number] {
+  const xs = Array.from({ length: count }, (_, k) => corners[k * 2]);
+  const ys = Array.from({ length: count }, (_, k) => corners[k * 2 + 1]);
+  const x = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const y = (Math.min(...ys) + Math.max(...ys)) / 2;
+  /* A little larger, as the shader reads these as 32-bit numbers. */
+  return [x, y, Math.max(...xs.map((cx, k) => Math.hypot(cx - x, ys[k] - y))) * 1.0001];
+}
+
+/**
+ * Each Light shapes copy's turn in 3D, as 3 by 3 matrices one after another:
+ * Spin turns it around its upright line, then Tumble around its level line,
+ * and each next copy has turned less by the lag (radians; see OUTLINE_SHADER).
+ */
+export function outlineTurns(spin: number, spinLag: number, tumble: number, tumbleLag: number): Float32Array {
+  const turns = new Float32Array(OUTLINE_COPIES * 9);
+  for (let i = 0; i < OUTLINE_COPIES; i++) {
+    const cs = Math.cos(spin - spinLag * i);
+    const ss = Math.sin(spin - spinLag * i);
+    const ct = Math.cos(tumble - tumbleLag * i);
+    const st = Math.sin(tumble - tumbleLag * i);
+    /* The Tumble matrix times the Spin matrix, by columns as GLSL reads them. */
+    turns.set([cs, -st * ss, ct * ss, 0, ct, st, -ss, -st * cs, ct * cs], i * 9);
+  }
+  return turns;
 }
 
 /** How many sides of an outline are in one group, and the most groups (see outlineGroups). */
@@ -188,6 +216,16 @@ function outlineGroups(corners: Float32Array, count: number, sides: number): Flo
     groups[g * 3 + 2] = Math.max(...around.map(([cx, cy]) => Math.hypot(cx - x, cy - y))) * 1.0001;
   }
   return groups;
+}
+
+/**
+ * How many picture pixels one pixel of the Light shapes glow target spans,
+ * across and up, for a haze (Width + Glow size) in pixels: at most a quarter
+ * of the haze, so the soft glow looks the same, and at most 4. Only 1, 2 and 4,
+ * so a drifting Glow size seldom needs a new target.
+ */
+export function outlineGlowStep(haze: number): 1 | 2 | 4 {
+  return haze >= 16 ? 4 : haze >= 8 ? 2 : 1;
 }
 
 /** The most Light shapes copies: the shader draws at most this many (see OUTLINE_SHADER). */
@@ -1008,6 +1046,11 @@ export class KaleidoRenderer {
   private readonly raysMix: Program;
   private readonly lasers: Program;
   private readonly outlines: Program;
+  /** Light shapes in two passes, when the GPU has float targets: the glow into outlineGlowTarget, then the line (see drawOutlines). */
+  private readonly outlineGlow: Program;
+  private readonly outlineLine: Program;
+  private outlineGlowTarget: Target | null = null;
+  private outlineGlowSize: [number, number] = [0, 0];
   private readonly mask: Program;
   private readonly bubble: Program;
   private readonly pictureProgram: Program;
@@ -1126,6 +1169,8 @@ export class KaleidoRenderer {
     this.raysMix = this.createProgram(RAYS_MIX_SHADER);
     this.lasers = this.createProgram(LASER_SHADER);
     this.outlines = this.createProgram(OUTLINE_SHADER);
+    this.outlineGlow = this.createProgram(OUTLINE_GLOW_SHADER);
+    this.outlineLine = this.createProgram(OUTLINE_LINE_SHADER);
     this.mask = this.createProgram(MASK_SHADER);
     this.bubble = this.createProgram(BUBBLE_SHADER);
     this.pictureProgram = this.createProgram(PICTURE_SHADER);
@@ -3149,16 +3194,54 @@ export class KaleidoRenderer {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
-  /** Light shapes: the outlines over the picture, in one pass (OUTLINE_SHADER). */
+  /**
+   * Light shapes: the outlines over the picture. With float targets, the soft
+   * glow goes first into a smaller target (OUTLINE_GLOW_SHADER), as its long
+   * reach costs the most, and the line pass (OUTLINE_LINE_SHADER) reads it.
+   * Without them, one pass does it all (OUTLINE_SHADER).
+   */
   private drawOutlines(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
     const gl = this.gl;
-    const l = this.outlines;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
+    const output = target ? target.framebuffer : this.output;
+    if (!this.floatTargets) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, output);
+      gl.viewport(0, 0, width, height);
+      this.drawOutlinePass(this.outlines, v, source, null, width, height, 0);
+      return;
+    }
+    const step = outlineGlowStep(Math.max(0.25, v.outlineWidth * this.texelScale) + Math.max(0.5, v.outlineGlowSize * this.texelScale));
+    const size: [number, number] = [Math.max(1, Math.ceil(width / step)), Math.max(1, Math.ceil(height / step))];
+    const glowTarget = this.outlineGlowTarget ??= this.createTarget();
+    if (size[0] !== this.outlineGlowSize[0] || size[1] !== this.outlineGlowSize[1]) {
+      this.allocate(glowTarget, size[0], size[1]);
+      this.outlineGlowSize = size;
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, glowTarget.framebuffer);
+    gl.viewport(0, 0, size[0], size[1]);
+    /* The glow splits two glow pixels from the line (see u_glowSplit), inside the line pass's shortest reach (13 pixels). */
+    const split = step === 1 ? 0 : 2 * step;
+    this.drawOutlinePass(this.outlineGlow, v, source, null, width, height, split);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, output);
     gl.viewport(0, 0, width, height);
+    this.drawOutlinePass(this.outlineLine, v, source, glowTarget.texture, width, height, split);
+  }
+
+  /**
+   * One Light shapes pass into the bound framebuffer. Sizes are in the
+   * picture's pixels, "width" by "height", whatever the target's size.
+   * "split" is u_glowSplit.
+   */
+  private drawOutlinePass(l: Program, v: FrameValues, source: WebGLTexture, glow: WebGLTexture | null, width: number, height: number, split: number) {
+    const gl = this.gl;
     gl.useProgram(l.program);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, source);
     gl.uniform1i(l.uniforms.u_picture, 0);
+    if (glow) {
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, glow);
+      gl.uniform1i(l.uniforms.u_glowTex, 1);
+    }
     gl.uniform2f(l.uniforms.u_res, width, height);
     gl.uniform2f(l.uniforms.u_center, v.outlineX * width, v.outlineY * height);
     gl.uniform1f(l.uniforms.u_turn, v.outlineTurn);
@@ -3178,6 +3261,9 @@ export class KaleidoRenderer {
     gl.uniform2fv(l.uniforms["u_corners[0]"], outline.corners);
     gl.uniform1fv(l.uniforms["u_cornerAt[0]"], outline.at);
     gl.uniform3fv(l.uniforms["u_groups[0]"], outline.groups);
+    gl.uniform3f(l.uniforms.u_bound, ...outline.bound);
+    gl.uniformMatrix3fv(l.uniforms["u_turns[0]"], false, outlineTurns(v.outlineSpin, v.outlineSpinLag, v.outlineTumble, v.outlineTumbleLag));
+    gl.uniform1f(l.uniforms.u_glowSplit, split);
     gl.uniform1f(l.uniforms.u_width, Math.max(0.25, v.outlineWidth * this.texelScale));
     gl.uniform1f(l.uniforms.u_glow, Math.max(0, v.outlineGlow));
     gl.uniform1f(l.uniforms.u_glowSize, Math.max(0.5, v.outlineGlowSize * this.texelScale));
@@ -3189,6 +3275,12 @@ export class KaleidoRenderer {
     gl.uniform1fv(l.uniforms["u_stopAt[0]"], v.outlineStopAt);
     gl.uniform3fv(l.uniforms["u_stopColor[0]"], v.outlineStopColor);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (glow) {
+      /* The glow target is drawn into next frame, so no texture unit keeps it. */
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, null);
+      gl.activeTexture(gl.TEXTURE0);
+    }
   }
 
   /** The size of bloom level "index": half the canvas for level 0, and half again for each next level. */

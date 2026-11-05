@@ -3771,8 +3771,15 @@ void main() {
  * turned less by the lag, as it is Delay later. A turned outline is its
  * corners turned, joined by straight lines, and place s still goes evenly
  * along the flat outline. A turned ring is a true circle (see nearestRing).
+ *
+ * The glow is soft and its reach is long, so it costs the most. PASS picks the
+ * work: 0 does all of it in one pass; 1 (OUTLINE_GLOW_SHADER) does only the
+ * glow, into a smaller float target, as glowColor (rgb) and glowSum (a); 2
+ * (OUTLINE_LINE_SHADER) does the line and the head's spot at full size, with a
+ * short reach, and reads the glow from u_glowTex.
  */
-export const OUTLINE_SHADER = `#version 300 es
+const outlineShader = (pass: 0 | 1 | 2) => `#version 300 es
+#define PASS ${pass}
 precision highp float;
 precision highp int;
 in vec2 v_uv;
@@ -3812,6 +3819,21 @@ uniform vec2 u_corners[48];
 uniform float u_cornerAt[49];
 /* A circle around each group of sides at radius 1: center x, center y and radius (see outlineGroups in renderer.ts). */
 uniform vec3 u_groups[6];
+/* A circle around the whole outline at radius 1, as u_groups. */
+uniform vec3 u_bound;
+/* Each copy's turn in 3D (Spin, then Tumble), worked out once per frame (see drawOutlinePass in renderer.ts). */
+uniform mat3 u_turns[24];
+/**
+ * With two passes, the glow is split at u_glowSplit pixels from the line, so
+ * the smaller glow target has no sharp peak to miss: smoothGlow is the glow
+ * with its peak rounded off inside that distance, and the line pass adds the
+ * rest (the glow minus smoothGlow), which is 0 past it. 0 means one pass.
+ */
+uniform float u_glowSplit;
+#if PASS == 2
+/* The glow from OUTLINE_GLOW_SHADER: glowColor (rgb) and glowSum (a). */
+uniform sampler2D u_glowTex;
+#endif
 ${COVER_GLSL}
 const float TAU = 6.2831853;
 /* The corners of a turned ring. */
@@ -3823,6 +3845,29 @@ bool turned;
 /* This copy's turn in 3D, and the distance of the eye (pixels) for the perspective. */
 mat3 turn3d;
 float eye;
+
+/**
+ * The glow's fade at distance d from the line (haze in pixels), with its peak
+ * rounded off inside u_glowSplit pixels: there a curve that is flat at the
+ * line and meets the fade with the same value and slope.
+ */
+float smoothGlow(float d, float haze) {
+  float split = u_glowSplit;
+  if (d >= split) return exp(-d / haze);
+  return exp(-split / haze) * (1.0 + (split * split - d * d) / (2.0 * split * haze));
+}
+
+/**
+ * How much larger a turned outline of radius r can look than its flat
+ * outline, with its perspective: an outline of the most "reach" times r
+ * from its center (1.9 for a snake, see snakePoint in renderer.ts).
+ */
+float growFor(float r) {
+  if (!turned) return 1.0;
+  float farthest = (u_shape == 4 ? 1.9 : 1.0) * r;
+  float closer = eye / max(eye - farthest, 1.0);
+  return closer + farthest * closer * closer / eye;
+}
 
 /* A point of the flat outline, turned in 3D and seen from the eye. */
 vec2 project(vec2 q) {
@@ -3959,8 +4004,8 @@ void nearestInGroup(int g, vec2 p, float r, float a, float b, inout vec2 best) {
  * Checks only the groups of sides that can count. "gap" is the shortest
  * distance from the pixel to any side of a group, or less. The group with the
  * smallest gap goes first; a later group with a gap past the best distance so
- * far has no nearer side. When the smallest gap is past "reach", nothing of
- * this copy shows at the pixel. The distance limits come from the turn: a turned
+ * far has no nearer side. Nothing past "reach" shows at the pixel, so a side
+ * or a group past it is not checked at all. The distance limits come from the turn: a turned
  * outline can look larger by "grow" at most, with its perspective.
  */
 vec2 nearestShown(vec2 p, float r, float a, float b, float reach) {
@@ -3973,13 +4018,7 @@ vec2 nearestShown(vec2 p, float r, float a, float b, float reach) {
     float db = length(p - outlinePoint(b, r));
     return da < db ? vec2(da, a) : vec2(db, b);
   }
-  float grow = 1.0;
-  if (turned) {
-    /* No corner of a snake is more than 1.9 radii from the center (see snakePoint in renderer.ts). */
-    float farthest = (u_shape == 4 ? 1.9 : 1.0) * r;
-    float closer = eye / max(eye - farthest, 1.0);
-    grow = closer + farthest * closer * closer / eye;
-  }
+  float grow = growFor(r);
   int groups = (sideCount() + GROUP_SIDES - 1) / GROUP_SIDES;
   float gap[6];
   int nearest = 0;
@@ -3987,13 +4026,14 @@ vec2 nearestShown(vec2 p, float r, float a, float b, float reach) {
     gap[g] = length(p - project(r * u_groups[g].xy)) - grow * r * u_groups[g].z;
     if (gap[g] < gap[nearest]) nearest = g;
   }
-  vec2 best = vec2(1e9, a);
-  if (gap[nearest] > reach) return best;
+  /* A side past the reach adds nothing, so the search starts there and only nearer sides count. */
+  vec2 best = vec2(reach, a);
+  if (gap[nearest] >= reach) return vec2(1e9, a);
   nearestInGroup(nearest, p, r, a, b, best);
   for (int g = 0; g < groups; g++) {
     if (g != nearest && gap[g] < best.x) nearestInGroup(g, p, r, a, b, best);
   }
-  return best;
+  return best.x < reach ? best : vec2(1e9, a);
 }
 
 void main() {
@@ -4020,20 +4060,17 @@ void main() {
      * its radius, a little larger when it turns toward the eye; a flat ring
      * also has nothing to add far inside it.
      */
+#if PASS == 1
+    float reach = haze * 12.0 + u_width * 4.0 + 12.0;
+#elif PASS == 2
+    float reach = max(u_width * 4.0, u_emitter * 4.0) + 12.0;
+#else
     float reach = max(haze * 12.0 + u_width * 4.0, u_emitter * 4.0) + 12.0;
-    float far = length(p);
-    /* A snake goes up to 1.6 radii across (see snakePoint in renderer.ts). */
-    float extent = u_shape == 4 ? 1.6 * r : r;
-    if (far > (turned ? extent * eye / max(eye - extent, 1.0) : extent) + reach) continue;
-    if (u_shape == 0 && !turned && far < r - reach) continue;
-    /* Spin turns the outline around its upright line, then Tumble around its level line. */
-    float spinAngle = u_turn3d.x - u_turn3d.y * float(i);
-    float tumbleAngle = u_turn3d.z - u_turn3d.w * float(i);
-    float cs = cos(spinAngle);
-    float ss = sin(spinAngle);
-    float ct = cos(tumbleAngle);
-    float st = sin(tumbleAngle);
-    turn3d = mat3(1.0, 0.0, 0.0, 0.0, ct, st, 0.0, -st, ct) * mat3(cs, 0.0, ss, 0.0, 1.0, 0.0, -ss, 0.0, cs);
+#endif
+    if (u_shape == 0 && !turned && length(p) < r - reach) continue;
+    turn3d = u_turns[i];
+    /* The circle around the whole outline: past it by more than the reach, nothing of this copy shows. */
+    if (length(p - project(r * u_bound.xy)) - growFor(r) * r * u_bound.z > reach) continue;
     float phase = fract(u_phase - u_delay * float(i));
     /**
      * The part that shows, from place a to place b. Drawing: from the top
@@ -4061,12 +4098,19 @@ void main() {
     float copyLight = 1.0 - u_copyFade * float(i) / float(max(u_count - 1, 1));
     shown *= copyLight;
     vec3 color = stopColor(around(n.y + u_shift));
-    float across = n.x / u_width;
-    float core = exp(-4.0 * across * across);
+#if PASS == 0
     float glow = u_glow * 0.5 * exp(-n.x / haze);
-    light += (color + 0.6) * core * shown;
+#elif PASS == 1
+    float glow = u_glow * 0.5 * smoothGlow(n.x, haze);
+#else
+    float glow = n.x < u_glowSplit ? u_glow * 0.5 * (exp(-n.x / haze) - smoothGlow(n.x, haze)) : 0.0;
+#endif
     glowSum += glow * shown;
     glowColor += color * glow * shown;
+#if PASS != 1
+    float across = n.x / u_width;
+    float core = exp(-4.0 * across * across);
+    light += (color + 0.6) * core * shown;
     /* The head's bright spot while the outline is drawn or chased. */
     if (moving && u_emitter > 0.0) {
       float near = length(p - project(outlinePoint(b, r))) / u_emitter;
@@ -4076,12 +4120,30 @@ void main() {
         spotColor = stopColor(around(b + u_shift));
       }
     }
+#endif
   }
+#if PASS == 1
+  o = vec4(glowColor, glowSum);
+#else
+#if PASS == 2
+  /* The sums add, so the glow near the line adds to the smooth glow read here. */
+  vec4 glowRead = texture(u_glowTex, v_uv);
+  glowColor += glowRead.rgb;
+  glowSum += glowRead.a;
+#endif
   float glowMax = u_glow;
   if (glowSum > 0.0) light += glowColor / glowSum * glowMax * (1.0 - exp(-glowSum / max(glowMax, 1e-4)));
   light += (spotColor + 0.5) * spot * (0.5 + min(u_glow, 1.0));
   o = addLight(texture(u_picture, v_uv), u_amount * light);
+#endif
 }`;
+
+/** Light shapes in one pass, for a GPU with no float targets. */
+export const OUTLINE_SHADER = outlineShader(0);
+/** Light shapes' glow only, drawn into a smaller float target (see drawOutlines in renderer.ts). */
+export const OUTLINE_GLOW_SHADER = outlineShader(1);
+/** Light shapes' line and head spot, with the glow read from u_glowTex. */
+export const OUTLINE_LINE_SHADER = outlineShader(2);
 
 /**
  * Bloom, step 2: one level of the glow, half the size of the level before
