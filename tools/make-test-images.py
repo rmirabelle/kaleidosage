@@ -109,13 +109,13 @@ def color_clouds() -> Image.Image:
 
 
 def random_shapes(count: int) -> Image.Image:
-    """Sharp-edged circles, boxes and triangles in random sizes, black and white, with 70% of them black."""
+    """Sharp-edged circles, boxes and triangles in random sizes. Half are black, and the rest are any gray from black to white."""
     image = Image.new("L", (WIDTH, HEIGHT), 0)
     draw = ImageDraw.Draw(image)
     for _ in range(count):
         size = random.choice([12, 30, 60, 120, 240]) * random.uniform(0.6, 1.4)
         x, y = random.uniform(-size, WIDTH), random.uniform(-size, HEIGHT)
-        color = 0 if random.random() < 0.7 else 255
+        color = 0 if random.random() < 0.5 else random.randint(0, 255)
         kind = random.random()
         if kind < 0.4:
             draw.ellipse([x, y, x + size, y + size], fill=color)
