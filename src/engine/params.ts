@@ -33,7 +33,7 @@ export const PARAM_KEYS = [
   "outlineSpin", "outlineTumble",
   "maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY",
   "colorAngle", "colorShift", "colorRepeat", "colorSize", "colorStretch", "colorTurn", "colorX", "colorY",
-  "domeAmount", "domeTilt", "domeSize"
+  "domeAmount", "domeTilt", "domeSize", "domeBackground"
 ] as const;
 export type ParamKey = typeof PARAM_KEYS[number];
 
@@ -973,9 +973,12 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   /**
    * Dome (see DOME_SHADER): Tilt is the view above level. 90 degrees looks
    * straight up, and at 180 degrees the dome hangs down on the screen. Dome size is the rim's distance from the screen's center
-   * when the view is straight up, in screen heights.
+   * when the view is straight up, in screen heights. Background is how much
+   * of the flat picture (the output of the effects before the Dome) shows
+   * past the rim.
    */
   domeAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
+  domeBackground: { label: "Background", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0, high: 1, on: false },
   domeTilt: { label: "Tilt", min: 0, max: 180, step: 1, value: 90, unit: "°", drift: "wave", low: 50, high: 90, on: false },
   domeSize: { label: "Dome size", min: 0.2, max: 1.5, step: 0.01, value: 0.5, drift: "wave", low: 0.4, high: 0.8, on: false },
   /**
@@ -1566,7 +1569,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   lasers: ["laserAmount", "laserOpacity", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"],
   outlines: ["outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"],
   mask: ["maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY"],
-  dome: ["domeAmount", "domeTilt", "domeSize"],
+  dome: ["domeAmount", "domeBackground", "domeTilt", "domeSize"],
   bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
   sharpen: ["sharpen", "sharpenRadius"],
   color: ["overlayOpacity", "colorAngle", "colorShift", "colorRepeat", "colorSize", "colorStretch", "colorTurn", "colorX", "colorY"],
@@ -1912,6 +1915,7 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("domeAmount", rand(0.8, 1), rand(0, 0.1));
   set("domeTilt", rand(40, 140), rand(0, 15));
   set("domeSize", rand(0.4, 1), rand(0, 0.15));
+  set("domeBackground", Math.random() < 0.6 ? 1 : rand(0, 0.7), rand(0, 0.2));
   /* Light rays and bloom together make every bright area shine; when Randomize picks both, each gets less. */
   if (state?.fxOrder.includes("rays") && state.fxOrder.includes("bloom")) {
     for (const key of ["raysAmount", "bloomAmount"] as const) {

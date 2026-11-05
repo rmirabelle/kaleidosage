@@ -3484,8 +3484,9 @@ void main() {
  * The picture's center is at the dome's top, and the rim is the largest circle
  * that fits in the picture. Equal steps along the dome are equal steps in the
  * picture, so near the eye (the rim) the picture looks large and far away (the
- * top) it looks small. Past the rim the picture is clear: black on the screen.
- * u_amount mixes from the flat picture (0) to the whole dome (1).
+ * top) it looks small. Past the rim, the flat picture (the output of the steps
+ * before the Dome) shows at u_background; at 0 it is clear, so black on the
+ * screen. u_amount mixes from the flat picture (0) to the whole dome (1).
  */
 export const DOME_SHADER = `#version 300 es
 precision highp float;
@@ -3496,6 +3497,7 @@ uniform vec2 u_res;
 uniform float u_amount;
 uniform float u_tilt;
 uniform float u_size;
+uniform float u_background;
 const float EYE = 0.35;
 const float QUARTER_TURN = 1.5707963;
 
@@ -3516,7 +3518,8 @@ void main() {
   /* The rim's edge is smoothed over about a pixel. */
   float inside = clamp(hit.z / max(fwidth(hit.z), 1e-5) + 0.5, 0.0, 1.0);
   /* The picture carries its cover (premultiplied), so the cover moves with the color. */
-  o = mix(texture(u_tex, v_uv), texture(u_tex, uv) * inside, u_amount);
+  vec4 picture = texture(u_tex, v_uv);
+  o = mix(picture, mix(picture * u_background, texture(u_tex, uv), inside), u_amount);
 }`;
 
 /**

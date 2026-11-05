@@ -241,7 +241,8 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Light shapes Spin and Tumble (rpm) turn each outline in 3D around its upright and its level line, with a little perspective. Each copy turns Delay later than the one before.
 - Only the drawn part of an outline glows, and its ends are round.
 - Random all puts Light shapes at the end of the list when it picks it.
-- Dome shows the picture on the inside of a dome, seen from below. The picture's center is at the dome's top, and black shows past the rim.
+- Dome shows the picture on the inside of a dome, seen from below. The picture's center is at the dome's top.
+- Dome Background sets how much of the flat picture, the output of the effects before the Dome, shows past the rim. At 0, black shows there.
 - Dome Tilt: 90° looks straight up. Toward 0° the dome rises above the rim on the screen, and toward 180° it hangs down below the rim.
 - Dome size is the rim's distance from the screen's center when the view is straight up, in screen heights.
 - Random all never adds Dome, but the Dome group's dice sets its sliders.

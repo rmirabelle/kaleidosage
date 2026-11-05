@@ -717,10 +717,11 @@ export interface FrameValues {
    * gradient's stops as grays (0 to 1).
    */
   mask: number;
-  /** Dome: how much shows (0 = off), the view's tilt above level (radians), and the rim's size on the screen, in screen heights. */
+  /** Dome: how much shows (0 = off), the view's tilt above level (radians), the rim's size on the screen, in screen heights, and how much of the flat picture shows past the rim. */
   dome: number;
   domeTilt: number;
   domeSize: number;
+  domeBackground: number;
   maskMode: MaskMode;
   maskSize: number;
   maskStretch: number;
@@ -3023,6 +3024,7 @@ export class KaleidoRenderer {
     gl.uniform1f(d.uniforms.u_amount, Math.min(1, Math.max(0, v.dome)));
     gl.uniform1f(d.uniforms.u_tilt, v.domeTilt);
     gl.uniform1f(d.uniforms.u_size, Math.max(0.05, v.domeSize));
+    gl.uniform1f(d.uniforms.u_background, Math.min(1, Math.max(0, v.domeBackground)));
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   }
