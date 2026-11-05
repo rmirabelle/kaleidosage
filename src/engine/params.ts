@@ -1,4 +1,4 @@
-import type { BlendMode, BlurMask, CameraColors, CameraHeightSource, CameraRepeat, ColorFill, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidShape, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, MaskMode, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
+import type { BlendMode, BlurMask, CameraColors, CameraHeightSource, CameraRepeat, ColorFill, CycleMove, DomeMode, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidShape, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, MaskMode, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
 
 export const PARAM_KEYS = [
   "cycle",
@@ -33,7 +33,7 @@ export const PARAM_KEYS = [
   "outlineSpin", "outlineTumble",
   "maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY",
   "colorAngle", "colorShift", "colorRepeat", "colorSize", "colorStretch", "colorTurn", "colorX", "colorY",
-  "domeAmount", "domeTilt", "domeSize", "domeBackground"
+  "domeAmount", "domeTilt", "domeSize", "domeBackground", "domeMagnify"
 ] as const;
 export type ParamKey = typeof PARAM_KEYS[number];
 
@@ -324,6 +324,8 @@ export interface PlayState {
   trailColor: string;
   /** The time smear's pattern of delays (see SMEAR_SHADER). */
   smearShape: SmearShape;
+  /** The Dome's type (see DOME_SHADER). */
+  domeMode: DomeMode;
   /** The contour lines' color: the Color slider's hue, or black or white. And how the lines combine with the picture under them. */
   contourTone: ContourTone;
   contourBlend: LayerBlend;
@@ -972,15 +974,17 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   maskY: { label: "Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   /**
    * Dome (see DOME_SHADER): Tilt is the view above level. 90 degrees looks
-   * straight up, and at 180 degrees the dome hangs down on the screen. Dome size is the rim's distance from the screen's center
-   * when the view is straight up, in screen heights. Background is how much
+   * straight up, and at 180 degrees the dome hangs down on the screen. Size is the rim's distance from the screen's center
+   * when the view is straight up, in screen heights. Magnify is how many
+   * times the Magnify type enlarges the center. Background is how much
    * of the flat picture (the output of the effects before the Dome) shows
    * past the rim.
    */
   domeAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
   domeBackground: { label: "Background", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0, high: 1, on: false },
+  domeMagnify: { label: "Magnify", min: 1, max: 8, step: 0.01, value: 2.5, drift: "wave", low: 1.5, high: 4, on: false },
   domeTilt: { label: "Tilt", min: 0, max: 180, step: 1, value: 90, unit: "°", drift: "wave", low: 50, high: 90, on: false },
-  domeSize: { label: "Dome size", min: 0.2, max: 1.5, step: 0.01, value: 0.5, drift: "wave", low: 0.4, high: 0.8, on: false },
+  domeSize: { label: "Size", min: 0.2, max: 1.5, step: 0.01, value: 0.5, drift: "wave", low: 0.4, high: 0.8, on: false },
   /**
    * Image or Video (see PICTURE_SHADER): an image or a video of the scene's own
    * over the picture made so far, by its blend (pictureBlend). Size 1
@@ -1129,7 +1133,7 @@ export function createPlayState(): PlayState {
     /* No effect is in the list at start-up, so every effect group is off. */
     groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, dome: false },
     locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, dome: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, domeMode: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1481,6 +1485,7 @@ export function resetEffects(params: Params, state: PlayState) {
     state.trailColor = fresh.trailColor;
   }
   if (!state.locks.smear) state.smearShape = fresh.smearShape;
+  if (!state.locks.dome) state.domeMode = fresh.domeMode;
   if (!state.locks.contours) {
     state.contourTone = fresh.contourTone;
     state.contourBlend = fresh.contourBlend;
@@ -1569,7 +1574,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   lasers: ["laserAmount", "laserOpacity", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"],
   outlines: ["outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"],
   mask: ["maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY"],
-  dome: ["domeAmount", "domeBackground", "domeTilt", "domeSize"],
+  dome: ["domeAmount", "domeBackground", "domeTilt", "domeSize", "domeMagnify"],
   bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
   sharpen: ["sharpen", "sharpenRadius"],
   color: ["overlayOpacity", "colorAngle", "colorShift", "colorRepeat", "colorSize", "colorStretch", "colorTurn", "colorX", "colorY"],
@@ -1589,6 +1594,7 @@ const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   blur: ["blurMask"],
   trails: ["trailColor"],
   smear: ["smearShape"],
+  dome: ["domeMode"],
   contours: ["contourTone", "contourBlend"],
   terrain: ["skyColor", "cameraBlend", "cameraRepeat"],
   camera: ["skyColor", "viewBlend", "cameraRepeat"],
@@ -1916,6 +1922,8 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("domeTilt", rand(40, 140), rand(0, 15));
   set("domeSize", rand(0.4, 1), rand(0, 0.15));
   set("domeBackground", Math.random() < 0.6 ? 1 : rand(0, 0.7), rand(0, 0.2));
+  set("domeMagnify", rand(1.5, 4), rand(0, 1));
+  if (state) state.domeMode = Math.random() < 0.5 ? 1 : 0;
   /* Light rays and bloom together make every bright area shine; when Randomize picks both, each gets less. */
   if (state?.fxOrder.includes("rays") && state.fxOrder.includes("bloom")) {
     for (const key of ["raysAmount", "bloomAmount"] as const) {

@@ -1679,6 +1679,8 @@ export class Engine {
       domeTilt: this.live("domeTilt") * DEGREES,
       domeSize: this.live("domeSize"),
       domeBackground: this.live("domeBackground"),
+      domeMode: this.state.domeMode,
+      domeMagnify: this.live("domeMagnify"),
       maskMode: this.state.maskMode,
       maskSize: this.live("maskSize"),
       maskStretch: this.live("maskStretch"),

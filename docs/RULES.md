@@ -244,7 +244,8 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Dome shows the picture on the inside of a dome, seen from below. The picture's center is at the dome's top.
 - Dome Background sets how much of the flat picture, the output of the effects before the Dome, shows past the rim. At 0, black shows there.
 - Dome Tilt: 90° looks straight up. Toward 0° the dome rises above the rim on the screen, and toward 180° it hangs down below the rim.
-- Dome size is the rim's distance from the screen's center when the view is straight up, in screen heights.
+- Dome Size is the rim's distance from the screen's center when the view is straight up, in screen heights.
+- Dome Type Magnify is a magnifying glass of radius Size: Magnify sets how many times the center is enlarged, and the picture meets the flat picture at the rim with no jump.
 - Random all never adds Dome, but the Dome group's dice sets its sliders.
 - Adding Image or Video with no image or video opens the Open dialog for one.
 - Image or Video lays its own image or video over the picture made so far; the effects after it change the whole picture, and one last in the list lies on top of everything.

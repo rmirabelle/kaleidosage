@@ -30,7 +30,7 @@ const EFFECT_NOTES: Record<FxStep, string> = {
   color: "Tints the whole picture with one color, or with a linear or radial gradient of colors.",
   levels: "Sets the exposure and the black level.",
   mask: "A radial gradient of grays fades parts of the picture out.",
-  dome: "Shows the picture on the inside of a dome above you."
+  dome: "Shows the picture on the inside of a dome above you, or under a magnifying glass."
 };
 
 /**

@@ -161,6 +161,8 @@ export function outlineCorners(shape: number, points: number, snakeTime = 0, sna
 
 /** The most Light shapes copies: the shader draws at most this many (see OUTLINE_SHADER). */
 export const OUTLINE_COPIES = 24;
+/** The Dome's type: 0 a dome seen from below, 1 a magnifying glass (see DOME_SHADER). */
+export type DomeMode = 0 | 1;
 /** The time smear's pattern: 0 linear, 1 rings, 2 sweep, 3 brightness, 4 noise (see SMEAR_SHADER). */
 export type SmearShape = 0 | 1 | 2 | 3 | 4;
 
@@ -722,6 +724,9 @@ export interface FrameValues {
   domeTilt: number;
   domeSize: number;
   domeBackground: number;
+  /** The Dome's type, and how many times Magnify enlarges the center. */
+  domeMode: DomeMode;
+  domeMagnify: number;
   maskMode: MaskMode;
   maskSize: number;
   maskStretch: number;
@@ -3025,6 +3030,8 @@ export class KaleidoRenderer {
     gl.uniform1f(d.uniforms.u_tilt, v.domeTilt);
     gl.uniform1f(d.uniforms.u_size, Math.max(0.05, v.domeSize));
     gl.uniform1f(d.uniforms.u_background, Math.min(1, Math.max(0, v.domeBackground)));
+    gl.uniform1i(d.uniforms.u_mode, v.domeMode);
+    gl.uniform1f(d.uniforms.u_magnify, Math.max(1, v.domeMagnify));
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   }

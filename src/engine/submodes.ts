@@ -1,5 +1,5 @@
 import type { ParamKey, PlayState } from "./params";
-import type { ColorFill, MaskMode, BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, SmearShape, SolidMap, SolidShape, WarpType, MandelPlace } from "./renderer";
+import type { ColorFill, DomeMode, MaskMode, BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, SmearShape, SolidMap, SolidShape, WarpType, MandelPlace } from "./renderer";
 
 /** The effects in the Add effect menu, in menu order, with the names their groups show. */
 export const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
@@ -175,7 +175,14 @@ export const COLOR_FILL_KEYS: Record<ColorFill, ParamKey[]> = {
   2: ["colorSize", "colorStretch", "colorTurn", "colorX", "colorY", "colorShift", "colorRepeat"]
 };
 
-export type SubmodeKey = "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape" | "cyclesMove" | "cyclesPaint" | "solidShape" | "solidMap" | "maskMode" | "colorFill";
+/** The Dome's types, and the sliders each shows: Magnify has no tilt. */
+export const DOME_KEYS: Record<DomeMode, ParamKey[]> = {
+  0: ["domeAmount", "domeBackground", "domeTilt", "domeSize"],
+  1: ["domeAmount", "domeBackground", "domeSize", "domeMagnify"]
+};
+export const DOME_MODES = [[0, "Dome"], [1, "Magnify"]] as const;
+
+export type SubmodeKey = "domeMode" | "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape" | "cyclesMove" | "cyclesPaint" | "solidShape" | "solidMap" | "maskMode" | "colorFill";
 
 /** One submode menu: the play-state setting it sets, its choices (value and name), and the sliders each choice shows. */
 export interface Submode {
@@ -196,7 +203,7 @@ export const DRIVER_SOURCES = [[0, "Caustics"], [1, "Smoke"], [2, "Ink"], [3, "F
  */
 export const EFFECT_TYPES: Partial<Record<FxStep, readonly (readonly [number, string])[]>> = {
   kaleidoscope: FOLD_MODES, map: MAP_MODES, warp: WARP_TYPES, blur: BLUR_MASKS,
-  trails: TRAIL_MODES, driver: DRIVER_SOURCES, outlines: OUTLINE_SHAPES
+  trails: TRAIL_MODES, driver: DRIVER_SOURCES, outlines: OUTLINE_SHAPES, dome: DOME_MODES
 };
 
 export const SUBMODES: readonly Submode[] = [
@@ -205,6 +212,7 @@ export const SUBMODES: readonly Submode[] = [
   { stateKey: "mapMode", options: MAP_MODES, keys: MAP_KEYS },
   { stateKey: "blurMask", options: BLUR_MASKS, keys: BLUR_KEYS },
   { stateKey: "smearShape", options: SMEAR_SHAPES, keys: SMEAR_KEYS },
+  { stateKey: "domeMode", options: DOME_MODES, keys: DOME_KEYS },
   { stateKey: "cyclesMove", options: CYCLE_MOVES, keys: CYCLE_KEYS },
   { stateKey: "cyclesPaint", options: CYCLE_PAINTS, keys: CYCLE_PAINT_KEYS },
   { stateKey: "solidShape", options: SOLID_SHAPES, keys: SOLID_SHAPE_KEYS },

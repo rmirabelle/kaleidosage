@@ -3487,6 +3487,11 @@ void main() {
  * top) it looks small. Past the rim, the flat picture (the output of the steps
  * before the Dome) shows at u_background; at 0 it is clear, so black on the
  * screen. u_amount mixes from the flat picture (0) to the whole dome (1).
+ *
+ * u_mode 1 (Magnify) is a magnifying glass instead, of radius u_size, with no
+ * tilt: the center shows the picture u_magnify times as large, and the picture
+ * is squeezed more and more toward the rim, where it meets the flat picture
+ * with no jump.
  */
 export const DOME_SHADER = `#version 300 es
 precision highp float;
@@ -3498,25 +3503,38 @@ uniform float u_amount;
 uniform float u_tilt;
 uniform float u_size;
 uniform float u_background;
+uniform int u_mode;
+uniform float u_magnify;
 const float EYE = 0.35;
 const float QUARTER_TURN = 1.5707963;
 
 void main() {
   float aspect = u_res.x / u_res.y;
   vec2 screen = (v_uv - 0.5) * vec2(aspect, 1.0);
-  vec3 ahead = vec3(0.0, cos(u_tilt), sin(u_tilt));
-  vec3 up = vec3(0.0, -sin(u_tilt), cos(u_tilt));
-  vec3 ray = normalize(ahead * u_size * EYE + vec3(screen.x, 0.0, 0.0) + up * screen.y);
-  /* The eye is inside the sphere, so the ray always meets it, once. */
-  float along = EYE * ray.z + sqrt(EYE * EYE * ray.z * ray.z + 1.0 - EYE * EYE);
-  vec3 hit = vec3(0.0, 0.0, -EYE) + along * ray;
-  float side = length(hit.xy);
-  float fromTop = atan(side, hit.z);
-  vec2 place = side > 1e-5 ? hit.xy / side * fromTop / QUARTER_TURN * 0.5 * min(aspect, 1.0) : vec2(0.0);
-  /* Looking up turns the view over, so y changes sign: straight up, the picture stays upright. */
-  vec2 uv = 0.5 + vec2(place.x, -place.y) / vec2(aspect, 1.0);
-  /* The rim's edge is smoothed over about a pixel. */
-  float inside = clamp(hit.z / max(fwidth(hit.z), 1e-5) + 0.5, 0.0, 1.0);
+  vec2 uv;
+  float inside;
+  if (u_mode == 1) {
+    float reach = dot(screen, screen) / (u_size * u_size);
+    /* 1 at the rim and past it, so there the picture does not move. */
+    float squeeze = max(u_magnify - (u_magnify - 1.0) * reach, 1.0);
+    uv = 0.5 + screen / squeeze / vec2(aspect, 1.0);
+    float fromCenter = sqrt(reach);
+    inside = clamp((1.0 - fromCenter) / max(fwidth(fromCenter), 1e-5) + 0.5, 0.0, 1.0);
+  } else {
+    vec3 ahead = vec3(0.0, cos(u_tilt), sin(u_tilt));
+    vec3 up = vec3(0.0, -sin(u_tilt), cos(u_tilt));
+    vec3 ray = normalize(ahead * u_size * EYE + vec3(screen.x, 0.0, 0.0) + up * screen.y);
+    /* The eye is inside the sphere, so the ray always meets it, once. */
+    float along = EYE * ray.z + sqrt(EYE * EYE * ray.z * ray.z + 1.0 - EYE * EYE);
+    vec3 hit = vec3(0.0, 0.0, -EYE) + along * ray;
+    float side = length(hit.xy);
+    float fromTop = atan(side, hit.z);
+    vec2 place = side > 1e-5 ? hit.xy / side * fromTop / QUARTER_TURN * 0.5 * min(aspect, 1.0) : vec2(0.0);
+    /* Looking up turns the view over, so y changes sign: straight up, the picture stays upright. */
+    uv = 0.5 + vec2(place.x, -place.y) / vec2(aspect, 1.0);
+    /* The rim's edge is smoothed over about a pixel. */
+    inside = clamp(hit.z / max(fwidth(hit.z), 1e-5) + 0.5, 0.0, 1.0);
+  }
   /* The picture carries its cover (premultiplied), so the cover moves with the color. */
   vec4 picture = texture(u_tex, v_uv);
   o = mix(picture, mix(picture * u_background, texture(u_tex, uv), inside), u_amount);
