@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { outlineCorners, outlineGlowStep, outlineTurns, snakePoint } from "./renderer";
+import { outlineCircles, outlineCorners, outlineGlowStep, outlineTurns, snakePoint } from "./renderer";
+
+/* The matrix of copy i, by columns, used on a point. */
+const turn = (turns: Float32Array, i: number, [x, y, z]: number[]) => [0, 1, 2].map((row) => turns[i * 9 + row] * x + turns[i * 9 + 3 + row] * y + turns[i * 9 + 6 + row] * z);
 
 describe("outlineTurns", () => {
-  /* The matrix of copy i, by columns, used on a point. */
-  const turn = (turns: Float32Array, i: number, [x, y, z]: number[]) => [0, 1, 2].map((row) => turns[i * 9 + row] * x + turns[i * 9 + 3 + row] * y + turns[i * 9 + 6 + row] * z);
-
   it("leaves a copy with no turn as it is", () => {
     /* "+ 0" makes -0 into 0. */
     expect([...outlineTurns(0, 0, 0, 0).slice(0, 9)].map((value) => value + 0)).toEqual([1, 0, 0, 0, 1, 0, 0, 0, 1]);
@@ -68,19 +68,34 @@ describe("outlineCorners", () => {
     }
   });
 
-  it("puts a circle around each group of 8 sides, with the corners at both ends inside it", () => {
-    const cases: [number, number, number][] = [[4, 5, 6], [3, 24, 6], [3, 5, 2], [1, 5, 1]];
-    for (const [shape, points, groupCount] of cases) {
-      const { corners, groups } = outlineCorners(shape, points, 7.5, 0.4, 0.5);
-      const count = shape === 4 ? 48 : shape === 1 ? 4 : 2 * points;
-      const sides = shape === 4 ? 47 : count;
-      for (let g = 0; g < 6; g++) {
-        expect(groups[g * 3 + 2] > 0).toBe(g < groupCount);
-        if (g >= groupCount) continue;
-        for (let k = g * 8; k <= Math.min(g * 8 + 8, sides); k++) {
-          const at = (k % count) * 2;
-          expect(Math.hypot(corners[at] - groups[g * 3], corners[at + 1] - groups[g * 3 + 1])).toBeLessThanOrEqual(groups[g * 3 + 2]);
-        }
+  it("puts each copy's seen sides inside its group circles and its whole circle, also when it turns", () => {
+    const eye = 2.5 * 2160;
+    const radii = [2138, 1500, 400];
+    for (const [spin, tumble] of [[0, 0], [4.3, 0], [2.2, 0.9]]) {
+      const turns = outlineTurns(spin, 0.21, tumble, 0.1);
+      for (const [shape, points, groupCount] of [[4, 5, 6], [3, 24, 6], [3, 5, 2], [1, 5, 1]]) {
+        const outline = outlineCorners(shape, points, 49, 0.82, 0.5);
+        const { groups, bounds } = outlineCircles(outline, radii, turns, eye, false);
+        radii.forEach((r, i) => {
+          /* A point a part t of the way along side k, turned and seen as project() in OUTLINE_SHADER. */
+          const seen = (k: number, t: number) => {
+            const [a, b] = [k % outline.count, (k + 1) % outline.count];
+            const [x, y] = [0, 1].map((axis) => r * (outline.corners[a * 2 + axis] * (1 - t) + outline.corners[b * 2 + axis] * t));
+            const [vx, vy, vz] = turn(turns, i, [x, y, 0]);
+            return [vx * eye / (eye + vz), vy * eye / (eye + vz)];
+          };
+          const inside = (circle: Float32Array, at: number, [x, y]: number[]) => expect(Math.hypot(x - circle[at], y - circle[at + 1])).toBeLessThanOrEqual(circle[at + 2]);
+          for (let g = 0; g < 6; g++) {
+            const at = (i * 6 + g) * 3;
+            expect(groups[at + 2] > 0).toBe(g < groupCount);
+            for (let k = g * 8; g < groupCount && k < Math.min(g * 8 + 8, outline.sides); k++) {
+              for (const t of [0, 0.3, 0.7, 1]) {
+                inside(groups, at, seen(k, t));
+                inside(bounds, i * 3, seen(k, t));
+              }
+            }
+          }
+        });
       }
     }
   });

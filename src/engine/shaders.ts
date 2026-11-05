@@ -3817,10 +3817,13 @@ uniform vec3 u_stopColor[8];
  */
 uniform vec2 u_corners[48];
 uniform float u_cornerAt[49];
-/* A circle around each group of sides at radius 1: center x, center y and radius (see outlineGroups in renderer.ts). */
-uniform vec3 u_groups[6];
-/* A circle around the whole outline at radius 1, as u_groups. */
-uniform vec3 u_bound;
+/**
+ * In pixels, as each copy is seen (center x, center y, radius; see
+ * outlineCircles in renderer.ts): a circle around each group of 8 sides, 6 for
+ * each copy, and one around each copy's whole outline.
+ */
+uniform vec3 u_groups[144];
+uniform vec3 u_bounds[24];
 /* Each copy's turn in 3D (Spin, then Tumble), worked out once per frame (see drawOutlinePass in renderer.ts). */
 uniform mat3 u_turns[24];
 /**
@@ -3855,18 +3858,6 @@ float smoothGlow(float d, float haze) {
   float split = u_glowSplit;
   if (d >= split) return exp(-d / haze);
   return exp(-split / haze) * (1.0 + (split * split - d * d) / (2.0 * split * haze));
-}
-
-/**
- * How much larger a turned outline of radius r can look than its flat
- * outline, with its perspective: an outline of the most "reach" times r
- * from its center (1.9 for a snake, see snakePoint in renderer.ts).
- */
-float growFor(float r) {
-  if (!turned) return 1.0;
-  float farthest = (u_shape == 4 ? 1.9 : 1.0) * r;
-  float closer = eye / max(eye - farthest, 1.0);
-  return closer + farthest * closer * closer / eye;
 }
 
 /* A point of the flat outline, turned in 3D and seen from the eye. */
@@ -4005,10 +3996,10 @@ void nearestInGroup(int g, vec2 p, float r, float a, float b, inout vec2 best) {
  * distance from the pixel to any side of a group, or less. The group with the
  * smallest gap goes first; a later group with a gap past the best distance so
  * far has no nearer side. Nothing past "reach" shows at the pixel, so a side
- * or a group past it is not checked at all. The distance limits come from the turn: a turned
- * outline can look larger by "grow" at most, with its perspective.
+ * or a group past it is not checked at all. The circles are copy "copy"'s, as
+ * it is seen (turned and with its perspective).
  */
-vec2 nearestShown(vec2 p, float r, float a, float b, float reach) {
+vec2 nearestShown(vec2 p, float r, float a, float b, float reach, int copy) {
   if (b - a <= 1e-5) return vec2(1e9, a);
   if (u_shape == 0 && turned) return nearestRing(p, r, a, b);
   if (u_shape == 0) {
@@ -4018,12 +4009,12 @@ vec2 nearestShown(vec2 p, float r, float a, float b, float reach) {
     float db = length(p - outlinePoint(b, r));
     return da < db ? vec2(da, a) : vec2(db, b);
   }
-  float grow = growFor(r);
   int groups = (sideCount() + GROUP_SIDES - 1) / GROUP_SIDES;
   float gap[6];
   int nearest = 0;
   for (int g = 0; g < groups; g++) {
-    gap[g] = length(p - project(r * u_groups[g].xy)) - grow * r * u_groups[g].z;
+    vec3 around = u_groups[copy * 6 + g];
+    gap[g] = length(p - around.xy) - around.z;
     if (gap[g] < gap[nearest]) nearest = g;
   }
   /* A side past the reach adds nothing, so the search starts there and only nearer sides count. */
@@ -4068,9 +4059,9 @@ void main() {
     float reach = max(haze * 12.0 + u_width * 4.0, u_emitter * 4.0) + 12.0;
 #endif
     if (u_shape == 0 && !turned && length(p) < r - reach) continue;
+    /* The circle around the whole outline as it is seen: past it by more than the reach, nothing of this copy shows. */
+    if (length(p - u_bounds[i].xy) - u_bounds[i].z > reach) continue;
     turn3d = u_turns[i];
-    /* The circle around the whole outline: past it by more than the reach, nothing of this copy shows. */
-    if (length(p - project(r * u_bound.xy)) - growFor(r) * r * u_bound.z > reach) continue;
     float phase = fract(u_phase - u_delay * float(i));
     /**
      * The part that shows, from place a to place b. Drawing: from the top
@@ -4092,7 +4083,7 @@ void main() {
       a = phase - u_length;
       b = phase;
     }
-    vec2 n = nearestShown(p, r, a, b, reach);
+    vec2 n = nearestShown(p, r, a, b, reach, i);
     /* A chased part is full at its head and fades to nothing at its tail; a snake's last 60% toward its tail fades. */
     float shown = u_shape == 4 ? clamp(n.y / 0.6, 0.0, 1.0) : u_draw == 1 ? clamp((n.y - a) / max(u_length, 1e-3), 0.0, 1.0) : 1.0;
     float copyLight = 1.0 - u_copyFade * float(i) / float(max(u_count - 1, 1));

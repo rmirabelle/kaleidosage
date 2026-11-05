@@ -133,7 +133,7 @@ export function snakePoint(t: number): [number, number] {
  * along its path from the tail (place 0, "length" times SNAKE_SPAN earlier) to
  * the head (place 1, at clock time "snakeTime").
  */
-export function outlineCorners(shape: number, points: number, snakeTime = 0, snakeLength = 0.35, inner = 1): { corners: Float32Array; at: Float32Array; length: number; groups: Float32Array; bound: [number, number, number] } {
+export function outlineCorners(shape: number, points: number, snakeTime = 0, snakeLength = 0.35, inner = 1): { corners: Float32Array; at: Float32Array; length: number; count: number; sides: number } {
   const snake = shape === 4;
   /* A ring's length here is its 48 straight sides', as the shader draws a turned ring. */
   const count = shape === 0 || snake ? OUTLINE_CORNERS : shape === 1 ? 4 : shape === 2 ? 3 : 2 * points;
@@ -159,17 +159,7 @@ export function outlineCorners(shape: number, points: number, snakeTime = 0, sna
     at[k + 1] = length;
   }
   for (let k = 1; k <= sides; k++) at[k] /= Math.max(length, 1e-9);
-  return { corners, at, length, groups: outlineGroups(corners, count, sides), bound: outlineBound(corners, count) };
-}
-
-/** A circle around all of an outline's corners, as center x, center y and radius (see u_bound in OUTLINE_SHADER). */
-function outlineBound(corners: Float32Array, count: number): [number, number, number] {
-  const xs = Array.from({ length: count }, (_, k) => corners[k * 2]);
-  const ys = Array.from({ length: count }, (_, k) => corners[k * 2 + 1]);
-  const x = (Math.min(...xs) + Math.max(...xs)) / 2;
-  const y = (Math.min(...ys) + Math.max(...ys)) / 2;
-  /* A little larger, as the shader reads these as 32-bit numbers. */
-  return [x, y, Math.max(...xs.map((cx, k) => Math.hypot(cx - x, ys[k] - y))) * 1.0001];
+  return { corners, at, length, count, sides };
 }
 
 /**
@@ -190,32 +180,61 @@ export function outlineTurns(spin: number, spinLag: number, tumble: number, tumb
   return turns;
 }
 
-/** How many sides of an outline are in one group, and the most groups (see outlineGroups). */
+/** How many sides of an outline are in one group, and the most groups (see outlineCircles). */
 const OUTLINE_GROUP_SIDES = 8;
 const OUTLINE_GROUPS = Math.ceil(OUTLINE_CORNERS / OUTLINE_GROUP_SIDES);
 
 /**
- * A circle around each group of an outline's sides, as center x, center y and
- * radius: the shader skips a group when its circle is too far from the pixel
- * for any of its sides to count (see nearestShown in OUTLINE_SHADER).
+ * The circles the Light shapes shader uses to skip work, in pixels, as each
+ * copy is seen (center x, center y, radius): for each copy, one around each
+ * group of OUTLINE_GROUP_SIDES sides (u_groups), and one around its whole
+ * outline (u_bounds). Each corner of copy i, at radius radii[i], is turned by
+ * its matrix in "turns" and seen from "eye" pixels away, as project() does in
+ * OUTLINE_SHADER. A straight side stays straight when it is seen, so a circle
+ * around its two seen corners holds all of it. A ring is a true circle, a
+ * little outside its 48 corners, so its circles are a little larger.
  */
-function outlineGroups(corners: Float32Array, count: number, sides: number): Float32Array {
-  const groups = new Float32Array(OUTLINE_GROUPS * 3);
-  for (let g = 0; g * OUTLINE_GROUP_SIDES < sides; g++) {
-    const first = g * OUTLINE_GROUP_SIDES;
-    const last = Math.min(first + OUTLINE_GROUP_SIDES, sides);
-    const around: [number, number][] = [];
-    for (let k = first; k <= last; k++) around.push([corners[(k % count) * 2], corners[(k % count) * 2 + 1]]);
-    const xs = around.map(([x]) => x);
-    const ys = around.map(([, y]) => y);
-    const x = (Math.min(...xs) + Math.max(...xs)) / 2;
-    const y = (Math.min(...ys) + Math.max(...ys)) / 2;
-    groups[g * 3] = x;
-    groups[g * 3 + 1] = y;
-    /* A little larger, as the shader reads these as 32-bit numbers. */
-    groups[g * 3 + 2] = Math.max(...around.map(([cx, cy]) => Math.hypot(cx - x, cy - y))) * 1.0001;
-  }
-  return groups;
+export function outlineCircles(outline: { corners: Float32Array; count: number; sides: number }, radii: readonly number[], turns: Float32Array, eye: number, ring: boolean): { groups: Float32Array; bounds: Float32Array } {
+  const { corners, count, sides } = outline;
+  const groups = new Float32Array(OUTLINE_COPIES * OUTLINE_GROUPS * 3);
+  const bounds = new Float32Array(OUTLINE_COPIES * 3);
+  const seenX = new Float64Array(count);
+  const seenY = new Float64Array(count);
+  /* A circle around the seen corners "first" to "last" (a last past the end is the first corner again). */
+  const circle = (first: number, last: number, margin: number, into: Float32Array, at: number) => {
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (let k = first; k <= last; k++) {
+      const c = k % count;
+      minX = Math.min(minX, seenX[c]);
+      maxX = Math.max(maxX, seenX[c]);
+      minY = Math.min(minY, seenY[c]);
+      maxY = Math.max(maxY, seenY[c]);
+    }
+    const x = (minX + maxX) / 2;
+    const y = (minY + maxY) / 2;
+    let reach = 0;
+    for (let k = first; k <= last; k++) reach = Math.max(reach, Math.hypot(seenX[k % count] - x, seenY[k % count] - y));
+    into.set([x, y, reach + margin], at);
+  };
+  radii.slice(0, OUTLINE_COPIES).forEach((r, i) => {
+    const m = turns.subarray(i * 9, i * 9 + 9);
+    for (let c = 0; c < count; c++) {
+      const qx = r * corners[c * 2];
+      const qy = r * corners[c * 2 + 1];
+      const z = qx * m[2] + qy * m[5];
+      const scale = eye / (eye + z);
+      seenX[c] = (qx * m[0] + qy * m[3]) * scale;
+      seenY[c] = (qx * m[1] + qy * m[4]) * scale;
+    }
+    /* 1 pixel for the shader's 32-bit numbers, and for a ring the most its true circle bulges past its corners (seen up to 4 times as large). */
+    const margin = 1 + (ring ? 0.01 * r : 0);
+    for (let g = 0; g * OUTLINE_GROUP_SIDES < sides; g++) circle(g * OUTLINE_GROUP_SIDES, Math.min((g + 1) * OUTLINE_GROUP_SIDES, sides), margin, groups, (i * OUTLINE_GROUPS + g) * 3);
+    circle(0, count - 1, margin, bounds, i * 3);
+  });
+  return { groups, bounds };
 }
 
 /**
@@ -3260,9 +3279,16 @@ export class KaleidoRenderer {
     const outline = outlineCorners(v.outlineShape, points, v.outlineSnakeTime, Math.min(1, Math.max(0.01, v.outlineLength)), Math.min(1, Math.max(0.1, v.outlineInner)));
     gl.uniform2fv(l.uniforms["u_corners[0]"], outline.corners);
     gl.uniform1fv(l.uniforms["u_cornerAt[0]"], outline.at);
-    gl.uniform3fv(l.uniforms["u_groups[0]"], outline.groups);
-    gl.uniform3f(l.uniforms.u_bound, ...outline.bound);
-    gl.uniformMatrix3fv(l.uniforms["u_turns[0]"], false, outlineTurns(v.outlineSpin, v.outlineSpinLag, v.outlineTumble, v.outlineTumbleLag));
+    const copies = Math.min(OUTLINE_COPIES, Math.max(1, Math.round(v.outlineCount)));
+    const radius = Math.max(0, v.outlineRadius) * height;
+    const spacing = Math.min(1, Math.max(0, v.outlineSpacing));
+    const radii = Array.from({ length: copies }, (_, i) => radius * (1 - spacing * i / Math.max(copies - 1, 1)));
+    const turns = outlineTurns(v.outlineSpin, v.outlineSpinLag, v.outlineTumble, v.outlineTumbleLag);
+    /* The eye is 2.5 picture heights away, as in OUTLINE_SHADER. */
+    const circles = outlineCircles(outline, radii, turns, 2.5 * height, v.outlineShape === 0);
+    gl.uniform3fv(l.uniforms["u_groups[0]"], circles.groups);
+    gl.uniform3fv(l.uniforms["u_bounds[0]"], circles.bounds);
+    gl.uniformMatrix3fv(l.uniforms["u_turns[0]"], false, turns);
     gl.uniform1f(l.uniforms.u_glowSplit, split);
     gl.uniform1f(l.uniforms.u_width, Math.max(0.25, v.outlineWidth * this.texelScale));
     gl.uniform1f(l.uniforms.u_glow, Math.max(0, v.outlineGlow));
