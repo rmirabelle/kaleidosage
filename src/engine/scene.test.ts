@@ -53,19 +53,46 @@ describe("scene files", () => {
       const scene = JSON.parse(serializeScene(createParams(), createPlayState(), { image: IMAGE }));
       delete scene.params.bubbleRoundness;
       delete scene.params.bubbleSegments;
+      delete scene.params.bubbleInner;
       scene.state.bubbleShape = shape;
       const params = createParams();
       const state = createPlayState();
       applyScene(JSON.stringify(scene), params, state);
-      return [state.bubbleShape, params.bubbleRoundness.value, params.bubbleSegments.value];
+      return [state.bubbleShape, params.bubbleRoundness.value, params.bubbleSegments.value, Number(params.bubbleInner.value.toFixed(3))];
     };
-    expect(opened(0)).toEqual([0, 0, 3]);
-    expect(opened(1)).toEqual([0, 0, 3]);
-    expect(opened(2)).toEqual([3, 0.5, 3]);
-    expect(opened(3)).toEqual([3, 0, 3]);
-    expect(opened(4)).toEqual([4, 0, 3]);
-    expect(opened(5)).toEqual([4, 0, 6]);
-    expect(opened(6)).toEqual([4, 0, 5]);
+    expect(opened(0)).toEqual([0, 0, 5, 1]);
+    expect(opened(1)).toEqual([0, 0, 5, 1]);
+    expect(opened(2)).toEqual([3, 0.5, 5, 1]);
+    expect(opened(3)).toEqual([3, 0, 5, 1]);
+    expect(opened(4)).toEqual([4, 0, 3, 1]);
+    expect(opened(5)).toEqual([4, 0, 6, 1]);
+    expect(opened(6)).toEqual([4, 0, 5, 0.472]);
+  });
+
+  it("keep the look of a Radial shape saved before Inner radius", () => {
+    const scene = JSON.parse(serializeScene(createParams(), createPlayState(), { image: IMAGE }));
+    delete scene.params.outlineInner;
+    delete scene.params.bubbleInner;
+    scene.state.outlineShape = 3;
+    scene.params.outlinePoints.value = 6;
+    scene.state.bubbleShape = 4;
+    scene.params.bubbleSegments.value = 8;
+    const params = createParams();
+    applyScene(JSON.stringify(scene), params, createPlayState());
+    expect(params.outlineInner.value * Math.cos(Math.PI / 6)).toBeCloseTo(0.45);
+    expect(params.bubbleInner.value).toBe(1);
+  });
+
+  it("keep a saved Inner radius", () => {
+    const params = createParams();
+    params.outlineInner.value = 0.3;
+    params.bubbleInner.value = 0.4;
+    const state = createPlayState();
+    state.outlineShape = 3;
+    state.bubbleShape = 4;
+    const loaded = createParams();
+    applyScene(serializeScene(params, state, { image: IMAGE }), loaded, createPlayState());
+    expect([loaded.outlineInner.value, loaded.bubbleInner.value]).toEqual([0.3, 0.4]);
   });
 
   it("keep the particles' gradient stops, and drop stops that do not read", () => {

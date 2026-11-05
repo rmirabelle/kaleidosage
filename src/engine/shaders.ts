@@ -3483,8 +3483,10 @@ void main() {
  * center to each corner, because the distance changes direction there.
  *
  * u_roundness rounds the Square's corners, from square (0) to a circle (1).
- * u_segments is the Radial shape's number of corners, with one corner straight up.
- * Values between two whole numbers crossfade between those two shapes.
+ * u_segments is the Radial shape's number of points, with one point straight up.
+ * Values between two whole numbers crossfade between those two shapes. u_inner
+ * sets how far in the edge goes between two points: 1 gives a plain shape with
+ * straight sides from point to point, and lower values give a sharper star.
  * u_rotation turns the shape and its bend clockwise, in radians, and not the picture.
  *
  * u_size is the distance from the shape's center to its top, in screen heights.
@@ -3523,6 +3525,7 @@ uniform int u_shape;
 uniform int u_blend;
 uniform float u_roundness;
 uniform float u_segments;
+uniform float u_inner;
 uniform float u_rotation;
 uniform float u_size;
 uniform float u_background;
@@ -3549,16 +3552,27 @@ ${COVER_GLSL}
 ${BLEND_COVER_GLSL}
 
 /**
- * shapeDistance for a regular shape with count corners, each 1 from the center,
- * and one corner straight up. Each point is folded into the part of the shape
- * between a corner and the middle of the next edge, where the edge is one straight
- * line at the angle of half a sector from the corner.
+ * The Radial shape has count points, each 1 from the center, with one point
+ * straight up. Each pixel is folded into the part of the shape between a point
+ * (at (1, 0) here) and the inner corner after it, where the edge is one straight
+ * line. This gives the pixel's place in that part.
  */
+vec2 foldedToPoint(vec2 p, float wedge) {
+  float angle = mod(atan(p.x, p.y), 2.0 * wedge);
+  angle = min(angle, 2.0 * wedge - angle);
+  return length(p) * vec2(cos(angle), sin(angle));
+}
+
+/** The inner corner after the point at (1, 0). At u_inner 1 it is on the straight line to the next point. */
+vec2 innerCorner(float wedge) {
+  return u_inner * cos(wedge) * vec2(cos(wedge), sin(wedge));
+}
+
+/** shapeDistance for the Radial shape: how far along the line from the center to the edge. */
 float cornerDistance(vec2 p, float count) {
-  float sector = TURN / count;
-  float angle = mod(atan(p.x, p.y), sector);
-  angle = min(angle, sector - angle);
-  return length(p) * cos(sector * 0.5 - angle) / cos(sector * 0.5);
+  float wedge = TURN * 0.5 / count;
+  vec2 inner = innerCorner(wedge);
+  return dot(foldedToPoint(p, wedge), vec2(inner.y, 1.0 - inner.x)) / inner.y;
 }
 
 /**
@@ -3587,13 +3601,14 @@ float shapeDistance(vec2 p) {
   return length(p);
 }
 
-/** The true distance from the Radial shape's edge: below 0 inside, and to the corner when a point is past the end of its edge. */
+/** The true distance from the Radial shape's edge, below 0 inside: the distance to the nearest place on the straight line from a point to its inner corner. */
 float cornerEdge(vec2 p, float count) {
-  float sector = TURN / count;
-  float angle = mod(atan(p.x, p.y), sector);
-  angle = sector * 0.5 - min(angle, sector - angle);
-  vec2 fromCorner = length(p) * vec2(cos(angle), sin(angle)) - vec2(cos(sector * 0.5), sin(sector * 0.5));
-  return fromCorner.y > 0.0 ? length(fromCorner) : fromCorner.x;
+  float wedge = TURN * 0.5 / count;
+  vec2 inner = innerCorner(wedge);
+  vec2 along = inner - vec2(1.0, 0.0);
+  vec2 fromPoint = foldedToPoint(p, wedge) - vec2(1.0, 0.0);
+  float gap = length(fromPoint - along * clamp(dot(fromPoint, along) / dot(along, along), 0.0, 1.0));
+  return dot(fromPoint, vec2(inner.y, 1.0 - inner.x)) > 0.0 ? gap : -gap;
 }
 
 /** The true distance from the shape's edge: 0 on it and below 0 inside. */
@@ -3733,7 +3748,7 @@ void main() {
 
 /**
  * Light shapes: glowing outlines (a ring, a square, a triangle or a Radial
- * shape with u_points sides) that draw themselves, in one pass over the picture. Each of u_count
+ * shape with u_points points) that draw themselves, in one pass over the picture. Each of u_count
  * copies has its own radius (smaller by u_spacing from the first) and its
  * own place in the draw cycle (later by u_delay). For each pixel, each
  * copy finds the nearest point of its outline and that point's place s
@@ -3830,7 +3845,7 @@ vec3 stopColor(float t) {
 }
 
 /* How many corners the outline has: a ring has none unless it is turned; a snake has 48 along its path. */
-int cornerCount() { return u_shape == 0 || u_shape == 4 ? RING_CORNERS : u_shape == 1 ? 4 : u_shape == 2 ? 3 : u_points; }
+int cornerCount() { return u_shape == 0 || u_shape == 4 ? RING_CORNERS : u_shape == 1 ? 4 : u_shape == 2 ? 3 : 2 * u_points; }
 
 /* How many sides: a closed outline has one back to its first corner; a snake (open) does not. */
 int sideCount() { return u_shape == 4 ? cornerCount() - 1 : cornerCount(); }

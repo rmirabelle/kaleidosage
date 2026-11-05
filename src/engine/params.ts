@@ -24,7 +24,7 @@ export const PARAM_KEYS = [
   "solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidFrost", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY",
   "raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY",
   "laserAmount", "laserOpacity", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY",
-  "outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineX", "outlineY",
+  "outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineInner", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineX", "outlineY",
   "pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn", "pictureKey",
   "bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize",
   "sharpen", "sharpenRadius", "overlayOpacity", "exposure", "blackLevel",
@@ -33,7 +33,7 @@ export const PARAM_KEYS = [
   "outlineSpin", "outlineTumble",
   "maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY",
   "colorAngle", "colorShift", "colorRepeat", "colorSize", "colorStretch", "colorTurn", "colorX", "colorY",
-  "bubbleAmount", "bubbleSize", "bubbleBackground", "bubbleDepth", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments", "bubbleShadowStrength", "bubbleShadowWidth", "bubbleShadowSoftness", "bubbleRotation"
+  "bubbleAmount", "bubbleSize", "bubbleBackground", "bubbleDepth", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments", "bubbleInner", "bubbleShadowStrength", "bubbleShadowWidth", "bubbleShadowSoftness", "bubbleRotation"
 ] as const;
 export type ParamKey = typeof PARAM_KEYS[number];
 
@@ -933,9 +933,10 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * Light shapes (see OUTLINE_SHADER): glowing outlines that draw
    * themselves. Count copies, each smaller by Spacing and later in the draw
    * by Delay (a part of a draw). Draw time is the seconds for one draw;
-   * Length is the chased part (Chase only); Sides is the Radial shape's (the
-   * key stays outlinePoints, so saved scenes keep their value). Width and
-   * Glow size are pixels at 1080p. Color flow moves the colors along the
+   * Length is the chased part (Chase only); Points and Inner radius are the
+   * Radial shape's. Inner radius 1 gives a plain shape with Points sides, and
+   * lower values give a sharper star (see outlineCorners). Width and Glow size
+   * are pixels at 1080p. Color flow moves the colors along the
    * outline, in turns per second.
    */
   outlineAmount: { label: "Strength", min: 0, max: 3, step: 0.01, value: 0, drift: "wave", low: 0.6, high: 1.5, on: false },
@@ -947,7 +948,8 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   outlineDelay: { label: "Delay", min: 0, max: 1, step: 0.01, value: 0.15, drift: "wave", low: 0.05, high: 0.3, on: false },
   outlineDrawTime: { label: "Draw time", min: 0.25, max: 20, step: 0.01, scale: "log", value: 3, unit: "s", drift: "wave", low: 2, high: 5, on: false },
   outlineLength: { label: "Length", min: 0.02, max: 1, step: 0.01, value: 0.35, drift: "wave", low: 0.2, high: 0.6, on: false },
-  outlinePoints: { label: "Sides", min: 3, max: 24, step: 1, value: 5, drift: "wave", low: 4, high: 8, on: false },
+  outlinePoints: { label: "Points", min: 3, max: 24, step: 1, value: 5, drift: "wave", low: 4, high: 8, on: false },
+  outlineInner: { label: "Inner radius", min: 0.1, max: 1, step: 0.01, value: 0.55, drift: "wave", low: 0.35, high: 0.8, on: false },
   outlineWidth: { label: "Width", min: 0.5, max: 12, step: 0.1, value: 2, unit: "px", drift: "wave", low: 1, high: 3, on: false },
   outlineGlow: { label: "Glow", min: 0, max: 4, step: 0.01, value: 1, drift: "wave", low: 0.5, high: 1.5, on: false },
   outlineGlowSize: { label: "Glow size", min: 2, max: 80, step: 0.1, scale: "log", value: 16, unit: "px", drift: "wave", low: 8, high: 30, on: false },
@@ -995,7 +997,9 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   bubblePanX: { label: "Pan X", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   bubblePanY: { label: "Pan Y", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   bubbleRoundness: { label: "Roundness", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.5, on: false },
-  bubbleSegments: { label: "Segments", min: 3, max: 24, step: 1, value: 3, drift: "wave", low: 3, high: 8, on: false },
+  bubbleSegments: { label: "Points", min: 3, max: 24, step: 1, value: 5, drift: "wave", low: 3, high: 8, on: false },
+  /** The Radial shape: 1 gives a plain shape with Points sides, and lower values give a sharper star. */
+  bubbleInner: { label: "Inner radius", min: 0.1, max: 1, step: 0.01, value: 0.55, drift: "wave", low: 0.35, high: 0.8, on: false },
   bubbleRotation: { label: "Rotation", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "spin", low: -180, high: 180, on: false },
   bubbleShadowStrength: { label: "Shadow strength", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.3, high: 0.8, on: false },
   bubbleShadowWidth: { label: "Shadow width", min: 0, max: 0.5, step: 0.005, value: 0.08, drift: "wave", low: 0.03, high: 0.15, on: false },
@@ -1591,9 +1595,9 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   rays: ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"],
   picture: ["pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn", "pictureKey"],
   lasers: ["laserAmount", "laserOpacity", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"],
-  outlines: ["outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"],
+  outlines: ["outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineInner", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"],
   mask: ["maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY"],
-  bubble: ["bubbleAmount", "bubbleBackground", "bubbleDepth", "bubbleSize", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments", "bubbleShadowStrength", "bubbleShadowWidth", "bubbleShadowSoftness", "bubbleRotation"],
+  bubble: ["bubbleAmount", "bubbleBackground", "bubbleDepth", "bubbleSize", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments", "bubbleInner", "bubbleShadowStrength", "bubbleShadowWidth", "bubbleShadowSoftness", "bubbleRotation"],
   bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
   sharpen: ["sharpen", "sharpenRadius"],
   color: ["overlayOpacity", "colorAngle", "colorShift", "colorRepeat", "colorSize", "colorStretch", "colorTurn", "colorX", "colorY"],
@@ -1935,6 +1939,7 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("bubblePanY", Math.random() < 0.8 ? 0 : rand(-0.2, 0.2), rand(0, 0.1));
   set("bubbleRoundness", Math.random() < 0.5 ? 0 : rand(0.1, 1), rand(0, 0.2));
   set("bubbleSegments", Math.round(rand(3, 12)), rand(0, 2));
+  set("bubbleInner", rand(0.3, 1), rand(0, 0.1));
   set("bubbleRotation", Math.random() < 0.6 ? 0 : rand(-180, 180));
   set("bubbleShadowStrength", Math.random() < 0.5 ? 0 : rand(0.3, 0.8), rand(0, 0.1));
   set("bubbleShadowWidth", rand(0.03, 0.15), rand(0, 0.03));
@@ -1966,6 +1971,7 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("outlineDrawTime", rand(1.5, 6), rand(0, 1));
   set("outlineLength", rand(0.15, 0.6), rand(0, 0.15));
   set("outlinePoints", Math.round(rand(4, 8)), 0);
+  set("outlineInner", rand(0.3, 1), rand(0, 0.1));
   set("outlineWidth", rand(1, 3), rand(0, 0.8));
   set("outlineGlow", rand(0.4, 1.8), rand(0, 0.4));
   set("outlineGlowSize", rand(8, 30), rand(0, 5));

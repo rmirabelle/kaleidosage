@@ -79,8 +79,8 @@ const SORT_KEYS: ParamKey[] = ["sortAmount", "sortLow", "sortHigh", "sortAngle",
 const PARTICLE_KEYS: ParamKey[] = ["particleLevel", "particleBackground", "particleCount", "particleSize", "particleLife", "particleSpeed", "particleFollow", "particleCling", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleGradient", "particleBoost"];
 const RAYS_KEYS: ParamKey[] = ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"];
 const PICTURE_KEYS: ParamKey[] = ["pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn", "pictureKey"];
-/** Light shapes' settings; OutlineSection hides Length but for Chase, and Sides but for Radial. */
-const OUTLINE_KEYS: ParamKey[] = ["outlineAmount", "outlineRadius", "outlineCount", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"];
+/** Light shapes' settings; OutlineSection hides Length but for Chase, and Points and Inner radius but for Radial. */
+const OUTLINE_KEYS: ParamKey[] = ["outlinePoints", "outlineInner", "outlineAmount", "outlineRadius", "outlineCount", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"];
 const OUTLINE_DRAWS = [[0, "Draw and erase"], [1, "Chase"], [2, "Whole"]] as const;
 const LASER_KEYS: ParamKey[] = ["laserAmount", "laserOpacity", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"];
 const BLOOM_KEYS: ParamKey[] = ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"];
@@ -1016,7 +1016,7 @@ function ParticleSection({ engine, row }: { engine: Engine; row: (key: ParamKey)
 /**
  * Light shapes' settings: the Shape and Draw menus, then the sliders, with
  * the colors along the outline (a gradient) above Color flow. Length shows
- * only for Chase and Snake, and Sides only for Radial.
+ * only for Chase and Snake, and Points and Inner radius only for Radial.
  */
 function OutlineSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
   const [shape, setShape] = useState<OutlineShape>(engine.state.outlineShape);
@@ -1024,7 +1024,7 @@ function OutlineSection({ engine, row }: { engine: Engine; row: (key: ParamKey) 
   /* A snake always crawls, as a chase does, so the Draw menu and Delay do not count for it. */
   const snake = shape === 4;
   const crawls = draw === 1 || snake;
-  const keys = OUTLINE_KEYS.filter((key) => (key !== "outlineLength" || crawls) && (key !== "outlineEmitter" || draw !== 2 || snake) && (key !== "outlinePoints" || shape === 3) && (key !== "outlineDelay" || !snake));
+  const keys = OUTLINE_KEYS.filter((key) => (key !== "outlineLength" || crawls) && (key !== "outlineEmitter" || draw !== 2 || snake) && ((key !== "outlinePoints" && key !== "outlineInner") || shape === 3) && (key !== "outlineDelay" || !snake));
   return (
     <>
       <ModeSelect engine={engine} stateKey="outlineShape" options={OUTLINE_SHAPES} name="Shape" onChange={setShape} />

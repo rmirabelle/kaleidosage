@@ -27,14 +27,22 @@ describe("outlineCorners", () => {
     for (let k = 1; k < 48; k++) expect(at[k]).toBeGreaterThan(at[k - 1]);
   });
 
-  it("gives Radial one corner for each side, all at radius 1, with one straight up", () => {
-    for (const sides of [3, 5, 24]) {
-      const { corners, at } = outlineCorners(3, sides);
+  it("gives Radial its points at radius 1, one straight up, and inner corners by Inner radius", () => {
+    for (const points of [3, 5, 24]) {
+      const inner = 0.5;
+      const { corners, at } = outlineCorners(3, points, 0, 0.35, inner);
       expect(corners[0]).toBeCloseTo(0);
       expect(corners[1]).toBeCloseTo(1);
-      for (let k = 0; k < sides; k++) expect(Math.hypot(corners[k * 2], corners[k * 2 + 1])).toBeCloseTo(1);
-      expect(at[1]).toBeCloseTo(1 / sides);
-      expect(at[sides]).toBeCloseTo(1);
+      for (let k = 0; k < 2 * points; k++) {
+        expect(Math.hypot(corners[k * 2], corners[k * 2 + 1])).toBeCloseTo(k % 2 === 0 ? 1 : inner * Math.cos(Math.PI / points));
+      }
+      expect(at[2 * points]).toBeCloseTo(1);
     }
+  });
+
+  it("makes Radial a plain shape with Points sides at Inner radius 1", () => {
+    const { length, at } = outlineCorners(3, 6);
+    expect(length).toBeCloseTo(6);
+    expect(at[2]).toBeCloseTo(1 / 6);
   });
 });

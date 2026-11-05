@@ -401,6 +401,8 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   state.cyclesPaint = mode(saved.cyclesPaint, [0, 1, 2, 3] as const) ?? state.cyclesPaint;
   state.cyclesStops = readGradientStops(saved.cyclesStops) ?? defaultCycleStops();
   state.outlineShape = mode(saved.outlineShape, [0, 1, 2, 3, 4] as const) ?? state.outlineShape;
+  /* Scenes from before Inner radius had a star here, with its inner corners 0.45 from the center. */
+  if (!isRecord(savedParams.outlineInner) && state.outlineShape === 3) params.outlineInner.value = 0.45 / Math.cos(Math.PI / Math.round(params.outlinePoints.value));
   state.outlineDraw = mode(saved.outlineDraw, [0, 1, 2] as const) ?? state.outlineDraw;
   state.outlineStops = readGradientStops(saved.outlineStops) ?? defaultOutlineStops();
   state.maskMode = mode(saved.maskMode, [0, 1] as const) ?? 0;
@@ -414,10 +416,13 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
     state.bubbleShape = 3;
     params.bubbleRoundness.value = 0.5;
   }
+  if (!isRecord(savedParams.bubbleSegments) && saved.bubbleShape === 4) params.bubbleSegments.value = 3;
   if (saved.bubbleShape === 5 || saved.bubbleShape === 6) {
     state.bubbleShape = 4;
     params.bubbleSegments.value = saved.bubbleShape === 5 ? 6 : 5;
   }
+  /* Scenes from before Inner radius had plain Radial shapes. The Star of 0.19.0 had its inner corners 0.381966 from the center. */
+  if (!isRecord(savedParams.bubbleInner)) params.bubbleInner.value = saved.bubbleShape === 6 ? 0.381966 / Math.cos(Math.PI / 5) : 1;
   state.bubbleBlend = mode(saved.bubbleBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? 0;
   state.bubbleShadow = mode(saved.bubbleShadow, [0, 1] as const) ?? 0;
   state.maskStops = readGradientStops(saved.maskStops) ?? defaultMaskStops();

@@ -234,8 +234,8 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - A saved scene keeps its loaded real terrain (heights and picture) while Terrain is in the list with Real terrain heights or Terrain picture colors, so it opens with no internet. A new Load is an unsaved change.
 - Terrain Colors Terrain picture paints the land with the loaded picture; with none, it uses Height colors.
 - Terrain Colors: Picture (as before) or Height colors, a gradient from the lowest land (left) to the highest (right): valley green, grass, rock, stone, snow by default.
-- Light shapes draws glowing outlines: a ring, a square, a triangle, a Radial shape or a snake. Sides shows only for Radial, and is its number of sides, from 3 to 24. One corner points straight up.
-- Scenes with the old Light shapes Star open with the Radial shape, and its Points value becomes Sides.
+- Light shapes draws glowing outlines: a ring, a square, a triangle, a Radial shape or a snake. Points and Inner radius show only for Radial. Points is from 3 to 24, and one point goes straight up. Inner radius 1 gives a plain shape with that many sides, and lower values give a sharper star.
+- Scenes with the old Light shapes Star open with the Radial shape and the same star: its Points stay, and Inner radius is set to match.
 - Light shapes Draw: Draw and erase draws the outline from the top, then erases it from the top; Chase sends a part of Length around it, brightest at its head; Whole shows it all.
 - Light shapes has Count copies, each smaller by Spacing and later in its draw by Delay. One draw takes Draw time seconds.
 - Light shapes colors come from a gradient along the outline, there and back once around it, so its ends meet with no seam; Color flow moves them along it.
@@ -244,15 +244,17 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Random all puts Light shapes at the end of the list when it picks it.
 - Bubble bends the picture inside a closed shape around the screen's center. The Shape menu has Circle, Square and Radial.
 - Bubble Roundness shows only for Square, and rounds its corners from square (0) to a circle (1).
-- Bubble Segments shows only for Radial, and is its number of corners, from 3 (a triangle) to 24. One corner points straight up. Values between two whole numbers crossfade between those two shapes.
+- Bubble Points shows only for Radial, from 3 to 24. One point goes straight up. Values between two whole numbers crossfade between those two shapes.
+- Bubble Inner radius shows only for Radial. 1 gives a plain shape with Points sides (3 is a triangle), and lower values give a sharper star.
+- A new Radial Bubble or Light shape starts as a star with 5 points and Inner radius 0.55.
 - Bubble Rotation shows only for Square and Radial. It turns the shape and its bend clockwise, and the picture does not turn.
 - Every point moves along its own line from the center, so a shape with corners shows a sharp line from the center to each corner. A rounded corner shows no such line.
 - Bubble has one shadow. The Shadow type menu makes it Inner, which darkens the bent picture just inside the edge, or Outer, which darkens what shows just past the edge. The two types share one set of sliders.
 - Shadow strength sets how dark the shadow is. It starts at 0, which is off.
-- Shadow width keeps an even width around the edge of every shape, in screen heights. With a Radial Segments value between two whole numbers, the shadow is only near the edge.
+- Shadow width keeps an even width around the edge of every shape, in screen heights. With a Radial Points value between two whole numbers, the shadow is only near the edge.
 - Shadow softness is the part of the width that fades. At 1 the shadow fades over the whole width, and at 0 it ends in a hard line.
 - An Outer shadow at Background 0 adds black cover to the clear picture, so effects under it or a later blend can show it.
-- Scenes from 0.19.0 open with the nearest shape: Ellipse as Circle, Rounded square as Square with Roundness 0.5, Triangle, Hexagon and Star as Radial with 3, 6 and 5 Segments.
+- Scenes from 0.19.0 open with the nearest shape: Ellipse as Circle, Rounded square as Square with Roundness 0.5, Triangle and Hexagon as Radial with 3 and 6 Points and Inner radius 1, and Star as Radial with 5 Points and Inner radius 0.47. Scenes with a Radial Bubble from before Inner radius open with Inner radius 1.
 - Bubble Background sets how much of the flat picture, the output of the effects before the Bubble, shows past the shape's edge. At 0, black shows there.
 - Bubble Blend combines the bent picture with the flat picture inside the shape only.
 - Bubble Size is the distance from the shape's center to its top, in screen heights. At 0.5 with no Center, the shape reaches the top of the screen. A read past the picture's edges repeats as a mirror image.
