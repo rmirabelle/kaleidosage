@@ -852,6 +852,8 @@ const MAX_CYCLE_INSTANCES = 262144;
 /** The width of the small copy of the picture that the light cycles read. */
 const CYCLE_PICTURE_WIDTH = 256;
 
+/** The longest side of the larger picture a Dome reads (see domeSourceSize), in pixels. */
+const DOME_SOURCE_LIMIT = 5120;
 /** Frames the time smear keeps, and the most GPU memory they may use (they get smaller on a large canvas). */
 const SMEAR_SLOTS = 32;
 const SMEAR_MEMORY = 320 * 1024 * 1024;
@@ -1421,6 +1423,15 @@ export class KaleidoRenderer {
       this.timer.end();
       source = this.frameTexture;
       padded = true;
+    } else if (input === null && passes[0] === "dome") {
+      const [sourceWidth, sourceHeight] = this.domeSourceSize(v, width, height);
+      const target = this.layerTarget("dome source", sourceWidth, sourceHeight);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer);
+      gl.viewport(0, 0, sourceWidth, sourceHeight);
+      this.timer.begin("fold");
+      this.drawShapes(v, first, null, sourceWidth, sourceHeight, 0);
+      this.timer.end();
+      source = target.texture;
     } else {
       const target = passes.length > 0 ? this.current : null;
       gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
@@ -3020,6 +3031,9 @@ export class KaleidoRenderer {
     gl.bindTexture(gl.TEXTURE_2D, source);
     gl.generateMipmap(gl.TEXTURE_2D);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    /* Near the rim the picture is squeezed one way only, so plain smaller copies would blur it the other way too. */
+    const sideways = gl.getExtension("EXT_texture_filter_anisotropic");
+    if (sideways) gl.texParameterf(gl.TEXTURE_2D, sideways.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, gl.getParameter(sideways.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
     const d = this.dome;
     gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
     gl.viewport(0, 0, width, height);
@@ -3034,6 +3048,20 @@ export class KaleidoRenderer {
     gl.uniform1f(d.uniforms.u_magnify, Math.max(1, v.domeMagnify));
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    if (sideways) gl.texParameterf(gl.TEXTURE_2D, sideways.TEXTURE_MAX_ANISOTROPY_EXT, 1);
+  }
+
+  /**
+   * The size of the picture a Dome reads when it comes right after the source
+   * images and the shape steps: twice the screen's, so what it enlarges has real
+   * detail from the images. An exact 2 keeps the flat picture past the rim sharp,
+   * as it reads one exact smaller copy. A very large screen stays at its own
+   * size, and so does Magnify at no enlargement, as this makes that pass 4 times
+   * the work.
+   */
+  private domeSourceSize(v: FrameValues, width: number, height: number): [number, number] {
+    const enlarges = v.domeMode !== 1 || v.domeMagnify > 1.01;
+    return enlarges && Math.max(width, height) * 2 <= DOME_SOURCE_LIMIT ? [width * 2, height * 2] : [width, height];
   }
 
   /** Opacity mask: the picture times the mask's gray, color and cover both (MASK_SHADER). */

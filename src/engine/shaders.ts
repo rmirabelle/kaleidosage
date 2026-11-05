@@ -3535,9 +3535,36 @@ void main() {
     /* The rim's edge is smoothed over about a pixel. */
     inside = clamp(hit.z / max(fwidth(hit.z), 1e-5) + 0.5, 0.0, 1.0);
   }
+  /**
+   * Where the picture is enlarged, the read point moves toward the center of
+   * its pixel, as in sampleImage, so an edge stays about one screen pixel wide.
+   * The read uses the point's own stretch, as the moved point has jumps in it.
+   * Elsewhere one read would mix a sharp and a soft size of the picture, which
+   * blurs it, so four reads inside the pixel use a sharper size and share the
+   * pixel between them.
+   */
+  vec2 texSize = vec2(textureSize(u_tex, 0));
+  vec2 alongX = dFdx(uv);
+  vec2 alongY = dFdy(uv);
+  float texels = max(length(alongX * texSize), length(alongY * texSize));
+  vec4 shown;
+  if (texels < 1.0) {
+    vec2 texel = uv * texSize - 0.5;
+    vec2 cell = floor(texel);
+    vec2 readAt = (cell + clamp((texel - cell - 0.5) / max(texels, 1e-4) + 0.5, 0.0, 1.0) + 0.5) / texSize;
+    shown = textureGrad(u_tex, readAt, alongX, alongY);
+  } else {
+    vec2 x = alongX * 0.5;
+    vec2 y = alongY * 0.5;
+    shown = 0.25 * (
+      textureGrad(u_tex, uv + alongX * -0.125 + alongY * -0.375, x, y) +
+      textureGrad(u_tex, uv + alongX * 0.375 + alongY * -0.125, x, y) +
+      textureGrad(u_tex, uv + alongX * -0.375 + alongY * 0.125, x, y) +
+      textureGrad(u_tex, uv + alongX * 0.125 + alongY * 0.375, x, y));
+  }
   /* The picture carries its cover (premultiplied), so the cover moves with the color. */
   vec4 picture = texture(u_tex, v_uv);
-  o = mix(picture, mix(picture * u_background, texture(u_tex, uv), inside), u_amount);
+  o = mix(picture, mix(picture * u_background, shown, inside), u_amount);
 }`;
 
 /**

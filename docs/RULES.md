@@ -246,6 +246,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Dome Tilt: 90° looks straight up. Toward 0° the dome rises above the rim on the screen, and toward 180° it hangs down below the rim.
 - Dome Size is the rim's distance from the screen's center when the view is straight up, in screen heights.
 - Dome Type Magnify is a magnifying glass of radius Size: Magnify sets how many times the center is enlarged, and the picture meets the flat picture at the rim with no jump.
+- When only shape effects come before Dome, Dome reads a copy of the picture at twice the screen's size, up to 5120 pixels on the long side, so what it enlarges stays sharp. Those shape effects then do 4 times the work. After any other effect, Dome reads a copy at the screen's size.
 - Random all never adds Dome, but the Dome group's dice sets its sliders.
 - Adding Image or Video with no image or video opens the Open dialog for one.
 - Image or Video lays its own image or video over the picture made so far; the effects after it change the whole picture, and one last in the list lies on top of everything.
