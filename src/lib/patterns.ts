@@ -99,15 +99,15 @@ const colorClouds: Draw = (context, width, height) => {
   context.filter = "none";
 };
 
-/** Sharp-edged circles, boxes and triangles in random sizes and colors. */
+/** Sharp-edged circles, boxes and triangles in random sizes, black and white, with 70% of them black. */
 const randomShapes: Draw = (context, width, height) => {
-  context.fillStyle = "#08080a";
+  context.fillStyle = "#000";
   context.fillRect(0, 0, width, height);
   for (let index = 0; index < 2500; index++) {
     const size = pick([12, 30, 60, 120, 240]) * rand(0.6, 1.4);
     const x = rand(-size, width);
     const y = rand(-size, height);
-    context.fillStyle = `hsl(${rand(0, 360)} ${rand(30, 100)}% ${rand(35, 65)}%)`;
+    context.fillStyle = Math.random() < 0.7 ? "#000" : "#fff";
     const kind = Math.random();
     context.beginPath();
     if (kind < 0.4) {
