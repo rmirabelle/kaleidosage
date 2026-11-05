@@ -30,7 +30,7 @@ const EFFECT_NOTES: Record<FxStep, string> = {
   color: "Tints the whole picture with one color, or with a linear or radial gradient of colors.",
   levels: "Sets the exposure and the black level.",
   mask: "A radial gradient of grays fades parts of the picture out.",
-  bubble: "Bends the picture inside a circle, a star or another shape, so its center looks smaller or larger."
+  bubble: "Bends the picture inside a circle, a square or a shape of 3 to 24 corners, so its center looks smaller or larger."
 };
 
 /**

@@ -241,8 +241,11 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Light shapes Spin and Tumble (rpm) turn each outline in 3D around its upright and its level line, with a little perspective. Each copy turns Delay later than the one before.
 - Only the drawn part of an outline glows, and its ends are round.
 - Random all puts Light shapes at the end of the list when it picks it.
-- Bubble bends the picture inside a closed shape around the screen's center. The Shape menu has Circle, Ellipse, Rounded square, Square, Triangle, Hexagon and Star.
-- Every point moves along its own line from the center, so a shape with corners shows a sharp line from the center to each corner. The smooth shapes show no such lines.
+- Bubble bends the picture inside a closed shape around the screen's center. The Shape menu has Circle, Square and Radial.
+- Bubble Roundness shows only for Square, and rounds its corners from square (0) to a circle (1).
+- Bubble Segments shows only for Radial, and is its number of corners, from 3 (a triangle) to 24. One corner points straight up. Values between two whole numbers crossfade between those two shapes.
+- Every point moves along its own line from the center, so a shape with corners shows a sharp line from the center to each corner. A rounded corner shows no such line.
+- Scenes from 0.19.0 open with the nearest shape: Ellipse as Circle, Rounded square as Square with Roundness 0.5, Triangle, Hexagon and Star as Radial with 3, 6 and 5 Segments.
 - Bubble Background sets how much of the flat picture, the output of the effects before the Bubble, shows past the shape's edge. At 0, black shows there.
 - Bubble Blend combines the bent picture with the flat picture inside the shape only.
 - Bubble Size is the distance from the shape's center to its top, in screen heights. At 0.5 with no Center, the shape reaches the top of the screen. A read past the picture's edges repeats as a mirror image.

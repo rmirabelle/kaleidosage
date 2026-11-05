@@ -219,8 +219,8 @@ export type OutlineShape = 0 | 1 | 2 | 3 | 4;
 export type OutlineDraw = 0 | 1 | 2;
 /** Opacity mask (see MASK_SHADER): 0 by the picture's brightness, 1 a radial gradient. */
 export type MaskMode = 0 | 1;
-/** The Bubble's closed shape, in the order of BUBBLE_SHAPES. */
-export type BubbleShape = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+/** The Bubble's closed shape (see BUBBLE_SHAPES). */
+export type BubbleShape = 0 | 3 | 4;
 /** The Color effect's fill (see FINISH_SHADER): 0 one color, 1 a linear gradient, 2 a radial gradient. */
 export type ColorFill = 0 | 1 | 2;
 /** How each particle looks: 0 a soft dot, 1 a line along its motion, 2 a ring (see PARTICLE_QUAD_SHADER). */
@@ -723,6 +723,9 @@ export interface FrameValues {
   bubble: number;
   bubbleBlend: LayerBlend;
   bubbleShape: BubbleShape;
+  /** The Square's rounded corners, from 0 to 1, and the Radial shape's number of corners. */
+  bubbleRoundness: number;
+  bubbleSegments: number;
   bubbleSize: number;
   bubbleBackground: number;
   /** The Bubble's bend: 1 makes the center 8 times as small, 0 is flat, -1 makes it 8 times as large (see BUBBLE_SHADER). */
@@ -3051,6 +3054,8 @@ export class KaleidoRenderer {
     gl.uniform1f(d.uniforms.u_amount, Math.min(1, Math.max(0, v.bubble)));
     gl.uniform1i(d.uniforms.u_shape, v.bubbleShape);
     gl.uniform1i(d.uniforms.u_blend, v.bubbleBlend);
+    gl.uniform1f(d.uniforms.u_roundness, Math.min(1, Math.max(0, v.bubbleRoundness)));
+    gl.uniform1f(d.uniforms.u_segments, Math.min(24, Math.max(3, v.bubbleSegments)));
     gl.uniform2f(d.uniforms.u_center, v.bubbleCenterX, v.bubbleCenterY);
     gl.uniform2f(d.uniforms.u_pan, v.bubblePanX, v.bubblePanY);
     gl.uniform1f(d.uniforms.u_size, Math.max(0.05, v.bubbleSize));

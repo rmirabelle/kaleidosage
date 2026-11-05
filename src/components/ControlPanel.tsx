@@ -12,8 +12,8 @@ import { loadTerrain } from "../lib/terrain";
 import type { TerrainData } from "../engine/terrain";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
-import { BUBBLE_SHAPES, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
-import type { BlurMask, ColorFill, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, MaskMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
+import { BUBBLE_SHAPES, BUBBLE_SHAPE_KEYS, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
+import type { BlurMask, BubbleShape, ColorFill, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, MaskMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ContextMenu } from "./ContextMenu";
@@ -438,8 +438,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     ),
     bubble: (grip) => (
       <Group engine={engine} group="bubble" title="Bubble" grip={grip} {...accordion("bubble")}>
-        <ModeSelect engine={engine} stateKey="bubbleShape" options={BUBBLE_SHAPES} name="Shape" />
-        <SplitRows keys={BUBBLE_KEYS} row={row} blend={<ModeSelect engine={engine} stateKey="bubbleBlend" options={LAYER_BLENDS} name="Blend" />} />
+        <BubbleSection engine={engine} row={row} />
       </Group>
     ),
     mask: (grip) => (
@@ -1033,6 +1032,17 @@ function OutlineSection({ engine, row }: { engine: Engine; row: (key: ParamKey) 
       {keys.map((key) => key === "outlineFlow"
         ? <Fragment key={key}><GradientEditor engine={engine} stateKey="outlineStops" />{row(key)}</Fragment>
         : row(key))}
+    </>
+  );
+}
+
+/** The Bubble's settings: the Shape menu, the slider of the picked shape, then those that every shape has. */
+function BubbleSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
+  const [shape, setShape] = useState<BubbleShape>(engine.state.bubbleShape);
+  return (
+    <>
+      <ModeSelect engine={engine} stateKey="bubbleShape" options={BUBBLE_SHAPES} name="Shape" onChange={setShape} />
+      <SplitRows keys={[...BUBBLE_SHAPE_KEYS[shape], ...BUBBLE_KEYS]} row={row} blend={<ModeSelect engine={engine} stateKey="bubbleBlend" options={LAYER_BLENDS} name="Blend" />} />
     </>
   );
 }

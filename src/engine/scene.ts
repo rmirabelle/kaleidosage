@@ -404,7 +404,20 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   state.outlineDraw = mode(saved.outlineDraw, [0, 1, 2] as const) ?? state.outlineDraw;
   state.outlineStops = readGradientStops(saved.outlineStops) ?? defaultOutlineStops();
   state.maskMode = mode(saved.maskMode, [0, 1] as const) ?? 0;
-  state.bubbleShape = mode(saved.bubbleShape, [0, 1, 2, 3, 4, 5, 6] as const) ?? 0;
+  state.bubbleShape = mode(saved.bubbleShape, [0, 3, 4] as const) ?? 0;
+  /**
+   * Scenes from 0.19.0 could have shapes that are gone: 1 Ellipse becomes the
+   * Circle, 2 Rounded square the Square with Roundness, and 5 Hexagon and 6 Star
+   * the Radial shape with that many corners. 4 Triangle is Radial's start.
+   */
+  if (saved.bubbleShape === 2) {
+    state.bubbleShape = 3;
+    params.bubbleRoundness.value = 0.5;
+  }
+  if (saved.bubbleShape === 5 || saved.bubbleShape === 6) {
+    state.bubbleShape = 4;
+    params.bubbleSegments.value = saved.bubbleShape === 5 ? 6 : 5;
+  }
   state.bubbleBlend = mode(saved.bubbleBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? 0;
   state.maskStops = readGradientStops(saved.maskStops) ?? defaultMaskStops();
   if (isNumber(saved.outlineTime)) state.outlineTime = ((saved.outlineTime % 1) + 1) % 1;

@@ -1,5 +1,5 @@
 import type { ParamKey, PlayState } from "./params";
-import type { ColorFill, MaskMode, BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, SmearShape, SolidMap, SolidShape, WarpType, MandelPlace } from "./renderer";
+import type { BubbleShape, ColorFill, MaskMode, BlurMask, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, SmearShape, SolidMap, SolidShape, WarpType, MandelPlace } from "./renderer";
 
 /** The effects in the Add effect menu, in menu order, with the names their groups show. */
 export const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
@@ -175,7 +175,7 @@ export const COLOR_FILL_KEYS: Record<ColorFill, ParamKey[]> = {
   2: ["colorSize", "colorStretch", "colorTurn", "colorX", "colorY", "colorShift", "colorRepeat"]
 };
 
-export type SubmodeKey = "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape" | "cyclesMove" | "cyclesPaint" | "solidShape" | "solidMap" | "maskMode" | "colorFill";
+export type SubmodeKey = "bubbleShape" | "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape" | "cyclesMove" | "cyclesPaint" | "solidShape" | "solidMap" | "maskMode" | "colorFill";
 
 /** One submode menu: the play-state setting it sets, its choices (value and name), and the sliders each choice shows. */
 export interface Submode {
@@ -184,7 +184,9 @@ export interface Submode {
   keys: Readonly<Record<number, readonly ParamKey[]>>;
 }
 
-export const BUBBLE_SHAPES = [[0, "Circle"], [1, "Ellipse"], [2, "Rounded square"], [3, "Square"], [4, "Triangle"], [5, "Hexagon"], [6, "Star"]] as const;
+/** The Bubble's shapes, and the slider each shows above the sliders they all have. */
+export const BUBBLE_SHAPES = [[0, "Circle"], [3, "Square"], [4, "Radial"]] as const;
+export const BUBBLE_SHAPE_KEYS: Record<BubbleShape, ParamKey[]> = { 0: [], 3: ["bubbleRoundness"], 4: ["bubbleSegments"] };
 export const OUTLINE_SHAPES = [[0, "Ring"], [1, "Square"], [2, "Triangle"], [3, "Star"], [4, "Snake"]] as const;
 export const TRAIL_MODES = [[1, "Mix (smoky)"], [2, "Lighten (glowing)"]] as const;
 export const DRIVER_SOURCES = [[0, "Caustics"], [1, "Smoke"], [2, "Ink"], [3, "Fire"], [4, "Ripples"], [5, "Video"]] as const;
@@ -211,6 +213,7 @@ export const SUBMODES: readonly Submode[] = [
   { stateKey: "solidShape", options: SOLID_SHAPES, keys: SOLID_SHAPE_KEYS },
   { stateKey: "solidMap", options: SOLID_MAPS, keys: SOLID_MAP_KEYS },
   { stateKey: "maskMode", options: MASK_MODES, keys: MASK_KEYS },
+  { stateKey: "bubbleShape", options: BUBBLE_SHAPES, keys: BUBBLE_SHAPE_KEYS },
   { stateKey: "colorFill", options: COLOR_FILLS, keys: COLOR_FILL_KEYS }
 ];
 

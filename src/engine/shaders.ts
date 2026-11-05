@@ -3482,6 +3482,10 @@ void main() {
  * flat picture with no jump. A shape with corners shows a sharp line from the
  * center to each corner, because the distance changes direction there.
  *
+ * u_roundness rounds the Square's corners, from square (0) to a circle (1).
+ * u_segments is the Radial shape's number of corners, with one corner straight up.
+ * Values between two whole numbers crossfade between those two shapes.
+ *
  * u_size is the distance from the shape's center to its top, in screen heights.
  * u_center moves the shape from the screen's center, so it goes over the picture
  * as a lens does, in parts of the screen. u_pan moves what the bubble reads, and
@@ -3509,6 +3513,8 @@ uniform vec2 u_res;
 uniform float u_amount;
 uniform int u_shape;
 uniform int u_blend;
+uniform float u_roundness;
+uniform float u_segments;
 uniform float u_size;
 uniform float u_background;
 uniform float u_depth;
@@ -3530,33 +3536,41 @@ ${COVER_GLSL}
 ${BLEND_COVER_GLSL}
 
 /**
- * shapeDistance for a shape with corners: count corners, the first one turn
- * clockwise from straight up. tip is each corner's distance from the center, and
- * notch is the distance of the point halfway between two corners. Each point is
- * folded into the part of the shape between a corner and the next halfway point,
- * where the edge is one straight line.
+ * shapeDistance for a regular shape with count corners, each 1 from the center,
+ * and one corner straight up. Each point is folded into the part of the shape
+ * between a corner and the middle of the next edge, where the edge is one straight
+ * line at the angle of half a sector from the corner.
  */
-float cornerDistance(vec2 p, float count, float turn, float tip, float notch) {
+float cornerDistance(vec2 p, float count) {
   float sector = TURN / count;
-  float angle = mod(atan(p.x, p.y) - turn, sector);
+  float angle = mod(atan(p.x, p.y), sector);
   angle = min(angle, sector - angle);
-  vec2 between = notch * vec2(cos(sector * 0.5), sin(sector * 0.5));
-  vec2 edge = vec2(1.0 / tip, (1.0 - between.x / tip) / between.y);
-  return length(p) * dot(vec2(cos(angle), sin(angle)), edge);
+  return length(p) * cos(sector * 0.5 - angle) / cos(sector * 0.5);
+}
+
+/**
+ * shapeDistance for a square with sides 1 from the center and corners of radius
+ * u_roundness. A point's line from the center meets a side, or the circle at a
+ * corner when it goes past the place where that circle starts.
+ */
+float squareDistance(vec2 p) {
+  vec2 side = abs(p);
+  float large = max(side.x, side.y);
+  float small = min(side.x, side.y);
+  float start = 1.0 - u_roundness;
+  if (small <= start * large) return large;
+  float along = start * (large + small);
+  float squared = large * large + small * small;
+  float reach = 2.0 * start * start - u_roundness * u_roundness;
+  return squared / (along + sqrt(max(along * along - squared * reach, 0.0)));
 }
 
 float shapeDistance(vec2 p) {
-  /* Ellipse: half as wide again as it is tall. */
-  if (u_shape == 1) return length(p / vec2(1.5, 1.0));
-  /* Rounded square: a circle's sum, with powers of 4 in place of 2. */
-  if (u_shape == 2) {
-    vec2 squares = p * p;
-    return sqrt(sqrt(dot(squares, squares)));
+  if (u_shape == 3) return squareDistance(p);
+  if (u_shape == 4) {
+    float whole = floor(u_segments);
+    return mix(cornerDistance(p, whole), cornerDistance(p, whole + 1.0), u_segments - whole);
   }
-  if (u_shape == 3) return cornerDistance(p, 4.0, TURN / 8.0, 1.4142136, 1.0);
-  if (u_shape == 4) return cornerDistance(p, 3.0, 0.0, 1.0, 0.5);
-  if (u_shape == 5) return cornerDistance(p, 6.0, TURN / 12.0, 1.1547005, 1.0);
-  if (u_shape == 6) return cornerDistance(p, 5.0, 0.0, 1.0, 0.381966);
   return length(p);
 }
 

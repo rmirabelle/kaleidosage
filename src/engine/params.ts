@@ -33,7 +33,7 @@ export const PARAM_KEYS = [
   "outlineSpin", "outlineTumble",
   "maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY",
   "colorAngle", "colorShift", "colorRepeat", "colorSize", "colorStretch", "colorTurn", "colorX", "colorY",
-  "bubbleAmount", "bubbleSize", "bubbleBackground", "bubbleDepth", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY"
+  "bubbleAmount", "bubbleSize", "bubbleBackground", "bubbleDepth", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments"
 ] as const;
 export type ParamKey = typeof PARAM_KEYS[number];
 
@@ -974,8 +974,9 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   maskX: { label: "X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   maskY: { label: "Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   /**
-   * Bubble (see BUBBLE_SHADER): Size is the distance from the shape's center to
-   * its top, in screen heights. Depth is 1 to make the center 8 times as small, 0
+   * Bubble (see BUBBLE_SHADER): Roundness rounds the Square's corners, from square
+   * to a circle. Segments is the Radial shape's number of corners. Size is the
+   * distance from the shape's center to its top, in screen heights. Depth is 1 to make the center 8 times as small, 0
    * for flat, and -1 to make it 8 times as large. Center X and Y move the shape and
    * the bend over the picture; Pan X and Y move only what shows inside the shape.
    * Background is how much of the flat picture (the output of the effects before
@@ -989,6 +990,8 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   bubbleCenterY: { label: "Center Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.25, high: 0.25, on: false },
   bubblePanX: { label: "Pan X", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   bubblePanY: { label: "Pan Y", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
+  bubbleRoundness: { label: "Roundness", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.5, on: false },
+  bubbleSegments: { label: "Segments", min: 3, max: 24, step: 1, value: 3, drift: "wave", low: 3, high: 8, on: false },
   /**
    * Image or Video (see PICTURE_SHADER): an image or a video of the scene's own
    * over the picture made so far, by its blend (pictureBlend). Size 1
@@ -1581,7 +1584,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   lasers: ["laserAmount", "laserOpacity", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"],
   outlines: ["outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"],
   mask: ["maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY"],
-  bubble: ["bubbleAmount", "bubbleBackground", "bubbleDepth", "bubbleSize", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY"],
+  bubble: ["bubbleAmount", "bubbleBackground", "bubbleDepth", "bubbleSize", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments"],
   bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
   sharpen: ["sharpen", "sharpenRadius"],
   color: ["overlayOpacity", "colorAngle", "colorShift", "colorRepeat", "colorSize", "colorStretch", "colorTurn", "colorX", "colorY"],
@@ -1921,8 +1924,10 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("bubbleCenterY", Math.random() < 0.6 ? 0 : rand(-0.25, 0.25), rand(0, 0.1));
   set("bubblePanX", Math.random() < 0.8 ? 0 : rand(-0.2, 0.2), rand(0, 0.1));
   set("bubblePanY", Math.random() < 0.8 ? 0 : rand(-0.2, 0.2), rand(0, 0.1));
+  set("bubbleRoundness", Math.random() < 0.5 ? 0 : rand(0.1, 1), rand(0, 0.2));
+  set("bubbleSegments", Math.round(rand(3, 12)), rand(0, 2));
   if (state && !state.locks.bubble) {
-    state.bubbleShape = Math.floor(Math.random() * 7) as BubbleShape;
+    state.bubbleShape = ([0, 3, 4] as const)[Math.floor(Math.random() * 3)];
   }
   /* Light rays and bloom together make every bright area shine; when Randomize picks both, each gets less. */
   if (state?.fxOrder.includes("rays") && state.fxOrder.includes("bloom")) {

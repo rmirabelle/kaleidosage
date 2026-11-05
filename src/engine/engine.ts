@@ -1678,6 +1678,8 @@ export class Engine {
       bubble: on.bubble ? this.live("bubbleAmount") : 0,
       bubbleBlend: this.state.bubbleBlend,
       bubbleShape: this.state.bubbleShape,
+      bubbleRoundness: this.live("bubbleRoundness"),
+      bubbleSegments: this.live("bubbleSegments"),
       bubbleCenterX: this.live("bubbleCenterX"),
       bubbleCenterY: this.live("bubbleCenterY"),
       bubblePanX: this.live("bubblePanX"),

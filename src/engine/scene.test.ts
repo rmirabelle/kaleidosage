@@ -40,11 +40,31 @@ describe("scene files", () => {
 
   it("keep the Bubble's shape and blend", () => {
     const state = createPlayState();
-    state.bubbleShape = 6;
+    state.bubbleShape = 4;
     state.bubbleBlend = 3;
     const loaded = createPlayState();
     applyScene(serializeScene(createParams(), state, { image: IMAGE }), createParams(), loaded);
-    expect([loaded.bubbleShape, loaded.bubbleBlend]).toEqual([6, 3]);
+    expect([loaded.bubbleShape, loaded.bubbleBlend]).toEqual([4, 3]);
+  });
+
+  it("turn the Bubble shapes of 0.19.0 into the shapes of now", () => {
+    const opened = (shape: number) => {
+      const scene = JSON.parse(serializeScene(createParams(), createPlayState(), { image: IMAGE }));
+      delete scene.params.bubbleRoundness;
+      delete scene.params.bubbleSegments;
+      scene.state.bubbleShape = shape;
+      const params = createParams();
+      const state = createPlayState();
+      applyScene(JSON.stringify(scene), params, state);
+      return [state.bubbleShape, params.bubbleRoundness.value, params.bubbleSegments.value];
+    };
+    expect(opened(0)).toEqual([0, 0, 3]);
+    expect(opened(1)).toEqual([0, 0, 3]);
+    expect(opened(2)).toEqual([3, 0.5, 3]);
+    expect(opened(3)).toEqual([3, 0, 3]);
+    expect(opened(4)).toEqual([4, 0, 3]);
+    expect(opened(5)).toEqual([4, 0, 6]);
+    expect(opened(6)).toEqual([4, 0, 5]);
   });
 
   it("keep the particles' gradient stops, and drop stops that do not read", () => {
