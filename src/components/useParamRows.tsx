@@ -106,10 +106,9 @@ function sliderLimits(param: Param): [number, number, number] {
  */
 const WHOLE_SNAP_KEYS: ParamKey[] = ["drosteSpirals", "segments"];
 
-/** Settings with well-known values the handles snap to, each with a tick mark: the usual lens lengths of a 35 mm camera, and the Dome's tilts every 45°. The values between still work. */
+/** Settings with well-known values the handles snap to, each with a tick mark: the usual lens lengths of a 35 mm camera. The values between still work. */
 const VALUE_SNAPS: Partial<Record<ParamKey, number[]>> = {
-  cameraLens: [14, 18, 24, 35, 50, 85, 135, 200],
-  domeTilt: [45, 90, 135]
+  cameraLens: [14, 18, 24, 35, 50, 85, 135, 200]
 };
 
 /** An angle setting that spans a whole turn (0 to 360°, or -180 to 180°). */

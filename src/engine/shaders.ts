@@ -3474,76 +3474,106 @@ void main() {
 }`;
 
 /**
- * Dome: the picture on a round surface, as if projected there, seen by an eye.
- * The rim is a circle of radius 1 around the origin, level, and the eye is under
- * its middle, EYE below it. The eye looks u_tilt above level: 90 degrees is
- * straight up, and past that the view goes on over the top, so at 180 degrees the
- * surface hangs down from the rim on the screen. The lens puts the rim u_size
- * screen heights from the screen's center when the view is straight up.
+ * Bubble: the picture bends inside a closed shape around the screen's center.
+ * u_shape picks the shape (see BUBBLE_SHAPES). shapeDistance says how far a point
+ * is from the center, as a part of the way to the shape's edge: 0 at the center
+ * and 1 on the edge. Every point moves along its own line from the center by one
+ * rule of that distance, so the edge reads the picture where it is, and meets the
+ * flat picture with no jump. A shape with corners shows a sharp line from the
+ * center to each corner, because the distance changes direction there.
  *
- * u_depth sets the surface, and the rim stays where it is:
- * - Above 0, half an ellipsoid rises u_depth above the rim, away from the eye, so
- *   its top looks small. At 1 it is a half sphere, and equal steps along it are
- *   equal steps in the picture; at lower depths this mixes toward a flat read.
- * - At 0 the surface is flat, so the picture does not bend.
- * - Below 0 it works as a magnifying glass on the flat circle: the center shows
- *   the picture 8^-u_depth times as large, and the picture is squeezed more and
- *   more toward the rim. This is a calculation, not a true 3D ball, which would
- *   hide its own rim.
+ * u_size is the distance from the center to the shape's top, in screen heights.
  *
- * The rim reads the picture u_size screen heights from its center, so straight
- * up it meets the flat picture with no jump. Past the rim, the flat picture (the
- * output of the steps before the Dome) shows at u_background; at 0 it is clear,
- * so black on the screen. u_amount mixes from the flat picture (0) to the whole
- * dome (1).
+ * u_depth sets the bend:
+ * - Above 0, half an ellipsoid rises u_depth above the shape, away from an eye EYE
+ *   below it, so its top looks small. At 1 it is a half sphere, and equal steps
+ *   along it are equal steps in the picture; at lower depths this mixes toward a
+ *   flat read.
+ * - At 0 the picture does not bend.
+ * - Below 0 it works as a magnifying glass: the center shows the picture
+ *   8^-u_depth times as large, and the picture is squeezed more and more toward
+ *   the edge. This is a calculation, not a true 3D ball, which would hide its own
+ *   edge.
+ *
+ * Past the edge, the flat picture (the output of the steps before the Bubble)
+ * shows at u_background; at 0 it is clear, so black on the screen. u_amount mixes
+ * from the flat picture (0) to the whole bubble (1).
  */
-export const DOME_SHADER = `#version 300 es
+export const BUBBLE_SHADER = `#version 300 es
 precision highp float;
 in vec2 v_uv;
 out vec4 o;
 uniform sampler2D u_tex;
 uniform vec2 u_res;
 uniform float u_amount;
-uniform float u_tilt;
+uniform int u_shape;
 uniform float u_size;
 uniform float u_background;
 uniform float u_depth;
 const float EYE = 0.35;
 const float QUARTER_TURN = 1.5707963;
+const float TURN = 6.2831853;
+
+/**
+ * shapeDistance for a shape with corners: count corners, the first one turn
+ * clockwise from straight up. tip is each corner's distance from the center, and
+ * notch is the distance of the point halfway between two corners. Each point is
+ * folded into the part of the shape between a corner and the next halfway point,
+ * where the edge is one straight line.
+ */
+float cornerDistance(vec2 p, float count, float turn, float tip, float notch) {
+  float sector = TURN / count;
+  float angle = mod(atan(p.x, p.y) - turn, sector);
+  angle = min(angle, sector - angle);
+  vec2 between = notch * vec2(cos(sector * 0.5), sin(sector * 0.5));
+  vec2 edge = vec2(1.0 / tip, (1.0 - between.x / tip) / between.y);
+  return length(p) * dot(vec2(cos(angle), sin(angle)), edge);
+}
+
+float shapeDistance(vec2 p) {
+  /* Ellipse: half as wide again as it is tall. */
+  if (u_shape == 1) return length(p / vec2(1.5, 1.0));
+  /* Rounded square: a circle's sum, with powers of 4 in place of 2. */
+  if (u_shape == 2) {
+    vec2 squares = p * p;
+    return sqrt(sqrt(dot(squares, squares)));
+  }
+  if (u_shape == 3) return cornerDistance(p, 4.0, TURN / 8.0, 1.4142136, 1.0);
+  if (u_shape == 4) return cornerDistance(p, 3.0, 0.0, 1.0, 0.5);
+  if (u_shape == 5) return cornerDistance(p, 6.0, TURN / 12.0, 1.1547005, 1.0);
+  if (u_shape == 6) return cornerDistance(p, 5.0, 0.0, 1.0, 0.381966);
+  return length(p);
+}
 
 void main() {
   float aspect = u_res.x / u_res.y;
-  vec2 screen = (v_uv - 0.5) * vec2(aspect, 1.0);
-  vec3 ahead = vec3(0.0, cos(u_tilt), sin(u_tilt));
-  vec3 up = vec3(0.0, -sin(u_tilt), cos(u_tilt));
-  vec3 ray = normalize(ahead * u_size * EYE + vec3(screen.x, 0.0, 0.0) + up * screen.y);
-  /* Where the ray crosses the rim's level. A ray that goes down or level never does. */
-  vec2 onRimLevel = ray.xy * EYE / max(ray.z, 1e-4);
-  float fromCenter = length(onRimLevel);
-  /* The rim's edge is smoothed over about a pixel. */
-  float inside = ray.z > 0.0 ? clamp((1.0 - fromCenter) / max(fwidth(fromCenter), 1e-5) + 0.5, 0.0, 1.0) : 0.0;
-  vec2 place;
+  vec2 p = (v_uv - 0.5) * vec2(aspect, 1.0) / u_size;
+  float fromCenter = shapeDistance(p);
+  /* The edge is smoothed over about a pixel. */
+  float inside = clamp((1.0 - fromCenter) / max(fwidth(fromCenter), 1e-5) + 0.5, 0.0, 1.0);
+  /* What the point's place is multiplied by to get the place it reads. */
+  float reach;
   if (u_depth < 0.0) {
     float enlarge = pow(8.0, -u_depth);
-    /* 1 at the rim and past it, so there the picture does not move. */
-    place = onRimLevel / max(enlarge - (enlarge - 1.0) * fromCenter * fromCenter, 1.0);
+    /* 1 at the edge and past it, so there the picture does not move. */
+    reach = 1.0 / max(enlarge - (enlarge - 1.0) * fromCenter * fromCenter, 1.0);
   } else {
     /**
-     * With height stretched to make the surface a half sphere, the ray goes on
-     * from the rim's level until it meets it. Starting at the rim's level, and
-     * not at the eye, keeps this exact at low depths.
+     * Along the point's line from the center: with height stretched to make the
+     * surface a half sphere, the ray from the eye goes on from the shape's level
+     * until it meets it. Starting at that level, and not at the eye, keeps this
+     * exact at low depths.
      */
-    float rise = ray.z / max(u_depth, 1e-3);
-    float steep = dot(ray.xy, ray.xy) + rise * rise;
-    float toward = dot(onRimLevel, ray.xy);
+    vec2 ray = normalize(vec2(fromCenter, EYE));
+    float rise = ray.y / max(u_depth, 1e-3);
+    float steep = ray.x * ray.x + rise * rise;
+    float toward = fromCenter * ray.x;
     float along = (-toward + sqrt(max(toward * toward - steep * (fromCenter * fromCenter - 1.0), 0.0))) / steep;
-    vec2 hit = onRimLevel + along * ray.xy;
-    float side = length(hit);
+    float side = fromCenter + along * ray.x;
     float fromTop = atan(side, along * rise);
-    place = side > 1e-5 ? hit / side * mix(side, fromTop / QUARTER_TURN, u_depth) : vec2(0.0);
+    reach = fromCenter > 1e-5 ? mix(side, fromTop / QUARTER_TURN, u_depth) / fromCenter : 1.0;
   }
-  /* Looking up turns the view over, so y changes sign: straight up, the picture stays upright. */
-  vec2 uv = 0.5 + vec2(place.x, -place.y) * u_size / vec2(aspect, 1.0);
+  vec2 uv = 0.5 + p * reach * u_size / vec2(aspect, 1.0);
   /**
    * Where the picture is enlarged, the read point moves toward the center of
    * its pixel, as in sampleImage, so an edge stays about one screen pixel wide.

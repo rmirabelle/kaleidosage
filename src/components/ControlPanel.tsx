@@ -12,7 +12,7 @@ import { loadTerrain } from "../lib/terrain";
 import type { TerrainData } from "../engine/terrain";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
-import { COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
+import { BUBBLE_SHAPES, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
 import type { BlurMask, ColorFill, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, MaskMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -67,7 +67,7 @@ const inputHasSound = () => audioInput.settings.kind !== "none";
 const TRAIL_KEYS: ParamKey[] = ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"];
 const CONTOUR_KEYS: ParamKey[] = ["contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady"];
 const RELIEF_KEYS: ParamKey[] = ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"];
-const DOME_KEYS: ParamKey[] = ["domeAmount", "domeBackground", "domeDepth", "domeTilt", "domeSize"];
+const BUBBLE_KEYS: ParamKey[] = ["bubbleAmount", "bubbleBackground", "bubbleDepth", "bubbleSize"];
 const DRIVER_KEYS: ParamKey[] = ["driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast"];
 /** Camera shares its camera settings with Terrain; only its Opacity (and Blend) are its own. */
 const CAMERA_KEYS: ParamKey[] = ["viewAmount", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraFog", "cameraSky"];
@@ -306,7 +306,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       bloom: () => start("bloomAmount", 1),
       outlines: () => start("outlineAmount", 1),
       mask: () => start("maskAmount", 1),
-      dome: () => start("domeAmount", 1),
+      bubble: () => start("bubbleAmount", 1),
       picture: () => {
         start("pictureAmount", 1);
         /* An overlay shows nothing until it has an image or a video. */
@@ -436,9 +436,10 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
         <OutlineSection engine={engine} row={row} />
       </Group>
     ),
-    dome: (grip) => (
-      <Group engine={engine} group="dome" title="Dome" grip={grip} {...accordion("dome")}>
-        {DOME_KEYS.map(row)}
+    bubble: (grip) => (
+      <Group engine={engine} group="bubble" title="Bubble" grip={grip} {...accordion("bubble")}>
+        <ModeSelect engine={engine} stateKey="bubbleShape" options={BUBBLE_SHAPES} name="Shape" />
+        {BUBBLE_KEYS.map(row)}
       </Group>
     ),
     mask: (grip) => (
@@ -891,7 +892,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "bubbleShape" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange }: {

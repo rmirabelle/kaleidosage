@@ -9,16 +9,41 @@ describe("scene files", () => {
   it("turn a Dome from before the Depth slider into its Depth", () => {
     const older = (state: Record<string, unknown>, magnify?: number) => {
       const scene = JSON.parse(serializeScene(createParams(), createPlayState(), { image: IMAGE }));
-      delete scene.params.domeDepth;
+      delete scene.params.bubbleDepth;
       if (magnify !== undefined) scene.params.domeMagnify = { value: magnify };
       Object.assign(scene.state, state);
       const params = createParams();
       applyScene(JSON.stringify(scene), params, createPlayState());
-      return params.domeDepth.value;
+      return params.bubbleDepth.value;
     };
     expect(older({ domeMode: 0 })).toBe(1);
     expect(older({ domeMode: 1 }, 2)).toBeCloseTo(-1 / 3);
     expect(older({ domeMode: 1 }, 8)).toBeCloseTo(-1);
+  });
+
+  it("open a Dome from before its new name as a Bubble", () => {
+    const scene = JSON.parse(serializeScene(createParams(), createPlayState(), { image: IMAGE }));
+    scene.params.domeSize = { value: 0.8 };
+    scene.params.domeTilt = { value: 45 };
+    delete scene.params.bubbleSize;
+    scene.state.groups.dome = true;
+    delete scene.state.groups.bubble;
+    scene.state.effects = ["dome"];
+    const params = createParams();
+    const loaded = createPlayState();
+    applyScene(JSON.stringify(scene), params, loaded);
+    expect(params.bubbleSize.value).toBe(0.8);
+    expect(loaded.groups.bubble).toBe(true);
+    expect(loaded.fxOrder).toEqual(["bubble"]);
+    expect(loaded.bubbleShape).toBe(0);
+  });
+
+  it("keep the Bubble's shape", () => {
+    const state = createPlayState();
+    state.bubbleShape = 6;
+    const loaded = createPlayState();
+    applyScene(serializeScene(createParams(), state, { image: IMAGE }), createParams(), loaded);
+    expect(loaded.bubbleShape).toBe(6);
   });
 
   it("keep the particles' gradient stops, and drop stops that do not read", () => {
@@ -169,7 +194,7 @@ describe("scene files", () => {
     /* Earlier versions of the app read a full order inside each kind: the list's order first. */
     const savedState = JSON.parse(text).state;
     expect(savedState.shapeStack).toEqual(["warp", "map", "kaleidoscope"]);
-    expect(savedState.pictureOrder).toEqual(["relief", "blur", "trails", "smear", "contours", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "dome"]);
+    expect(savedState.pictureOrder).toEqual(["relief", "blur", "trails", "smear", "contours", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble"]);
 
     /* Scenes from before the effect list: every effect that is on and changes the picture, in their order. */
     const showing = { warpAmount: { value: 0.3 }, blurAmount: { value: 10 }, trailAmount: { value: 0.5 }, smearAmount: { value: 1 }, contourOpacity: { value: 1 }, reliefAmount: { value: 1 }, sharpen: { value: 1 } };

@@ -1,7 +1,7 @@
 import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, DOME_SHADER, MASK_SHADER, OUTLINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, BUBBLE_SHADER, MASK_SHADER, OUTLINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 import { halveGrid, type TerrainData } from "./terrain";
 import type { VrEye, VrScreen, XrLayer, XrSession } from "./vr";
 
@@ -23,7 +23,7 @@ export type ShapeStep = "warp" | "map" | "kaleidoscope";
 /** The kind of warp: noise, ripple, waves, swirl, bulge and pinch, cells. */
 export type WarpType = 0 | 1 | 2 | 3 | 4 | 5;
 /** The steps that change the drawn picture. The user sets their order. */
-export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "dome";
+export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble";
 /**
  * Any effect step. The user sets one order for all of them. Shape steps
  * that are next to each other run in one pass; a shape step after a
@@ -31,7 +31,7 @@ export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | 
  */
 export type FxStep = ShapeStep | PictureStep;
 export const SHAPE_STEPS: readonly ShapeStep[] = ["warp", "map", "kaleidoscope"];
-export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "dome"];
+export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble"];
 
 /** Sharpen, Color and Levels, in the order FINISH_SHADER applies them (see drawFinish). */
 type FinishPart = "sharpen" | "color" | "levels";
@@ -219,6 +219,8 @@ export type OutlineShape = 0 | 1 | 2 | 3 | 4;
 export type OutlineDraw = 0 | 1 | 2;
 /** Opacity mask (see MASK_SHADER): 0 by the picture's brightness, 1 a radial gradient. */
 export type MaskMode = 0 | 1;
+/** The Bubble's closed shape, in the order of BUBBLE_SHAPES. */
+export type BubbleShape = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 /** The Color effect's fill (see FINISH_SHADER): 0 one color, 1 a linear gradient, 2 a radial gradient. */
 export type ColorFill = 0 | 1 | 2;
 /** How each particle looks: 0 a soft dot, 1 a line along its motion, 2 a ring (see PARTICLE_QUAD_SHADER). */
@@ -717,13 +719,13 @@ export interface FrameValues {
    * gradient's stops as grays (0 to 1).
    */
   mask: number;
-  /** Dome: how much shows (0 = off), the view's tilt above level (radians), the rim's size on the screen, in screen heights, and how much of the flat picture shows past the rim. */
-  dome: number;
-  domeTilt: number;
-  domeSize: number;
-  domeBackground: number;
-  /** The Dome's surface: 1 a half sphere, 0 flat, -1 a magnifying glass (see DOME_SHADER). */
-  domeDepth: number;
+  /** Bubble: how much shows (0 = off), its closed shape, the distance from the center to the shape's top, in screen heights, and how much of the flat picture shows past the edge. */
+  bubble: number;
+  bubbleShape: BubbleShape;
+  bubbleSize: number;
+  bubbleBackground: number;
+  /** The Bubble's bend: 1 a half sphere, 0 flat, -1 a magnifying glass (see BUBBLE_SHADER). */
+  bubbleDepth: number;
   maskMode: MaskMode;
   maskSize: number;
   maskStretch: number;
@@ -849,8 +851,8 @@ const MAX_CYCLE_INSTANCES = 262144;
 /** The width of the small copy of the picture that the light cycles read. */
 const CYCLE_PICTURE_WIDTH = 256;
 
-/** The longest side of the larger picture a Dome reads (see domeSourceSize), in pixels. */
-const DOME_SOURCE_LIMIT = 5120;
+/** The longest side of the larger picture a Bubble reads (see bubbleSourceSize), in pixels. */
+const BUBBLE_SOURCE_LIMIT = 5120;
 /** Frames the time smear keeps, and the most GPU memory they may use (they get smaller on a large canvas). */
 const SMEAR_SLOTS = 32;
 const SMEAR_MEMORY = 320 * 1024 * 1024;
@@ -957,7 +959,7 @@ export class KaleidoRenderer {
   private readonly lasers: Program;
   private readonly outlines: Program;
   private readonly mask: Program;
-  private readonly dome: Program;
+  private readonly bubble: Program;
   private readonly pictureProgram: Program;
   /**
    * Where the steps draw what would go to the screen: the screen (null), or
@@ -1075,7 +1077,7 @@ export class KaleidoRenderer {
     this.lasers = this.createProgram(LASER_SHADER);
     this.outlines = this.createProgram(OUTLINE_SHADER);
     this.mask = this.createProgram(MASK_SHADER);
-    this.dome = this.createProgram(DOME_SHADER);
+    this.bubble = this.createProgram(BUBBLE_SHADER);
     this.pictureProgram = this.createProgram(PICTURE_SHADER);
     this.bloomUp = this.createProgram(BLOOM_UP_SHADER);
     this.bloomMix = this.createProgram(BLOOM_SHADER);
@@ -1342,7 +1344,7 @@ export class KaleidoRenderer {
       lasers: v.lasers > 0,
       outlines: v.outlines > 0,
       mask: v.mask > 0,
-      dome: v.dome > 0,
+      bubble: v.bubble > 0,
       picture: v.picture > 0 && this.pictureSource !== null,
       bloom: v.bloom > 0,
       sharpen: v.sharpen > 0,
@@ -1420,9 +1422,9 @@ export class KaleidoRenderer {
       this.timer.end();
       source = this.frameTexture;
       padded = true;
-    } else if (input === null && passes[0] === "dome") {
-      const [sourceWidth, sourceHeight] = this.domeSourceSize(width, height);
-      const target = this.layerTarget("dome source", sourceWidth, sourceHeight);
+    } else if (input === null && passes[0] === "bubble") {
+      const [sourceWidth, sourceHeight] = this.bubbleSourceSize(width, height);
+      const target = this.layerTarget("bubble source", sourceWidth, sourceHeight);
       gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer);
       gl.viewport(0, 0, sourceWidth, sourceHeight);
       this.timer.begin("fold");
@@ -1486,7 +1488,7 @@ export class KaleidoRenderer {
         else if (step === "lasers") this.drawLasers(v, source, target, width, height);
         else if (step === "outlines") this.drawOutlines(v, source, target, width, height);
         else if (step === "mask") this.drawMask(v, source, target, width, height);
-        else if (step === "dome") this.drawDome(v, source, target, width, height);
+        else if (step === "bubble") this.drawBubble(v, source, target, width, height);
         else if (step === "picture") this.drawPicture(v, source, target, width, height);
         else if (step === "sort") this.drawSort(v, source, target, width, height);
         else if (step === "bloom") this.drawBloom(v, source, target, width, height);
@@ -3018,11 +3020,11 @@ export class KaleidoRenderer {
   }
 
   /**
-   * Dome: the picture on the inside of a dome (see DOME_SHADER). The picture
-   * gets mip levels for the view, so the top of the dome, where the picture
-   * is small, does not flicker. It loses them again after.
+   * Bubble: the picture bent inside a closed shape (see BUBBLE_SHADER). The picture
+   * gets mip levels for the view, so the middle of the bubble, where the picture
+   * can be small, does not flicker. It loses them again after.
    */
-  private drawDome(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+  private drawBubble(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
     const gl = this.gl;
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, source);
@@ -3031,20 +3033,20 @@ export class KaleidoRenderer {
     /* A large Size reads past the picture's edges, where it repeats as a mirror image. */
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
-    /* Near the rim the picture is squeezed one way only, so plain smaller copies would blur it the other way too. */
+    /* Near the edge the picture is squeezed one way only, so plain smaller copies would blur it the other way too. */
     const sideways = gl.getExtension("EXT_texture_filter_anisotropic");
     if (sideways) gl.texParameterf(gl.TEXTURE_2D, sideways.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, gl.getParameter(sideways.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
-    const d = this.dome;
+    const d = this.bubble;
     gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
     gl.viewport(0, 0, width, height);
     gl.useProgram(d.program);
     gl.uniform1i(d.uniforms.u_tex, 0);
     gl.uniform2f(d.uniforms.u_res, width, height);
-    gl.uniform1f(d.uniforms.u_amount, Math.min(1, Math.max(0, v.dome)));
-    gl.uniform1f(d.uniforms.u_tilt, v.domeTilt);
-    gl.uniform1f(d.uniforms.u_size, Math.max(0.05, v.domeSize));
-    gl.uniform1f(d.uniforms.u_background, Math.min(1, Math.max(0, v.domeBackground)));
-    gl.uniform1f(d.uniforms.u_depth, Math.min(1, Math.max(-1, v.domeDepth)));
+    gl.uniform1f(d.uniforms.u_amount, Math.min(1, Math.max(0, v.bubble)));
+    gl.uniform1i(d.uniforms.u_shape, v.bubbleShape);
+    gl.uniform1f(d.uniforms.u_size, Math.max(0.05, v.bubbleSize));
+    gl.uniform1f(d.uniforms.u_background, Math.min(1, Math.max(0, v.bubbleBackground)));
+    gl.uniform1f(d.uniforms.u_depth, Math.min(1, Math.max(-1, v.bubbleDepth)));
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -3053,14 +3055,14 @@ export class KaleidoRenderer {
   }
 
   /**
-   * The size of the picture a Dome reads when it comes right after the source
+   * The size of the picture a Bubble reads when it comes right after the source
    * images and the shape steps: twice the screen's, so what it enlarges has real
-   * detail from the images. An exact 2 keeps the flat picture past the rim sharp,
+   * detail from the images. An exact 2 keeps the flat picture past the edge sharp,
    * as it reads one exact smaller copy. A very large screen stays at its own
    * size, as this makes that pass 4 times the work.
    */
-  private domeSourceSize(width: number, height: number): [number, number] {
-    return Math.max(width, height) * 2 <= DOME_SOURCE_LIMIT ? [width * 2, height * 2] : [width, height];
+  private bubbleSourceSize(width: number, height: number): [number, number] {
+    return Math.max(width, height) * 2 <= BUBBLE_SOURCE_LIMIT ? [width * 2, height * 2] : [width, height];
   }
 
   /** Opacity mask: the picture times the mask's gray, color and cover both (MASK_SHADER). */

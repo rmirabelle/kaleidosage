@@ -152,7 +152,7 @@ const EFFECT_GROUPS: [GroupKey, string][] = [
   ["color", "Color"],
   ["levels", "Levels"],
   ["mask", "Opacity mask"],
-  ["dome", "Dome"]
+  ["bubble", "Bubble"]
 ];
 
 const IMAGE_TYPES: Record<string, string> = {

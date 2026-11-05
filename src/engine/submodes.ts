@@ -4,7 +4,7 @@ import type { ColorFill, MaskMode, BlurMask, CycleMove, CyclePaint, FoldMode, Fx
 /** The effects in the Add effect menu, in menu order, with the names their groups show. */
 export const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
   ["kaleidoscope", "Kaleidoscope"], ["map", "Algorithm"], ["warp", "Warp"], ["blur", "Blur"], ["trails", "Trails"],
-  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["driver", "Driver"], ["terrain", "Terrain"], ["camera", "Camera"], ["solid", "3D object"], ["sort", "Pixel sort"], ["particles", "Particles"], ["cycles", "Light cycles"], ["rays", "Light rays"], ["lasers", "Lasers"], ["outlines", "Light shapes"], ["picture", "Image or Video"], ["bloom", "Bloom"], ["sharpen", "Sharpen"], ["color", "Color"], ["levels", "Levels"], ["mask", "Opacity mask"], ["dome", "Dome"]
+  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["driver", "Driver"], ["terrain", "Terrain"], ["camera", "Camera"], ["solid", "3D object"], ["sort", "Pixel sort"], ["particles", "Particles"], ["cycles", "Light cycles"], ["rays", "Light rays"], ["lasers", "Lasers"], ["outlines", "Light shapes"], ["picture", "Image or Video"], ["bloom", "Bloom"], ["sharpen", "Sharpen"], ["color", "Color"], ["levels", "Levels"], ["mask", "Opacity mask"], ["bubble", "Bubble"]
 ];
 
 /** An effect's name in the panel and the menus. */
@@ -184,6 +184,7 @@ export interface Submode {
   keys: Readonly<Record<number, readonly ParamKey[]>>;
 }
 
+export const BUBBLE_SHAPES = [[0, "Circle"], [1, "Ellipse"], [2, "Rounded square"], [3, "Square"], [4, "Triangle"], [5, "Hexagon"], [6, "Star"]] as const;
 export const OUTLINE_SHAPES = [[0, "Ring"], [1, "Square"], [2, "Triangle"], [3, "Star"], [4, "Snake"]] as const;
 export const TRAIL_MODES = [[1, "Mix (smoky)"], [2, "Lighten (glowing)"]] as const;
 export const DRIVER_SOURCES = [[0, "Caustics"], [1, "Smoke"], [2, "Ink"], [3, "Fire"], [4, "Ripples"], [5, "Video"]] as const;
@@ -196,7 +197,7 @@ export const DRIVER_SOURCES = [[0, "Caustics"], [1, "Smoke"], [2, "Ink"], [3, "F
  */
 export const EFFECT_TYPES: Partial<Record<FxStep, readonly (readonly [number, string])[]>> = {
   kaleidoscope: FOLD_MODES, map: MAP_MODES, warp: WARP_TYPES, blur: BLUR_MASKS,
-  trails: TRAIL_MODES, driver: DRIVER_SOURCES, outlines: OUTLINE_SHAPES
+  trails: TRAIL_MODES, driver: DRIVER_SOURCES, outlines: OUTLINE_SHAPES, bubble: BUBBLE_SHAPES
 };
 
 export const SUBMODES: readonly Submode[] = [
