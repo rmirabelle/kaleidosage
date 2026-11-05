@@ -1041,7 +1041,7 @@ const BUBBLE_SHADOW_TYPES = [[0, "Inner"], [1, "Outer"]] as const;
 const BUBBLE_SHADOW_KEYS: readonly ParamKey[] = ["bubbleShadowStrength", "bubbleShadowWidth", "bubbleShadowSoftness"];
 
 /**
- * The Bubble's settings: the Shape menu, the slider of the picked shape, those
+ * The Bubble's settings: the Shape menu, the sliders of the picked shape, those
  * that every shape has, then the Shadow type menu with the shadow's sliders.
  */
 function BubbleSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {

@@ -244,6 +244,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Bubble bends the picture inside a closed shape around the screen's center. The Shape menu has Circle, Square and Radial.
 - Bubble Roundness shows only for Square, and rounds its corners from square (0) to a circle (1).
 - Bubble Segments shows only for Radial, and is its number of corners, from 3 (a triangle) to 24. One corner points straight up. Values between two whole numbers crossfade between those two shapes.
+- Bubble Rotation shows only for Square and Radial. It turns the shape and its bend clockwise, and the picture does not turn.
 - Every point moves along its own line from the center, so a shape with corners shows a sharp line from the center to each corner. A rounded corner shows no such line.
 - Bubble has one shadow. The Shadow type menu makes it Inner, which darkens the bent picture just inside the edge, or Outer, which darkens what shows just past the edge. The two types share one set of sliders.
 - Shadow strength sets how dark the shadow is. It starts at 0, which is off.

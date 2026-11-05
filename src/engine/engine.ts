@@ -1680,6 +1680,7 @@ export class Engine {
       bubbleShape: this.state.bubbleShape,
       bubbleRoundness: this.live("bubbleRoundness"),
       bubbleSegments: this.live("bubbleSegments"),
+      bubbleRotation: this.live("bubbleRotation") * DEGREES,
       bubbleShadow: this.state.bubbleShadow,
       bubbleShadowStrength: this.live("bubbleShadowStrength"),
       bubbleShadowWidth: this.live("bubbleShadowWidth"),

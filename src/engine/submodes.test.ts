@@ -40,5 +40,6 @@ describe("submodes", () => {
     expect(submodeNote("segments")).toBe("Radial");
     expect(submodeNote("warpScale")).toBe("except Cells");
     expect(submodeNote("panX")).toBe("");
+    expect(submodeNote("bubbleRotation")).toBe("except Circle");
   });
 });

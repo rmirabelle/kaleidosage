@@ -3485,6 +3485,7 @@ void main() {
  * u_roundness rounds the Square's corners, from square (0) to a circle (1).
  * u_segments is the Radial shape's number of corners, with one corner straight up.
  * Values between two whole numbers crossfade between those two shapes.
+ * u_rotation turns the shape and its bend clockwise, in radians, and not the picture.
  *
  * u_size is the distance from the shape's center to its top, in screen heights.
  * u_center moves the shape from the screen's center, so it goes over the picture
@@ -3522,6 +3523,7 @@ uniform int u_shape;
 uniform int u_blend;
 uniform float u_roundness;
 uniform float u_segments;
+uniform float u_rotation;
 uniform float u_size;
 uniform float u_background;
 uniform float u_depth;
@@ -3610,7 +3612,9 @@ float edgeDistance(vec2 p) {
 void main() {
   float aspect = u_res.x / u_res.y;
   vec2 p = (v_uv - 0.5 - u_center) * vec2(aspect, 1.0) / u_size;
-  float fromCenter = shapeDistance(p);
+  /* The point turns counterclockwise, which turns the shape clockwise. */
+  vec2 onShape = vec2(cos(u_rotation) * p.x - sin(u_rotation) * p.y, sin(u_rotation) * p.x + cos(u_rotation) * p.y);
+  float fromCenter = shapeDistance(onShape);
   /* The edge is smoothed over about a pixel. */
   float inside = clamp((1.0 - fromCenter) / max(fwidth(fromCenter), 1e-5) + 0.5, 0.0, 1.0);
   /**
@@ -3656,7 +3660,7 @@ void main() {
   vec4 picture = texture(u_tex, v_uv);
   vec4 bent = blendCover(picture, shown, u_blend, 1.0);
   vec4 beyond = picture * u_background;
-  float shadowEdge = edgeDistance(p) * u_size;
+  float shadowEdge = edgeDistance(onShape) * u_size;
   /* A hard line is still smoothed over about a pixel. */
   float fade = max(u_shadowWidth * u_shadowSoftness, fwidth(shadowEdge));
   if (u_shadowType == 0) {
