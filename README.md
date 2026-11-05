@@ -100,7 +100,7 @@ Add effects in any order. The picture goes through the list from top to bottom.
 |---|---|
 | **Mirrors and math** | Kaleidoscope (radial, triangle, hexagon, square, hyperbolic), Algorithm (Mandelbrot, Julia, Möbius, Droste spiral, log spiral, seamless spiral, tunnel, sine, power) |
 | **Motion and time** | Warp, Driver (caustics, smoke, ink, fire, ripples, video), Trails, Time smear, Pixel sort |
-| **3D** | 3D object (sphere, cube, morph, blobs, star, Menger sponge and more), Terrain, Camera |
+| **3D** | 3D object (sphere, cube, morph, blobs, star, Menger sponge and more), Terrain, Camera, Dome |
 | **Light** | Bloom, Light rays, Lasers, Light shapes, Light cycles, Particles |
 | **Line and surface** | Contours, Relief, Sharpen, Blur |
 | **Color and layers** | Color, Levels, Opacity mask, Image or Video |

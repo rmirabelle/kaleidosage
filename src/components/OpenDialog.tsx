@@ -151,7 +151,8 @@ const EFFECT_GROUPS: [GroupKey, string][] = [
   ["sharpen", "Sharpen"],
   ["color", "Color"],
   ["levels", "Levels"],
-  ["mask", "Opacity mask"]
+  ["mask", "Opacity mask"],
+  ["dome", "Dome"]
 ];
 
 const IMAGE_TYPES: Record<string, string> = {

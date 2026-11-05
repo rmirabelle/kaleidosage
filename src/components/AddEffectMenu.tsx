@@ -29,7 +29,8 @@ const EFFECT_NOTES: Record<FxStep, string> = {
   sharpen: "Makes edges and fine detail crisper.",
   color: "Tints the whole picture with one color, or with a linear or radial gradient of colors.",
   levels: "Sets the exposure and the black level.",
-  mask: "A radial gradient of grays fades parts of the picture out."
+  mask: "A radial gradient of grays fades parts of the picture out.",
+  dome: "Shows the picture on the inside of a dome above you."
 };
 
 /**

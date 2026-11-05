@@ -1,7 +1,7 @@
 import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, MASK_SHADER, OUTLINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, DOME_SHADER, MASK_SHADER, OUTLINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 import { halveGrid, type TerrainData } from "./terrain";
 import type { VrEye, VrScreen, XrLayer, XrSession } from "./vr";
 
@@ -23,7 +23,7 @@ export type ShapeStep = "warp" | "map" | "kaleidoscope";
 /** The kind of warp: noise, ripple, waves, swirl, bulge and pinch, cells. */
 export type WarpType = 0 | 1 | 2 | 3 | 4 | 5;
 /** The steps that change the drawn picture. The user sets their order. */
-export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask";
+export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "dome";
 /**
  * Any effect step. The user sets one order for all of them. Shape steps
  * that are next to each other run in one pass; a shape step after a
@@ -31,7 +31,7 @@ export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | 
  */
 export type FxStep = ShapeStep | PictureStep;
 export const SHAPE_STEPS: readonly ShapeStep[] = ["warp", "map", "kaleidoscope"];
-export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask"];
+export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "dome"];
 
 /** Sharpen, Color and Levels, in the order FINISH_SHADER applies them (see drawFinish). */
 type FinishPart = "sharpen" | "color" | "levels";
@@ -717,6 +717,10 @@ export interface FrameValues {
    * gradient's stops as grays (0 to 1).
    */
   mask: number;
+  /** Dome: how much shows (0 = off), the view's tilt above level (radians), and the rim's size on the screen, in screen heights. */
+  dome: number;
+  domeTilt: number;
+  domeSize: number;
   maskMode: MaskMode;
   maskSize: number;
   maskStretch: number;
@@ -948,6 +952,7 @@ export class KaleidoRenderer {
   private readonly lasers: Program;
   private readonly outlines: Program;
   private readonly mask: Program;
+  private readonly dome: Program;
   private readonly pictureProgram: Program;
   /**
    * Where the steps draw what would go to the screen: the screen (null), or
@@ -1065,6 +1070,7 @@ export class KaleidoRenderer {
     this.lasers = this.createProgram(LASER_SHADER);
     this.outlines = this.createProgram(OUTLINE_SHADER);
     this.mask = this.createProgram(MASK_SHADER);
+    this.dome = this.createProgram(DOME_SHADER);
     this.pictureProgram = this.createProgram(PICTURE_SHADER);
     this.bloomUp = this.createProgram(BLOOM_UP_SHADER);
     this.bloomMix = this.createProgram(BLOOM_SHADER);
@@ -1331,6 +1337,7 @@ export class KaleidoRenderer {
       lasers: v.lasers > 0,
       outlines: v.outlines > 0,
       mask: v.mask > 0,
+      dome: v.dome > 0,
       picture: v.picture > 0 && this.pictureSource !== null,
       bloom: v.bloom > 0,
       sharpen: v.sharpen > 0,
@@ -1465,6 +1472,7 @@ export class KaleidoRenderer {
         else if (step === "lasers") this.drawLasers(v, source, target, width, height);
         else if (step === "outlines") this.drawOutlines(v, source, target, width, height);
         else if (step === "mask") this.drawMask(v, source, target, width, height);
+        else if (step === "dome") this.drawDome(v, source, target, width, height);
         else if (step === "picture") this.drawPicture(v, source, target, width, height);
         else if (step === "sort") this.drawSort(v, source, target, width, height);
         else if (step === "bloom") this.drawBloom(v, source, target, width, height);
@@ -2993,6 +3001,30 @@ export class KaleidoRenderer {
     gl.uniform1f(l.uniforms.u_opacity, Math.min(1, Math.max(0, v.laserOpacity)));
     gl.uniform1i(l.uniforms.u_blend, v.laserBlend);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /**
+   * Dome: the picture on the inside of a dome (see DOME_SHADER). The picture
+   * gets mip levels for the view, so the top of the dome, where the picture
+   * is small, does not flicker. It loses them again after.
+   */
+  private drawDome(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+    const gl = this.gl;
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    const d = this.dome;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(d.program);
+    gl.uniform1i(d.uniforms.u_tex, 0);
+    gl.uniform2f(d.uniforms.u_res, width, height);
+    gl.uniform1f(d.uniforms.u_amount, Math.min(1, Math.max(0, v.dome)));
+    gl.uniform1f(d.uniforms.u_tilt, v.domeTilt);
+    gl.uniform1f(d.uniforms.u_size, Math.max(0.05, v.domeSize));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   }
 
   /** Opacity mask: the picture times the mask's gray, color and cover both (MASK_SHADER). */

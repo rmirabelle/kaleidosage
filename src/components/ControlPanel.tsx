@@ -67,6 +67,7 @@ const inputHasSound = () => audioInput.settings.kind !== "none";
 const TRAIL_KEYS: ParamKey[] = ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"];
 const CONTOUR_KEYS: ParamKey[] = ["contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady"];
 const RELIEF_KEYS: ParamKey[] = ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"];
+const DOME_KEYS: ParamKey[] = ["domeAmount", "domeTilt", "domeSize"];
 const DRIVER_KEYS: ParamKey[] = ["driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast"];
 /** Camera shares its camera settings with Terrain; only its Opacity (and Blend) are its own. */
 const CAMERA_KEYS: ParamKey[] = ["viewAmount", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraFog", "cameraSky"];
@@ -305,6 +306,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       bloom: () => start("bloomAmount", 1),
       outlines: () => start("outlineAmount", 1),
       mask: () => start("maskAmount", 1),
+      dome: () => start("domeAmount", 1),
       picture: () => {
         start("pictureAmount", 1);
         /* An overlay shows nothing until it has an image or a video. */
@@ -432,6 +434,11 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     outlines: (grip) => (
       <Group engine={engine} group="outlines" title="Light shapes" grip={grip} {...accordion("outlines")}>
         <OutlineSection engine={engine} row={row} />
+      </Group>
+    ),
+    dome: (grip) => (
+      <Group engine={engine} group="dome" title="Dome" grip={grip} {...accordion("dome")}>
+        {DOME_KEYS.map(row)}
       </Group>
     ),
     mask: (grip) => (

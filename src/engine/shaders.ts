@@ -3474,6 +3474,50 @@ void main() {
 }`;
 
 /**
+ * Dome: the picture on the inside of a dome, as if projected there, seen from
+ * below. The dome is half a sphere of radius 1 around the origin, with its top
+ * on +z. The eye is under the middle of the rim, EYE below the rim's level, and
+ * looks u_tilt above level (90 degrees is straight up). The lens puts the rim
+ * u_size screen heights from the screen's center when the view is straight up.
+ * The picture's center is at the dome's top, and the rim is the largest circle
+ * that fits in the picture. Equal steps along the dome are equal steps in the
+ * picture, so near the eye (the rim) the picture looks large and far away (the
+ * top) it looks small. Past the rim the picture is clear: black on the screen.
+ * u_amount mixes from the flat picture (0) to the whole dome (1).
+ */
+export const DOME_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform vec2 u_res;
+uniform float u_amount;
+uniform float u_tilt;
+uniform float u_size;
+const float EYE = 0.35;
+const float QUARTER_TURN = 1.5707963;
+
+void main() {
+  float aspect = u_res.x / u_res.y;
+  vec2 screen = (v_uv - 0.5) * vec2(aspect, 1.0);
+  vec3 ahead = vec3(0.0, cos(u_tilt), sin(u_tilt));
+  vec3 up = vec3(0.0, -sin(u_tilt), cos(u_tilt));
+  vec3 ray = normalize(ahead * u_size * EYE + vec3(screen.x, 0.0, 0.0) + up * screen.y);
+  /* The eye is inside the sphere, so the ray always meets it, once. */
+  float along = EYE * ray.z + sqrt(EYE * EYE * ray.z * ray.z + 1.0 - EYE * EYE);
+  vec3 hit = vec3(0.0, 0.0, -EYE) + along * ray;
+  float side = length(hit.xy);
+  float fromTop = atan(side, hit.z);
+  vec2 place = side > 1e-5 ? hit.xy / side * fromTop / QUARTER_TURN * 0.5 * min(aspect, 1.0) : vec2(0.0);
+  /* Looking up turns the view over, so y changes sign: straight up, the picture stays upright. */
+  vec2 uv = 0.5 + vec2(place.x, -place.y) / vec2(aspect, 1.0);
+  /* The rim's edge is smoothed over about a pixel. */
+  float inside = clamp(hit.z / max(fwidth(hit.z), 1e-5) + 0.5, 0.0, 1.0);
+  /* The picture carries its cover (premultiplied), so the cover moves with the color. */
+  o = mix(texture(u_tex, v_uv), texture(u_tex, uv) * inside, u_amount);
+}`;
+
+/**
  * Opacity mask: a gradient of grays sets how much of each pixel stays.
  * White keeps the pixel, black clears it (its color and its cover, so what
  * is under the picture shows: black on the screen), and the grays between

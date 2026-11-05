@@ -241,6 +241,10 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Light shapes Spin and Tumble (rpm) turn each outline in 3D around its upright and its level line, with a little perspective. Each copy turns Delay later than the one before.
 - Only the drawn part of an outline glows, and its ends are round.
 - Random all puts Light shapes at the end of the list when it picks it.
+- Dome shows the picture on the inside of a dome, seen from below. The picture's center is at the dome's top, and black shows past the rim.
+- Dome Tilt: 90° looks straight up, and a lower value looks forward, so the rim crosses the screen.
+- Dome size is the rim's distance from the screen's center when the view is straight up, in screen heights.
+- Random all never adds Dome, but the Dome group's dice sets its sliders.
 - Adding Image or Video with no image or video opens the Open dialog for one.
 - Image or Video lays its own image or video over the picture made so far; the effects after it change the whole picture, and one last in the list lies on top of everything.
 - Image or Video blends: Normal (a PNG's clear parts show the picture), Screen and Add (black adds nothing). Screen is the default.
