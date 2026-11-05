@@ -3504,11 +3504,13 @@ void main() {
  * Bubble) shows at u_background; at 0 it is clear, so black on the screen. u_amount
  * mixes from the flat picture (0) to the whole bubble (1).
  *
- * Two shadows follow the edge at an even width, in screen heights, as edgeDistance
- * is a true distance. u_innerShadow darkens the bent picture over u_innerWidth just
- * inside the edge. u_outerShadow falls on what shows past the edge, over
- * u_outerWidth; on a clear part it adds black cover. u_shadowMove moves the shape
- * that both shadows are made from, so the outer shadow falls on that side and the
+ * The shadow follows the edge at an even width, in screen heights, as edgeDistance
+ * is a true distance. u_shadowType 0 (Inner) darkens the bent picture just inside
+ * the edge. 1 (Outer) falls on what shows past the edge; on a clear part it adds
+ * black cover. u_shadowStrength is how dark it is, and 0 is off. u_shadowSoftness
+ * is the part of u_shadowWidth that fades: at 0 the shadow ends in a hard line, and
+ * at 1 it fades over the whole width. u_shadowDistance moves the shape the shadow
+ * is made from down and to the right, so an outer shadow falls on that side and an
  * inner shadow shows on the other side.
  */
 export const BUBBLE_SHADER = `#version 300 es
@@ -3527,12 +3529,13 @@ uniform float u_background;
 uniform float u_depth;
 uniform vec2 u_center;
 uniform vec2 u_pan;
-uniform float u_innerShadow;
-uniform float u_innerWidth;
-uniform float u_outerShadow;
-uniform float u_outerWidth;
-uniform vec2 u_shadowMove;
+uniform int u_shadowType;
+uniform float u_shadowStrength;
+uniform float u_shadowWidth;
+uniform float u_shadowSoftness;
+uniform float u_shadowDistance;
 const float TURN = 6.2831853;
+const vec2 SHADOW_SIDE = vec2(0.7071068, -0.7071068);
 
 vec3 blendLayer(vec3 base, vec3 top, int mode) {
   if (mode == 1) return 1.0 - (1.0 - base) * (1.0 - top);
@@ -3655,11 +3658,17 @@ void main() {
   }
   /* The picture carries its cover (premultiplied), so the cover moves with the color. */
   vec4 picture = texture(u_tex, v_uv);
-  float shadowEdge = edgeDistance(p - u_shadowMove / u_size) * u_size;
   vec4 bent = blendCover(picture, shown, u_blend, 1.0);
-  bent.rgb *= 1.0 - u_innerShadow * smoothstep(-u_innerWidth, 0.0, shadowEdge);
-  float outerCover = u_outerShadow * (1.0 - smoothstep(0.0, u_outerWidth, shadowEdge));
-  vec4 beyond = picture * u_background * (1.0 - outerCover) + vec4(0.0, 0.0, 0.0, outerCover);
+  vec4 beyond = picture * u_background;
+  float shadowEdge = edgeDistance(p - SHADOW_SIDE * u_shadowDistance / u_size) * u_size;
+  /* A hard line is still smoothed over about a pixel. */
+  float fade = max(u_shadowWidth * u_shadowSoftness, fwidth(shadowEdge));
+  if (u_shadowType == 0) {
+    bent.rgb *= 1.0 - u_shadowStrength * smoothstep(-u_shadowWidth, fade - u_shadowWidth, shadowEdge);
+  } else {
+    float cover = u_shadowStrength * (1.0 - smoothstep(u_shadowWidth - fade, u_shadowWidth, shadowEdge));
+    beyond = beyond * (1.0 - cover) + vec4(0.0, 0.0, 0.0, cover);
+  }
   o = mix(picture, mix(beyond, bent, inside), u_amount);
 }`;
 

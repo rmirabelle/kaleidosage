@@ -1,4 +1,4 @@
-import type { BlendMode, BlurMask, BubbleShape, CameraColors, CameraHeightSource, CameraRepeat, ColorFill, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidShape, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, MaskMode, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
+import type { BlendMode, BlurMask, BubbleShadow, BubbleShape, CameraColors, CameraHeightSource, CameraRepeat, ColorFill, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidShape, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, MaskMode, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
 
 export const PARAM_KEYS = [
   "cycle",
@@ -33,7 +33,7 @@ export const PARAM_KEYS = [
   "outlineSpin", "outlineTumble",
   "maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY",
   "colorAngle", "colorShift", "colorRepeat", "colorSize", "colorStretch", "colorTurn", "colorX", "colorY",
-  "bubbleAmount", "bubbleSize", "bubbleBackground", "bubbleDepth", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments", "bubbleInnerStrength", "bubbleInnerWidth", "bubbleOuterStrength", "bubbleOuterWidth", "bubbleShadowAngle", "bubbleShadowDistance"
+  "bubbleAmount", "bubbleSize", "bubbleBackground", "bubbleDepth", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments", "bubbleShadowStrength", "bubbleShadowWidth", "bubbleShadowSoftness", "bubbleShadowDistance"
 ] as const;
 export type ParamKey = typeof PARAM_KEYS[number];
 
@@ -384,9 +384,10 @@ export interface PlayState {
    */
   maskMode: MaskMode;
   maskStops: GradientStop[];
-  /** Bubble (see BUBBLE_SHADER): the closed shape the picture bends inside, and how the bent picture combines with the flat picture. */
+  /** Bubble (see BUBBLE_SHADER): the closed shape the picture bends inside, how the bent picture combines with the flat picture, and the shadow's type. */
   bubbleShape: BubbleShape;
   bubbleBlend: LayerBlend;
+  bubbleShadow: BubbleShadow;
   /**
    * 3D Object (see SOLID_SHADER): the shape preset, how the picture goes onto
    * it (wrap, project, mirror), how the shape combines with the picture
@@ -980,9 +981,8 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * for flat, and -1 to make it 8 times as large. Center X and Y move the shape and
    * the bend over the picture; Pan X and Y move only what shows inside the shape.
    * Background is how much of the flat picture (the output of the effects before
-   * the Bubble) shows past the shape's edge. The shadows' Widths and Distance are
-   * in screen heights, and Shadow angle is the side the outer shadow falls on,
-   * counterclockwise from the right.
+   * the Bubble) shows past the shape's edge. The shadow's Width and Distance are in
+   * screen heights, and its Softness is the part of its Width that fades.
    */
   bubbleAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
   bubbleBackground: { label: "Background", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0, high: 1, on: false },
@@ -994,11 +994,9 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   bubblePanY: { label: "Pan Y", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   bubbleRoundness: { label: "Roundness", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.5, on: false },
   bubbleSegments: { label: "Segments", min: 3, max: 24, step: 1, value: 3, drift: "wave", low: 3, high: 8, on: false },
-  bubbleInnerStrength: { label: "Inner strength", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.3, high: 0.8, on: false },
-  bubbleInnerWidth: { label: "Inner width", min: 0, max: 0.5, step: 0.005, value: 0.08, drift: "wave", low: 0.03, high: 0.15, on: false },
-  bubbleOuterStrength: { label: "Outer strength", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.3, high: 0.8, on: false },
-  bubbleOuterWidth: { label: "Outer width", min: 0, max: 0.5, step: 0.005, value: 0.08, drift: "wave", low: 0.03, high: 0.15, on: false },
-  bubbleShadowAngle: { label: "Shadow angle", min: 0, max: 360, step: 1, value: 315, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  bubbleShadowStrength: { label: "Shadow strength", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.3, high: 0.8, on: false },
+  bubbleShadowWidth: { label: "Shadow width", min: 0, max: 0.5, step: 0.005, value: 0.08, drift: "wave", low: 0.03, high: 0.15, on: false },
+  bubbleShadowSoftness: { label: "Shadow softness", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0.3, high: 1, on: false },
   bubbleShadowDistance: { label: "Shadow distance", min: 0, max: 0.25, step: 0.005, value: 0, drift: "wave", low: 0, high: 0.05, on: false },
   /**
    * Image or Video (see PICTURE_SHADER): an image or a video of the scene's own
@@ -1148,7 +1146,7 @@ export function createPlayState(): PlayState {
     /* No effect is in the list at start-up, so every effect group is off. */
     groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false },
     locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, solidShape: 1, solidMap: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1548,6 +1546,7 @@ export function resetEffects(params: Params, state: PlayState) {
   if (!state.locks.bubble) {
     state.bubbleShape = fresh.bubbleShape;
     state.bubbleBlend = fresh.bubbleBlend;
+    state.bubbleShadow = fresh.bubbleShadow;
   }
   if (!state.locks.driver) {
     state.driverSource = fresh.driverSource;
@@ -1592,7 +1591,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   lasers: ["laserAmount", "laserOpacity", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"],
   outlines: ["outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"],
   mask: ["maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY"],
-  bubble: ["bubbleAmount", "bubbleBackground", "bubbleDepth", "bubbleSize", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments", "bubbleInnerStrength", "bubbleInnerWidth", "bubbleOuterStrength", "bubbleOuterWidth", "bubbleShadowAngle", "bubbleShadowDistance"],
+  bubble: ["bubbleAmount", "bubbleBackground", "bubbleDepth", "bubbleSize", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments", "bubbleShadowStrength", "bubbleShadowWidth", "bubbleShadowSoftness", "bubbleShadowDistance"],
   bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
   sharpen: ["sharpen", "sharpenRadius"],
   color: ["overlayOpacity", "colorAngle", "colorShift", "colorRepeat", "colorSize", "colorStretch", "colorTurn", "colorX", "colorY"],
@@ -1619,7 +1618,7 @@ const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   particles: ["particleBlend", "particleShape"],
   outlines: ["outlineShape", "outlineDraw"],
   mask: ["maskMode"],
-  bubble: ["bubbleShape", "bubbleBlend"],
+  bubble: ["bubbleShape", "bubbleBlend", "bubbleShadow"],
   picture: ["pictureBlend"],
   cycles: ["cyclesMove", "cyclesBlend", "cyclesPaint"],
   lasers: ["laserBlend"],
@@ -1934,14 +1933,13 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("bubblePanY", Math.random() < 0.8 ? 0 : rand(-0.2, 0.2), rand(0, 0.1));
   set("bubbleRoundness", Math.random() < 0.5 ? 0 : rand(0.1, 1), rand(0, 0.2));
   set("bubbleSegments", Math.round(rand(3, 12)), rand(0, 2));
-  set("bubbleInnerStrength", Math.random() < 0.5 ? 0 : rand(0.3, 0.8), rand(0, 0.1));
-  set("bubbleInnerWidth", rand(0.03, 0.15), rand(0, 0.03));
-  set("bubbleOuterStrength", Math.random() < 0.5 ? 0 : rand(0.3, 0.8), rand(0, 0.1));
-  set("bubbleOuterWidth", rand(0.03, 0.15), rand(0, 0.03));
-  set("bubbleShadowAngle", rand(0, 360));
+  set("bubbleShadowStrength", Math.random() < 0.5 ? 0 : rand(0.3, 0.8), rand(0, 0.1));
+  set("bubbleShadowWidth", rand(0.03, 0.15), rand(0, 0.03));
+  set("bubbleShadowSoftness", rand(0.3, 1), rand(0, 0.1));
   set("bubbleShadowDistance", Math.random() < 0.5 ? 0 : rand(0.01, 0.05), rand(0, 0.01));
   if (state && !state.locks.bubble) {
     state.bubbleShape = ([0, 3, 4] as const)[Math.floor(Math.random() * 3)];
+    state.bubbleShadow = (Math.random() < 0.5 ? 0 : 1) as BubbleShadow;
   }
   /* Light rays and bloom together make every bright area shine; when Randomize picks both, each gets less. */
   if (state?.fxOrder.includes("rays") && state.fxOrder.includes("bloom")) {

@@ -221,6 +221,8 @@ export type OutlineDraw = 0 | 1 | 2;
 export type MaskMode = 0 | 1;
 /** The Bubble's closed shape (see BUBBLE_SHAPES). */
 export type BubbleShape = 0 | 3 | 4;
+/** The Bubble's shadow: 0 inside the edge, 1 outside it. */
+export type BubbleShadow = 0 | 1;
 /** The Color effect's fill (see FINISH_SHADER): 0 one color, 1 a linear gradient, 2 a radial gradient. */
 export type ColorFill = 0 | 1 | 2;
 /** How each particle looks: 0 a soft dot, 1 a line along its motion, 2 a ring (see PARTICLE_QUAD_SHADER). */
@@ -726,12 +728,11 @@ export interface FrameValues {
   /** The Square's rounded corners, from 0 to 1, and the Radial shape's number of corners. */
   bubbleRoundness: number;
   bubbleSegments: number;
-  /** The Bubble's shadows: each one's strength and width in screen heights, and their shared direction (radians) and distance in screen heights. */
-  bubbleInnerStrength: number;
-  bubbleInnerWidth: number;
-  bubbleOuterStrength: number;
-  bubbleOuterWidth: number;
-  bubbleShadowAngle: number;
+  /** The Bubble's shadow: its type, its strength, its width and distance in screen heights, and the part of its width that fades. */
+  bubbleShadow: BubbleShadow;
+  bubbleShadowStrength: number;
+  bubbleShadowWidth: number;
+  bubbleShadowSoftness: number;
   bubbleShadowDistance: number;
   bubbleSize: number;
   bubbleBackground: number;
@@ -3063,11 +3064,11 @@ export class KaleidoRenderer {
     gl.uniform1i(d.uniforms.u_blend, v.bubbleBlend);
     gl.uniform1f(d.uniforms.u_roundness, Math.min(1, Math.max(0, v.bubbleRoundness)));
     gl.uniform1f(d.uniforms.u_segments, Math.min(24, Math.max(3, v.bubbleSegments)));
-    gl.uniform1f(d.uniforms.u_innerShadow, Math.min(1, Math.max(0, v.bubbleInnerStrength)));
-    gl.uniform1f(d.uniforms.u_innerWidth, Math.max(1e-3, v.bubbleInnerWidth));
-    gl.uniform1f(d.uniforms.u_outerShadow, Math.min(1, Math.max(0, v.bubbleOuterStrength)));
-    gl.uniform1f(d.uniforms.u_outerWidth, Math.max(1e-3, v.bubbleOuterWidth));
-    gl.uniform2f(d.uniforms.u_shadowMove, v.bubbleShadowDistance * Math.cos(v.bubbleShadowAngle), v.bubbleShadowDistance * Math.sin(v.bubbleShadowAngle));
+    gl.uniform1i(d.uniforms.u_shadowType, v.bubbleShadow);
+    gl.uniform1f(d.uniforms.u_shadowStrength, Math.min(1, Math.max(0, v.bubbleShadowStrength)));
+    gl.uniform1f(d.uniforms.u_shadowWidth, Math.max(0, v.bubbleShadowWidth));
+    gl.uniform1f(d.uniforms.u_shadowSoftness, Math.min(1, Math.max(0, v.bubbleShadowSoftness)));
+    gl.uniform1f(d.uniforms.u_shadowDistance, Math.max(0, v.bubbleShadowDistance));
     gl.uniform2f(d.uniforms.u_center, v.bubbleCenterX, v.bubbleCenterY);
     gl.uniform2f(d.uniforms.u_pan, v.bubblePanX, v.bubblePanY);
     gl.uniform1f(d.uniforms.u_size, Math.max(0.05, v.bubbleSize));

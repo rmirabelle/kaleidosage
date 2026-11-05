@@ -38,13 +38,14 @@ describe("scene files", () => {
     expect(loaded.bubbleShape).toBe(0);
   });
 
-  it("keep the Bubble's shape and blend", () => {
+  it("keep the Bubble's shape, blend and shadow type", () => {
     const state = createPlayState();
     state.bubbleShape = 4;
     state.bubbleBlend = 3;
+    state.bubbleShadow = 1;
     const loaded = createPlayState();
     applyScene(serializeScene(createParams(), state, { image: IMAGE }), createParams(), loaded);
-    expect([loaded.bubbleShape, loaded.bubbleBlend]).toEqual([4, 3]);
+    expect([loaded.bubbleShape, loaded.bubbleBlend, loaded.bubbleShadow]).toEqual([4, 3, 1]);
   });
 
   it("turn the Bubble shapes of 0.19.0 into the shapes of now", () => {

@@ -891,7 +891,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "bubbleShape" | "bubbleBlend" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "bubbleShape" | "bubbleBlend" | "bubbleShadow" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange }: {
@@ -1036,18 +1036,16 @@ function OutlineSection({ engine, row }: { engine: Engine; row: (key: ParamKey) 
   );
 }
 
-/** The Bubble's two shadows. Picking one only picks the sliders that show: both shadows stay as they are set. */
+/** The Bubble's one shadow is inside or outside the edge. */
 const BUBBLE_SHADOW_TYPES = [[0, "Inner"], [1, "Outer"]] as const;
-const BUBBLE_SHADOW_KEYS: readonly (readonly ParamKey[])[] = [["bubbleInnerStrength", "bubbleInnerWidth"], ["bubbleOuterStrength", "bubbleOuterWidth"]];
+const BUBBLE_SHADOW_KEYS: readonly ParamKey[] = ["bubbleShadowStrength", "bubbleShadowWidth", "bubbleShadowSoftness", "bubbleShadowDistance"];
 
 /**
  * The Bubble's settings: the Shape menu, the slider of the picked shape, those
- * that every shape has, then the Shadow type menu with the sliders of that shadow
- * and the two sliders the shadows share.
+ * that every shape has, then the Shadow type menu with the shadow's sliders.
  */
 function BubbleSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
   const [shape, setShape] = useState<BubbleShape>(engine.state.bubbleShape);
-  const [shadow, setShadow] = useState<0 | 1>(0);
   return (
     <>
       <ModeSelect engine={engine} stateKey="bubbleShape" options={BUBBLE_SHAPES} name="Shape" onChange={setShape} />
@@ -1056,13 +1054,8 @@ function BubbleSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =
         row={row}
         below={(
           <>
-            <div className="panel-select-row panel-select-named">
-              <span className="panel-row-name">Shadow type</span>
-              <Dropdown value={shadow} options={BUBBLE_SHADOW_TYPES} onChange={setShadow} />
-            </div>
-            {BUBBLE_SHADOW_KEYS[shadow].map(row)}
-            {row("bubbleShadowAngle")}
-            {row("bubbleShadowDistance")}
+            <ModeSelect engine={engine} stateKey="bubbleShadow" options={BUBBLE_SHADOW_TYPES} name="Shadow type" />
+            {BUBBLE_SHADOW_KEYS.map(row)}
           </>
         )}
         blend={<ModeSelect engine={engine} stateKey="bubbleBlend" options={LAYER_BLENDS} name="Blend" />}
