@@ -161,8 +161,6 @@ export function outlineCorners(shape: number, points: number, snakeTime = 0, sna
 
 /** The most Light shapes copies: the shader draws at most this many (see OUTLINE_SHADER). */
 export const OUTLINE_COPIES = 24;
-/** The Dome's type: 0 a dome seen from below, 1 a magnifying glass (see DOME_SHADER). */
-export type DomeMode = 0 | 1;
 /** The time smear's pattern: 0 linear, 1 rings, 2 sweep, 3 brightness, 4 noise (see SMEAR_SHADER). */
 export type SmearShape = 0 | 1 | 2 | 3 | 4;
 
@@ -724,9 +722,8 @@ export interface FrameValues {
   domeTilt: number;
   domeSize: number;
   domeBackground: number;
-  /** The Dome's type, and how many times Magnify enlarges the center. */
-  domeMode: DomeMode;
-  domeMagnify: number;
+  /** The Dome's surface: 1 a half sphere, 0 flat, -1 a magnifying glass (see DOME_SHADER). */
+  domeDepth: number;
   maskMode: MaskMode;
   maskSize: number;
   maskStretch: number;
@@ -1424,7 +1421,7 @@ export class KaleidoRenderer {
       source = this.frameTexture;
       padded = true;
     } else if (input === null && passes[0] === "dome") {
-      const [sourceWidth, sourceHeight] = this.domeSourceSize(v, width, height);
+      const [sourceWidth, sourceHeight] = this.domeSourceSize(width, height);
       const target = this.layerTarget("dome source", sourceWidth, sourceHeight);
       gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer);
       gl.viewport(0, 0, sourceWidth, sourceHeight);
@@ -3031,6 +3028,9 @@ export class KaleidoRenderer {
     gl.bindTexture(gl.TEXTURE_2D, source);
     gl.generateMipmap(gl.TEXTURE_2D);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    /* A large Size reads past the picture's edges, where it repeats as a mirror image. */
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
     /* Near the rim the picture is squeezed one way only, so plain smaller copies would blur it the other way too. */
     const sideways = gl.getExtension("EXT_texture_filter_anisotropic");
     if (sideways) gl.texParameterf(gl.TEXTURE_2D, sideways.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, gl.getParameter(sideways.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
@@ -3044,10 +3044,11 @@ export class KaleidoRenderer {
     gl.uniform1f(d.uniforms.u_tilt, v.domeTilt);
     gl.uniform1f(d.uniforms.u_size, Math.max(0.05, v.domeSize));
     gl.uniform1f(d.uniforms.u_background, Math.min(1, Math.max(0, v.domeBackground)));
-    gl.uniform1i(d.uniforms.u_mode, v.domeMode);
-    gl.uniform1f(d.uniforms.u_magnify, Math.max(1, v.domeMagnify));
+    gl.uniform1f(d.uniforms.u_depth, Math.min(1, Math.max(-1, v.domeDepth)));
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     if (sideways) gl.texParameterf(gl.TEXTURE_2D, sideways.TEXTURE_MAX_ANISOTROPY_EXT, 1);
   }
 
@@ -3056,12 +3057,10 @@ export class KaleidoRenderer {
    * images and the shape steps: twice the screen's, so what it enlarges has real
    * detail from the images. An exact 2 keeps the flat picture past the rim sharp,
    * as it reads one exact smaller copy. A very large screen stays at its own
-   * size, and so does Magnify at no enlargement, as this makes that pass 4 times
-   * the work.
+   * size, as this makes that pass 4 times the work.
    */
-  private domeSourceSize(v: FrameValues, width: number, height: number): [number, number] {
-    const enlarges = v.domeMode !== 1 || v.domeMagnify > 1.01;
-    return enlarges && Math.max(width, height) * 2 <= DOME_SOURCE_LIMIT ? [width * 2, height * 2] : [width, height];
+  private domeSourceSize(width: number, height: number): [number, number] {
+    return Math.max(width, height) * 2 <= DOME_SOURCE_LIMIT ? [width * 2, height * 2] : [width, height];
   }
 
   /** Opacity mask: the picture times the mask's gray, color and cover both (MASK_SHADER). */

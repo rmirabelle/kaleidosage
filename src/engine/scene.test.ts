@@ -6,6 +6,21 @@ const IMAGE = { type: "image/png", data: "iVBORw0KGgo=" };
 const IMAGE2 = { type: "image/jpeg", data: "/9j/4AAQ" };
 
 describe("scene files", () => {
+  it("turn a Dome from before the Depth slider into its Depth", () => {
+    const older = (state: Record<string, unknown>, magnify?: number) => {
+      const scene = JSON.parse(serializeScene(createParams(), createPlayState(), { image: IMAGE }));
+      delete scene.params.domeDepth;
+      if (magnify !== undefined) scene.params.domeMagnify = { value: magnify };
+      Object.assign(scene.state, state);
+      const params = createParams();
+      applyScene(JSON.stringify(scene), params, createPlayState());
+      return params.domeDepth.value;
+    };
+    expect(older({ domeMode: 0 })).toBe(1);
+    expect(older({ domeMode: 1 }, 2)).toBeCloseTo(-1 / 3);
+    expect(older({ domeMode: 1 }, 8)).toBeCloseTo(-1);
+  });
+
   it("keep the particles' gradient stops, and drop stops that do not read", () => {
     const state = createPlayState();
     state.particleStops = [{ at: 0, color: "#112233" }, { at: 0.4, color: "#ffffff" }, { at: 1, color: "#000000" }];

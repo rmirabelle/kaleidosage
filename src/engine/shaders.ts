@@ -3474,24 +3474,28 @@ void main() {
 }`;
 
 /**
- * Dome: the picture on the inside of a dome, as if projected there, seen from
- * below. The dome is half a sphere of radius 1 around the origin, with its top
- * on +z. The eye is under the middle of the rim, EYE below the rim's level, and
- * looks u_tilt above level: 90 degrees is straight up, and past that the view
- * goes on over the top, so at 180 degrees the dome hangs down from the rim on
- * the screen. The lens puts the rim u_size screen heights from the screen's
- * center when the view is straight up.
- * The picture's center is at the dome's top, and the rim is the largest circle
- * that fits in the picture. Equal steps along the dome are equal steps in the
- * picture, so near the eye (the rim) the picture looks large and far away (the
- * top) it looks small. Past the rim, the flat picture (the output of the steps
- * before the Dome) shows at u_background; at 0 it is clear, so black on the
- * screen. u_amount mixes from the flat picture (0) to the whole dome (1).
+ * Dome: the picture on a round surface, as if projected there, seen by an eye.
+ * The rim is a circle of radius 1 around the origin, level, and the eye is under
+ * its middle, EYE below it. The eye looks u_tilt above level: 90 degrees is
+ * straight up, and past that the view goes on over the top, so at 180 degrees the
+ * surface hangs down from the rim on the screen. The lens puts the rim u_size
+ * screen heights from the screen's center when the view is straight up.
  *
- * u_mode 1 (Magnify) is a magnifying glass instead, of radius u_size, with no
- * tilt: the center shows the picture u_magnify times as large, and the picture
- * is squeezed more and more toward the rim, where it meets the flat picture
- * with no jump.
+ * u_depth sets the surface, and the rim stays where it is:
+ * - Above 0, half an ellipsoid rises u_depth above the rim, away from the eye, so
+ *   its top looks small. At 1 it is a half sphere, and equal steps along it are
+ *   equal steps in the picture; at lower depths this mixes toward a flat read.
+ * - At 0 the surface is flat, so the picture does not bend.
+ * - Below 0 it works as a magnifying glass on the flat circle: the center shows
+ *   the picture 8^-u_depth times as large, and the picture is squeezed more and
+ *   more toward the rim. This is a calculation, not a true 3D ball, which would
+ *   hide its own rim.
+ *
+ * The rim reads the picture u_size screen heights from its center, so straight
+ * up it meets the flat picture with no jump. Past the rim, the flat picture (the
+ * output of the steps before the Dome) shows at u_background; at 0 it is clear,
+ * so black on the screen. u_amount mixes from the flat picture (0) to the whole
+ * dome (1).
  */
 export const DOME_SHADER = `#version 300 es
 precision highp float;
@@ -3503,38 +3507,43 @@ uniform float u_amount;
 uniform float u_tilt;
 uniform float u_size;
 uniform float u_background;
-uniform int u_mode;
-uniform float u_magnify;
+uniform float u_depth;
 const float EYE = 0.35;
 const float QUARTER_TURN = 1.5707963;
 
 void main() {
   float aspect = u_res.x / u_res.y;
   vec2 screen = (v_uv - 0.5) * vec2(aspect, 1.0);
-  vec2 uv;
-  float inside;
-  if (u_mode == 1) {
-    float reach = dot(screen, screen) / (u_size * u_size);
+  vec3 ahead = vec3(0.0, cos(u_tilt), sin(u_tilt));
+  vec3 up = vec3(0.0, -sin(u_tilt), cos(u_tilt));
+  vec3 ray = normalize(ahead * u_size * EYE + vec3(screen.x, 0.0, 0.0) + up * screen.y);
+  /* Where the ray crosses the rim's level. A ray that goes down or level never does. */
+  vec2 onRimLevel = ray.xy * EYE / max(ray.z, 1e-4);
+  float fromCenter = length(onRimLevel);
+  /* The rim's edge is smoothed over about a pixel. */
+  float inside = ray.z > 0.0 ? clamp((1.0 - fromCenter) / max(fwidth(fromCenter), 1e-5) + 0.5, 0.0, 1.0) : 0.0;
+  vec2 place;
+  if (u_depth < 0.0) {
+    float enlarge = pow(8.0, -u_depth);
     /* 1 at the rim and past it, so there the picture does not move. */
-    float squeeze = max(u_magnify - (u_magnify - 1.0) * reach, 1.0);
-    uv = 0.5 + screen / squeeze / vec2(aspect, 1.0);
-    float fromCenter = sqrt(reach);
-    inside = clamp((1.0 - fromCenter) / max(fwidth(fromCenter), 1e-5) + 0.5, 0.0, 1.0);
+    place = onRimLevel / max(enlarge - (enlarge - 1.0) * fromCenter * fromCenter, 1.0);
   } else {
-    vec3 ahead = vec3(0.0, cos(u_tilt), sin(u_tilt));
-    vec3 up = vec3(0.0, -sin(u_tilt), cos(u_tilt));
-    vec3 ray = normalize(ahead * u_size * EYE + vec3(screen.x, 0.0, 0.0) + up * screen.y);
-    /* The eye is inside the sphere, so the ray always meets it, once. */
-    float along = EYE * ray.z + sqrt(EYE * EYE * ray.z * ray.z + 1.0 - EYE * EYE);
-    vec3 hit = vec3(0.0, 0.0, -EYE) + along * ray;
-    float side = length(hit.xy);
-    float fromTop = atan(side, hit.z);
-    vec2 place = side > 1e-5 ? hit.xy / side * fromTop / QUARTER_TURN * 0.5 * min(aspect, 1.0) : vec2(0.0);
-    /* Looking up turns the view over, so y changes sign: straight up, the picture stays upright. */
-    uv = 0.5 + vec2(place.x, -place.y) / vec2(aspect, 1.0);
-    /* The rim's edge is smoothed over about a pixel. */
-    inside = clamp(hit.z / max(fwidth(hit.z), 1e-5) + 0.5, 0.0, 1.0);
+    /**
+     * With height stretched to make the surface a half sphere, the ray goes on
+     * from the rim's level until it meets it. Starting at the rim's level, and
+     * not at the eye, keeps this exact at low depths.
+     */
+    float rise = ray.z / max(u_depth, 1e-3);
+    float steep = dot(ray.xy, ray.xy) + rise * rise;
+    float toward = dot(onRimLevel, ray.xy);
+    float along = (-toward + sqrt(max(toward * toward - steep * (fromCenter * fromCenter - 1.0), 0.0))) / steep;
+    vec2 hit = onRimLevel + along * ray.xy;
+    float side = length(hit);
+    float fromTop = atan(side, along * rise);
+    place = side > 1e-5 ? hit / side * mix(side, fromTop / QUARTER_TURN, u_depth) : vec2(0.0);
   }
+  /* Looking up turns the view over, so y changes sign: straight up, the picture stays upright. */
+  vec2 uv = 0.5 + vec2(place.x, -place.y) * u_size / vec2(aspect, 1.0);
   /**
    * Where the picture is enlarged, the read point moves toward the center of
    * its pixel, as in sampleImage, so an edge stays about one screen pixel wide.

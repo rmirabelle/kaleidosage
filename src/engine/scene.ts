@@ -66,7 +66,7 @@ export function serializeScene(params: Params, state: PlayState, { image, image2
     const { value, low, high, on, ease, custom, seconds, startTime } = params[key];
     savedParams[key] = { value, low, high, on, ease, custom, seconds, startTime };
   }
-  const { groups, blendMode, tiling, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, domeMode, contourTone, contourBlend, cameraBlend, viewBlend, skyColor, cameraRepeat, cameraHeightSource, cameraColors, cameraStops, sortOrder, particleBlend, particleShape, pictureBlend, particleStops, cyclesMove, cyclesBlend, laserBlend, cyclesPaint, cyclesStops, solidShape, solidMap, solidBlend, solidKeep, mandelPlace, solidSpinTurns, solidTumbleTurns, outlineSpinTurns, outlineTumbleTurns, driverSource, driverMode, videoCrossfade, time, clock, warpTime, mandelFlowTime, driverTime, mapTravel, cameraX, cameraY, fxOrder, layerBlend, outlineShape, outlineDraw, outlineStops, maskMode, maskStops, colorFill, colorStops, outlineTime, outlineFlowTime, outlineSnakeTime } = state;
+  const { groups, blendMode, tiling, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, viewBlend, skyColor, cameraRepeat, cameraHeightSource, cameraColors, cameraStops, sortOrder, particleBlend, particleShape, pictureBlend, particleStops, cyclesMove, cyclesBlend, laserBlend, cyclesPaint, cyclesStops, solidShape, solidMap, solidBlend, solidKeep, mandelPlace, solidSpinTurns, solidTumbleTurns, outlineSpinTurns, outlineTumbleTurns, driverSource, driverMode, videoCrossfade, time, clock, warpTime, mandelFlowTime, driverTime, mapTravel, cameraX, cameraY, fxOrder, layerBlend, outlineShape, outlineDraw, outlineStops, maskMode, maskStops, colorFill, colorStops, outlineTime, outlineFlowTime, outlineSnakeTime } = state;
   /**
    * "effects" is the effect list. Earlier versions of the app read two full
    * orders of their own, so they get the list's order inside each kind,
@@ -79,7 +79,7 @@ export function serializeScene(params: Params, state: PlayState, { image, image2
     app: "KaleidoSage",
     version: SCENE_VERSION,
     params: savedParams,
-    state: { groups: { ...groups }, blendMode, tiling, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, domeMode, contourTone, contourBlend, cameraBlend, viewBlend, skyColor, cameraRepeat, cameraHeightSource, cameraColors, cameraStops, sortOrder, particleBlend, particleShape, pictureBlend, particleStops: particleStops.map((stop) => ({ ...stop })), cyclesMove, cyclesBlend, laserBlend, cyclesPaint, cyclesStops: cyclesStops.map((stop) => ({ ...stop })), solidShape, solidMap, solidBlend, solidKeep, mandelPlace, solidSpinTurns, solidTumbleTurns, outlineSpinTurns, outlineTumbleTurns, driverSource, driverMode, videoCrossfade, time, clock, warpTime, mandelFlowTime, driverTime, mapTravel, cameraX, cameraY, effects: [...fxOrder], shapeStack, pictureOrder, layerBlend: { ...layerBlend }, outlineShape, outlineDraw, outlineStops: outlineStops.map((stop) => ({ ...stop })), maskMode, maskStops: maskStops.map((stop) => ({ ...stop })), colorFill, colorStops: colorStops.map((stop) => ({ ...stop })), outlineTime, outlineFlowTime, outlineSnakeTime, sound: soundList(state.sound) },
+    state: { groups: { ...groups }, blendMode, tiling, warpMode, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, viewBlend, skyColor, cameraRepeat, cameraHeightSource, cameraColors, cameraStops, sortOrder, particleBlend, particleShape, pictureBlend, particleStops: particleStops.map((stop) => ({ ...stop })), cyclesMove, cyclesBlend, laserBlend, cyclesPaint, cyclesStops: cyclesStops.map((stop) => ({ ...stop })), solidShape, solidMap, solidBlend, solidKeep, mandelPlace, solidSpinTurns, solidTumbleTurns, outlineSpinTurns, outlineTumbleTurns, driverSource, driverMode, videoCrossfade, time, clock, warpTime, mandelFlowTime, driverTime, mapTravel, cameraX, cameraY, effects: [...fxOrder], shapeStack, pictureOrder, layerBlend: { ...layerBlend }, outlineShape, outlineDraw, outlineStops: outlineStops.map((stop) => ({ ...stop })), maskMode, maskStops: maskStops.map((stop) => ({ ...stop })), colorFill, colorStops: colorStops.map((stop) => ({ ...stop })), outlineTime, outlineFlowTime, outlineSnakeTime, sound: soundList(state.sound) },
     image,
     ...(image2 ? { image2 } : {})
   };
@@ -351,6 +351,11 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   if (isNumber(saved.cameraX)) state.cameraX = saved.cameraX;
   if (isNumber(saved.cameraY)) state.cameraY = saved.cameraY;
   freeCameraOf(savedParams, params, state);
+  /* Scenes from before Dome's Depth had a Type, and Magnify times for the magnifying glass. */
+  if (saved.domeMode === 1 && !isRecord(savedParams.domeDepth)) {
+    const times = isRecord(savedParams.domeMagnify) && isNumber(savedParams.domeMagnify.value) ? savedParams.domeMagnify.value : 2.5;
+    params.domeDepth.value = -clamp(Math.log(times) / Math.log(8), 0, 1);
+  }
   if (typeof saved.overlayColor === "string" && /^#[0-9a-f]{6}$/i.test(saved.overlayColor)) state.overlayColor = saved.overlayColor;
   /* Scenes from before the color blend covered the picture with the color (Normal). */
   state.colorBlend = mode(saved.colorBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? 0;
@@ -363,7 +368,6 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   state.particleStops = readGradientStops(saved.particleStops) ?? defaultGradientStops();
   if (typeof saved.videoCrossfade === "boolean") state.videoCrossfade = saved.videoCrossfade;
   state.smearShape = mode(saved.smearShape, [0, 1, 2, 3, 4] as const) ?? state.smearShape;
-  state.domeMode = mode(saved.domeMode, [0, 1] as const) ?? state.domeMode;
   if (CONTOUR_TONES.includes(saved.contourTone as ContourTone)) state.contourTone = saved.contourTone as ContourTone;
   state.contourBlend = mode(saved.contourBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? state.contourBlend;
   state.cameraBlend = mode(saved.cameraBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? state.cameraBlend;
@@ -423,8 +427,8 @@ export function sceneFingerprint(params: Params, state: PlayState, imageIds: rea
     const { value, low, high, on, ease, custom, seconds } = params[key];
     return [value, low, high, on, ease ?? null, custom ?? false, custom ? seconds : null];
   });
-  const { groups, blendMode, tiling, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, domeMode, contourTone, contourBlend, cameraBlend, viewBlend, skyColor, cameraRepeat, cameraHeightSource, cameraColors, cameraStops, sortOrder, particleBlend, particleShape, pictureBlend, particleStops, cyclesMove, cyclesBlend, laserBlend, cyclesPaint, cyclesStops, solidShape, solidMap, solidBlend, solidKeep, mandelPlace, driverSource, driverMode, videoCrossfade, fxOrder, layerBlend, outlineShape, outlineDraw, outlineStops, maskMode, maskStops, colorFill, colorStops } = state;
-  return JSON.stringify([settings, outlineShape, outlineDraw, outlineStops, maskMode, maskStops, colorFill, colorStops, groups, blendMode, tiling, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, domeMode, contourTone, contourBlend, cameraBlend, viewBlend, skyColor, cameraRepeat, cameraHeightSource, cameraColors, cameraStops, sortOrder, particleBlend, particleShape, pictureBlend, particleStops, cyclesMove, cyclesBlend, laserBlend, cyclesPaint, cyclesStops, solidShape, solidMap, solidBlend, solidKeep, mandelPlace, driverSource, driverMode, videoCrossfade, fxOrder, layerBlend, soundList(state.sound), imageIds]);
+  const { groups, blendMode, tiling, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, viewBlend, skyColor, cameraRepeat, cameraHeightSource, cameraColors, cameraStops, sortOrder, particleBlend, particleShape, pictureBlend, particleStops, cyclesMove, cyclesBlend, laserBlend, cyclesPaint, cyclesStops, solidShape, solidMap, solidBlend, solidKeep, mandelPlace, driverSource, driverMode, videoCrossfade, fxOrder, layerBlend, outlineShape, outlineDraw, outlineStops, maskMode, maskStops, colorFill, colorStops } = state;
+  return JSON.stringify([settings, outlineShape, outlineDraw, outlineStops, maskMode, maskStops, colorFill, colorStops, groups, blendMode, tiling, warpType, mapMode, foldMode, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, viewBlend, skyColor, cameraRepeat, cameraHeightSource, cameraColors, cameraStops, sortOrder, particleBlend, particleShape, pictureBlend, particleStops, cyclesMove, cyclesBlend, laserBlend, cyclesPaint, cyclesStops, solidShape, solidMap, solidBlend, solidKeep, mandelPlace, driverSource, driverMode, videoCrossfade, fxOrder, layerBlend, soundList(state.sound), imageIds]);
 }
 
 /** Uint8Array.fromBase64 and toBase64, in newer browsers; much faster for a large video. */

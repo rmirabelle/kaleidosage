@@ -12,8 +12,8 @@ import { loadTerrain } from "../lib/terrain";
 import type { TerrainData } from "../engine/terrain";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
-import { COLOR_FILL_KEYS, DOME_KEYS, DOME_MODES, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
-import type { BlurMask, ColorFill, CycleMove, CyclePaint, DomeMode, FoldMode, FxStep, MapMode, MaskMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
+import { COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
+import type { BlurMask, ColorFill, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, MaskMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ContextMenu } from "./ContextMenu";
@@ -67,6 +67,7 @@ const inputHasSound = () => audioInput.settings.kind !== "none";
 const TRAIL_KEYS: ParamKey[] = ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"];
 const CONTOUR_KEYS: ParamKey[] = ["contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady"];
 const RELIEF_KEYS: ParamKey[] = ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"];
+const DOME_KEYS: ParamKey[] = ["domeAmount", "domeBackground", "domeDepth", "domeTilt", "domeSize"];
 const DRIVER_KEYS: ParamKey[] = ["driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast"];
 /** Camera shares its camera settings with Terrain; only its Opacity (and Blend) are its own. */
 const CAMERA_KEYS: ParamKey[] = ["viewAmount", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraFog", "cameraSky"];
@@ -437,7 +438,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     ),
     dome: (grip) => (
       <Group engine={engine} group="dome" title="Dome" grip={grip} {...accordion("dome")}>
-        <DomeSection engine={engine} row={row} />
+        {DOME_KEYS.map(row)}
       </Group>
     ),
     mask: (grip) => (
@@ -890,7 +891,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "domeMode" | "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange }: {
@@ -975,16 +976,6 @@ const OPACITY_KEY: Record<ShapeStep, ParamKey> = { warp: "warpOpacity", map: "ma
  * the Shape list.
  */
 /** The time smear's pattern picker, and the sliders for the picked pattern. */
-function DomeSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
-  const [mode, setMode] = useState<DomeMode>(engine.state.domeMode);
-  return (
-    <>
-      <ModeSelect engine={engine} stateKey="domeMode" options={DOME_MODES} onChange={setMode} />
-      <SplitRows keys={DOME_KEYS[mode]} row={row} />
-    </>
-  );
-}
-
 function SmearSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
   const [shape, setShape] = useState<SmearShape>(engine.state.smearShape);
   return (
