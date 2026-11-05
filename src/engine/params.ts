@@ -432,7 +432,7 @@ type ParamSpec = Param;
  * is the plain step; 0 leaves the step out.
  */
 const opacitySpec: ParamSpec = { label: "Opacity", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0, high: 1, on: false };
-/** Randomize does not change the opacities or their ranges. */
+/** Nudge does not change these, and Randomize does not turn their ranges on. */
 const OPACITY_KEYS: ParamKey[] = ["warpOpacity", "mapOpacity", "foldOpacity", "particleBackground"];
 
 /**
@@ -1629,7 +1629,11 @@ export function randomizeGroup(params: Params, state: PlayState, group: GroupKey
   randomizeAll(scratchParams, scratchState);
   for (const key of GROUP_PARAMS[group]) Object.assign(params[key], scratchParams[key]);
   for (const key of GROUP_STATE[group] ?? []) Object.assign(state, { [key]: scratchState[key] });
+  if (group === "warp" || group === "map" || group === "kaleidoscope") state.layerBlend[group] = scratchState.layerBlend[group];
 }
+
+/** The settings named Opacity: Randomize shows every effect fully. */
+const FULL_OPACITY: readonly ParamKey[] = ["warpOpacity", "mapOpacity", "foldOpacity", "smearAmount", "contourOpacity", "cameraAmount", "viewAmount", "sortAmount", "particleAmount", "cyclesAmount", "solidAmount", "driverAmount", "laserOpacity", "bubbleAmount", "pictureAmount"];
 
 /** The chance that Randomize puts each effect in the list. Blur looks the least good, so Randomize leaves it out. */
 const EFFECT_CHANCE: Record<FxStep, number> = {
@@ -1646,7 +1650,6 @@ const EFFECT_CHANCE: Record<FxStep, number> = {
 function randomizeAll(params: Params, state?: PlayState) {
   if (state) {
     state.overlayColor = hslToHex(rand(0, 360), rand(0.5, 1), rand(0.35, 0.6));
-    state.colorBlend = (Math.random() < 0.5 ? 0 : Math.floor(Math.random() * 8)) as LayerBlend;
     state.skyColor = hslToHex(Math.random() < 0.6 ? rand(190, 250) : rand(0, 360), rand(0.3, 0.8), rand(0.45, 0.8));
     state.mapMode = (1 + Math.floor(Math.random() * 8)) as MapMode;
     /* Noise is the most common warp; the other kinds share the rest. */
@@ -1771,12 +1774,10 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("hyperSize", rand(0.4, 1), rand(0.05, 0.2));
   set("hyperFlow", Math.random() < 0.5 ? 0 : rand(-0.4, 0.4), rand(0.1, 0.5));
   set("trailHue", Math.random() < 0.3 ? rand(-3, 3) : 0, rand(0.5, 3));
-  set("smearAmount", rand(0.6, 1), rand(0, 0.2));
   set("smearDelay", rand(0.3, 2), rand(0.1, 0.5));
   setAngle("smearAngle", 0.3);
   set("smearBands", Math.random() < 0.5 ? 1 : rand(1, 5), rand(0, 1));
   if (state) state.smearShape = Math.floor(Math.random() * 5) as SmearShape;
-  set("contourOpacity", rand(0.4, 1), rand(0.1, 0.3));
   setAngle("contourHue", 0.3);
   set("contourLines", Math.round(rand(6, 40)), rand(2, 8));
   set("contourWidth", rand(0.8, 4), rand(0.2, 1.5));
@@ -1785,17 +1786,11 @@ function randomizeAll(params: Params, state?: PlayState) {
   if (state) {
     const tone = Math.random();
     state.contourTone = tone < 0.6 ? "hue" : tone < 0.8 ? "white" : "black";
-    state.contourBlend = (Math.random() < 0.6 ? 0 : Math.floor(Math.random() * 8)) as LayerBlend;
-    state.cameraBlend = (Math.random() < 0.6 ? 0 : Math.floor(Math.random() * 8)) as LayerBlend;
     state.cameraRepeat = (Math.random() < 0.7 ? 0 : Math.random() < 0.7 ? 1 : 2) as CameraRepeat;
-    state.particleBlend = (Math.random() < 0.7 ? 0 : 1) as ParticleBlend;
     state.cyclesMove = (Math.random() < 0.6 ? 0 : 1) as CycleMove;
-    state.cyclesBlend = (Math.random() < 0.7 ? 7 : Math.floor(Math.random() * 8)) as LayerBlend;
-    state.laserBlend = (Math.random() < 0.8 ? 7 : Math.floor(Math.random() * 8)) as LayerBlend;
     state.cyclesPaint = Math.floor(Math.random() * 4) as CyclePaint;
     state.solidShape = Math.floor(Math.random() * 10) as SolidShape;
     state.solidMap = Math.floor(Math.random() * 3) as SolidMap;
-    state.solidBlend = (Math.random() < 0.7 ? 0 : Math.floor(Math.random() * 8)) as LayerBlend;
     state.driverSource = Math.floor(Math.random() * 5) as DriverSource;
     state.driverMode = Math.floor(Math.random() * 3) as DriverMode;
     state.sortOrder = (Math.random() < 0.5 ? 0 : 1) as SortOrder;
@@ -1805,8 +1800,6 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("reliefSize", rand(1, 3), rand(0, 0.8));
   setAngle("lightAngle", 0.5);
   set("shine", Math.random() < 0.5 ? 0 : rand(0.1, 0.6), rand(0, 0.2));
-  set("cameraAmount", 1, rand(0, 0.1));
-  set("viewAmount", 1);
   set("cameraHeight", (Math.random() < 0.8 ? 1 : -1) * rand(0.1, 0.5), rand(0.02, 0.15));
   /* The same random draws as the orbit camera's before it, so the effects after it keep their random values. */
   set("cameraTilt", rand(20, 75) - 90, rand(5, 20));
@@ -1821,13 +1814,11 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("cameraSky", rand(0, 1), rand(0, 0.2));
   set("cameraShine", Math.random() < 0.5 ? 0 : rand(0.1, 0.6), rand(0, 0.2));
   set("cameraSmooth", rand(1.5, 4), rand(0, 1));
-  set("sortAmount", rand(0.7, 1), rand(0, 0.2));
   set("sortLow", rand(0.1, 0.4), rand(0.02, 0.1));
   set("sortHigh", rand(0.6, 0.95), rand(0.02, 0.1));
   setAngle("sortAngle", 0.15);
   set("sortLength", Math.random() < 0.5 ? 1 : rand(0.1, 0.6), rand(0.05, 0.2));
   set("sortThickness", Math.random() < 0.5 ? 1 : rand(2, 24), rand(0.5, 4));
-  set("particleAmount", rand(0.6, 1), rand(0, 0.2));
   set("particleCount", Math.round(rand(1500, 15000)), rand(200, 2000));
   set("particleLevel", rand(0.3, 0.8), rand(0.05, 0.15));
   set("particleSize", rand(1.5, 10), rand(0.5, 3));
@@ -1837,7 +1828,6 @@ function randomizeAll(params: Params, state?: PlayState) {
   setAngle("particleAngle", 0.2);
   set("particleTurbulence", rand(0, 1), rand(0.05, 0.3));
   set("particleDrag", rand(0.3, 2.5), rand(0, 0.5));
-  set("cyclesAmount", rand(0.7, 1), rand(0, 0.2));
   set("cyclesBackground", Math.random() < 0.6 ? 1 : rand(0.2, 0.8), rand(0, 0.2));
   set("cyclesCount", Math.round(Math.random() < 0.7 ? rand(4, 40) : rand(40, 400)), rand(1, 10));
   set("cyclesSpeed", rand(0.15, 0.6), rand(0, 0.1));
@@ -1854,7 +1844,6 @@ function randomizeAll(params: Params, state?: PlayState) {
   setAngle("cyclesAngle", 0.4);
   set("cyclesCenterX", Math.random() < 0.5 ? 0 : rand(-0.3, 0.3), rand(0.05, 0.2));
   set("cyclesCenterY", Math.random() < 0.5 ? 0 : rand(-0.25, 0.25), rand(0.05, 0.2));
-  set("solidAmount", 1, rand(0, 0.1));
   set("solidBackground", Math.random() < 0.6 ? 1 : rand(0.1, 0.7), rand(0, 0.2));
   set("solidSize", rand(0.4, 0.9), rand(0.05, 0.2));
   set("solidRound", Math.random() < 0.4 ? 0 : rand(0.05, 0.7), rand(0, 0.2));
@@ -1870,7 +1859,6 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("solidShadow", rand(0.2, 0.8), rand(0, 0.2));
   set("solidX", Math.random() < 0.6 ? 0 : rand(-0.3, 0.3), rand(0.05, 0.2));
   set("solidY", Math.random() < 0.6 ? 0 : rand(-0.2, 0.2), rand(0.05, 0.15));
-  set("driverAmount", rand(0.6, 1), rand(0, 0.2));
   set("driverStrength", rand(0.3, 0.9), rand(0.05, 0.2));
   set("driverScale", rand(0.6, 2), rand(0.1, 0.4));
   set("driverSpeed", rand(0.3, 1.5), rand(0.1, 0.4));
@@ -1926,7 +1914,6 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("solidSpikeCount", Math.random() < 0.5 ? 12 : Math.round(rand(6, 24)), rand(0, 2));
   set("solidLevels", Math.round(rand(2, 4)), rand(0, 1));
   set("innerTwirl", Math.random() < 0.7 ? 0 : rand(-3, 3), rand(0.3, 1));
-  set("bubbleAmount", rand(0.8, 1), rand(0, 0.1));
   set("bubbleSize", rand(0.4, 1), rand(0, 0.15));
   set("bubbleBackground", Math.random() < 0.6 ? 1 : rand(0, 0.7), rand(0, 0.2));
   set("bubbleDepth", rand(-0.7, 0.7), rand(0, 0.3));
@@ -1936,7 +1923,6 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("bubblePanY", Math.random() < 0.8 ? 0 : rand(-0.2, 0.2), rand(0, 0.1));
   if (state && !state.locks.bubble) {
     state.bubbleShape = Math.floor(Math.random() * 7) as BubbleShape;
-    state.bubbleBlend = (Math.random() < 0.7 ? 0 : Math.floor(Math.random() * 8)) as LayerBlend;
   }
   /* Light rays and bloom together make every bright area shine; when Randomize picks both, each gets less. */
   if (state?.fxOrder.includes("rays") && state.fxOrder.includes("bloom")) {
@@ -1972,6 +1958,30 @@ function randomizeAll(params: Params, state?: PlayState) {
     if (on) state.fxOrder = [...state.fxOrder, "outlines"];
     state.outlineShape = Math.floor(Math.random() * 5) as OutlineShape;
     state.outlineDraw = Math.floor(Math.random() * 3) as OutlineDraw;
+  }
+  /**
+   * Every effect starts fully shown over the picture: Blend is Normal and Opacity
+   * is 1, with no range on it. Color overlay is not here: at 1 it covers the
+   * whole picture with its color. A locked group keeps its own.
+   */
+  for (const key of FULL_OPACITY) {
+    set(key, 1);
+    params[key].on = false;
+  }
+  if (state) {
+    const { locks } = state;
+    if (!locks.color) state.colorBlend = 0;
+    if (!locks.contours) state.contourBlend = 0;
+    if (!locks.terrain) state.cameraBlend = 0;
+    if (!locks.camera) state.viewBlend = 0;
+    /* A particle's blend has Normal at 1, as 0 is Glow. */
+    if (!locks.particles) state.particleBlend = 1;
+    if (!locks.cycles) state.cyclesBlend = 0;
+    if (!locks.lasers) state.laserBlend = 0;
+    if (!locks.solid) state.solidBlend = 0;
+    if (!locks.bubble) state.bubbleBlend = 0;
+    if (!locks.picture) state.pictureBlend = 0;
+    for (const step of ["warp", "map", "kaleidoscope"] as const) if (!locks[step]) state.layerBlend[step] = 0;
   }
   /* Last, so the random values before them stay as they were before them. */
   set("outlineSpin", Math.random() < 0.6 ? 0 : (Math.random() < 0.5 ? -1 : 1) * rand(2, 12), rand(0, 3));

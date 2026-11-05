@@ -381,7 +381,8 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Blur has a 0% chance.
 - A locked effect keeps its place in the list, or stays out.
 - A locked group keeps its settings, modes and colors.
-- Random all does not change the Length, Crossfade, opacities or layer blends.
+- Random all does not change the Length or Crossfade.
+- Random all and each group's dice set every Blend to Normal and every Opacity to 1, with no range on Opacity. Color overlay is not an Opacity here, as at 1 it covers the whole picture with its color.
 - Random all turns on ranges only for 15 settings that move the picture most.
 - Twirl's range comes on half the time.
 - Inner twirl comes on 30% of the time, with its range off.

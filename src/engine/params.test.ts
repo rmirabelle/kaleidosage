@@ -341,6 +341,36 @@ describe("randomizeGroup", () => {
 });
 
 describe("randomizeParams", () => {
+  it("gives every effect Blend Normal and Opacity 1", () => {
+    const params = createParams();
+    const state = createPlayState();
+    params.foldOpacity.value = 0.3;
+    params.foldOpacity.on = true;
+    state.laserBlend = 3;
+    state.layerBlend.map = 4;
+    randomizeParams(params, state);
+    for (const key of PARAM_KEYS) {
+      if (params[key].label === "Opacity") expect([key, params[key].value, params[key].on]).toEqual([key, 1, false]);
+    }
+    expect([state.colorBlend, state.contourBlend, state.cameraBlend, state.viewBlend, state.cyclesBlend, state.laserBlend, state.solidBlend, state.bubbleBlend, state.pictureBlend]).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    expect(state.particleBlend).toBe(1);
+    expect(state.layerBlend).toEqual({ warp: 0, map: 0, kaleidoscope: 0 });
+  });
+
+  it("leaves the Blend and Opacity of a locked group, and a group's dice sets its own", () => {
+    const params = createParams();
+    const state = createPlayState();
+    state.locks.lasers = true;
+    state.laserBlend = 3;
+    params.laserOpacity.value = 0.4;
+    randomizeParams(params, state);
+    expect([state.laserBlend, params.laserOpacity.value]).toEqual([3, 0.4]);
+    state.layerBlend.warp = 2;
+    state.layerBlend.map = 5;
+    randomizeGroup(params, state, "warp");
+    expect([state.layerBlend.warp, state.layerBlend.map]).toEqual([0, 5]);
+  });
+
   it("gives every Algorithm type no Darkness", () => {
     const params = createParams();
     randomizeParams(params);
