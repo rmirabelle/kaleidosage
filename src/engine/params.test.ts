@@ -341,6 +341,14 @@ describe("randomizeGroup", () => {
 });
 
 describe("randomizeParams", () => {
+  it("gives every Algorithm type no Darkness", () => {
+    const params = createParams();
+    randomizeParams(params);
+    for (const key of ["mapFog", "juliaFog", "mobiusFog"] as const) {
+      expect([params[key].value, params[key].low, params[key].high]).toEqual([0, 0, 0]);
+    }
+  });
+
   it("leaves locked groups as they were", () => {
     for (let run = 0; run < 50; run++) {
       const params = createParams();

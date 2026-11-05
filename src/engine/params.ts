@@ -1726,10 +1726,11 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("drosteSpirals", [1, 1, 1, 2][Math.floor(Math.random() * 4)]);
   set("mapTwist", rand(-60, 60), rand(5, 25));
   set("mapSpeed", (Math.random() < 0.8 ? 1 : -1) * rand(0.1, 0.6), rand(0, 0.2));
-  set("mapFog", rand(0.3, 0.8), rand(0, 0.15));
+  /* Every Algorithm type starts with no Darkness. */
+  set("mapFog", 0);
   set("mapFogSoftness", rand(0.3, 0.7), rand(0, 0.1));
-  set("mobiusFog", rand(0.3, 0.8), rand(0, 0.15));
-  set("juliaFog", rand(0.3, 0.8), rand(0, 0.15));
+  set("mobiusFog", 0);
+  set("juliaFog", 0);
   set("juliaFogSoftness", rand(0.3, 0.7), rand(0, 0.1));
   set("mobiusFogSoftness", rand(0.3, 0.7), rand(0, 0.1));
   set("tunnelTwist", Math.random() < 0.4 ? 0 : rand(-1.5, 1.5), rand(0.1, 0.5));
