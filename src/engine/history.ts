@@ -7,7 +7,7 @@ const LIMIT = 200;
 
 type SavedParam = Pick<Param, "value" | "low" | "high" | "on" | "ease" | "custom" | "seconds" | "startTime">;
 type SavedState = Pick<PlayState, "groups" | "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode"
-  | "overlayColor" | "colorBlend" | "trailColor" | "smearShape" | "contourTone" | "contourBlend" | "cameraBlend" | "viewBlend" | "skyColor" | "cameraRepeat" | "cameraHeightSource" | "cameraColors" | "cameraStops" | "videoCrossfade" | "fxOrder" | "layerBlend" | "sound" | "particleStops" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "cyclesPaint" | "cyclesStops" | "solidShape" | "solidMap" | "solidBlend" | "solidKeep" | "mandelPlace" | "particleShape" | "bubbleShape" | "outlineShape" | "outlineDraw" | "outlineStops" | "maskMode" | "maskStops" | "colorFill" | "colorStops">;
+  | "overlayColor" | "colorBlend" | "trailColor" | "smearShape" | "contourTone" | "contourBlend" | "cameraBlend" | "viewBlend" | "skyColor" | "cameraRepeat" | "cameraHeightSource" | "cameraColors" | "cameraStops" | "videoCrossfade" | "fxOrder" | "layerBlend" | "sound" | "particleStops" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "cyclesPaint" | "cyclesStops" | "solidShape" | "solidMap" | "solidBlend" | "solidKeep" | "mandelPlace" | "particleShape" | "bubbleShape" | "bubbleBlend" | "outlineShape" | "outlineDraw" | "outlineStops" | "maskMode" | "maskStops" | "colorFill" | "colorStops">;
 
 /** The settings at one step, and their fingerprint, to tell whether two steps differ. */
 interface Snapshot {
@@ -39,6 +39,7 @@ function take(params: Params, state: PlayState): Snapshot {
       smearShape: state.smearShape,
       particleShape: state.particleShape,
       bubbleShape: state.bubbleShape,
+      bubbleBlend: state.bubbleBlend,
       outlineShape: state.outlineShape,
       outlineDraw: state.outlineDraw,
       outlineStops: state.outlineStops.map((stop) => ({ ...stop })),

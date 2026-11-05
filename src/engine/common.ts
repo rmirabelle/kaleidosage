@@ -18,8 +18,8 @@ export const COMMON_ROLES: readonly (readonly [CommonRole, string])[] = [
  * Turn are not: they move the picture a little more each frame, not once.
  */
 const ROLES: Partial<Record<ParamKey, CommonRole>> = {
-  panX: "panX", mapPanX: "panX", mobiusPanX: "panX", solidX: "panX",
-  panY: "panY", mapPanY: "panY", mobiusPanY: "panY", solidY: "panY",
+  panX: "panX", mapPanX: "panX", mobiusPanX: "panX", solidX: "panX", bubblePanX: "panX",
+  panY: "panY", mapPanY: "panY", mobiusPanY: "panY", solidY: "panY", bubblePanY: "panY",
   zoom: "zoom", mapScale: "zoom", juliaZoom: "zoom", mobiusZoom: "zoom", solidSize: "zoom",
   rotation: "rotation", mapAngle: "rotation", mobiusTurn: "rotation", drosteRotation: "rotation",
   foldOpacity: "opacity", mapOpacity: "opacity", warpOpacity: "opacity", smearAmount: "opacity", contourOpacity: "opacity",

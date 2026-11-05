@@ -3482,22 +3482,23 @@ void main() {
  * flat picture with no jump. A shape with corners shows a sharp line from the
  * center to each corner, because the distance changes direction there.
  *
- * u_size is the distance from the center to the shape's top, in screen heights.
+ * u_size is the distance from the shape's center to its top, in screen heights.
+ * u_center moves the shape from the screen's center, so it goes over the picture
+ * as a lens does, in parts of the screen. u_pan moves what the bubble reads, and
+ * not the shape; a u_pan other than 0 no longer meets the flat picture at the edge.
  *
- * u_depth sets the bend:
- * - Above 0, half an ellipsoid rises u_depth above the shape, away from an eye EYE
- *   below it, so its top looks small. At 1 it is a half sphere, and equal steps
- *   along it are equal steps in the picture; at lower depths this mixes toward a
- *   flat read.
- * - At 0 the picture does not bend.
+ * u_depth sets the bend. The center's size changes 8 times at -1 and at 1, and
+ * each side is the exact reverse of the other, so a depth undoes its opposite:
  * - Below 0 it works as a magnifying glass: the center shows the picture
- *   8^-u_depth times as large, and the picture is squeezed more and more toward
- *   the edge. This is a calculation, not a true 3D ball, which would hide its own
- *   edge.
+ *   8^-u_depth times as large, and the picture is squeezed toward the edge.
+ * - At 0 the picture does not bend.
+ * - Above 0 the center shows the picture 8^u_depth times as small, and the
+ *   picture is stretched toward the edge.
  *
- * Past the edge, the flat picture (the output of the steps before the Bubble)
- * shows at u_background; at 0 it is clear, so black on the screen. u_amount mixes
- * from the flat picture (0) to the whole bubble (1).
+ * u_blend mixes the bent picture with the flat picture, inside the shape only (see
+ * blendLayer). Past the edge, the flat picture (the output of the steps before the
+ * Bubble) shows at u_background; at 0 it is clear, so black on the screen. u_amount
+ * mixes from the flat picture (0) to the whole bubble (1).
  */
 export const BUBBLE_SHADER = `#version 300 es
 precision highp float;
@@ -3507,12 +3508,26 @@ uniform sampler2D u_tex;
 uniform vec2 u_res;
 uniform float u_amount;
 uniform int u_shape;
+uniform int u_blend;
 uniform float u_size;
 uniform float u_background;
 uniform float u_depth;
-const float EYE = 0.35;
-const float QUARTER_TURN = 1.5707963;
+uniform vec2 u_center;
+uniform vec2 u_pan;
 const float TURN = 6.2831853;
+
+vec3 blendLayer(vec3 base, vec3 top, int mode) {
+  if (mode == 1) return 1.0 - (1.0 - base) * (1.0 - top);
+  if (mode == 2) return base * top;
+  if (mode == 3) return mix(2.0 * base * top, 1.0 - 2.0 * (1.0 - base) * (1.0 - top), step(0.5, base));
+  if (mode == 4) return abs(base - top);
+  if (mode == 5) return max(base, top);
+  if (mode == 6) return min(base, top);
+  if (mode == 7) return min(base + top, 1.0);
+  return top;
+}
+${COVER_GLSL}
+${BLEND_COVER_GLSL}
 
 /**
  * shapeDistance for a shape with corners: count corners, the first one turn
@@ -3547,33 +3562,22 @@ float shapeDistance(vec2 p) {
 
 void main() {
   float aspect = u_res.x / u_res.y;
-  vec2 p = (v_uv - 0.5) * vec2(aspect, 1.0) / u_size;
+  vec2 p = (v_uv - 0.5 - u_center) * vec2(aspect, 1.0) / u_size;
   float fromCenter = shapeDistance(p);
   /* The edge is smoothed over about a pixel. */
   float inside = clamp((1.0 - fromCenter) / max(fwidth(fromCenter), 1e-5) + 0.5, 0.0, 1.0);
-  /* What the point's place is multiplied by to get the place it reads. */
-  float reach;
-  if (u_depth < 0.0) {
-    float enlarge = pow(8.0, -u_depth);
-    /* 1 at the edge and past it, so there the picture does not move. */
-    reach = 1.0 / max(enlarge - (enlarge - 1.0) * fromCenter * fromCenter, 1.0);
-  } else {
-    /**
-     * Along the point's line from the center: with height stretched to make the
-     * surface a half sphere, the ray from the eye goes on from the shape's level
-     * until it meets it. Starting at that level, and not at the eye, keeps this
-     * exact at low depths.
-     */
-    vec2 ray = normalize(vec2(fromCenter, EYE));
-    float rise = ray.y / max(u_depth, 1e-3);
-    float steep = ray.x * ray.x + rise * rise;
-    float toward = fromCenter * ray.x;
-    float along = (-toward + sqrt(max(toward * toward - steep * (fromCenter * fromCenter - 1.0), 0.0))) / steep;
-    float side = fromCenter + along * ray.x;
-    float fromTop = atan(side, along * rise);
-    reach = fromCenter > 1e-5 ? mix(side, fromTop / QUARTER_TURN, u_depth) / fromCenter : 1.0;
-  }
-  vec2 uv = 0.5 + p * reach * u_size / vec2(aspect, 1.0);
+  /**
+   * What the point's place is multiplied by to get the place it reads. A distance
+   * d reads d / (times - (times - 1) * d * d) below 0. Above 0 is the answer to
+   * that same equation solved for d, which reads it backward. Both are 1 at the
+   * edge and past it, so there the picture does not move.
+   */
+  float times = pow(8.0, abs(u_depth));
+  float squared = fromCenter * fromCenter;
+  float reach = u_depth < 0.0
+    ? 1.0 / max(times - (times - 1.0) * squared, 1.0)
+    : max(2.0 * times / (1.0 + sqrt(1.0 + 4.0 * (times - 1.0) * times * squared)), 1.0);
+  vec2 uv = 0.5 + u_center + p * reach * u_size / vec2(aspect, 1.0) + u_pan;
   /**
    * Where the picture is enlarged, the read point moves toward the center of
    * its pixel, as in sampleImage, so an edge stays about one screen pixel wide.
@@ -3603,7 +3607,7 @@ void main() {
   }
   /* The picture carries its cover (premultiplied), so the cover moves with the color. */
   vec4 picture = texture(u_tex, v_uv);
-  o = mix(picture, mix(picture * u_background, shown, inside), u_amount);
+  o = mix(picture, mix(picture * u_background, blendCover(picture, shown, u_blend, 1.0), inside), u_amount);
 }`;
 
 /**

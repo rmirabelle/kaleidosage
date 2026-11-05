@@ -719,13 +719,19 @@ export interface FrameValues {
    * gradient's stops as grays (0 to 1).
    */
   mask: number;
-  /** Bubble: how much shows (0 = off), its closed shape, the distance from the center to the shape's top, in screen heights, and how much of the flat picture shows past the edge. */
+  /** Bubble: how much shows (0 = off), how it combines with the flat picture, its closed shape, the distance from the shape's center to its top, in screen heights, and how much of the flat picture shows past the edge. */
   bubble: number;
+  bubbleBlend: LayerBlend;
   bubbleShape: BubbleShape;
   bubbleSize: number;
   bubbleBackground: number;
-  /** The Bubble's bend: 1 a half sphere, 0 flat, -1 a magnifying glass (see BUBBLE_SHADER). */
+  /** The Bubble's bend: 1 makes the center 8 times as small, 0 is flat, -1 makes it 8 times as large (see BUBBLE_SHADER). */
   bubbleDepth: number;
+  /** The Bubble's place on the screen, and the move of what it reads, both in parts of the screen. */
+  bubbleCenterX: number;
+  bubbleCenterY: number;
+  bubblePanX: number;
+  bubblePanY: number;
   maskMode: MaskMode;
   maskSize: number;
   maskStretch: number;
@@ -3044,6 +3050,9 @@ export class KaleidoRenderer {
     gl.uniform2f(d.uniforms.u_res, width, height);
     gl.uniform1f(d.uniforms.u_amount, Math.min(1, Math.max(0, v.bubble)));
     gl.uniform1i(d.uniforms.u_shape, v.bubbleShape);
+    gl.uniform1i(d.uniforms.u_blend, v.bubbleBlend);
+    gl.uniform2f(d.uniforms.u_center, v.bubbleCenterX, v.bubbleCenterY);
+    gl.uniform2f(d.uniforms.u_pan, v.bubblePanX, v.bubblePanY);
     gl.uniform1f(d.uniforms.u_size, Math.max(0.05, v.bubbleSize));
     gl.uniform1f(d.uniforms.u_background, Math.min(1, Math.max(0, v.bubbleBackground)));
     gl.uniform1f(d.uniforms.u_depth, Math.min(1, Math.max(-1, v.bubbleDepth)));

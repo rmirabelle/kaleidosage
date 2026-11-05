@@ -244,8 +244,10 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Bubble bends the picture inside a closed shape around the screen's center. The Shape menu has Circle, Ellipse, Rounded square, Square, Triangle, Hexagon and Star.
 - Every point moves along its own line from the center, so a shape with corners shows a sharp line from the center to each corner. The smooth shapes show no such lines.
 - Bubble Background sets how much of the flat picture, the output of the effects before the Bubble, shows past the shape's edge. At 0, black shows there.
-- Bubble Size is the distance from the screen's center to the shape's top, in screen heights. At 0.5 the shape reaches the top of the screen. A Size above 0.5 can read past the picture's edges, where it repeats as a mirror image.
-- Bubble Depth: 1 is a half sphere that curves away from the viewer, 0 is flat, and -1 is a magnifying glass that enlarges the center 8 times (each 1/3 of Depth is 2 times). The picture meets the flat picture at the shape's edge with no jump at every Depth.
+- Bubble Blend combines the bent picture with the flat picture inside the shape only.
+- Bubble Size is the distance from the shape's center to its top, in screen heights. At 0.5 with no Center, the shape reaches the top of the screen. A read past the picture's edges repeats as a mirror image.
+- Bubble Depth changes the size of the shape's center: -1 makes it 8 times as large, 0 is flat, and 1 makes it 8 times as small (each 1/3 of Depth is 2 times). Each side is the exact reverse of the other. With no Pan, the picture meets the flat picture at the shape's edge with no jump at every Depth.
+- Bubble Center X and Y move the shape and its bend over the picture, in parts of the screen. Bubble Pan X and Y move only what shows inside the shape, so a Pan other than 0 shows a jump at the edge.
 - When only shape effects come before Bubble, Bubble reads a copy of the picture at twice the screen's size, up to 5120 pixels on the long side, so what it enlarges stays sharp. Those shape effects then do 4 times the work. After any other effect, Bubble reads a copy at the screen's size.
 - Random all never adds Bubble, but the Bubble group's dice sets its sliders and its Shape.
 - Adding Image or Video with no image or video opens the Open dialog for one.

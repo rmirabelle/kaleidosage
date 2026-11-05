@@ -67,7 +67,7 @@ const inputHasSound = () => audioInput.settings.kind !== "none";
 const TRAIL_KEYS: ParamKey[] = ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"];
 const CONTOUR_KEYS: ParamKey[] = ["contourOpacity", "contourLines", "contourWidth", "contourResolution", "contourSteady"];
 const RELIEF_KEYS: ParamKey[] = ["reliefAmount", "reliefDepth", "reliefSize", "lightAngle", "shine"];
-const BUBBLE_KEYS: ParamKey[] = ["bubbleAmount", "bubbleBackground", "bubbleDepth", "bubbleSize"];
+const BUBBLE_KEYS: ParamKey[] = ["bubbleDepth", "bubbleSize", "bubbleCenterX", "bubbleCenterY", "bubbleBackground", "bubblePanX", "bubblePanY", "bubbleAmount"];
 const DRIVER_KEYS: ParamKey[] = ["driverAmount", "driverStrength", "driverScale", "driverSpeed", "driverContrast"];
 /** Camera shares its camera settings with Terrain; only its Opacity (and Blend) are its own. */
 const CAMERA_KEYS: ParamKey[] = ["viewAmount", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraFog", "cameraSky"];
@@ -439,7 +439,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     bubble: (grip) => (
       <Group engine={engine} group="bubble" title="Bubble" grip={grip} {...accordion("bubble")}>
         <ModeSelect engine={engine} stateKey="bubbleShape" options={BUBBLE_SHAPES} name="Shape" />
-        {BUBBLE_KEYS.map(row)}
+        <SplitRows keys={BUBBLE_KEYS} row={row} blend={<ModeSelect engine={engine} stateKey="bubbleBlend" options={LAYER_BLENDS} name="Blend" />} />
       </Group>
     ),
     mask: (grip) => (
@@ -892,7 +892,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "bubbleShape" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "bubbleShape" | "bubbleBlend" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange }: {

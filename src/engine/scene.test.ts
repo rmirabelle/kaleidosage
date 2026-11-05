@@ -16,7 +16,7 @@ describe("scene files", () => {
       applyScene(JSON.stringify(scene), params, createPlayState());
       return params.bubbleDepth.value;
     };
-    expect(older({ domeMode: 0 })).toBe(1);
+    expect(older({ domeMode: 0 })).toBe(createParams().bubbleDepth.value);
     expect(older({ domeMode: 1 }, 2)).toBeCloseTo(-1 / 3);
     expect(older({ domeMode: 1 }, 8)).toBeCloseTo(-1);
   });
@@ -38,12 +38,13 @@ describe("scene files", () => {
     expect(loaded.bubbleShape).toBe(0);
   });
 
-  it("keep the Bubble's shape", () => {
+  it("keep the Bubble's shape and blend", () => {
     const state = createPlayState();
     state.bubbleShape = 6;
+    state.bubbleBlend = 3;
     const loaded = createPlayState();
     applyScene(serializeScene(createParams(), state, { image: IMAGE }), createParams(), loaded);
-    expect(loaded.bubbleShape).toBe(6);
+    expect([loaded.bubbleShape, loaded.bubbleBlend]).toEqual([6, 3]);
   });
 
   it("keep the particles' gradient stops, and drop stops that do not read", () => {
