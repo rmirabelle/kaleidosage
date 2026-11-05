@@ -3503,6 +3503,13 @@ void main() {
  * blendLayer). Past the edge, the flat picture (the output of the steps before the
  * Bubble) shows at u_background; at 0 it is clear, so black on the screen. u_amount
  * mixes from the flat picture (0) to the whole bubble (1).
+ *
+ * Two shadows follow the edge at an even width, in screen heights, as edgeDistance
+ * is a true distance. u_innerShadow darkens the bent picture over u_innerWidth just
+ * inside the edge. u_outerShadow falls on what shows past the edge, over
+ * u_outerWidth; on a clear part it adds black cover. u_shadowMove moves the shape
+ * that both shadows are made from, so the outer shadow falls on that side and the
+ * inner shadow shows on the other side.
  */
 export const BUBBLE_SHADER = `#version 300 es
 precision highp float;
@@ -3520,6 +3527,11 @@ uniform float u_background;
 uniform float u_depth;
 uniform vec2 u_center;
 uniform vec2 u_pan;
+uniform float u_innerShadow;
+uniform float u_innerWidth;
+uniform float u_outerShadow;
+uniform float u_outerWidth;
+uniform vec2 u_shadowMove;
 const float TURN = 6.2831853;
 
 vec3 blendLayer(vec3 base, vec3 top, int mode) {
@@ -3574,6 +3586,28 @@ float shapeDistance(vec2 p) {
   return length(p);
 }
 
+/** The true distance from the Radial shape's edge: below 0 inside, and to the corner when a point is past the end of its edge. */
+float cornerEdge(vec2 p, float count) {
+  float sector = TURN / count;
+  float angle = mod(atan(p.x, p.y), sector);
+  angle = sector * 0.5 - min(angle, sector - angle);
+  vec2 fromCorner = length(p) * vec2(cos(angle), sin(angle)) - vec2(cos(sector * 0.5), sin(sector * 0.5));
+  return fromCorner.y > 0.0 ? length(fromCorner) : fromCorner.x;
+}
+
+/** The true distance from the shape's edge: 0 on it and below 0 inside. */
+float edgeDistance(vec2 p) {
+  if (u_shape == 3) {
+    vec2 past = abs(p) - (1.0 - u_roundness);
+    return length(max(past, 0.0)) + min(max(past.x, past.y), 0.0) - u_roundness;
+  }
+  if (u_shape == 4) {
+    float whole = floor(u_segments);
+    return mix(cornerEdge(p, whole), cornerEdge(p, whole + 1.0), u_segments - whole);
+  }
+  return length(p) - 1.0;
+}
+
 void main() {
   float aspect = u_res.x / u_res.y;
   vec2 p = (v_uv - 0.5 - u_center) * vec2(aspect, 1.0) / u_size;
@@ -3621,7 +3655,12 @@ void main() {
   }
   /* The picture carries its cover (premultiplied), so the cover moves with the color. */
   vec4 picture = texture(u_tex, v_uv);
-  o = mix(picture, mix(picture * u_background, blendCover(picture, shown, u_blend, 1.0), inside), u_amount);
+  float shadowEdge = edgeDistance(p - u_shadowMove / u_size) * u_size;
+  vec4 bent = blendCover(picture, shown, u_blend, 1.0);
+  bent.rgb *= 1.0 - u_innerShadow * smoothstep(-u_innerWidth, 0.0, shadowEdge);
+  float outerCover = u_outerShadow * (1.0 - smoothstep(0.0, u_outerWidth, shadowEdge));
+  vec4 beyond = picture * u_background * (1.0 - outerCover) + vec4(0.0, 0.0, 0.0, outerCover);
+  o = mix(picture, mix(beyond, bent, inside), u_amount);
 }`;
 
 /**

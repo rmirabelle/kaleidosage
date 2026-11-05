@@ -726,6 +726,13 @@ export interface FrameValues {
   /** The Square's rounded corners, from 0 to 1, and the Radial shape's number of corners. */
   bubbleRoundness: number;
   bubbleSegments: number;
+  /** The Bubble's shadows: each one's strength and width in screen heights, and their shared direction (radians) and distance in screen heights. */
+  bubbleInnerStrength: number;
+  bubbleInnerWidth: number;
+  bubbleOuterStrength: number;
+  bubbleOuterWidth: number;
+  bubbleShadowAngle: number;
+  bubbleShadowDistance: number;
   bubbleSize: number;
   bubbleBackground: number;
   /** The Bubble's bend: 1 makes the center 8 times as small, 0 is flat, -1 makes it 8 times as large (see BUBBLE_SHADER). */
@@ -3056,6 +3063,11 @@ export class KaleidoRenderer {
     gl.uniform1i(d.uniforms.u_blend, v.bubbleBlend);
     gl.uniform1f(d.uniforms.u_roundness, Math.min(1, Math.max(0, v.bubbleRoundness)));
     gl.uniform1f(d.uniforms.u_segments, Math.min(24, Math.max(3, v.bubbleSegments)));
+    gl.uniform1f(d.uniforms.u_innerShadow, Math.min(1, Math.max(0, v.bubbleInnerStrength)));
+    gl.uniform1f(d.uniforms.u_innerWidth, Math.max(1e-3, v.bubbleInnerWidth));
+    gl.uniform1f(d.uniforms.u_outerShadow, Math.min(1, Math.max(0, v.bubbleOuterStrength)));
+    gl.uniform1f(d.uniforms.u_outerWidth, Math.max(1e-3, v.bubbleOuterWidth));
+    gl.uniform2f(d.uniforms.u_shadowMove, v.bubbleShadowDistance * Math.cos(v.bubbleShadowAngle), v.bubbleShadowDistance * Math.sin(v.bubbleShadowAngle));
     gl.uniform2f(d.uniforms.u_center, v.bubbleCenterX, v.bubbleCenterY);
     gl.uniform2f(d.uniforms.u_pan, v.bubblePanX, v.bubblePanY);
     gl.uniform1f(d.uniforms.u_size, Math.max(0.05, v.bubbleSize));

@@ -33,7 +33,7 @@ export const PARAM_KEYS = [
   "outlineSpin", "outlineTumble",
   "maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY",
   "colorAngle", "colorShift", "colorRepeat", "colorSize", "colorStretch", "colorTurn", "colorX", "colorY",
-  "bubbleAmount", "bubbleSize", "bubbleBackground", "bubbleDepth", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments"
+  "bubbleAmount", "bubbleSize", "bubbleBackground", "bubbleDepth", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments", "bubbleInnerStrength", "bubbleInnerWidth", "bubbleOuterStrength", "bubbleOuterWidth", "bubbleShadowAngle", "bubbleShadowDistance"
 ] as const;
 export type ParamKey = typeof PARAM_KEYS[number];
 
@@ -980,7 +980,9 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * for flat, and -1 to make it 8 times as large. Center X and Y move the shape and
    * the bend over the picture; Pan X and Y move only what shows inside the shape.
    * Background is how much of the flat picture (the output of the effects before
-   * the Bubble) shows past the shape's edge.
+   * the Bubble) shows past the shape's edge. The shadows' Widths and Distance are
+   * in screen heights, and Shadow angle is the side the outer shadow falls on,
+   * counterclockwise from the right.
    */
   bubbleAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
   bubbleBackground: { label: "Background", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0, high: 1, on: false },
@@ -992,6 +994,12 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   bubblePanY: { label: "Pan Y", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   bubbleRoundness: { label: "Roundness", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.5, on: false },
   bubbleSegments: { label: "Segments", min: 3, max: 24, step: 1, value: 3, drift: "wave", low: 3, high: 8, on: false },
+  bubbleInnerStrength: { label: "Inner strength", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.3, high: 0.8, on: false },
+  bubbleInnerWidth: { label: "Inner width", min: 0, max: 0.5, step: 0.005, value: 0.08, drift: "wave", low: 0.03, high: 0.15, on: false },
+  bubbleOuterStrength: { label: "Outer strength", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.3, high: 0.8, on: false },
+  bubbleOuterWidth: { label: "Outer width", min: 0, max: 0.5, step: 0.005, value: 0.08, drift: "wave", low: 0.03, high: 0.15, on: false },
+  bubbleShadowAngle: { label: "Shadow angle", min: 0, max: 360, step: 1, value: 315, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  bubbleShadowDistance: { label: "Shadow distance", min: 0, max: 0.25, step: 0.005, value: 0, drift: "wave", low: 0, high: 0.05, on: false },
   /**
    * Image or Video (see PICTURE_SHADER): an image or a video of the scene's own
    * over the picture made so far, by its blend (pictureBlend). Size 1
@@ -1584,7 +1592,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   lasers: ["laserAmount", "laserOpacity", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"],
   outlines: ["outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"],
   mask: ["maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY"],
-  bubble: ["bubbleAmount", "bubbleBackground", "bubbleDepth", "bubbleSize", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments"],
+  bubble: ["bubbleAmount", "bubbleBackground", "bubbleDepth", "bubbleSize", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments", "bubbleInnerStrength", "bubbleInnerWidth", "bubbleOuterStrength", "bubbleOuterWidth", "bubbleShadowAngle", "bubbleShadowDistance"],
   bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
   sharpen: ["sharpen", "sharpenRadius"],
   color: ["overlayOpacity", "colorAngle", "colorShift", "colorRepeat", "colorSize", "colorStretch", "colorTurn", "colorX", "colorY"],
@@ -1926,6 +1934,12 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("bubblePanY", Math.random() < 0.8 ? 0 : rand(-0.2, 0.2), rand(0, 0.1));
   set("bubbleRoundness", Math.random() < 0.5 ? 0 : rand(0.1, 1), rand(0, 0.2));
   set("bubbleSegments", Math.round(rand(3, 12)), rand(0, 2));
+  set("bubbleInnerStrength", Math.random() < 0.5 ? 0 : rand(0.3, 0.8), rand(0, 0.1));
+  set("bubbleInnerWidth", rand(0.03, 0.15), rand(0, 0.03));
+  set("bubbleOuterStrength", Math.random() < 0.5 ? 0 : rand(0.3, 0.8), rand(0, 0.1));
+  set("bubbleOuterWidth", rand(0.03, 0.15), rand(0, 0.03));
+  set("bubbleShadowAngle", rand(0, 360));
+  set("bubbleShadowDistance", Math.random() < 0.5 ? 0 : rand(0.01, 0.05), rand(0, 0.01));
   if (state && !state.locks.bubble) {
     state.bubbleShape = ([0, 3, 4] as const)[Math.floor(Math.random() * 3)];
   }

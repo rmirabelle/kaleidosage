@@ -1036,13 +1036,37 @@ function OutlineSection({ engine, row }: { engine: Engine; row: (key: ParamKey) 
   );
 }
 
-/** The Bubble's settings: the Shape menu, the slider of the picked shape, then those that every shape has. */
+/** The Bubble's two shadows. Picking one only picks the sliders that show: both shadows stay as they are set. */
+const BUBBLE_SHADOW_TYPES = [[0, "Inner"], [1, "Outer"]] as const;
+const BUBBLE_SHADOW_KEYS: readonly (readonly ParamKey[])[] = [["bubbleInnerStrength", "bubbleInnerWidth"], ["bubbleOuterStrength", "bubbleOuterWidth"]];
+
+/**
+ * The Bubble's settings: the Shape menu, the slider of the picked shape, those
+ * that every shape has, then the Shadow type menu with the sliders of that shadow
+ * and the two sliders the shadows share.
+ */
 function BubbleSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
   const [shape, setShape] = useState<BubbleShape>(engine.state.bubbleShape);
+  const [shadow, setShadow] = useState<0 | 1>(0);
   return (
     <>
       <ModeSelect engine={engine} stateKey="bubbleShape" options={BUBBLE_SHAPES} name="Shape" onChange={setShape} />
-      <SplitRows keys={[...BUBBLE_SHAPE_KEYS[shape], ...BUBBLE_KEYS]} row={row} blend={<ModeSelect engine={engine} stateKey="bubbleBlend" options={LAYER_BLENDS} name="Blend" />} />
+      <SplitRows
+        keys={[...BUBBLE_SHAPE_KEYS[shape], ...BUBBLE_KEYS]}
+        row={row}
+        below={(
+          <>
+            <div className="panel-select-row panel-select-named">
+              <span className="panel-row-name">Shadow type</span>
+              <Dropdown value={shadow} options={BUBBLE_SHADOW_TYPES} onChange={setShadow} />
+            </div>
+            {BUBBLE_SHADOW_KEYS[shadow].map(row)}
+            {row("bubbleShadowAngle")}
+            {row("bubbleShadowDistance")}
+          </>
+        )}
+        blend={<ModeSelect engine={engine} stateKey="bubbleBlend" options={LAYER_BLENDS} name="Blend" />}
+      />
     </>
   );
 }
@@ -1386,13 +1410,14 @@ function LayerBlend({ engine, step }: { engine: Engine; step: ShapeStep }) {
  * (see engine/common.ts) under a Common heading. "blend" is the effect's
  * Blend menu, which is common too: it shows right before Opacity.
  */
-function SplitRows({ keys, row, blend }: { keys: readonly ParamKey[]; row: (key: ParamKey) => ReactNode; blend?: ReactNode }) {
+function SplitRows({ keys, row, below, blend }: { keys: readonly ParamKey[]; row: (key: ParamKey) => ReactNode; below?: ReactNode; blend?: ReactNode }) {
   const { own, common } = splitCommon(keys);
   const moves = common.filter((key) => commonRole(key) !== "opacity");
   const opacity = common.filter((key) => commonRole(key) === "opacity");
   return (
     <>
       {own.map(row)}
+      {below}
       {(common.length > 0 || blend) && (
         <>
           <div className="panel-common-head" data-tip="Settings that many effects share. A MIDI control on one of them moves it in every effect.">Common</div>

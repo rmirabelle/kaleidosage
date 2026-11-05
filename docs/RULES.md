@@ -245,6 +245,11 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Bubble Roundness shows only for Square, and rounds its corners from square (0) to a circle (1).
 - Bubble Segments shows only for Radial, and is its number of corners, from 3 (a triangle) to 24. One corner points straight up. Values between two whole numbers crossfade between those two shapes.
 - Every point moves along its own line from the center, so a shape with corners shows a sharp line from the center to each corner. A rounded corner shows no such line.
+- Bubble has an inner shadow, which darkens the bent picture just inside the edge, and an outer shadow, which darkens what shows just past the edge. Each has its own Strength and Width. Both start at Strength 0, which is off.
+- The Shadow type menu picks whether the Inner or the Outer sliders show. It does not turn a shadow on or off, so both shadows can show at the same time. The menu always opens at Inner, and scene files do not save it.
+- Each shadow keeps an even width around the edge of every shape, in screen heights. With a Radial Segments value between two whole numbers, the shadow is only near the edge.
+- Shadow angle and Shadow distance are for both shadows. With a Distance above 0, the outer shadow falls toward the Angle, and the inner shadow shows on the other side. Shadow angle goes counterclockwise from the right.
+- An outer shadow past the edge at Background 0 adds black cover to the clear picture, so effects under it or a later blend can show it.
 - Scenes from 0.19.0 open with the nearest shape: Ellipse as Circle, Rounded square as Square with Roundness 0.5, Triangle, Hexagon and Star as Radial with 3, 6 and 5 Segments.
 - Bubble Background sets how much of the flat picture, the output of the effects before the Bubble, shows past the shape's edge. At 0, black shows there.
 - Bubble Blend combines the bent picture with the flat picture inside the shape only.
