@@ -3924,8 +3924,12 @@ vec2 nearestShown(vec2 p, float r, float a, float b) {
     float seen = dot(ab, ab);
     float s0 = u_cornerAt[k];
     float s1 = u_cornerAt[k + 1];
-    /* The side as it is, and one turn earlier, for a part across the top. */
-    for (int w = -1; w <= 0; w++) {
+    /**
+     * The side as it is, and one turn earlier, for a part across the top. A
+     * snake is open, so it has no earlier turn: its head (place 1) would also
+     * count as place 0, the unlit tail, and darken all pixels past the head.
+     */
+    for (int w = u_shape == 4 ? 0 : -1; w <= 0; w++) {
       float lo = max(a, s0 + float(w));
       float hi = min(b, s1 + float(w));
       if (hi < lo) continue;
