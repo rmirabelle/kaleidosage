@@ -9,7 +9,7 @@ export const PARAM_KEYS = [
   "mandelDepth", "mandelEnd", "mandelSpeed", "mandelFade", "mandelSpread", "mandelInvert", "mandelEdge", "mandelEdgeWidth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle",
   "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
   "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness",
-  "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl", "mirrorFade",
+  "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl", "innerTwirl", "mirrorFade",
   "blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel",
   "trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint",
   "smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade",
@@ -604,6 +604,8 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   panX: { label: "Pan X", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.35, high: 0.35, on: false },
   panY: { label: "Pan Y", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.35, high: 0.35, on: false },
   twirl: { label: "Twirl", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -1.5, high: 1.5, on: false },
+  /** Inner twirl: the turn in radians at the center. It fades to almost nothing at the screen's edges. */
+  innerTwirl: { label: "Inner twirl", min: -6, max: 6, step: 0.01, value: 0, drift: "wave", low: -3, high: 3, on: false },
   /**
    * Every Kaleidoscope type: each reflection is darker, as real glass loses
    * light at each bounce (1 = half as bright per mirror). The picture with
@@ -1027,7 +1029,7 @@ export const NO_EFFECT: Partial<Record<ParamKey, number>> = {
   hyperFlow: 0, warpCenterX: 0, warpCenterY: 0, cameraHeight: 0, cameraDolly: 0, cameraTruck: 0,
   mapScale: 1, juliaZoom: 1, mapPower: 1, mapArms: 0, mapTwist: 0, mapSpeed: 0, tunnelTwist: 0, mapPanX: 0, mapPanY: 0,
   mobiusPanX: 0, mobiusPanY: 0,
-  centerX: 0, centerY: 0, zoom: 1, panX: 0, panY: 0, twirl: 0,
+  centerX: 0, centerY: 0, zoom: 1, panX: 0, panY: 0, twirl: 0, innerTwirl: 0,
   blurMaskX: 0, blurMaskY: 0,
   trailTurn: 0, trailHue: 0, trailFlow: 0,
   particleGravity: 0,
@@ -1427,7 +1429,7 @@ const RADIAL_START: Partial<Record<ParamKey, Partial<Param>>> = {
  * types keep the values they have.
  */
 export function applyRadialStart(params: Params) {
-  for (const key of ["segments", "panX", "panY", "rotation", "zoom", "twirl", "centerX", "centerY"] as const) {
+  for (const key of ["segments", "panX", "panY", "rotation", "zoom", "twirl", "innerTwirl", "centerX", "centerY"] as const) {
     const { value, low, high, on, ease } = { ...SPECS[key], ...RADIAL_START[key] };
     Object.assign(params[key], { value, low, high, on, ease, custom: false, startTime: 0 });
   }
@@ -1535,7 +1537,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   warp: ["warpOpacity", "warpAmount", "warpScale", "warpCellSize", "warpCellAngle", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle"],
   map: ["mapOpacity", "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl", "mandelDepth", "mandelEnd", "mandelSpeed", "mandelFade", "mandelSpread", "mandelInvert", "mandelEdge", "mandelEdgeWidth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle", "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
     "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness"],
-  kaleidoscope: ["foldOpacity", "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl", "mirrorFade"],
+  kaleidoscope: ["foldOpacity", "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl", "innerTwirl", "mirrorFade"],
   blur: ["blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel"],
   trails: ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"],
   smear: ["smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade"],
@@ -1893,6 +1895,7 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("solidSpikeTip", Math.random() < 0.6 ? 0 : rand(0.2, 1), rand(0, 0.3));
   set("solidSpikeCount", Math.random() < 0.5 ? 12 : Math.round(rand(6, 24)), rand(0, 2));
   set("solidLevels", Math.round(rand(2, 4)), rand(0, 1));
+  set("innerTwirl", Math.random() < 0.7 ? 0 : rand(-3, 3), rand(0.3, 1));
   /* Light rays and bloom together make every bright area shine; when Randomize picks both, each gets less. */
   if (state?.fxOrder.includes("rays") && state.fxOrder.includes("bloom")) {
     for (const key of ["raysAmount", "bloomAmount"] as const) {

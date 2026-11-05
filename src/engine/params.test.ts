@@ -361,7 +361,7 @@ describe("randomizeParams", () => {
     for (let run = 0; run < 200; run++) {
       const params = createParams();
       randomizeParams(params);
-      for (const key of ["twirl", "trailHue", "exposure", "overlayOpacity", "blackLevel"] as const) {
+      for (const key of ["twirl", "innerTwirl", "trailHue", "exposure", "overlayOpacity", "blackLevel"] as const) {
         const param = params[key];
         if (param.value !== 0) continue;
         expect(param.low).toBe(0);

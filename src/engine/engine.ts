@@ -1458,6 +1458,7 @@ export class Engine {
       rotation: kaleidoscope("rotation", 0) * DEGREES,
       zoom: kaleidoscope("zoom", 1),
       twirl: kaleidoscope("twirl", 0),
+      innerTwirl: kaleidoscope("innerTwirl", 0),
       mirrorFade: kaleidoscope("mirrorFade", 0),
       panX: kaleidoscope("panX", 0),
       panY: kaleidoscope("panY", 0),

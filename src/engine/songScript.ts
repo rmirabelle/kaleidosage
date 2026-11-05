@@ -78,7 +78,7 @@ export const FAMILY_LABELS: Record<Family, string> = { glow: "Brightness", scale
 export const FAMILIES: Partial<Record<ParamKey, Exclude<Family, "beat">>> = {
   exposure: "glow", bloomAmount: "glow", bloomSize: "glow", overlayOpacity: "glow", contourOpacity: "glow", shine: "glow",
   zoom: "scale", mapScale: "scale", juliaZoom: "scale", mobiusZoom: "scale", trailZoom: "scale", particleSize: "scale", cyclesWidth: "scale", solidSize: "scale",
-  segments: "complexity", drosteSpirals: "complexity", mapArms: "complexity", twirl: "complexity", warpAmount: "complexity",
+  segments: "complexity", drosteSpirals: "complexity", mapArms: "complexity", twirl: "complexity", innerTwirl: "complexity", warpAmount: "complexity",
   warpMarble: "complexity", blurAmount: "complexity", contourLines: "complexity", mapTwist: "complexity", tunnelTwist: "complexity",
   mapCurl: "complexity", mapPower: "complexity", smearAmount: "complexity",
   particleBoost: "sparkle", particleSpeed: "sparkle", particleTurbulence: "sparkle", cyclesSpeed: "sparkle", raysAmount: "sparkle", raysLength: "sparkle", sharpen: "sparkle"

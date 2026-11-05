@@ -43,6 +43,7 @@ vec4 blendCover(vec4 base, vec4 top, int mode, float opacity) {
  * Pass 1: kaleidoscope. Folds the screen angle into mirrored wedges, then
  * samples the source image with mirror-repeat. Twirl turns the angle more
  * with distance from the center, before the fold, which makes spirals.
+ * Inner twirl does the opposite: it turns the angle most at the center.
  * The target is larger than the screen by u_pad pixels on each side, so the
  * blur pass can read real picture content past the screen edges. u_center
  * moves the fold point away from the screen center, as a fraction of the
@@ -240,6 +241,7 @@ uniform float u_hyperSize;
 uniform float u_rotation;
 uniform float u_zoom;
 uniform float u_twirl;
+uniform float u_innerTwirl;
 /* Each reflection's darkening (0 to 1); see afterBounces. */
 uniform float u_mirrorFade;
 uniform vec2 u_offset;
@@ -1087,8 +1089,9 @@ vec4 sampleImage(sampler2D image, vec2 size, vec2 q, float g) {
 }
 
 /**
- * Turns a point (rotation, and twirl, which turns more with distance), folds
- * it into mirrored wedges or tiles, and zooms it into image space.
+ * Turns a point (rotation, twirl, which turns more with distance, and inner
+ * twirl, which turns most at the center), folds it into mirrored wedges or
+ * tiles, and zooms it into image space.
  */
 /**
  * Set by fold() during a crossfade: how many more points it made, each with
@@ -1119,7 +1122,8 @@ float aroundBounces(float j, float m) { return min(j, m - j); }
 
 vec2 fold(vec2 p) {
   float r = length(p);
-  float a = atan(p.y, p.x) + u_rotation + u_twirl * r;
+  /* Inner twirl fades smoothly with distance: to 13% at the top of the screen (r = 0.5). */
+  float a = atan(p.y, p.x) + u_rotation + u_twirl * r + u_innerTwirl * exp(-r * r / 0.1225);
   foldAlts = 0;
   foldStretch = 1.0;
   foldBounces = 0.0;
