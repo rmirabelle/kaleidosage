@@ -728,12 +728,11 @@ export interface FrameValues {
   /** The Square's rounded corners, from 0 to 1, and the Radial shape's number of corners. */
   bubbleRoundness: number;
   bubbleSegments: number;
-  /** The Bubble's shadow: its type, its strength, its width and distance in screen heights, and the part of its width that fades. */
+  /** The Bubble's shadow: its type, its strength, its width in screen heights, and the part of its width that fades. */
   bubbleShadow: BubbleShadow;
   bubbleShadowStrength: number;
   bubbleShadowWidth: number;
   bubbleShadowSoftness: number;
-  bubbleShadowDistance: number;
   bubbleSize: number;
   bubbleBackground: number;
   /** The Bubble's bend: 1 makes the center 8 times as small, 0 is flat, -1 makes it 8 times as large (see BUBBLE_SHADER). */
@@ -3068,7 +3067,6 @@ export class KaleidoRenderer {
     gl.uniform1f(d.uniforms.u_shadowStrength, Math.min(1, Math.max(0, v.bubbleShadowStrength)));
     gl.uniform1f(d.uniforms.u_shadowWidth, Math.max(0, v.bubbleShadowWidth));
     gl.uniform1f(d.uniforms.u_shadowSoftness, Math.min(1, Math.max(0, v.bubbleShadowSoftness)));
-    gl.uniform1f(d.uniforms.u_shadowDistance, Math.max(0, v.bubbleShadowDistance));
     gl.uniform2f(d.uniforms.u_center, v.bubbleCenterX, v.bubbleCenterY);
     gl.uniform2f(d.uniforms.u_pan, v.bubblePanX, v.bubblePanY);
     gl.uniform1f(d.uniforms.u_size, Math.max(0.05, v.bubbleSize));

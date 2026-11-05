@@ -249,7 +249,6 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Shadow strength sets how dark the shadow is. It starts at 0, which is off.
 - Shadow width keeps an even width around the edge of every shape, in screen heights. With a Radial Segments value between two whole numbers, the shadow is only near the edge.
 - Shadow softness is the part of the width that fades. At 1 the shadow fades over the whole width, and at 0 it ends in a hard line.
-- Shadow distance moves the shadow down and to the right, in screen heights. An Outer shadow then falls on that side, and an Inner shadow shows on the other side.
 - An Outer shadow at Background 0 adds black cover to the clear picture, so effects under it or a later blend can show it.
 - Scenes from 0.19.0 open with the nearest shape: Ellipse as Circle, Rounded square as Square with Roundness 0.5, Triangle, Hexagon and Star as Radial with 3, 6 and 5 Segments.
 - Bubble Background sets how much of the flat picture, the output of the effects before the Bubble, shows past the shape's edge. At 0, black shows there.

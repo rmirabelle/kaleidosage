@@ -3509,9 +3509,7 @@ void main() {
  * the edge. 1 (Outer) falls on what shows past the edge; on a clear part it adds
  * black cover. u_shadowStrength is how dark it is, and 0 is off. u_shadowSoftness
  * is the part of u_shadowWidth that fades: at 0 the shadow ends in a hard line, and
- * at 1 it fades over the whole width. u_shadowDistance moves the shape the shadow
- * is made from down and to the right, so an outer shadow falls on that side and an
- * inner shadow shows on the other side.
+ * at 1 it fades over the whole width.
  */
 export const BUBBLE_SHADER = `#version 300 es
 precision highp float;
@@ -3533,9 +3531,7 @@ uniform int u_shadowType;
 uniform float u_shadowStrength;
 uniform float u_shadowWidth;
 uniform float u_shadowSoftness;
-uniform float u_shadowDistance;
 const float TURN = 6.2831853;
-const vec2 SHADOW_SIDE = vec2(0.7071068, -0.7071068);
 
 vec3 blendLayer(vec3 base, vec3 top, int mode) {
   if (mode == 1) return 1.0 - (1.0 - base) * (1.0 - top);
@@ -3660,7 +3656,7 @@ void main() {
   vec4 picture = texture(u_tex, v_uv);
   vec4 bent = blendCover(picture, shown, u_blend, 1.0);
   vec4 beyond = picture * u_background;
-  float shadowEdge = edgeDistance(p - SHADOW_SIDE * u_shadowDistance / u_size) * u_size;
+  float shadowEdge = edgeDistance(p) * u_size;
   /* A hard line is still smoothed over about a pixel. */
   float fade = max(u_shadowWidth * u_shadowSoftness, fwidth(shadowEdge));
   if (u_shadowType == 0) {

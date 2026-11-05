@@ -1038,7 +1038,7 @@ function OutlineSection({ engine, row }: { engine: Engine; row: (key: ParamKey) 
 
 /** The Bubble's one shadow is inside or outside the edge. */
 const BUBBLE_SHADOW_TYPES = [[0, "Inner"], [1, "Outer"]] as const;
-const BUBBLE_SHADOW_KEYS: readonly ParamKey[] = ["bubbleShadowStrength", "bubbleShadowWidth", "bubbleShadowSoftness", "bubbleShadowDistance"];
+const BUBBLE_SHADOW_KEYS: readonly ParamKey[] = ["bubbleShadowStrength", "bubbleShadowWidth", "bubbleShadowSoftness"];
 
 /**
  * The Bubble's settings: the Shape menu, the slider of the picked shape, those

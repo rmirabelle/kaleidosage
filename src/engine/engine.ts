@@ -1684,7 +1684,6 @@ export class Engine {
       bubbleShadowStrength: this.live("bubbleShadowStrength"),
       bubbleShadowWidth: this.live("bubbleShadowWidth"),
       bubbleShadowSoftness: this.live("bubbleShadowSoftness"),
-      bubbleShadowDistance: this.live("bubbleShadowDistance"),
       bubbleCenterX: this.live("bubbleCenterX"),
       bubbleCenterY: this.live("bubbleCenterY"),
       bubblePanX: this.live("bubblePanX"),
