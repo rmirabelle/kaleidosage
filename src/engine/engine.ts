@@ -468,6 +468,9 @@ export class Engine {
 
   /** The camera's real terrain (see docs/TERRAIN.md), or null. The scene owns it; the engine draws with it. */
   terrain: TerrainData | null = null;
+  /** Goes up each time the land changes, so a slow load can see that it is out of date. */
+  terrainVersion = 0;
+  private readonly terrainWatchers = new Set<() => void>();
 
   /** The drawn picture's shape (width over height): real terrain loads in this shape. */
   aspect() {
@@ -477,7 +480,17 @@ export class Engine {
   setTerrain(terrain: TerrainData | null) {
     this.wake();
     this.terrain = terrain;
+    this.terrainVersion++;
     this.renderer.setTerrain(terrain);
+    for (const watcher of this.terrainWatchers) watcher();
+  }
+
+  /** Calls "watcher" each time the land changes, until the returned function runs. */
+  watchTerrain(watcher: () => void) {
+    this.terrainWatchers.add(watcher);
+    return () => {
+      this.terrainWatchers.delete(watcher);
+    };
   }
 
   /** Keeps the overlay's video at its place, and stops it while it is not used. */

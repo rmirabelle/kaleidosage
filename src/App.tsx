@@ -40,7 +40,7 @@ import { SettingsHistory } from "./engine/history";
 import { scenePosition } from "./engine/loop";
 import { SCENE_EXTENSION, applyScene, blobToSceneImage, sceneFingerprint, serializeScene, type SceneImage } from "./engine/scene";
 import { loadSceneMedia, loadSceneSource, readScene, writeScene } from "./lib/scenes";
-import { terrainFromScene, terrainToScene } from "./lib/terrain";
+import { DEFAULT_LAND_KM, loadTerrain, randomLandPlace, terrainFromScene, terrainToScene } from "./lib/terrain";
 import { adoptImage, keepAnalyses, keepImage, keepScenes, keepTerrain, keptAnalysisText, keptImageBytes, keptTerrain, readKept, type Kept, type KeptImage } from "./lib/reloadKeeper";
 import type { ImageSource } from "./engine/renderer";
 import {
@@ -1240,6 +1240,31 @@ export default function App() {
     }
   }, [setDriver, showError, showStatus]);
 
+  /** The load that Random all started for Terrain: the next Random all stops it. */
+  const randomLand = useRef<AbortController | null>(null);
+
+  /**
+   * New land at a random place, as Terrain is flat with none. If other land comes
+   * while this loads (another scene or tab, or the panel's Load), or Terrain leaves
+   * the list, this load is dropped.
+   */
+  const loadRandomLand = useCallback(async () => {
+    if (!engine) return;
+    const load = new AbortController();
+    randomLand.current = load;
+    const version = engine.terrainVersion;
+    const [place, longitude, latitude] = randomLandPlace();
+    showStatus(`Loading the land of ${place}…`);
+    try {
+      const terrain = await loadTerrain({ place, longitude, latitude, areaKm: DEFAULT_LAND_KM, aspect: engine.aspect(), signal: load.signal });
+      if (load.signal.aborted || engine.terrainVersion !== version || !engine.state.fxOrder.includes("terrain")) return;
+      engine.setTerrain(terrain);
+      showStatus(`Land: ${place}`);
+    } catch (error) {
+      if (!load.signal.aborted) showError(`Could not load the land of ${place}. ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }, [engine, showError, showStatus]);
+
   const randomize = useCallback(() => {
     if (!engine) return;
     /* Random all on an empty list adds the first effects: the effect tips show, as for "+ New". */
@@ -1248,7 +1273,9 @@ export default function App() {
     setRevision((value) => value + 1);
     showStatus("New random settings");
     if (wasEmpty && engine.state.fxOrder.length > 0) firstEffect();
-  }, [engine, firstEffect, showStatus]);
+    randomLand.current?.abort();
+    if (engine.state.fxOrder.includes("terrain") && !engine.state.locks.terrain) void loadRandomLand();
+  }, [engine, firstEffect, loadRandomLand, showStatus]);
 
   /** A group's dice: new random settings for that group only. */
   const randomizeOneGroup = useCallback((group: GroupKey) => {

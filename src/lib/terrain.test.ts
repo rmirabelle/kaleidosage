@@ -2,9 +2,20 @@ import { describe, expect, it } from "vitest";
 import { createParams, createPlayState } from "../engine/params";
 import { applyScene, serializeScene } from "../engine/scene";
 import type { TerrainData } from "../engine/terrain";
-import { terrainFromScene, terrainToScene } from "./terrain";
+import { LAND_PLACES } from "./images";
+import { randomLandPlace, terrainFromScene, terrainToScene } from "./terrain";
 
 const IMAGE = { type: "image/png", data: "iVBORw0KGgo=" };
+
+describe("a random place for the land", () => {
+  it("is one of the land places, inside the map's latitudes", () => {
+    for (let run = 0; run < 200; run++) {
+      const place = randomLandPlace();
+      expect(LAND_PLACES).toContain(place);
+      expect(Math.abs(place[2])).toBeLessThan(84);
+    }
+  });
+});
 
 describe("real terrain in a scene file", () => {
   it("comes back with its place, range and heights (to 16 bits)", async () => {

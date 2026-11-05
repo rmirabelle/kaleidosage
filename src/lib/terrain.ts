@@ -1,5 +1,6 @@
 import { blobToSceneImage, sceneImageToBlob, type SceneTerrain } from "../engine/scene";
 import type { TerrainData } from "../engine/terrain";
+import { LAND_PLACES } from "./images";
 
 /**
  * Loads real terrain for the camera (see docs/TERRAIN.md): the heights of
@@ -22,6 +23,15 @@ const GRID = 2048;
  * in hard steps; the camera draws between the heights with smooth curves.
  */
 const MAX_ZOOM = 12;
+
+/** How wide the land is, in km, until the user picks another Area. */
+export const DEFAULT_LAND_KM = 40;
+
+/** A random place for Terrain, inside the latitudes that the map layout reaches. */
+export function randomLandPlace() {
+  const choices = LAND_PLACES.filter(([, , latitude]) => Math.abs(latitude) < 84);
+  return choices[Math.floor(Math.random() * choices.length)];
+}
 
 let nextTerrainId = 1;
 

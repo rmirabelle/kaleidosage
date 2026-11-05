@@ -8,7 +8,7 @@ import { audioInput } from "../lib/audioInput";
 import { settingButtons } from "../lib/settingButtons";
 import { GradientEditor } from "./GradientEditor";
 import { LAND_PLACES } from "../lib/images";
-import { loadTerrain } from "../lib/terrain";
+import { DEFAULT_LAND_KM, loadTerrain, randomLandPlace } from "../lib/terrain";
 import type { TerrainData } from "../engine/terrain";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
@@ -1308,13 +1308,16 @@ const terrainNote = (terrain: TerrainData | null) => terrain
  */
 function TerrainRows({ engine }: { engine: Engine }) {
   const [place, setPlace] = useState(-1);
-  const [area, setArea] = useState<number>(engine.terrain?.areaKm ?? 40);
+  const [area, setArea] = useState<number>(engine.terrain?.areaKm ?? DEFAULT_LAND_KM);
   const [note, setNote] = useState(() => terrainNote(engine.terrain));
   const [busy, setBusy] = useState(false);
+  /* Random all can load new land while these rows show. */
+  useEffect(() => engine.watchTerrain(() => {
+    setNote(terrainNote(engine.terrain));
+    if (engine.terrain) setArea(engine.terrain.areaKm);
+  }), [engine]);
   const load = async () => {
-    const choices = LAND_PLACES.map((_, index) => index).filter((index) => Math.abs(LAND_PLACES[index][2]) < 84);
-    const index = place >= 0 ? place : choices[Math.floor(Math.random() * choices.length)];
-    const [name, longitude, latitude] = LAND_PLACES[index];
+    const [name, longitude, latitude] = place >= 0 ? LAND_PLACES[place] : randomLandPlace();
     setBusy(true);
     setNote(`Loading ${name}…`);
     try {

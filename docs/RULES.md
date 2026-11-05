@@ -273,6 +273,9 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - An effect at strength 0, or a shape effect at opacity 0, is skipped.
 - Terrain shows its view while on, also at opacity 0 (then the land is flat).
 - Random all can pick Terrain, as it picked the old Camera; it never picks the flat Camera.
+- When Random all picks Terrain, it also loads the real terrain of a random place, 40 km wide. The status shows the place. A locked Terrain keeps its land. The Terrain group's dice does not load land.
+- The next Random all stops a load that has not finished. Other land that comes first, from another scene or tab or from Load, stays.
+- If the land does not load, the status shows the error, and Terrain stays as it was.
 - A scene from before Terrain opens with its Camera as Terrain, with the same settings.
 - Particles and Pixel sort do nothing on a GPU without float textures.
 - Each shape effect has an Opacity from 0 to 1.
