@@ -40,6 +40,23 @@ describe("outlineCorners", () => {
     }
   });
 
+  it("puts a circle around each group of 8 sides, with the corners at both ends inside it", () => {
+    const cases: [number, number, number][] = [[4, 5, 6], [3, 24, 6], [3, 5, 2], [1, 5, 1]];
+    for (const [shape, points, groupCount] of cases) {
+      const { corners, groups } = outlineCorners(shape, points, 7.5, 0.4, 0.5);
+      const count = shape === 4 ? 48 : shape === 1 ? 4 : 2 * points;
+      const sides = shape === 4 ? 47 : count;
+      for (let g = 0; g < 6; g++) {
+        expect(groups[g * 3 + 2] > 0).toBe(g < groupCount);
+        if (g >= groupCount) continue;
+        for (let k = g * 8; k <= Math.min(g * 8 + 8, sides); k++) {
+          const at = (k % count) * 2;
+          expect(Math.hypot(corners[at] - groups[g * 3], corners[at + 1] - groups[g * 3 + 1])).toBeLessThanOrEqual(groups[g * 3 + 2]);
+        }
+      }
+    }
+  });
+
   it("makes Radial a plain shape with Points sides at Inner radius 1", () => {
     const { length, at } = outlineCorners(3, 6);
     expect(length).toBeCloseTo(6);

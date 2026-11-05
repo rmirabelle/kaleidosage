@@ -3810,10 +3810,13 @@ uniform vec3 u_stopColor[8];
  */
 uniform vec2 u_corners[48];
 uniform float u_cornerAt[49];
+/* A circle around each group of sides at radius 1: center x, center y and radius (see outlineGroups in renderer.ts). */
+uniform vec3 u_groups[6];
 ${COVER_GLSL}
 const float TAU = 6.2831853;
 /* The corners of a turned ring. */
 const int RING_CORNERS = 48;
+const int GROUP_SIDES = 8;
 
 /* True when the outlines turn in 3D: then they are drawn by their turned corners. */
 bool turned;
@@ -3854,6 +3857,8 @@ int sideCount() { return u_shape == 4 ? cornerCount() - 1 : cornerCount(); }
 vec2 outlinePoint(float s, float r) {
   if (u_shape == 0) return r * vec2(sin(TAU * s), cos(TAU * s));
   int corners = cornerCount();
+  /* A snake's head is its last corner, so its place needs no search for each pixel. */
+  if (u_shape == 4 && s >= 1.0) return r * u_corners[corners - 1];
   int sides = sideCount();
   float h = u_shape == 4 ? clamp(s, 0.0, 1.0) : fract(s);
   for (int k = 0; k < RING_CORNERS; k++) {
@@ -3916,23 +3921,14 @@ vec2 nearestRing(vec2 p, float r, float a, float b) {
   return best;
 }
 
-vec2 nearestShown(vec2 p, float r, float a, float b) {
-  if (b - a <= 1e-5) return vec2(1e9, a);
-  if (u_shape == 0 && turned) return nearestRing(p, r, a, b);
-  if (u_shape == 0) {
-    float s = a + fract(fract(atan(p.x, p.y) / TAU) - a);
-    if (s <= b) return vec2(abs(length(p) - r), s);
-    float da = length(p - outlinePoint(a, r));
-    float db = length(p - outlinePoint(b, r));
-    return da < db ? vec2(da, a) : vec2(db, b);
-  }
+/* Makes "best" the nearer of itself and the nearest point on the part that shows of group g's sides. */
+void nearestInGroup(int g, vec2 p, float r, float a, float b, inout vec2 best) {
   int corners = cornerCount();
-  int sides = sideCount();
-  vec2 best = vec2(1e9, a);
+  int first = g * GROUP_SIDES;
+  int end = min(first + GROUP_SIDES, sideCount());
   /* Each corner is turned and seen once: a side's end is the next side's start. */
-  vec2 c0 = project(r * u_corners[0]);
-  for (int k = 0; k < RING_CORNERS; k++) {
-    if (k >= sides) break;
+  vec2 c0 = project(r * u_corners[first]);
+  for (int k = first; k < end; k++) {
     /* The place along the side comes from the flat side; the distance from the side as it is seen. */
     vec2 c1 = project(r * u_corners[(k + 1) % corners]);
     vec2 ab = c1 - c0;
@@ -3956,6 +3952,46 @@ vec2 nearestShown(vec2 p, float r, float a, float b) {
       if (d < best.x) best = vec2(d, s0 + float(w) + t * span);
     }
     c0 = c1;
+  }
+}
+
+/**
+ * Checks only the groups of sides that can count. "gap" is the shortest
+ * distance from the pixel to any side of a group, or less. The group with the
+ * smallest gap goes first; a later group with a gap past the best distance so
+ * far has no nearer side. When the smallest gap is past "reach", nothing of
+ * this copy shows at the pixel. The distance limits come from the turn: a turned
+ * outline can look larger by "grow" at most, with its perspective.
+ */
+vec2 nearestShown(vec2 p, float r, float a, float b, float reach) {
+  if (b - a <= 1e-5) return vec2(1e9, a);
+  if (u_shape == 0 && turned) return nearestRing(p, r, a, b);
+  if (u_shape == 0) {
+    float s = a + fract(fract(atan(p.x, p.y) / TAU) - a);
+    if (s <= b) return vec2(abs(length(p) - r), s);
+    float da = length(p - outlinePoint(a, r));
+    float db = length(p - outlinePoint(b, r));
+    return da < db ? vec2(da, a) : vec2(db, b);
+  }
+  float grow = 1.0;
+  if (turned) {
+    /* No corner of a snake is more than 1.9 radii from the center (see snakePoint in renderer.ts). */
+    float farthest = (u_shape == 4 ? 1.9 : 1.0) * r;
+    float closer = eye / max(eye - farthest, 1.0);
+    grow = closer + farthest * closer * closer / eye;
+  }
+  int groups = (sideCount() + GROUP_SIDES - 1) / GROUP_SIDES;
+  float gap[6];
+  int nearest = 0;
+  for (int g = 0; g < groups; g++) {
+    gap[g] = length(p - project(r * u_groups[g].xy)) - grow * r * u_groups[g].z;
+    if (gap[g] < gap[nearest]) nearest = g;
+  }
+  vec2 best = vec2(1e9, a);
+  if (gap[nearest] > reach) return best;
+  nearestInGroup(nearest, p, r, a, b, best);
+  for (int g = 0; g < groups; g++) {
+    if (g != nearest && gap[g] < best.x) nearestInGroup(g, p, r, a, b, best);
   }
   return best;
 }
@@ -4019,7 +4055,7 @@ void main() {
       a = phase - u_length;
       b = phase;
     }
-    vec2 n = nearestShown(p, r, a, b);
+    vec2 n = nearestShown(p, r, a, b, reach);
     /* A chased part is full at its head and fades to nothing at its tail; a snake's last 60% toward its tail fades. */
     float shown = u_shape == 4 ? clamp(n.y / 0.6, 0.0, 1.0) : u_draw == 1 ? clamp((n.y - a) / max(u_length, 1e-3), 0.0, 1.0) : 1.0;
     float copyLight = 1.0 - u_copyFade * float(i) / float(max(u_count - 1, 1));

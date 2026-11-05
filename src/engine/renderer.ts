@@ -133,7 +133,7 @@ export function snakePoint(t: number): [number, number] {
  * along its path from the tail (place 0, "length" times SNAKE_SPAN earlier) to
  * the head (place 1, at clock time "snakeTime").
  */
-export function outlineCorners(shape: number, points: number, snakeTime = 0, snakeLength = 0.35, inner = 1): { corners: Float32Array; at: Float32Array; length: number } {
+export function outlineCorners(shape: number, points: number, snakeTime = 0, snakeLength = 0.35, inner = 1): { corners: Float32Array; at: Float32Array; length: number; groups: Float32Array } {
   const snake = shape === 4;
   /* A ring's length here is its 48 straight sides', as the shader draws a turned ring. */
   const count = shape === 0 || snake ? OUTLINE_CORNERS : shape === 1 ? 4 : shape === 2 ? 3 : 2 * points;
@@ -159,7 +159,35 @@ export function outlineCorners(shape: number, points: number, snakeTime = 0, sna
     at[k + 1] = length;
   }
   for (let k = 1; k <= sides; k++) at[k] /= Math.max(length, 1e-9);
-  return { corners, at, length };
+  return { corners, at, length, groups: outlineGroups(corners, count, sides) };
+}
+
+/** How many sides of an outline are in one group, and the most groups (see outlineGroups). */
+const OUTLINE_GROUP_SIDES = 8;
+const OUTLINE_GROUPS = Math.ceil(OUTLINE_CORNERS / OUTLINE_GROUP_SIDES);
+
+/**
+ * A circle around each group of an outline's sides, as center x, center y and
+ * radius: the shader skips a group when its circle is too far from the pixel
+ * for any of its sides to count (see nearestShown in OUTLINE_SHADER).
+ */
+function outlineGroups(corners: Float32Array, count: number, sides: number): Float32Array {
+  const groups = new Float32Array(OUTLINE_GROUPS * 3);
+  for (let g = 0; g * OUTLINE_GROUP_SIDES < sides; g++) {
+    const first = g * OUTLINE_GROUP_SIDES;
+    const last = Math.min(first + OUTLINE_GROUP_SIDES, sides);
+    const around: [number, number][] = [];
+    for (let k = first; k <= last; k++) around.push([corners[(k % count) * 2], corners[(k % count) * 2 + 1]]);
+    const xs = around.map(([x]) => x);
+    const ys = around.map(([, y]) => y);
+    const x = (Math.min(...xs) + Math.max(...xs)) / 2;
+    const y = (Math.min(...ys) + Math.max(...ys)) / 2;
+    groups[g * 3] = x;
+    groups[g * 3 + 1] = y;
+    /* A little larger, as the shader reads these as 32-bit numbers. */
+    groups[g * 3 + 2] = Math.max(...around.map(([cx, cy]) => Math.hypot(cx - x, cy - y))) * 1.0001;
+  }
+  return groups;
 }
 
 /** The most Light shapes copies: the shader draws at most this many (see OUTLINE_SHADER). */
@@ -3149,6 +3177,7 @@ export class KaleidoRenderer {
     const outline = outlineCorners(v.outlineShape, points, v.outlineSnakeTime, Math.min(1, Math.max(0.01, v.outlineLength)), Math.min(1, Math.max(0.1, v.outlineInner)));
     gl.uniform2fv(l.uniforms["u_corners[0]"], outline.corners);
     gl.uniform1fv(l.uniforms["u_cornerAt[0]"], outline.at);
+    gl.uniform3fv(l.uniforms["u_groups[0]"], outline.groups);
     gl.uniform1f(l.uniforms.u_width, Math.max(0.25, v.outlineWidth * this.texelScale));
     gl.uniform1f(l.uniforms.u_glow, Math.max(0, v.outlineGlow));
     gl.uniform1f(l.uniforms.u_glowSize, Math.max(0.5, v.outlineGlowSize * this.texelScale));
