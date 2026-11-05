@@ -1459,7 +1459,6 @@ export class Engine {
       zoom: kaleidoscope("zoom", 1),
       twirl: kaleidoscope("twirl", 0),
       mirrorFade: kaleidoscope("mirrorFade", 0),
-      mirrorHue: kaleidoscope("mirrorHue", 0) * DEGREES,
       panX: kaleidoscope("panX", 0),
       panY: kaleidoscope("panY", 0),
       blur: on.blur ? this.live("blurAmount") / 1080 : 0,

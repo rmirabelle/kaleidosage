@@ -240,9 +240,8 @@ uniform float u_hyperSize;
 uniform float u_rotation;
 uniform float u_zoom;
 uniform float u_twirl;
-/* Each reflection's darkening (0 to 1) and hue turn (radians per mirror); see mirrorLight. */
+/* Each reflection's darkening (0 to 1); see afterBounces. */
 uniform float u_mirrorFade;
-uniform float u_mirrorHue;
 uniform vec2 u_offset;
 uniform int u_mapMode;
 uniform float u_mapMix;
@@ -1106,9 +1105,9 @@ vec4 foldShares;
 float foldStretch;
 /**
  * Set by fold(): how many mirrors the picture at the point bounced off, for
- * Mirror fade and Mirror hue (see mirrorLight). For the tile types it is
- * the number of mirror lines between the point and one tile part that has
- * no bounce: crossing a mirror line is one bounce.
+ * Mirror fade (see afterBounces). For the tile types it is the number of
+ * mirror lines between the point and one tile part that has no bounce:
+ * crossing a mirror line is one bounce.
  */
 float foldBounces;
 
@@ -1273,24 +1272,12 @@ vec2 fold(vec2 p) {
 }
 
 /**
- * Mirror fade and Mirror hue: the light of a picture that bounced off n
- * mirrors. Each bounce keeps 1 - fade / 2 of the light and turns the hue by
- * u_mirrorHue (a turn around the gray line, so gray stays gray). The
- * colors may carry their cover (premultiplied); both steps keep it right.
+ * Mirror fade: the light of a picture that bounced off n mirrors. Each bounce
+ * keeps 1 - fade / 2 of the light. The colors may carry their cover
+ * (premultiplied); this keeps it right.
  */
-vec3 mirrorLight(vec3 c, float n) {
-  float angle = u_mirrorHue * n;
-  if (angle != 0.0) {
-    const vec3 gray = vec3(0.57735027);
-    float cs = cos(angle);
-    c = c * cs + cross(gray, c) * sin(angle) + gray * dot(gray, c) * (1.0 - cs);
-  }
-  return max(c, 0.0) * pow(1.0 - 0.5 * u_mirrorFade, n);
-}
-
-/* A picture read with the light of its mirror bounces. */
 vec4 afterBounces(vec4 c, float n) {
-  if (n > 0.0) c.rgb = mirrorLight(c.rgb, n);
+  if (n > 0.0) c.rgb *= pow(1.0 - 0.5 * u_mirrorFade, n);
   return c;
 }
 
