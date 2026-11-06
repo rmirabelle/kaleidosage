@@ -4972,6 +4972,64 @@ float star(vec3 q) {
 }
 
 /**
+ * One four-sided point of the Moravian star: a pyramid on a square face
+ * "r" from the middle along "n" ("u" and "v" across the face, "w" half its
+ * side), with its tip "a" from the middle. The largest of its planes'
+ * distances, and the distance to a ball around it, so the walk is not slow
+ * past the tip.
+ */
+float squarePoint(vec3 q, vec3 n, vec3 u, vec3 v, float r, float w, float a) {
+  float h = dot(q, n);
+  float across = max(abs(dot(q, u)), abs(dot(q, v)));
+  float side = ((a - r) * across + w * (h - a)) / sqrt((a - r) * (a - r) + w * w);
+  float half_ = (a - r) * 0.5;
+  float ball = length(q - n * (r + half_)) - sqrt(half_ * half_ + 2.0 * w * w);
+  return max(max(side, r - h), ball);
+}
+/* A side plane of a point, through the face corners p and s and the tip, facing out. */
+float pointSide(vec3 q, vec3 p, vec3 s, vec3 tip) {
+  vec3 m = normalize(cross(s - p, tip - p));
+  return dot(q - p, dot(m, p) < 0.0 ? -m : m);
+}
+/**
+ * The Moravian star: a rhombicuboctahedron (18 squares and 8 triangles)
+ * with a pyramid on each face, 26 points with flat sides, all with their
+ * tips equally far out. Spike length 0 leaves the bare rhombicuboctahedron;
+ * 1 makes the tips 1.25 from the middle. The shape repeats in each of the
+ * 48 mirror-image parts of space (folded by abs and sorting), so only one
+ * point of each kind is worked out: on the x axis, between x and y, and
+ * the triangle toward (1, 1, 1).
+ */
+float moravian(vec3 q) {
+  /* The rhombicuboctahedron's corners are the turns of (±1, ±1, ±S), scaled by c. */
+  const float S = 2.41421356;
+  const float CORE = 0.42;
+  const float c = CORE / S;
+  const vec3 DIAG = vec3(0.57735027);
+  const float R_TRI = c * (S + 2.0) * 0.57735027;
+  float reach = clamp(u_spikes, 0.0, 1.0);
+  float aSquare = mix(CORE, 1.25, reach);
+  float aTri = mix(R_TRI, 1.25, reach);
+  q = abs(q);
+  if (q.x < q.y) q.xy = q.yx;
+  if (q.y < q.z) q.yz = q.zy;
+  if (q.x < q.y) q.xy = q.yx;
+  const vec2 H = vec2(0.70710678);
+  float d = max(max(q.x - CORE, dot(q.xy, H) - CORE), dot(q, DIAG) - R_TRI);
+  d = min(d, squarePoint(q, vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), vec3(0.0, 0.0, 1.0), CORE, c, aSquare));
+  d = min(d, squarePoint(q, vec3(H, 0.0), vec3(H.x, -H.y, 0.0), vec3(0.0, 0.0, 1.0), CORE, c, aSquare));
+  vec3 p0 = c * vec3(S, 1.0, 1.0);
+  vec3 p1 = c * vec3(1.0, S, 1.0);
+  vec3 p2 = c * vec3(1.0, 1.0, S);
+  vec3 tip = DIAG * aTri;
+  float tri = max(R_TRI - dot(q, DIAG), pointSide(q, p0, p1, tip));
+  tri = max(tri, max(pointSide(q, p1, p2, tip), pointSide(q, p2, p0, tip)));
+  float half_ = (aTri - R_TRI) * 0.5;
+  tri = max(tri, length(q - DIAG * (R_TRI + half_)) - sqrt(half_ * half_ + dot(p0 - DIAG * R_TRI, p0 - DIAG * R_TRI)));
+  return min(d, tri);
+}
+
+/**
  * The Menger sponge: a cube (as large as the box) with a cross of three
  * bars of holes through it, then through each of its 20 remaining small
  * cubes, and so on for Levels levels. Each bar is a third of its small
@@ -5076,6 +5134,7 @@ float unitShape(vec3 q) {
   if (u_shape == 4) return wobbly(q);
   if (u_shape == 5) return star(q);
   if (u_shape == 9) return menger(q);
+  if (u_shape == 10) return moravian(q);
   return flatShape(q) * 0.7;
 }
 
@@ -5119,7 +5178,7 @@ vec2 onFace(vec3 q, vec3 axis) {
  */
 vec3 wrapAt(vec3 q, vec3 n) {
   float around = atan(q.z, q.x) / (2.0 * PI) + 0.5;
-  if (u_shape == 0 || u_shape == 3 || u_shape == 4 || u_shape == 5) {
+  if (u_shape == 0 || u_shape == 3 || u_shape == 4 || u_shape == 5 || u_shape == 10) {
     vec3 d = normalize(q);
     return readAt(vec2(around * 2.0, asin(clamp(d.y, -1.0, 1.0)) / PI + 0.5));
   }

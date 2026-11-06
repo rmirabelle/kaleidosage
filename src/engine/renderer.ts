@@ -325,8 +325,8 @@ export type CycleMove = 0 | 1;
  * distance from a center.
  */
 export type CyclePaint = 0 | 1 | 2 | 3;
-/** The 3D Object's shape: sphere, cube, cylinder, cone, torus, capsule, octahedron, icosahedron, pyramid (see SOLID_SHADER). */
-export type SolidShape = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+/** The 3D Object's shape (see SOLID_SHAPES and SOLID_SHADER). */
+export type SolidShape = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 /** How the picture goes onto the 3D Object: 0 wrapped on its surface, 1 bent through it like a lens, 2 reflected in it like chrome. */
 export type SolidMap = 0 | 1 | 2;
 /** How the two images fade: 0 = crossfade, 1 = dissolve by brightness (light areas change first). */

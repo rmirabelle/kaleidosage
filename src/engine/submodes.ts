@@ -148,17 +148,19 @@ export const CYCLE_PAINTS = [[0, "Cycle"], [1, "Trail"], [2, "Position, linear"]
 export const SOLID_KEYS: readonly ParamKey[] = ["solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidTiles", "solidBend", "solidFrost", "solidLight", "solidShading", "solidShine", "solidShadow", "solidBackground", "solidX", "solidY", "solidAmount"];
 /**
  * Each shape's own sliders. The sphere and Morph have no edges to round;
- * for the blobs Roundness is how softly they merge, for the star how round
- * its spikes are, for the Menger sponge how round its holes are. Numbers 2 to 5 were the cylinder, cone, torus and capsule
- * until 2026-10-24 (no scene used them).
+ * for the blobs Roundness is how softly they merge, for the spike ball how
+ * round its spikes are, for the Menger sponge how round its holes are. The
+ * Moravian star has sharp, flat-sided points and only Spike length. Numbers
+ * 2 to 5 were the cylinder, cone, torus and capsule until 2026-10-24 (no
+ * scene used them).
  */
 export const SOLID_SHAPE_KEYS: Record<SolidShape, ParamKey[]> = {
   0: [], 1: ["solidRound"], 2: ["solidMorph"], 3: ["solidBlobs", "solidRound"], 4: ["solidBumps", "solidWaves"], 5: ["solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidRound"],
-  6: ["solidRound"], 7: ["solidRound"], 8: ["solidRound"], 9: ["solidLevels", "solidRound"]
+  6: ["solidRound"], 7: ["solidRound"], 8: ["solidRound"], 9: ["solidLevels", "solidRound"], 10: ["solidSpikes"]
 };
 /** The sliders that only some shapes show (see SOLID_SHAPE_KEYS). */
 export const SOLID_SHAPE_ONLY: readonly ParamKey[] = ["solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidLevels"];
-export const SOLID_SHAPES = [[0, "Sphere"], [1, "Cube"], [2, "Morph"], [3, "Blobs"], [4, "Wobbly ball"], [5, "Star"], [6, "Octahedron"], [7, "Icosahedron"], [8, "Pyramid"], [9, "Menger sponge"]] as const;
+export const SOLID_SHAPES = [[0, "Sphere"], [1, "Cube"], [2, "Morph"], [3, "Blobs"], [4, "Wobbly ball"], [5, "Spike ball"], [6, "Octahedron"], [7, "Icosahedron"], [8, "Pyramid"], [9, "Menger sponge"], [10, "Moravian star"]] as const;
 /** Tiles is for Wrap; Bend for Project. */
 export const SOLID_MAP_KEYS: Record<SolidMap, ParamKey[]> = { 0: ["solidTiles"], 1: ["solidBend", "solidFrost"], 2: [] };
 export const SOLID_MAPS = [[0, "Wrap"], [1, "Project"], [2, "Mirror"]] as const;

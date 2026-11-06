@@ -1805,7 +1805,7 @@ function randomizeAll(params: Params, state?: PlayState) {
     state.cameraRepeat = (Math.random() < 0.7 ? 0 : Math.random() < 0.7 ? 1 : 2) as CameraRepeat;
     state.cyclesMove = (Math.random() < 0.6 ? 0 : 1) as CycleMove;
     state.cyclesPaint = Math.floor(Math.random() * 4) as CyclePaint;
-    state.solidShape = Math.floor(Math.random() * 10) as SolidShape;
+    state.solidShape = Math.floor(Math.random() * 11) as SolidShape;
     state.solidMap = Math.floor(Math.random() * 3) as SolidMap;
     state.driverSource = Math.floor(Math.random() * 5) as DriverSource;
     state.driverMode = Math.floor(Math.random() * 3) as DriverMode;

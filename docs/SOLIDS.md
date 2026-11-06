@@ -20,13 +20,15 @@ picture.
 
 ## Menus
 
-- **Shape** (presets): Sphere, Cube, Morph, Blobs, Wobbly ball, Star,
-  Octahedron, Icosahedron, Pyramid, Menger sponge. Morph, Blobs, Wobbly ball and Star came
+- **Shape** (presets): Sphere, Cube, Morph, Blobs, Wobbly ball, Spike ball,
+  Octahedron, Icosahedron, Pyramid, Menger sponge, Moravian star. Morph, Blobs, Wobbly ball and Spike ball (first named Star) came
   on 2026-10-24 in place of the Cylinder, Cone, Torus and Capsule (no scene
-  used them; the new shapes took their numbers, 2 to 5).
+  used them; the new shapes took their numbers, 2 to 5). The Moravian star
+  (2026-11-06) is the paper star: a rhombicuboctahedron (18 squares, 8
+  triangles) with a flat-sided pyramid on each face, 26 points.
 - **Map**: how the picture goes onto the shape.
   - **Wrap**: the picture is painted on the surface and turns with the
-    shape. Round shapes (sphere, blobs, wobbly ball, star) wrap it around
+    shape. Round shapes (sphere, blobs, wobbly ball, spike ball, Moravian star) wrap it around
     their axis; flat faces (and Morph, as the cube) each show the whole
     picture. The picture
     is mirrored at its seam, so the seam does not show.
@@ -41,13 +43,13 @@ picture.
 | Setting | What it does |
 |---|---|
 | Size | The shape's size, as a part of the screen height. |
-| Roundness | How round the edges and corners are. 0 is sharp. At the top a cube is almost a sphere. For Blobs, how softly the blobs merge; for Star, how round its spikes are; for the Menger sponge, how round its holes are (0 square, 1 round). The Sphere, Morph and Wobbly ball hide this slider. |
+| Roundness | How round the edges and corners are. 0 is sharp. At the top a cube is almost a sphere. For Blobs, how softly the blobs merge; for Spike ball, how round its spikes are; for the Menger sponge, how round its holes are (0 square, 1 round). The Sphere, Morph, Wobbly ball and Moravian star hide this slider. |
 | Squareness | Morph only: from a star with points on the axes (0), through a ball (about 0.38), to a rounded cube (1). A range makes it flow between them. |
 | Blobs | Blobs only: how many balls (2 to 8) drift on slow loops and merge. Between two whole numbers the last blob grows from nothing. |
 | Bumps, Waves | Wobbly ball only: how high the waves over the ball are, and how many. They flow with the animation time. |
-| Spike length | Star only: how long its spikes are; at 0 they stay inside the ball, so the star is a smooth ball. |
-| Spikes | Star only: how many spikes (4 to 32), thinner as there are more. 6, 8, 12 and 20 sit on the corners of an octahedron, a cube, an icosahedron and a dodecahedron; other counts sit evenly on a spiral over the ball. |
-| Spike shape | Star only: from pointed (0) to capped, as wide at the end as at the foot (1). |
+| Spike length | Spike ball: how long its spikes are; at 0 they stay inside the ball, so it is a smooth ball. Moravian star: how far out its points reach; at 0 it is the bare rhombicuboctahedron. |
+| Spikes | Spike ball only: how many spikes (4 to 32), thinner as there are more. 6, 8, 12 and 20 sit on the corners of an octahedron, a cube, an icosahedron and a dodecahedron; other counts sit evenly on a spiral over the ball. |
+| Spike shape | Spike ball only: from pointed (0) to capped, as wide at the end as at the foot (1). |
 | Levels | Menger sponge only: how many levels of holes (1 to 5). Between two whole numbers the next level's holes grow, so a range opens and closes them smoothly. |
 | Spin | How fast the shape turns around its own axis, in turns per minute. Negative turns the other way. |
 | Tumble | How fast the axis itself turns over, in turns per minute. |
