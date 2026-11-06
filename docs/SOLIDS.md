@@ -24,8 +24,9 @@ picture.
   Octahedron, Icosahedron, Pyramid, Menger sponge, Moravian star. Morph, Blobs, Wobbly ball and Spike ball (first named Star) came
   on 2026-10-24 in place of the Cylinder, Cone, Torus and Capsule (no scene
   used them; the new shapes took their numbers, 2 to 5). The Moravian star
-  (2026-11-06) is the paper star: a rhombicuboctahedron (18 squares, 8
-  triangles) with a flat-sided pyramid on each face, 26 points.
+  (2026-11-06) is the paper star: a core with a flat-sided pyramid on each
+  face. At 26 points the core is a rhombicuboctahedron (18 squares, 8
+  triangles), as in the paper star.
 - **Map**: how the picture goes onto the shape.
   - **Wrap**: the picture is painted on the surface and turns with the
     shape. Round shapes (sphere, blobs, wobbly ball, spike ball, Moravian star) wrap it around
@@ -47,7 +48,10 @@ picture.
 | Squareness | Morph only: from a star with points on the axes (0), through a ball (about 0.38), to a rounded cube (1). A range makes it flow between them. |
 | Blobs | Blobs only: how many balls (2 to 8) drift on slow loops and merge. Between two whole numbers the last blob grows from nothing. |
 | Bumps, Waves | Wobbly ball only: how high the waves over the ball are, and how many. They flow with the animation time. |
-| Spike length | Spike ball: how long its spikes are; at 0 they stay inside the ball, so it is a smooth ball. Moravian star: how far out its points reach; at 0 it is the bare rhombicuboctahedron. |
+| Spike length | Spike ball only: how long its spikes are; at 0 they stay inside the ball, so it is a smooth ball. |
+| Points | Moravian star only: 4 (tetrahedron), 6 (cube), 8 (octahedron: the Merkaba), 12 (dodecahedron), 14 (cuboctahedron: cube and octahedron), 20 (icosahedron), 26 (rhombicuboctahedron: the paper star) or 32 (icosidodecahedron). A count between two of them morphs between the two shapes. |
+| Point length | Moravian star only: how far out the points reach; at 0 only the bare core shows. Points 8 at 0.6 is the exact Merkaba. |
+| Hollow | Moravian star only: 0 is solid; higher keeps only bars along the edges, thinner toward 1 (a frame, like a string-art star). |
 | Spikes | Spike ball only: how many spikes (4 to 32), thinner as there are more. 6, 8, 12 and 20 sit on the corners of an octahedron, a cube, an icosahedron and a dodecahedron; other counts sit evenly on a spiral over the ball. |
 | Spike shape | Spike ball only: from pointed (0) to capped, as wide at the end as at the foot (1). |
 | Levels | Menger sponge only: how many levels of holes (1 to 5). Between two whole numbers the next level's holes grow, so a range opens and closes them smoothly. |

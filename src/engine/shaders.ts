@@ -4808,6 +4808,10 @@ uniform float u_spikeTip;
 uniform float u_spikeCount;
 /* The Menger sponge's levels of holes (1 to 5; between two whole numbers the next level's holes grow). */
 uniform float u_levels;
+/* The Moravian star: how many points (4 to 32), how long, and how hollow (see stellated). */
+uniform float u_points;
+uniform float u_pointLength;
+uniform float u_hollow;
 uniform float u_time;
 /* From the shape's own frame to the view. */
 uniform mat3 u_turn;
@@ -4971,62 +4975,134 @@ float star(vec3 q) {
   return d * 0.8;
 }
 
-/**
- * One four-sided point of the Moravian star: a pyramid on a square face
- * "r" from the middle along "n" ("u" and "v" across the face, "w" half its
- * side), with its tip "a" from the middle. The largest of its planes'
- * distances, and the distance to a ball around it, so the walk is not slow
- * past the tip.
- */
-float squarePoint(vec3 q, vec3 n, vec3 u, vec3 v, float r, float w, float a) {
-  float h = dot(q, n);
-  float across = max(abs(dot(q, u)), abs(dot(q, v)));
-  float side = ((a - r) * across + w * (h - a)) / sqrt((a - r) * (a - r) + w * w);
-  float half_ = (a - r) * 0.5;
-  float ball = length(q - n * (r + half_)) - sqrt(half_ * half_ + 2.0 * w * w);
-  return max(max(side, r - h), ball);
-}
-/* A side plane of a point, through the face corners p and s and the tip, facing out. */
-float pointSide(vec3 q, vec3 p, vec3 s, vec3 tip) {
-  vec3 m = normalize(cross(s - p, tip - p));
-  return dot(q - p, dot(m, p) < 0.0 ? -m : m);
+/* The distance from p to the segment from a to b. */
+float segment(vec3 p, vec3 a, vec3 b) {
+  vec3 ab = b - a;
+  vec3 ap = p - a;
+  return length(ap - ab * clamp(dot(ap, ab) / dot(ab, ab), 0.0, 1.0));
 }
 /**
- * The Moravian star: a rhombicuboctahedron (18 squares and 8 triangles)
- * with a pyramid on each face, 26 points with flat sides, all with their
- * tips equally far out. Spike length 0 leaves the bare rhombicuboctahedron;
- * 1 makes the tips 1.25 from the middle. The shape repeats in each of the
- * 48 mirror-image parts of space (folded by abs and sorting), so only one
- * point of each kind is worked out: on the x axis, between x and y, and
- * the triangle toward (1, 1, 1).
+ * The Moravian star's eight cores, each with a pyramid (a point) on every
+ * face: 4 the tetrahedron, 6 the cube, 8 the octahedron (the Merkaba), 12
+ * the dodecahedron, 14 the cuboctahedron, 20 the icosahedron, 26 the
+ * rhombicuboctahedron (the paper Moravian star), 32 the icosidodecahedron.
+ * Each kind of face is one row: its outward direction (STAR_N), the
+ * direction of one of its corners (STAR_CORNER) and its number of sides.
+ * The shape repeats in mirror-image parts of space, so after the fold (see
+ * starKind) only one face of each kind is worked out; the tetrahedron has
+ * no such fold and works out all 4 faces.
  */
-float moravian(vec3 q) {
-  /* The rhombicuboctahedron's corners are the turns of (±1, ±1, ±S), scaled by c. */
-  const float S = 2.41421356;
-  const float CORE = 0.42;
-  const float c = CORE / S;
-  const vec3 DIAG = vec3(0.57735027);
-  const float R_TRI = c * (S + 2.0) * 0.57735027;
-  float reach = clamp(u_spikes, 0.0, 1.0);
-  float aSquare = mix(CORE, 1.25, reach);
-  float aTri = mix(R_TRI, 1.25, reach);
-  q = abs(q);
-  if (q.x < q.y) q.xy = q.yx;
-  if (q.y < q.z) q.yz = q.zy;
-  if (q.x < q.y) q.xy = q.yx;
-  const vec2 H = vec2(0.70710678);
-  float d = max(max(q.x - CORE, dot(q.xy, H) - CORE), dot(q, DIAG) - R_TRI);
-  d = min(d, squarePoint(q, vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), vec3(0.0, 0.0, 1.0), CORE, c, aSquare));
-  d = min(d, squarePoint(q, vec3(H, 0.0), vec3(H.x, -H.y, 0.0), vec3(0.0, 0.0, 1.0), CORE, c, aSquare));
-  vec3 p0 = c * vec3(S, 1.0, 1.0);
-  vec3 p1 = c * vec3(1.0, S, 1.0);
-  vec3 p2 = c * vec3(1.0, 1.0, S);
-  vec3 tip = DIAG * aTri;
-  float tri = max(R_TRI - dot(q, DIAG), pointSide(q, p0, p1, tip));
-  tri = max(tri, max(pointSide(q, p1, p2, tip), pointSide(q, p2, p0, tip)));
-  float half_ = (aTri - R_TRI) * 0.5;
-  tri = max(tri, length(q - DIAG * (R_TRI + half_)) - sqrt(half_ * half_ + dot(p0 - DIAG * R_TRI, p0 - DIAG * R_TRI)));
-  return min(d, tri);
+const vec3 STAR_N[15] = vec3[15](
+  vec3(-0.5773503), vec3(-0.5773503, 0.5773503, 0.5773503), vec3(0.5773503, -0.5773503, 0.5773503), vec3(0.5773503, 0.5773503, -0.5773503),
+  vec3(1.0, 0.0, 0.0), vec3(0.5773503), vec3(0.5257311, 0.0, 0.8506508),
+  vec3(1.0, 0.0, 0.0), vec3(0.5773503), vec3(0.0, 0.3568221, 0.9341724),
+  vec3(1.0, 0.0, 0.0), vec3(0.7071068, 0.7071068, 0.0), vec3(0.5773503),
+  vec3(0.5257311, 0.0, 0.8506508), vec3(0.0, 0.3568221, 0.9341724));
+const vec3 STAR_CORNER[15] = vec3[15](
+  vec3(0.5773503, -0.5773503, -0.5773503), vec3(0.5773503), vec3(0.5773503), vec3(0.5773503),
+  vec3(0.5773503), vec3(1.0, 0.0, 0.0), vec3(0.0, 0.3568221, 0.9341724),
+  vec3(0.7071068, 0.7071068, 0.0), vec3(0.7071068, 0.7071068, 0.0), vec3(0.5257311, 0.0, 0.8506508),
+  vec3(0.8628562, 0.3574067, 0.3574067), vec3(0.8628562, 0.3574067, 0.3574067), vec3(0.8628562, 0.3574067, 0.3574067),
+  vec3(0.0, 0.0, 1.0), vec3(0.0, 0.0, 1.0));
+const float STAR_SIDES[15] = float[15](3.0, 3.0, 3.0, 3.0, 4.0, 3.0, 5.0, 4.0, 3.0, 3.0, 4.0, 4.0, 3.0, 5.0, 3.0);
+/* For each of the 8 cores: its first row, how many rows, and its fold (0 none, 1 the cube's, 2 the icosahedron's). */
+const int STAR_START[8] = int[8](0, 4, 5, 6, 7, 9, 10, 13);
+const int STAR_COUNT[8] = int[8](4, 1, 1, 1, 2, 1, 3, 2);
+const int STAR_FOLD[8] = int[8](0, 1, 1, 2, 1, 2, 1, 2);
+
+/**
+ * One core of the Moravian star with its points. Every core has its corners
+ * 0.5 from the middle; Point length 0 leaves the bare core, 1 puts the tips
+ * 1.25 out (Points 8 at 0.6 is the exact Merkaba, two tetrahedra). A point
+ * is the largest of its planes' distances, with the distance to a ball
+ * around it so the walk is not slow past the tip. The face's own corners
+ * are found by turning to the nearest corner around its middle (a regular
+ * polygon repeats every 1 / sides of a turn).
+ *
+ * Hollow keeps only bars along the edges: round bars around each point's
+ * side edges (the base edges while the points are short), cut flat by the
+ * solid shape, so their outer sides are the faces. The bars thin from 0.53
+ * at Hollow 0 (they fill the shape) to 0.03 at 1. This runs once in the
+ * code (a loop over the rows), so the Direct3D compiler stays quick.
+ */
+float starKind(vec3 q, int kind) {
+  const float V = 0.5;
+  float reach = clamp(u_pointLength, 0.0, 1.0);
+  float open = clamp(u_hollow, 0.0, 1.0);
+  float bar = open > 0.0 ? 0.03 + 0.5 * (1.0 - open) * (1.0 - open) : 0.0;
+  int fold = STAR_FOLD[kind];
+  if (fold == 1) {
+    q = abs(q);
+    if (q.x < q.y) q.xy = q.yx;
+    if (q.y < q.z) q.yz = q.zy;
+    if (q.x < q.y) q.xy = q.yx;
+  } else if (fold == 2) {
+    /* The icosahedron's mirrors (the usual fold), into the part between its 2-, 5- and 3-fold axes. */
+    const vec3 NC = vec3(-0.5, -0.80901699, 0.30901699);
+    for (int i = 0; i < 5; i++) {
+      q.xy = abs(q.xy);
+      q -= 2.0 * min(0.0, dot(q, NC)) * NC;
+    }
+  }
+  float solid = 1e9;
+  float edge = 1e9;
+  float core = -1e9;
+  for (int e = 0; e < 4; e++) {
+    if (e >= STAR_COUNT[kind]) break;
+    int at = STAR_START[kind] + e;
+    vec3 n = STAR_N[at];
+    vec3 corner = STAR_CORNER[at];
+    float sector = 2.0 * PI / STAR_SIDES[at];
+    float cosA = dot(n, corner);
+    float r = V * cosA;
+    float rho = V * sqrt(max(1.0 - cosA * cosA, 0.0));
+    vec3 u = normalize(corner - n * cosA);
+    vec3 v = cross(n, u);
+    float tip = mix(r, 1.25, reach);
+    float rise = tip - r;
+    float h = dot(q, n);
+    /* Across the face, turned so the nearest corner is on the first axis, and mirrored to its one side. */
+    vec2 w = vec2(dot(q, u), dot(q, v));
+    float turn = sector * floor(atan(w.y, w.x) / sector + 0.5);
+    float c = cos(turn);
+    float s = sin(turn);
+    w = vec2(c * w.x + s * w.y, abs(c * w.y - s * w.x));
+    vec2 sideDir = vec2(cos(sector * 0.5), sin(sector * 0.5));
+    float ap = rho * sideDir.x;
+    float side = (rise * dot(w, sideDir) + ap * (h - tip)) / sqrt(rise * rise + ap * ap);
+    float half_ = rise * 0.5;
+    float ball = length(q - n * (r + half_)) - sqrt(half_ * half_ + rho * rho);
+    solid = min(solid, max(max(side, r - h), ball));
+    core = max(core, h - r);
+    if (bar > 0.0) {
+      vec3 lp = vec3(w, h);
+      vec3 p0 = vec3(rho, 0.0, r);
+      float grow = smoothstep(0.0, 0.08, rise);
+      if (grow > 0.0) edge = min(edge, segment(lp, p0, vec3(0.0, 0.0, tip)) - bar * grow);
+      if (grow < 1.0) edge = min(edge, segment(lp, p0, vec3(rho * cos(sector), rho * sin(sector), r)) - bar * (1.0 - grow));
+    }
+  }
+  solid = min(solid, core);
+  return bar > 0.0 ? max(solid, edge) : solid;
+}
+/**
+ * The Moravian star: Points picks the core (4, 6, 8, 12, 14, 20, 26, 32);
+ * a count between two of them mixes the two shapes' distances, so the
+ * shape morphs from one to the next as Points moves.
+ */
+float stellated(vec3 q) {
+  const float COUNTS[8] = float[8](4.0, 6.0, 8.0, 12.0, 14.0, 20.0, 26.0, 32.0);
+  float c = clamp(u_points, 4.0, 32.0);
+  int i = 0;
+  for (int j = 1; j < 8; j++) if (c >= COUNTS[j]) i = j;
+  float next = i < 7 ? smoothstep(0.0, 1.0, (c - COUNTS[i]) / (COUNTS[min(i + 1, 7)] - COUNTS[i])) : 0.0;
+  float d = 0.0;
+  for (int m = 0; m < 2; m++) {
+    float weight = m == 0 ? 1.0 - next : next;
+    if (weight < 0.001) continue;
+    d += weight * starKind(q, i + m);
+  }
+  return d;
 }
 
 /**
@@ -5134,7 +5210,7 @@ float unitShape(vec3 q) {
   if (u_shape == 4) return wobbly(q);
   if (u_shape == 5) return star(q);
   if (u_shape == 9) return menger(q);
-  if (u_shape == 10) return moravian(q);
+  if (u_shape == 10) return stellated(q);
   return flatShape(q) * 0.7;
 }
 

@@ -21,7 +21,7 @@ export const PARAM_KEYS = [
   "particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost", "particleRingRadius",
   "cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead",
   "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY",
-  "solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidFrost", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY",
+  "solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidPoints", "solidPointLength", "solidHollow", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidFrost", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY",
   "raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY",
   "laserAmount", "laserOpacity", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY",
   "outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineInner", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineX", "outlineY",
@@ -857,6 +857,14 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   solidSpikeCount: { label: "Spikes", min: 4, max: 32, step: 1, value: 12, drift: "wave", low: 8, high: 20, on: false },
   solidLevels: { label: "Levels", min: 1, max: 5, step: 1, value: 3, drift: "wave", low: 2, high: 4, on: false },
   solidSpikeTip: { label: "Spike shape", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 1, on: false },
+  /**
+   * Moravian star: how many points (4, 6, 8, 12, 14, 20, 26 or 32; a count
+   * between two of them morphs between the two shapes), how far out they
+   * reach, and how hollow it is (0 solid, 1 a frame of thin bars).
+   */
+  solidPoints: { label: "Points", min: 4, max: 32, step: 1, value: 26, drift: "wave", low: 8, high: 26, on: false },
+  solidPointLength: { label: "Point length", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.3, high: 0.9, on: false },
+  solidHollow: { label: "Hollow", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.4, high: 1, on: false },
   solidSpin: { label: "Spin", min: -60, max: 60, step: 0.1, value: 6, unit: " rpm", drift: "wave", low: 3, high: 12, on: false },
   solidTumble: { label: "Tumble", min: -60, max: 60, step: 0.1, value: 0, unit: " rpm", drift: "wave", low: -3, high: 3, on: false },
   solidTilt: { label: "Tilt", min: -90, max: 90, step: 1, value: 20, unit: "°", drift: "wave", low: -30, high: 30, on: false },
@@ -1588,7 +1596,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   terrain: ["cameraAmount", "cameraHeight", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth", "cameraTerrainScale", "cameraRoughness", "cameraRidges", "cameraSeed", "cameraDetail", "cameraDetailSize"],
   /** Camera shares its camera with Terrain (see SPECS). */
   camera: ["viewAmount", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraFog", "cameraSky"],
-  solid: ["solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidFrost", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY"],
+  solid: ["solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidPoints", "solidPointLength", "solidHollow", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidFrost", "solidTiles", "solidLight", "solidShading", "solidShine", "solidShadow", "solidX", "solidY"],
   sort: ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"],
   particles: ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost", "particleRingRadius"],
   cycles: ["cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead", "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY"],
@@ -2026,4 +2034,8 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("colorTurn", rand(-180, 180), rand(0, 30));
   set("colorX", Math.random() < 0.5 ? 0 : rand(-0.3, 0.3), rand(0.05, 0.2));
   set("colorY", Math.random() < 0.5 ? 0 : rand(-0.25, 0.25), rand(0.05, 0.2));
+  /* Last, so the Moravian star's settings (2026-11-06) do not change the random picks above. */
+  set("solidPoints", [4, 6, 8, 12, 14, 20, 26, 32][Math.floor(Math.random() * 8)], rand(0, 2));
+  set("solidPointLength", rand(0.3, 0.9), rand(0, 0.2));
+  set("solidHollow", Math.random() < 0.6 ? 0 : rand(0.5, 1), rand(0, 0.2));
 }

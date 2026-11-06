@@ -623,6 +623,10 @@ export interface FrameValues {
   solidSpikeTip: number;
   /** How many spikes the star has (4 to 32). */
   solidSpikeCount: number;
+  /** The Moravian star's points (4 to 32, morphing between the shapes it has), their length (0 to 1), and how hollow it is (0 to 1). */
+  solidPoints: number;
+  solidPointLength: number;
+  solidHollow: number;
   /** The Menger sponge's levels of holes (1 to 5). */
   solidLevels: number;
   /** Animation seconds: the blobs drift and the bumps flow with it. */
@@ -2343,6 +2347,9 @@ export class KaleidoRenderer {
     gl.uniform1f(s.uniforms.u_spikes, v.solidSpikes);
     gl.uniform1f(s.uniforms.u_spikeTip, v.solidSpikeTip);
     gl.uniform1f(s.uniforms.u_spikeCount, v.solidSpikeCount);
+    gl.uniform1f(s.uniforms.u_points, v.solidPoints);
+    gl.uniform1f(s.uniforms.u_pointLength, v.solidPointLength);
+    gl.uniform1f(s.uniforms.u_hollow, v.solidHollow);
     gl.uniform1f(s.uniforms.u_levels, v.solidLevels);
     gl.uniform1f(s.uniforms.u_time, v.solidTime);
     const [cs, ss] = [Math.cos(v.solidSpin), Math.sin(v.solidSpin)];
