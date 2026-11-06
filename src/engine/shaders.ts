@@ -4975,11 +4975,27 @@ float star(vec3 q) {
   return d * 0.8;
 }
 
-/* The distance from p to the segment from a to b. */
-float segment(vec3 p, vec3 a, vec3 b) {
-  vec3 ab = b - a;
-  vec3 ap = p - a;
-  return length(ap - ab * clamp(dot(ap, ab) / dot(ab, ab), 0.0, 1.0));
+/**
+ * A bar from a to b with a triangle for its cross-section (sides 2 × size),
+ * one flat side facing out (away from the middle of the shape) and its
+ * point facing in. Each end goes on past a and b by half the size, so the
+ * bars that meet at a corner close the joint.
+ */
+float triangleBar(vec3 p, vec3 a, vec3 b, float size) {
+  vec3 e = b - a;
+  float len = length(e);
+  e /= len;
+  vec3 m = (a + b) * 0.5;
+  vec3 out_ = normalize(m - e * dot(m, e));
+  vec3 d = p - m;
+  float along = abs(dot(d, e)) - len * 0.5 - size * 0.5;
+  /* The equilateral triangle (the usual exact distance), its point toward -out_. */
+  const float K = 1.7320508;
+  vec2 c = vec2(abs(dot(d, cross(e, out_))) - size, size / K - dot(d, out_));
+  if (c.x + K * c.y > 0.0) c = vec2(c.x - K * c.y, -K * c.x - c.y) * 0.5;
+  c.x -= clamp(c.x, -2.0 * size, 0.0);
+  float across = -length(c) * sign(c.y);
+  return length(max(vec2(across, along), 0.0)) + min(max(across, along), 0.0);
 }
 /**
  * The Moravian star's eight cores, each with a pyramid (a point) on every
@@ -5019,12 +5035,13 @@ const int STAR_FOLD[8] = int[8](0, 1, 1, 2, 1, 2, 1, 2);
  * are found by turning to the nearest corner around its middle (a regular
  * polygon repeats every 1 / sides of a turn).
  *
- * Hollow keeps only bars along the edges: round bars along each point's
+ * Hollow keeps only bars along the edges: triangle bars (flat side out, see
+ * triangleBar) along each point's
  * side edges and around its foot (the core's edges, which brace the points
  * to each other). Each edge is one bar, shared by the faces that meet
  * there. Low Hollow cuts the thick bars by the solid shape grown by
  * 2 × bar × Hollow², so the shape opens smoothly from solid; at high Hollow
- * the bars are fully round. The bars thin from 0.53
+ * the bars keep their whole triangle. The bars thin from 0.53
  * at Hollow 0 (they fill the shape) to 0.03 at 1. This runs once in the
  * code (a loop over the rows), so the Direct3D compiler stays quick.
  */
@@ -5081,8 +5098,8 @@ float starKind(vec3 q, int kind) {
       vec3 lp = vec3(w, h);
       vec3 p0 = vec3(rho, 0.0, r);
       float grow = smoothstep(0.0, 0.08, rise);
-      if (grow > 0.0) edge = min(edge, segment(lp, p0, vec3(0.0, 0.0, tip)) - bar * grow);
-      edge = min(edge, segment(lp, p0, vec3(rho * cos(sector), rho * sin(sector), r)) - bar);
+      if (grow > 0.0) edge = min(edge, triangleBar(lp, p0, vec3(0.0, 0.0, tip), bar * grow));
+      edge = min(edge, triangleBar(lp, p0, vec3(rho * cos(sector), rho * sin(sector), r), bar));
     }
   }
   solid = min(solid, core);
