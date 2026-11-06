@@ -5021,8 +5021,10 @@ const int STAR_FOLD[8] = int[8](0, 1, 1, 2, 1, 2, 1, 2);
  *
  * Hollow keeps only bars along the edges: round bars along each point's
  * side edges and around its foot (the core's edges, which brace the points
- * to each other), cut flat by the solid shape, so their outer sides are
- * the faces. The bars thin from 0.53
+ * to each other). Each edge is one bar, shared by the faces that meet
+ * there. Low Hollow cuts the thick bars by the solid shape grown by
+ * 2 × bar × Hollow², so the shape opens smoothly from solid; at high Hollow
+ * the bars are fully round. The bars thin from 0.53
  * at Hollow 0 (they fill the shape) to 0.03 at 1. This runs once in the
  * code (a loop over the rows), so the Direct3D compiler stays quick.
  */
@@ -5084,7 +5086,7 @@ float starKind(vec3 q, int kind) {
     }
   }
   solid = min(solid, core);
-  return bar > 0.0 ? max(solid, edge) : solid;
+  return bar > 0.0 ? max(solid - 2.0 * bar * open * open, edge) : solid;
 }
 /**
  * The Moravian star: Points picks the core (4, 6, 8, 12, 14, 20, 26, 32);
