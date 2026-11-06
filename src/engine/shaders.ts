@@ -5019,9 +5019,10 @@ const int STAR_FOLD[8] = int[8](0, 1, 1, 2, 1, 2, 1, 2);
  * are found by turning to the nearest corner around its middle (a regular
  * polygon repeats every 1 / sides of a turn).
  *
- * Hollow keeps only bars along the edges: round bars around each point's
- * side edges (the base edges while the points are short), cut flat by the
- * solid shape, so their outer sides are the faces. The bars thin from 0.53
+ * Hollow keeps only bars along the edges: round bars along each point's
+ * side edges and around its foot (the core's edges, which brace the points
+ * to each other), cut flat by the solid shape, so their outer sides are
+ * the faces. The bars thin from 0.53
  * at Hollow 0 (they fill the shape) to 0.03 at 1. This runs once in the
  * code (a loop over the rows), so the Direct3D compiler stays quick.
  */
@@ -5079,7 +5080,7 @@ float starKind(vec3 q, int kind) {
       vec3 p0 = vec3(rho, 0.0, r);
       float grow = smoothstep(0.0, 0.08, rise);
       if (grow > 0.0) edge = min(edge, segment(lp, p0, vec3(0.0, 0.0, tip)) - bar * grow);
-      if (grow < 1.0) edge = min(edge, segment(lp, p0, vec3(rho * cos(sector), rho * sin(sector), r)) - bar * (1.0 - grow));
+      edge = min(edge, segment(lp, p0, vec3(rho * cos(sector), rho * sin(sector), r)) - bar);
     }
   }
   solid = min(solid, core);
