@@ -5091,8 +5091,14 @@ vec3 normalAt(vec3 p, float e) {
   return normalize(k.xyy * scene(p + k.xyy * e) + k.yyx * scene(p + k.yyx * e) + k.yxy * scene(p + k.yxy * e) + k.xxx * scene(p + k.xxx * e));
 }
 
-/* A read of the picture at a place of the surface, with Tiles and the mirrored fold. */
-vec3 readAt(vec2 uv) { return straight(texture(u_tex, fold(uv * u_tiles))); }
+/**
+ * A read of the picture at a place of the surface, with Tiles and the
+ * mirrored fold. Every read of u_tex here is textureLod at level 0 (the
+ * picture has no smaller levels, so it is the same color): a plain texture()
+ * after the ray's loop makes the Windows (Direct3D) shader compiler copy out
+ * the whole loop, which made the Star about 7 times slower.
+ */
+vec3 readAt(vec2 uv) { return straight(textureLod(u_tex, fold(uv * u_tiles), 0.0)); }
 
 /* The picture lying flat on a face with this outward direction, across the face. */
 vec2 onFace(vec3 q, vec3 axis) {
@@ -5253,15 +5259,15 @@ void main() {
           for (int k = 0; k < 16; k++) {
             float angle = float(k) * 2.39996323 + spin;
             vec2 tap = vec2(cos(angle), sin(angle)) * sqrt((float(k) + 0.5) / 16.0) * reach;
-            sum += straight(texture(u_tex, fold(lens + tap * vec2(1.0 / u_aspect, 1.0))));
+            sum += straight(textureLod(u_tex, fold(lens + tap * vec2(1.0 / u_aspect, 1.0)), 0.0));
           }
           color = mix(sum / 16.0, vec3(1.0), u_frost * 0.12);
         } else {
-          color = straight(texture(u_tex, fold(lens)));
+          color = straight(textureLod(u_tex, fold(lens), 0.0));
         }
       } else if (u_map == 2) {
         vec3 r = reflect(rd, n);
-        color = straight(texture(u_tex, vec2(abs(atan(r.x, -r.z)) / PI, asin(clamp(r.y, -1.0, 1.0)) / PI + 0.5)));
+        color = straight(textureLod(u_tex, vec2(abs(atan(r.x, -r.z)) / PI, asin(clamp(r.y, -1.0, 1.0)) / PI + 0.5), 0.0));
       } else {
         color = wrapAt(toShape(p), transpose(u_turn) * n);
       }
