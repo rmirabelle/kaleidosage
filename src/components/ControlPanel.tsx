@@ -1150,11 +1150,15 @@ function SolidSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =>
 }
 
 /**
- * Picking the Moravian star sets Tilt to 0, so the star starts upright
- * with a point at the top center (the user's wish, 2026-11-06); the other
- * shapes keep their lean. A drifting Tilt keeps its range's width, around 0.
+ * Picking the Moravian star sets Tilt to 0 and clears how far the shape
+ * has spun and tumbled, so the star starts upright with a point at the
+ * top center, facing as it was built (the user's wish, 2026-11-06); the
+ * other shapes keep their lean. A drifting Tilt keeps its range's width,
+ * around 0. A Tumble speed other than 0 tips the star over again as it runs.
  */
 function standStarUp(engine: Engine) {
+  engine.state.solidSpinTurns = 0;
+  engine.state.solidTumbleTurns = 0;
   const tilt = engine.params.solidTilt;
   tilt.value = 0;
   if (tilt.low !== undefined && tilt.high !== undefined) {
