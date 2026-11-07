@@ -195,11 +195,17 @@ export function barSize(hollow: number, largest: number) {
 interface Tri {
   at: [number, number, number];
   widths: [number, number, number];
+  /** The direction of the point this triangle belongs to (for Wrap: Points). */
+  axis: V3;
 }
+
+/** Numbers per corner of a mesh triangle: its place, its normal and its point's direction (see starMesh and flatMesh). */
+export const MESH_STRIDE = 9;
 
 /**
  * The star's triangles for one core: points in its unit frame, then for
- * each triangle its position and normal (6 numbers per corner, 3 corners).
+ * each corner of each triangle its place, normal and point's direction
+ * (MESH_STRIDE numbers per corner, 3 corners).
  */
 export function starMesh(kind: number, pointLength: number, hollow: number): Float32Array {
   const c = core(kind);
@@ -216,7 +222,7 @@ export function starMesh(kind: number, pointLength: number, hollow: number): Flo
     points.push(mul(face.normal, tip));
     const count = face.corners.length;
     for (let i = 0; i < count; i++) {
-      tris.push({ at: [face.corners[i], face.corners[(i + 1) % count], apex], widths: [0, 0, 0] });
+      tris.push({ at: [face.corners[i], face.corners[(i + 1) % count], apex], widths: [0, 0, 0], axis: face.normal });
       grows.push(grow);
     }
   }
@@ -229,7 +235,9 @@ export function starMesh(kind: number, pointLength: number, hollow: number): Flo
   const { width, thick, over } = barSize(hollow, Math.max(largest, THIN));
   tris.forEach((t, i) => { t.widths = [width, width * grows[i], width * grows[i]]; });
   const out: number[] = [];
-  const corner = (p: V3, n: V3) => out.push(p[0], p[1], p[2], n[0], n[1], n[2]);
+  /* The point the triangles being written belong to. */
+  let axis: V3 = [0, 1, 0];
+  const corner = (p: V3, n: V3) => out.push(p[0], p[1], p[2], n[0], n[1], n[2], axis[0], axis[1], axis[2]);
   const triangle = (a: V3, b: V3, d: V3, n: V3) => {
     corner(a, n);
     corner(b, n);
@@ -241,11 +249,15 @@ export function starMesh(kind: number, pointLength: number, hollow: number): Flo
   };
   const normals = tris.map((t) => unit(cross(sub(points[t.at[1]], points[t.at[0]]), sub(points[t.at[2]], points[t.at[0]]))));
   if (width <= 0) {
-    tris.forEach((t, i) => triangle(points[t.at[0]], points[t.at[1]], points[t.at[2]], normals[i]));
+    tris.forEach((t, i) => {
+      axis = t.axis;
+      triangle(points[t.at[0]], points[t.at[1]], points[t.at[2]], normals[i]);
+    });
     return new Float32Array(out);
   }
   const inner = innerPoints(points, tris, normals, thick);
   tris.forEach((t, i) => {
+    axis = t.axis;
     const n = normals[i];
     const [a, b, d] = t.at.map((index) => points[index]);
     const [ia, ib, id] = t.at.map((index) => inner[index]);

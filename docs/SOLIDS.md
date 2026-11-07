@@ -35,6 +35,12 @@ picture.
     their axis; flat faces (and Morph, as the cube) each show the whole
     picture. The picture
     is mirrored at its seam, so the seam does not show.
+    For the Moravian star a Wrap menu picks how (2026-11-07; the globe
+    pinched the picture at the top and bottom points): Globe (around the
+    upright, as before), Faces (flat on each triangle), Six sides (cast
+    from the six directions of a box, blended by the way each face looks)
+    and Points (around each point's own direction, like a small globe per
+    point; each corner of the mesh carries its point's direction).
   - **Project**: the picture stays still, facing the viewer, and the shape
     bends it like a glass lens. Bend sets how strongly.
   - **Mirror**: the shape is chrome and reflects the picture around it.

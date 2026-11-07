@@ -73,9 +73,9 @@ const meshes = new Map<number, Float32Array>();
 
 /**
  * The mesh of a flat-faced shape (1, 6, 7 or 8): for each corner of each
- * triangle its place on the sharp shape and its face's direction (6
- * numbers). Each face is cut into triangles from its middle to each edge,
- * and each of those into a grid.
+ * triangle its place on the sharp shape and its face's direction (twice,
+ * MESH_STRIDE numbers). Each face is cut into triangles from its middle
+ * to each edge, and each of those into a grid.
  */
 export function flatMesh(shape: number): Float32Array {
   const kept = meshes.get(shape);
@@ -101,7 +101,8 @@ export function flatMesh(shape: number): Float32Array {
         }
         grid.push(row);
       }
-      const put = (p: V3) => out.push(p[0], p[1], p[2], n[0], n[1], n[2]);
+      /* The face's direction stands in for the point's (MESH_STRIDE numbers per corner). */
+      const put = (p: V3) => out.push(p[0], p[1], p[2], n[0], n[1], n[2], n[0], n[1], n[2]);
       for (let i = 0; i < ROWS; i++) {
         for (let j = 0; j <= i; j++) {
           put(grid[i][j]);

@@ -3,7 +3,7 @@ import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./c
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
 import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, BUBBLE_SHADER, MASK_SHADER, OUTLINE_SHADER, OUTLINE_GLOW_SHADER, OUTLINE_LINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, SOLID_MESH_VERTEX, SOLID_MESH_SHADER, SOLID_BACK_SHADER, SOLID_SHADE_BLUR_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 import { MESH_SHAPES, flatMesh } from "./flatMesh";
-import { starKinds, starMesh } from "./starMesh";
+import { MESH_STRIDE, starKinds, starMesh } from "./starMesh";
 import { halveGrid, type TerrainData } from "./terrain";
 import type { VrEye, VrScreen, XrLayer, XrSession } from "./vr";
 
@@ -331,6 +331,8 @@ export type CyclePaint = 0 | 1 | 2 | 3;
 export type SolidShape = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 /** How the picture goes onto the 3D Object: 0 wrapped on its surface, 1 bent through it like a lens, 2 reflected in it like chrome. */
 export type SolidMap = 0 | 1 | 2;
+/** How Wrap lays the picture on the Moravian star: 0 Globe (around the upright), 1 Faces (flat on each triangle), 2 Six sides (cast from six directions, blended), 3 Points (around each point). */
+export type SolidWrap = 0 | 1 | 2 | 3;
 /** How the two images fade: 0 = crossfade, 1 = dissolve by brightness (light areas change first). */
 export type BlendMode = 0 | 1;
 /**
@@ -611,6 +613,7 @@ export interface FrameValues {
   solid: number;
   solidShape: SolidShape;
   solidMap: SolidMap;
+  solidWrap: SolidWrap;
   solidBlend: LayerBlend;
   solidBackground: number;
   solidSize: number;
@@ -2394,6 +2397,7 @@ export class KaleidoRenderer {
       gl.uniform1f(s.uniforms.u_size, Math.max(0.01, v.solidSize));
       gl.uniform2f(s.uniforms.u_view, width, height);
       gl.uniform1i(s.uniforms.u_map, v.solidMap);
+    gl.uniform1i(s.uniforms.u_wrap, v.solidWrap);
       gl.uniform1i(s.uniforms.u_blend, v.solidBlend);
       gl.uniform1f(s.uniforms.u_opacity, Math.min(1, Math.max(0, v.solid)));
       gl.uniform1f(s.uniforms.u_background, Math.min(1, Math.max(0, v.solidBackground)));
@@ -2481,9 +2485,12 @@ export class KaleidoRenderer {
       gl.bindVertexArray(vertices);
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
       gl.enableVertexAttribArray(0);
-      gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0);
+      const stride = MESH_STRIDE * 4;
+      gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride, 0);
       gl.enableVertexAttribArray(1);
-      gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+      gl.vertexAttribPointer(1, 3, gl.FLOAT, false, stride, 12);
+      gl.enableVertexAttribArray(2);
+      gl.vertexAttribPointer(2, 3, gl.FLOAT, false, stride, 24);
       gl.bindVertexArray(null);
       entry = { vertices, buffer, key: "", count: 0 };
       this.starBuffers[slot] = entry;
@@ -2493,7 +2500,7 @@ export class KaleidoRenderer {
       gl.bindBuffer(gl.ARRAY_BUFFER, entry.buffer);
       gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
       entry.key = key;
-      entry.count = data.length / 6;
+      entry.count = data.length / MESH_STRIDE;
     }
     return entry;
   }
@@ -2532,6 +2539,7 @@ export class KaleidoRenderer {
     gl.uniform1f(s.uniforms.u_pixel, 1 / height);
     gl.uniform1i(s.uniforms.u_shape, v.solidShape);
     gl.uniform1i(s.uniforms.u_map, v.solidMap);
+    gl.uniform1i(s.uniforms.u_wrap, v.solidWrap);
     gl.uniform1i(s.uniforms.u_blend, v.solidBlend);
     gl.uniform1f(s.uniforms.u_opacity, Math.min(1, Math.max(0, v.solid)));
     gl.uniform1f(s.uniforms.u_background, Math.min(1, Math.max(0, v.solidBackground)));

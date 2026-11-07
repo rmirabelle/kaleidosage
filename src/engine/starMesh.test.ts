@@ -3,9 +3,9 @@ import { STAR_COUNTS, barSize, core, starKinds, starMesh } from "./starMesh";
 
 /** Each edge of the triangles (by its two ends' places), and how many triangles have it. */
 function edgeCounts(data: Float32Array) {
-  const key = (i: number) => [0, 1, 2].map((k) => Math.round(data[i * 6 + k] * 1e4)).join(",");
+  const key = (i: number) => [0, 1, 2].map((k) => Math.round(data[i * 9 + k] * 1e4)).join(",");
   const counts = new Map<string, number>();
-  for (let t = 0; t < data.length / 18; t++) {
+  for (let t = 0; t < data.length / 27; t++) {
     for (let side = 0; side < 3; side++) {
       const a = key(t * 3 + side);
       const b = key(t * 3 + (side + 1) % 3);
@@ -64,7 +64,7 @@ describe("Moravian star mesh", () => {
   it("stays inside the tips' reach", () => {
     for (let kind = 0; kind < 8; kind++) {
       const data = starMesh(kind, 1, 1);
-      for (let i = 0; i < data.length; i += 6) expect(Math.hypot(data[i], data[i + 1], data[i + 2])).toBeLessThanOrEqual(1.25 + 1e-5);
+      for (let i = 0; i < data.length; i += 9) expect(Math.hypot(data[i], data[i + 1], data[i + 2])).toBeLessThanOrEqual(1.25 + 1e-5);
     }
   });
 

@@ -4839,7 +4839,14 @@ vec2 onFace(vec3 q, vec3 axis) {
  * wobbly ball, the spike ball and the Moravian star take the ball's map:
  * around and up.
  */
+#ifdef STAR_WRAPS
+/* The Moravian star's Wrap choices other than Globe, in the mesh shader (see starWrap there). */
+vec3 starWrap(vec3 q, vec3 n);
+#endif
 vec3 wrapAt(vec3 q, vec3 n) {
+#ifdef STAR_WRAPS
+  if (u_shape == 10 && u_wrap != 0) return starWrap(q, n);
+#endif
   float around = atan(q.z, q.x) / (2.0 * PI) + 0.5;
   if (u_shape == 0 || u_shape == 3 || u_shape == 4 || u_shape == 5 || u_shape == 10) {
     vec3 d = normalize(q);
@@ -5346,6 +5353,8 @@ void main() {
 export const SOLID_MESH_VERTEX = `#version 300 es
 layout(location = 0) in vec3 a_pos;
 layout(location = 1) in vec3 a_normal;
+/* The direction of the point the triangle belongs to (the Moravian star; a flat shape's face). */
+layout(location = 2) in vec3 a_axis;
 uniform mat3 u_turn;
 uniform vec2 u_center;
 uniform float u_size;
@@ -5357,6 +5366,7 @@ uniform float u_round;
 out vec3 v_world;
 out vec3 v_normal;
 out vec3 v_shape;
+flat out vec3 v_axis;
 const float EYE = 3.0;
 const float WALL = 0.9;
 const float NEAR = 0.1;
@@ -5423,6 +5433,7 @@ void main() {
   v_world = world;
   v_normal = u_turn * facing;
   v_shape = shape;
+  v_axis = a_axis;
   if (u_pass == 1) {
     vec3 wall = world - u_light * ((world.z + WALL * scale) / u_light.z);
     gl_Position = vec4(wall.x / (0.5 * u_aspect), wall.y / 0.5, 0.0, 1.0);
@@ -5518,9 +5529,12 @@ precision highp int;
 in vec3 v_world;
 in vec3 v_normal;
 in vec3 v_shape;
+flat in vec3 v_axis;
 out vec4 o;
 uniform sampler2D u_tex;
 uniform vec2 u_view;
+/* The Moravian star's Wrap: 0 Globe, 1 Faces, 2 Six sides, 3 Points (see starWrap). */
+uniform int u_wrap;
 uniform int u_pass;
 uniform int u_shape;
 uniform float u_round;
@@ -5550,7 +5564,35 @@ vec3 blendLayer(vec3 base, vec3 top, int mode) {
 vec2 fold(vec2 uv) { return 1.0 - abs(1.0 - 2.0 * fract(uv * 0.5)); }
 float radius() { return u_round * 0.6; }
 ${SOLID_PLANES_GLSL}
+#define STAR_WRAPS
 ${SOLID_WRAP_GLSL}
+/**
+ * The Moravian star's Wrap choices (the user's wish, 2026-11-07: Globe
+ * pinched the picture at the top and bottom points). n is the face's
+ * direction in the star's frame. Faces: the picture lies flat on each
+ * triangle. Six sides: cast from the six directions of a box and blended
+ * by how much the face looks each way. Points: around each point's own
+ * direction, like a small globe per point: around it, and down from its tip.
+ */
+vec3 starWrap(vec3 q, vec3 n) {
+  if (u_wrap == 1) return readAt(onFace(q, n));
+  if (u_wrap == 2) {
+    vec3 w = pow(abs(n), vec3(4.0));
+    w /= w.x + w.y + w.z;
+    vec3 color = vec3(0.0);
+    if (w.x > 0.01) color += w.x * readAt(onFace(q, vec3(sign(n.x), 0.0, 0.0)));
+    if (w.y > 0.01) color += w.y * readAt(onFace(q, vec3(0.0, sign(n.y), 0.0)));
+    if (w.z > 0.01) color += w.z * readAt(onFace(q, vec3(0.0, 0.0, sign(n.z))));
+    return color / max(dot(w, step(0.01, w)), 1e-4);
+  }
+  vec3 axis = normalize(v_axis);
+  vec3 t1 = normalize(cross(abs(axis.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), axis));
+  vec3 t2 = cross(axis, t1);
+  vec3 d = normalize(q);
+  float around = atan(dot(d, t2), dot(d, t1)) / (2.0 * PI) + 0.5;
+  float down = acos(clamp(dot(d, axis), -1.0, 1.0)) / (0.25 * PI);
+  return readAt(vec2(around * 2.0, down));
+}
 ${SOLID_PAINT_GLSL}
 void main() {
   if (u_pass == 1) {
