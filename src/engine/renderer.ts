@@ -333,8 +333,8 @@ export type SolidShape = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 export type SolidMap = 0 | 1 | 2;
 /** How Wrap lays the picture on the Moravian star: 0 Globe (around the upright), 1 Faces (flat on each triangle), 2 Six sides (cast from six directions, blended), 3 Points (around each point). */
 export type SolidWrap = 0 | 1 | 2 | 3;
-/** What paints the 3D Object: 0 the picture made so far, 1 its own image or video (see setSolidMedia). */
-export type SolidPaint = 0 | 1;
+/** What paints the 3D Object: 0 the picture made so far, 1 its own image or video (see setSolidMedia), 2 Source B (the scene's second image or video). */
+export type SolidPaint = 0 | 1 | 2;
 /** How the two images fade: 0 = crossfade, 1 = dissolve by brightness (light areas change first). */
 export type BlendMode = 0 | 1;
 /**
@@ -2342,8 +2342,8 @@ export class KaleidoRenderer {
    * place, see render).
    */
   private drawSolid(v: FrameValues, picture: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture) {
-    /* Paint: Image or Video puts the 3D Object's own file on it in place of the picture (until its first frame comes, the picture). */
-    const source = (v.solidPaint === 1 ? this.solidMediaFrame() : null) ?? picture;
+    /* Paint: Image or Video puts the 3D Object's own file on it in place of the picture (until its first frame comes, the picture); Source B, the scene's second image (the engine sends Picture while there is none). */
+    const source = v.solidPaint === 2 ? this.imageTextures[1] : (v.solidPaint === 1 ? this.solidMediaFrame() : null) ?? picture;
     if (MESH_SHAPES.has(v.solidShape)) {
       this.drawMesh(v, source, target, width, height, back);
       return;

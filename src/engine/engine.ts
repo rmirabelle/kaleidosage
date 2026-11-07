@@ -1600,7 +1600,8 @@ export class Engine {
       solidShape: this.state.solidShape,
       solidMap: this.state.solidMap,
       solidWrap: this.state.solidWrap,
-      solidPaint: this.state.solidPaint,
+      /* Source B with no second image paints with the picture. */
+      solidPaint: this.state.solidPaint === 2 && !this.hasSecondImage ? 0 : this.state.solidPaint,
       solidBlend: this.state.solidBlend,
       solidBackground: this.live("solidBackground"),
       solidSize: this.live("solidSize"),

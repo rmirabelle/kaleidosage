@@ -51,7 +51,9 @@ picture.
   or Video effect's does. The scene file keeps the file while the 3D Object
   is in the list and paints with it (a video embedded like a source
   video: scene_archive.rs names the slot solidMedia). Until the file has
-  a frame, the picture paints the shape.
+  a frame, the picture paints the shape. Source B (2026-11-07) paints it
+  with the scene's second image or video (Source B in the Scene panel);
+  with no Source B loaded, the picture paints it.
 - **Blend**: the 8 layer blends of the other effects, for how the shape
   goes over the picture behind it.
 
