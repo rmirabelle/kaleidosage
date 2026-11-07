@@ -22,17 +22,14 @@ describe("Moravian star mesh", () => {
     expect(STAR_COUNTS.map((_, kind) => core(kind).faces.length)).toEqual([...STAR_COUNTS]);
   });
 
-  it("turns each core as the ray-marched star does (SOLID_SHADER's STAR_N)", () => {
+  it("stands each core with a point straight up", () => {
     const has = (kind: number, n: number[]) => core(kind).faces.some((face) => face.normal.every((x, k) => Math.abs(x - n[k]) < 1e-5));
-    const a = 0.5773503;
-    expect(has(0, [-a, -a, -a])).toBe(true);
-    expect(has(1, [1, 0, 0])).toBe(true);
-    expect(has(2, [a, a, a])).toBe(true);
-    expect(has(3, [0.5257311, 0, 0.8506508])).toBe(true);
-    expect(has(4, [0.7071068, 0.7071068, 0]) || has(4, [1, 0, 0])).toBe(true);
-    expect(has(5, [0, 0.3568221, 0.9341724])).toBe(true);
-    expect(has(6, [0.7071068, 0.7071068, 0]) && has(6, [a, a, a])).toBe(true);
-    expect(has(7, [0.5257311, 0, 0.8506508]) && has(7, [0, 0.3568221, 0.9341724])).toBe(true);
+    for (let kind = 0; kind < 8; kind++) expect(has(kind, [0, 1, 0])).toBe(true);
+    /* The Merkaba: a point down too, and a lower point toward the viewer. */
+    expect(has(2, [0, -1, 0])).toBe(true);
+    expect(has(2, [0, -1 / 3, Math.sqrt(8) / 3])).toBe(true);
+    /* The paper star hangs from a square's point. */
+    expect(core(6).faces.find((face) => face.normal[1] > 0.9999)?.corners.length).toBe(4);
   });
 
   it("is closed when solid: every edge belongs to two triangles", () => {

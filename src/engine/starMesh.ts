@@ -115,13 +115,54 @@ export function hull(points: V3[]): CoreFace[] {
   return faces;
 }
 
+/**
+ * The turn that stands a core up: one point straight up (a face with the
+ * most sides, so the 26-point star hangs from a square's point, as paper
+ * stars do), and turned about the upright so the most level of the other
+ * points (the lower one, if two are as level) faces the viewer. So the
+ * 8-point star (the Merkaba) shows a point up, a point down, and a lower
+ * point toward the viewer. Returns the turn as a function.
+ */
+function standUp(faces: CoreFace[]): (p: V3) => V3 {
+  const most = Math.max(...faces.map((face) => face.corners.length));
+  const up = faces.filter((face) => face.corners.length === most).reduce((best, face) => (face.normal[1] > best.normal[1] + 1e-9 ? face : best)).normal;
+  /* The turn about the axis across up and y that takes up to y (Rodrigues' formula). */
+  const y: V3 = [0, 1, 0];
+  const axis = cross(up, y);
+  const sine = length(axis);
+  const cosine = dot(up, y);
+  const tilt = (p: V3): V3 => {
+    if (sine < 1e-9) return cosine > 0 ? p : [p[0], -p[1], -p[2]];
+    const k = mul(axis, 1 / sine);
+    return add(add(mul(p, cosine), mul(cross(k, p), sine)), mul(k, dot(k, p) * (1 - cosine)));
+  };
+  const sides = faces.map((face) => tilt(face.normal)).filter((n) => Math.abs(n[1]) < 0.999);
+  const front = sides.reduce((best, n) => {
+    const level = Math.abs(n[1]) - Math.abs(best[1]);
+    if (level < -1e-6) return n;
+    if (level > 1e-6) return best;
+    if (n[1] < best[1] - 1e-6) return n;
+    if (n[1] > best[1] + 1e-6) return best;
+    return n[2] > best[2] ? n : best;
+  });
+  const angle = Math.atan2(front[0], front[2]);
+  const [c, s] = [Math.cos(angle), Math.sin(angle)];
+  /* About y, by the front's angle from +z, so it ends at +z. */
+  return (p: V3) => {
+    const q = tilt(p);
+    return [c * q[0] - s * q[2], q[1], s * q[0] + c * q[2]];
+  };
+}
+
 const cores: Core[] = [];
-/** The core for a kind (0 to 7), with its corners CORNER from the middle. */
+/** The core for a kind (0 to 7), with its corners CORNER from the middle, stood up (see standUp). */
 export function core(kind: number): Core {
   if (!cores[kind]) {
     /* The orders of a point with equal coordinates repeat it: keep each corner once. */
     const unique = new Map(coreCorners(kind).map((p) => [p.map((x) => Math.round(x * 1e6)).join(","), p]));
-    const points = [...unique.values()].map((p) => mul(unit(p), CORNER));
+    const plain = [...unique.values()].map((p) => mul(unit(p), CORNER));
+    const turn = standUp(hull(plain));
+    const points = plain.map(turn);
     cores[kind] = { points, faces: hull(points) };
   }
   return cores[kind];
