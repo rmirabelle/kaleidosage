@@ -1140,29 +1140,9 @@ function SolidSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =>
     <>
       <ModeSelect engine={engine} stateKey="solidShape" options={SOLID_SHAPES} name="Shape" onChange={setShape} />
       <ModeSelect engine={engine} stateKey="solidMap" options={SOLID_MAPS} name="Map" onChange={setMap} />
-      <EdgesTest engine={engine} />
       <KeepBackground engine={engine} />
       <SplitRows keys={SOLID_KEYS.filter(shown)} row={row} blend={<ModeSelect engine={engine} stateKey="solidBlend" options={LAYER_BLENDS} name="Blend" />} />
     </>
-  );
-}
-
-/** A test switch (not saved) to compare ways to smooth the 3D Object's edges: one ray, one ray and an edge filter, more rays at creases. */
-const EDGE_TESTS = [[0, "Off"], [1, "Filter"], [2, "More rays"]] as const;
-function EdgesTest({ engine }: { engine: Engine }) {
-  const [edges, setEdges] = useState(engine.solidEdges);
-  return (
-    <div className="panel-select-row panel-select-named">
-      <span className="panel-row-name">Edges</span>
-      <Dropdown
-        value={edges}
-        options={EDGE_TESTS}
-        onChange={(next) => {
-          engine.solidEdges = next;
-          setEdges(next);
-        }}
-      />
-    </div>
   );
 }
 

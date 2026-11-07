@@ -4853,12 +4853,6 @@ uniform float u_spikeTip;
 uniform float u_spikeCount;
 /* The Menger sponge's levels of holes (1 to 5; between two whole numbers the next level's holes grow). */
 uniform float u_levels;
-/* The Moravian star: how many points (4 to 32), how long, and how hollow (see stellated). */
-uniform float u_points;
-uniform float u_pointLength;
-uniform float u_hollow;
-/* 1: a pixel on a crease takes more rays (see main); 0: one ray (Edges Off or Filter, a test switch). */
-uniform int u_extra;
 uniform float u_time;
 /* From the shape's own frame to the view. */
 uniform mat3 u_turn;
@@ -5022,141 +5016,6 @@ float star(vec3 q) {
   return d * 0.8;
 }
 
-/* The distance from p to the segment from a to b. */
-float segment(vec3 p, vec3 a, vec3 b) {
-  vec3 ab = b - a;
-  vec3 ap = p - a;
-  return length(ap - ab * clamp(dot(ap, ab) / dot(ab, ab), 0.0, 1.0));
-}
-/**
- * The Moravian star's eight cores, each with a pyramid (a point) on every
- * face: 4 the tetrahedron, 6 the cube, 8 the octahedron (the Merkaba), 12
- * the dodecahedron, 14 the cuboctahedron, 20 the icosahedron, 26 the
- * rhombicuboctahedron (the paper Moravian star), 32 the icosidodecahedron.
- * Each kind of face is one row: its outward direction (STAR_N), the
- * direction of one of its corners (STAR_CORNER) and its number of sides.
- * The shape repeats in mirror-image parts of space, so after the fold (see
- * starKind) only one face of each kind is worked out; the tetrahedron has
- * no such fold and works out all 4 faces.
- */
-const vec3 STAR_N[15] = vec3[15](
-  vec3(-0.5773503), vec3(-0.5773503, 0.5773503, 0.5773503), vec3(0.5773503, -0.5773503, 0.5773503), vec3(0.5773503, 0.5773503, -0.5773503),
-  vec3(1.0, 0.0, 0.0), vec3(0.5773503), vec3(0.5257311, 0.0, 0.8506508),
-  vec3(1.0, 0.0, 0.0), vec3(0.5773503), vec3(0.0, 0.3568221, 0.9341724),
-  vec3(1.0, 0.0, 0.0), vec3(0.7071068, 0.7071068, 0.0), vec3(0.5773503),
-  vec3(0.5257311, 0.0, 0.8506508), vec3(0.0, 0.3568221, 0.9341724));
-const vec3 STAR_CORNER[15] = vec3[15](
-  vec3(0.5773503, -0.5773503, -0.5773503), vec3(0.5773503), vec3(0.5773503), vec3(0.5773503),
-  vec3(0.5773503), vec3(1.0, 0.0, 0.0), vec3(0.0, 0.3568221, 0.9341724),
-  vec3(0.7071068, 0.7071068, 0.0), vec3(0.7071068, 0.7071068, 0.0), vec3(0.5257311, 0.0, 0.8506508),
-  vec3(0.8628562, 0.3574067, 0.3574067), vec3(0.8628562, 0.3574067, 0.3574067), vec3(0.8628562, 0.3574067, 0.3574067),
-  vec3(0.0, 0.0, 1.0), vec3(0.0, 0.0, 1.0));
-const float STAR_SIDES[15] = float[15](3.0, 3.0, 3.0, 3.0, 4.0, 3.0, 5.0, 4.0, 3.0, 3.0, 4.0, 4.0, 3.0, 5.0, 3.0);
-/* For each of the 8 cores: its first row, how many rows, and its fold (0 none, 1 the cube's, 2 the icosahedron's). */
-const int STAR_START[8] = int[8](0, 4, 5, 6, 7, 9, 10, 13);
-const int STAR_COUNT[8] = int[8](4, 1, 1, 1, 2, 1, 3, 2);
-const int STAR_FOLD[8] = int[8](0, 1, 1, 2, 1, 2, 1, 2);
-
-/**
- * One core of the Moravian star with its points. Every core has its corners
- * 0.5 from the middle; Point length 0 leaves the bare core, 1 puts the tips
- * 1.25 out (Points 8 at 0.6 is the exact Merkaba, two tetrahedra). A point
- * is the largest of its planes' distances, with the distance to a ball
- * around it so the walk is not slow past the tip. The face's own corners
- * are found by turning to the nearest corner around its middle (a regular
- * polygon repeats every 1 / sides of a turn).
- *
- * Hollow: one thin shell over the whole shape ("bar" thick, inward), with
- * a window cut in each face, leaving a strip 1.6 × bar wide along every
- * edge. The faces that meet at an edge share one folded strip, and the tips
- * stay sharp. The edges are each point's side edges and the edges around
- * its foot, inside the shape, which brace the points to each other. "bar"
- * goes from 0.53 at Hollow 0 (the shell fills the shape, no windows) to
- * 0.03 at 1. This runs once in the
- * code (a loop over the rows), so the Direct3D compiler stays quick.
- */
-float starKind(vec3 q, int kind) {
-  const float V = 0.5;
-  float reach = clamp(u_pointLength, 0.0, 1.0);
-  float open = clamp(u_hollow, 0.0, 1.0);
-  float bar = open > 0.0 ? 0.03 + 0.5 * (1.0 - open) * (1.0 - open) : 0.0;
-  int fold = STAR_FOLD[kind];
-  if (fold == 1) {
-    q = abs(q);
-    if (q.x < q.y) q.xy = q.yx;
-    if (q.y < q.z) q.yz = q.zy;
-    if (q.x < q.y) q.xy = q.yx;
-  } else if (fold == 2) {
-    /* The icosahedron's mirrors (the usual fold), into the part between its 2-, 5- and 3-fold axes. */
-    const vec3 NC = vec3(-0.5, -0.80901699, 0.30901699);
-    for (int i = 0; i < 5; i++) {
-      q.xy = abs(q.xy);
-      q -= 2.0 * min(0.0, dot(q, NC)) * NC;
-    }
-  }
-  float solid = 1e9;
-  float edge = 1e9;
-  float core = -1e9;
-  for (int e = 0; e < 4; e++) {
-    if (e >= STAR_COUNT[kind]) break;
-    int at = STAR_START[kind] + e;
-    vec3 n = STAR_N[at];
-    vec3 corner = STAR_CORNER[at];
-    float sector = 2.0 * PI / STAR_SIDES[at];
-    float cosA = dot(n, corner);
-    float r = V * cosA;
-    float rho = V * sqrt(max(1.0 - cosA * cosA, 0.0));
-    vec3 u = normalize(corner - n * cosA);
-    vec3 v = cross(n, u);
-    float tip = mix(r, 1.25, reach);
-    float rise = tip - r;
-    float h = dot(q, n);
-    /* Across the face, turned so the nearest corner is on the first axis, and mirrored to its one side. */
-    vec2 w = vec2(dot(q, u), dot(q, v));
-    float turn = sector * floor(atan(w.y, w.x) / sector + 0.5);
-    float c = cos(turn);
-    float s = sin(turn);
-    w = vec2(c * w.x + s * w.y, abs(c * w.y - s * w.x));
-    vec2 sideDir = vec2(cos(sector * 0.5), sin(sector * 0.5));
-    float ap = rho * sideDir.x;
-    float side = (rise * dot(w, sideDir) + ap * (h - tip)) / sqrt(rise * rise + ap * ap);
-    float half_ = rise * 0.5;
-    float ball = length(q - n * (r + half_)) - sqrt(half_ * half_ + rho * rho);
-    /* The ball only helps outside; inside, the planes give the true depth, which the shell needs. */
-    float piece = max(side, r - h);
-    solid = min(solid, piece > 0.0 ? max(piece, ball) : piece);
-    core = max(core, h - r);
-    if (bar > 0.0) {
-      vec3 lp = vec3(w, h);
-      vec3 p0 = vec3(rho, 0.0, r);
-      float grow = smoothstep(0.0, 0.08, rise);
-      edge = min(edge, segment(lp, p0, vec3(0.0, 0.0, tip)) + (1.0 - grow));
-      edge = min(edge, segment(lp, p0, vec3(rho * cos(sector), rho * sin(sector), r)));
-    }
-  }
-  solid = min(solid, core);
-  return bar > 0.0 ? max(max(solid, -solid - bar), edge - 1.6 * bar) : solid;
-}
-/**
- * The Moravian star: Points picks the core (4, 6, 8, 12, 14, 20, 26, 32);
- * a count between two of them mixes the two shapes' distances, so the
- * shape morphs from one to the next as Points moves.
- */
-float stellated(vec3 q) {
-  const float COUNTS[8] = float[8](4.0, 6.0, 8.0, 12.0, 14.0, 20.0, 26.0, 32.0);
-  float c = clamp(u_points, 4.0, 32.0);
-  int i = 0;
-  for (int j = 1; j < 8; j++) if (c >= COUNTS[j]) i = j;
-  float next = i < 7 ? smoothstep(0.0, 1.0, (c - COUNTS[i]) / (COUNTS[min(i + 1, 7)] - COUNTS[i])) : 0.0;
-  float d = 0.0;
-  for (int m = 0; m < 2; m++) {
-    float weight = m == 0 ? 1.0 - next : next;
-    if (weight < 0.001) continue;
-    d += weight * starKind(q, i + m);
-  }
-  return d;
-}
-
 /**
  * The Menger sponge: a cube (as large as the box) with a cross of three
  * bars of holes through it, then through each of its 20 remaining small
@@ -5262,7 +5121,6 @@ float unitShape(vec3 q) {
   if (u_shape == 4) return wobbly(q);
   if (u_shape == 5) return star(q);
   if (u_shape == 9) return menger(q);
-  if (u_shape == 10) return stellated(q);
   return flatShape(q) * 0.7;
 }
 
@@ -5317,7 +5175,7 @@ vec2 onFace(vec3 q, vec3 axis) {
  */
 vec3 wrapAt(vec3 q, vec3 n) {
   float around = atan(q.z, q.x) / (2.0 * PI) + 0.5;
-  if (u_shape == 0 || u_shape == 3 || u_shape == 4 || u_shape == 5 || u_shape == 10) {
+  if (u_shape == 0 || u_shape == 3 || u_shape == 4 || u_shape == 5) {
     vec3 d = normalize(q);
     return readAt(vec2(around * 2.0, asin(clamp(d.y, -1.0, 1.0)) / PI + 0.5));
   }
@@ -5398,30 +5256,22 @@ float castLight(vec2 screen) {
 }
 
 /**
- * One ray from the eye, from the place from on: the shape's color
- * (premultiplied by its cover) and how much of the pixel the shape covers
- * (a soft outline, half a pixel wide). edgy says the ray hit next to a
- * crease, so the pixel needs more rays. close is where the ray first came
- * within 3 pixels of the shape: a ray less than a pixel beside it can start
- * there, as nothing is in its way before.
+ * One ray from the eye: the shape's color (premultiplied by its cover) and
+ * how much of the pixel the shape covers (a soft outline, half a pixel
+ * wide).
  */
-const float CREASE = 0.1;
-vec4 shoot(vec3 eye, vec3 rd, float from, out bool edgy, out float close) {
-  edgy = false;
-  close = 0.0;
+vec4 shoot(vec3 eye, vec3 rd) {
   /* The sphere around the shape: rays that miss it miss the shape. */
   vec3 oc = eye - vec3(u_center, 0.0);
   float b = dot(oc, rd);
   float bound = 1.45 * scale();
   float h = b * b - (dot(oc, oc) - bound * bound);
   if (h <= 0.0) return vec4(0.0);
-  float t = max(max(-b - sqrt(h), 0.0), from);
+  float t = max(-b - sqrt(h), 0.0);
   float end = -b + sqrt(h);
-  close = end;
   /* The nearest the ray comes to the shape, in pixels, and where. */
   float nearest = 1e9;
   float nearestT = t;
-  float dHit = 0.0;
   bool hit = false;
   for (int i = 0; i < STEPS; i++) {
     float d = scene(eye + rd * t);
@@ -5431,10 +5281,8 @@ vec4 shoot(vec3 eye, vec3 rd, float from, out bool edgy, out float close) {
       nearest = ratio;
       nearestT = t;
     }
-    if (ratio < 3.0) close = min(close, t);
     if (d < footprint * 0.25) {
       hit = true;
-      dHit = d;
       break;
     }
     t += d;
@@ -5445,12 +5293,6 @@ vec4 shoot(vec3 eye, vec3 rd, float from, out bool edgy, out float close) {
   float at = hit ? t : nearestT;
   vec3 p = eye + rd * at;
   vec4 around = probe(p, max(u_pixel * at / EYE * 0.5, 1e-4));
-  /**
-   * A crease: on a flat surface the four samples' mean is the distance at
-   * the hit (the tetrahedron's corners sum to 0). A crease or corner less
-   * than a pixel away bends them off it, by a part of the gradient's step.
-   */
-  if (hit && abs(around.w - 4.0 * dHit) > CREASE * length(around.xyz)) edgy = true;
   vec3 n = normalize(around.xyz);
   return vec4(paint(toShape(p), n, rd, v_uv) * cover, cover);
 }
@@ -5464,77 +5306,12 @@ void main() {
 
   if (u_shadow > 0.0) base *= 1.0 - u_shadow * 0.75 * (1.0 - castLight(screen));
 
-  /**
-   * One ray through the middle of the pixel. A pixel on a crease (where
-   * the light changes at once, as on the edges of a hollow star's bars)
-   * takes four more rays (a turned grid, so no two share a row or a
-   * column), and the five are averaged, so creases do not crawl as the
-   * shape turns. More rays at the outline too cost twice as much and looked
-   * no better. The loop's end is set at run time, so the Direct3D compiler
-   * does not copy it out five times.
-   */
-  const vec2 SUB[4] = vec2[4](vec2(0.125, 0.375), vec2(-0.375, 0.125), vec2(-0.125, -0.375), vec2(0.375, -0.125));
-  vec4 sum = vec4(0.0);
-  int rays = 1;
-  float from = 0.0;
-  for (int s = 0; s < rays; s++) {
-    vec2 shift = s == 0 ? vec2(0.0) : SUB[s - 1] * u_pixel;
-    bool edgy;
-    float close;
-    sum += shoot(eye, normalize(vec3(screen + shift, 0.0) - eye), from, edgy, close);
-    if (s == 0 && edgy && u_extra == 1) {
-      rays = 5;
-      from = close;
-    }
-  }
-  sum /= float(rays);
+  vec4 sum = shoot(eye, normalize(vec3(screen, 0.0) - eye));
   vec3 color = sum.a > 0.0 ? sum.rgb / sum.a : vec3(0.0);
   float shown = sum.a * u_opacity;
   o = covered(mix(base, blendLayer(base, color, u_blend), shown), mix(picture.a, 1.0, shown));
 }`;
 
-/**
- * A test of an edge filter for the 3D Object (Edges: Filter), to compare
- * with more rays at creases. It works on the finished picture, as FXAA does:
- * where the brightness changes sharply, it reads the picture along the edge
- * and blends. Only the disk around the shape is filtered (u_center, u_radius
- * in screen heights); the rest is copied.
- */
-export const SOLID_FILTER_SHADER = `#version 300 es
-precision highp float;
-in vec2 v_uv;
-out vec4 o;
-uniform sampler2D u_tex;
-uniform vec2 u_texel;
-uniform float u_aspect;
-uniform vec2 u_center;
-uniform float u_radius;
-float luma(vec4 c) { return dot(c.rgb, vec3(0.299, 0.587, 0.114)); }
-vec4 at(vec2 uv) { return textureLod(u_tex, uv, 0.0); }
-void main() {
-  vec4 middle = at(v_uv);
-  vec2 screen = vec2((v_uv.x - 0.5) * u_aspect, v_uv.y - 0.5);
-  if (length(screen - u_center) > u_radius) {
-    o = middle;
-    return;
-  }
-  float nw = luma(at(v_uv + vec2(-1.0, 1.0) * u_texel));
-  float ne = luma(at(v_uv + vec2(1.0, 1.0) * u_texel));
-  float sw = luma(at(v_uv + vec2(-1.0, -1.0) * u_texel));
-  float se = luma(at(v_uv + vec2(1.0, -1.0) * u_texel));
-  float m = luma(middle);
-  float low = min(m, min(min(nw, ne), min(sw, se)));
-  float high = max(m, max(max(nw, ne), max(sw, se)));
-  /* The direction along the edge, from the four corners. */
-  vec2 dir = vec2(-((nw + ne) - (sw + se)), (nw + sw) - (ne + se));
-  float reduce = max((nw + ne + sw + se) * 0.25 * (1.0 / 8.0), 1.0 / 128.0);
-  float scale = 1.0 / (min(abs(dir.x), abs(dir.y)) + reduce);
-  dir = clamp(dir * scale, -8.0, 8.0) * u_texel;
-  vec4 near = 0.5 * (at(v_uv + dir * (1.0 / 3.0 - 0.5)) + at(v_uv + dir * (2.0 / 3.0 - 0.5)));
-  vec4 far = near * 0.5 + 0.25 * (at(v_uv - dir * 0.5) + at(v_uv + dir * 0.5));
-  float lf = luma(far);
-  o = lf < low || lf > high ? near : far;
-}`;
 
 /**
  * The Moravian star as a mesh (see starMesh.ts and docs/SOLIDS.md): the

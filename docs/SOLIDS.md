@@ -21,7 +21,8 @@ picture.
 ## Menus
 
 - **Shape** (presets): Sphere, Cube, Morph, Blobs, Wobbly ball, Spike ball,
-  Octahedron, Icosahedron, Pyramid, Menger sponge, Moravian star. Morph, Blobs, Wobbly ball and Spike ball (first named Star) came
+  Octahedron, Icosahedron, Pyramid, Menger sponge, Moravian star (drawn
+  as a mesh, see below). Morph, Blobs, Wobbly ball and Spike ball (first named Star) came
   on 2026-10-24 in place of the Cylinder, Cone, Torus and Capsule (no scene
   used them; the new shapes took their numbers, 2 to 5). The Moravian star
   (2026-11-06) is the paper star: a core with a flat-sided pyramid on each
@@ -121,13 +122,11 @@ so a range on them changes the speed, not the angle.
   shape, so the outline does not stair-step (one pixel wide until
   2026-11-06; half a pixel is nearer to a picture made with 16 rays per
   pixel).
-- Creases (2026-11-06): where the four normal samples show a crease or a
-  corner less than a pixel away, the pixel takes four more rays and the
-  five are averaged, so sharp edges (the Moravian star's Hollow bars) do
-  not crawl as the shape turns. The extra rays start where the first ray
-  came within 3 pixels of the shape. At 2560 x 1440 on an RTX 5090 the
-  hollow star went from about 1.8 to 3.2 ms. More rays at the outline and
-  at inner edges too cost about twice as much again and were no better.
+- Creases: tried 2026-11-06 and removed the same day. A pixel next to a
+  crease took four more rays; an edge filter on the finished picture was
+  also tried. Both helped the hollow Moravian star's bars only a little,
+  and the rays cost about 1.4 ms more at 2560 x 1440. The star became a
+  mesh instead (see below).
 
 ## The Moravian star as a mesh
 

@@ -393,8 +393,6 @@ export class Engine {
 
   /** True when a second image is loaded; only then does the image blend have an effect. */
   hasSecondImage = false;
-  /** A test switch for the 3D Object's edges (not saved): 0 one ray, 1 an edge filter, 2 more rays at creases. */
-  solidEdges = 2;
 
   /** The image in each slot, as set. */
   private readonly sources: [ImageSource | null, ImageSource | null] = [null, null];
@@ -1575,7 +1573,6 @@ export class Engine {
       solidPoints: this.live("solidPoints"),
       solidPointLength: this.live("solidPointLength"),
       solidHollow: this.live("solidHollow"),
-      solidEdges: this.solidEdges,
       solidLevels: this.live("solidLevels"),
       solidTime: this.state.time,
       solidSpin: this.state.solidSpinTurns * Math.PI * 2,

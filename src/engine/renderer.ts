@@ -1,7 +1,7 @@
 import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, BUBBLE_SHADER, MASK_SHADER, OUTLINE_SHADER, OUTLINE_GLOW_SHADER, OUTLINE_LINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, SOLID_FILTER_SHADER, SOLID_MESH_VERTEX, SOLID_MESH_SHADER, SOLID_BACK_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, BUBBLE_SHADER, MASK_SHADER, OUTLINE_SHADER, OUTLINE_GLOW_SHADER, OUTLINE_LINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, SOLID_MESH_VERTEX, SOLID_MESH_SHADER, SOLID_BACK_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 import { starKinds, starMesh } from "./starMesh";
 import { halveGrid, type TerrainData } from "./terrain";
 import type { VrEye, VrScreen, XrLayer, XrSession } from "./vr";
@@ -628,8 +628,6 @@ export interface FrameValues {
   solidPoints: number;
   solidPointLength: number;
   solidHollow: number;
-  /** A test switch for the 3D Object's edges: 0 one ray, 1 one ray and an edge filter, 2 more rays at creases. */
-  solidEdges: number;
   /** The Menger sponge's levels of holes (1 to 5). */
   solidLevels: number;
   /** Animation seconds: the blobs drift and the bumps flow with it. */
@@ -1006,7 +1004,6 @@ export class KaleidoRenderer {
   private readonly terrainProgram: Program;
   private readonly terrainField: Program;
   private readonly solidProgram: Program;
-  private readonly solidFilterProgram: Program;
   /** The Moravian star as a mesh (see drawStarMesh): its triangles, and the picture behind them. */
   private readonly starProgram: Program;
   private readonly starBackProgram: Program;
@@ -1178,7 +1175,6 @@ export class KaleidoRenderer {
     this.terrainProgram = this.createProgram(TERRAIN_SHADER);
     this.terrainField = this.createProgram(TERRAIN_FIELD_SHADER);
     this.solidProgram = this.createProgram(SOLID_SHADER);
-    this.solidFilterProgram = this.createProgram(SOLID_FILTER_SHADER);
     this.starProgram = this.createProgram(SOLID_MESH_SHADER, SOLID_MESH_VERTEX);
     this.starBackProgram = this.createProgram(SOLID_BACK_SHADER);
     this.maxPass = this.createProgram(MAX_SHADER);
@@ -2341,27 +2337,7 @@ export class KaleidoRenderer {
       this.drawStarMesh(v, source, target, width, height, back);
       return;
     }
-    if (v.solidEdges !== 1) {
-      this.drawSolidPass(v, source, target, width, height, back);
-      return;
-    }
-    /* Edges: Filter (a test): the shape with one ray into a picture of its own, then the edge filter from it. */
-    const gl = this.gl;
-    const mid = this.layerTarget("solid filter", width, height);
-    this.drawSolidPass(v, source, mid, width, height, back);
-    const f = this.solidFilterProgram;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
-    gl.viewport(0, 0, width, height);
-    gl.useProgram(f.program);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, mid.texture);
-    gl.uniform1i(f.uniforms.u_tex, 0);
-    gl.uniform2f(f.uniforms.u_texel, 1 / width, 1 / height);
-    gl.uniform1f(f.uniforms.u_aspect, width / height);
-    gl.uniform2f(f.uniforms.u_center, v.solidX, v.solidY);
-    /* The sphere around the shape (1.45 shape sizes, as in the shader) seen from the eye, with some room. */
-    gl.uniform1f(f.uniforms.u_radius, 0.5 * Math.max(0.01, v.solidSize) * 1.45 * 1.25 + 4 / height);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    this.drawSolidPass(v, source, target, width, height, back);
   }
 
   /** The 3D Object's turn, place, map and light settings, which the ray shader and the mesh star share. */
@@ -2545,10 +2521,6 @@ export class KaleidoRenderer {
     gl.uniform1f(s.uniforms.u_spikes, v.solidSpikes);
     gl.uniform1f(s.uniforms.u_spikeTip, v.solidSpikeTip);
     gl.uniform1f(s.uniforms.u_spikeCount, v.solidSpikeCount);
-    gl.uniform1f(s.uniforms.u_points, v.solidPoints);
-    gl.uniform1f(s.uniforms.u_pointLength, v.solidPointLength);
-    gl.uniform1f(s.uniforms.u_hollow, v.solidHollow);
-    gl.uniform1i(s.uniforms.u_extra, v.solidEdges === 2 ? 1 : 0);
     gl.uniform1f(s.uniforms.u_levels, v.solidLevels);
     gl.uniform1f(s.uniforms.u_time, v.solidTime);
     this.solidLook(s, v);
