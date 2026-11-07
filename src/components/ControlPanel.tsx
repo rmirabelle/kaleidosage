@@ -1138,12 +1138,31 @@ function SolidSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =>
     : key === "solidTiles" || key === "solidBend" || key === "solidFrost" ? SOLID_MAP_KEYS[map].includes(key) : true;
   return (
     <>
-      <ModeSelect engine={engine} stateKey="solidShape" options={SOLID_SHAPES} name="Shape" onChange={setShape} />
+      <ModeSelect engine={engine} stateKey="solidShape" options={SOLID_SHAPES} name="Shape" onChange={(next) => {
+        setShape(next);
+        if (next === 10) standStarUp(engine);
+      }} />
       <ModeSelect engine={engine} stateKey="solidMap" options={SOLID_MAPS} name="Map" onChange={setMap} />
       <KeepBackground engine={engine} />
       <SplitRows keys={SOLID_KEYS.filter(shown)} row={row} blend={<ModeSelect engine={engine} stateKey="solidBlend" options={LAYER_BLENDS} name="Blend" />} />
     </>
   );
+}
+
+/**
+ * Picking the Moravian star sets Tilt to 0, so the star starts upright
+ * with a point at the top center (the user's wish, 2026-11-06); the other
+ * shapes keep their lean. A drifting Tilt keeps its range's width, around 0.
+ */
+function standStarUp(engine: Engine) {
+  const tilt = engine.params.solidTilt;
+  tilt.value = 0;
+  if (tilt.low !== undefined && tilt.high !== undefined) {
+    const half = (tilt.high - tilt.low) / 2;
+    tilt.low = -half;
+    tilt.high = half;
+  }
+  engine.paramChanged("solidTilt");
 }
 
 /** The 3D Object's Freeze background switch (see docs/LAYERS.md): the effects after it change only the picture painted on the object. */
