@@ -1153,15 +1153,15 @@ function SolidSection({ engine, row, mediaName, onPickMedia, onRemoveMedia }: { 
       }} />
       <ModeSelect engine={engine} stateKey="solidMap" options={SOLID_MAPS} name="Map" onChange={setMap} />
       {shape === 10 && map === 0 && <ModeSelect engine={engine} stateKey="solidWrap" options={SOLID_WRAPS} name="Wrap" child />}
-      {/* Paint: the picture made so far, or the 3D Object's own image or video; picking Image or Video with no file opens the Open dialog. */}
-      <ModeSelect engine={engine} stateKey="solidPaint" options={SOLID_PAINTS} name="Paint" onChange={(next) => {
+      {/* Source: Slot A (the picture made so far), Slot B, or the 3D Object's own image or video; picking Image or Video with no file opens the Open dialog. */}
+      <ModeSelect engine={engine} stateKey="solidPaint" options={SOLID_PAINTS} name="Source" onChange={(next) => {
         setPaint(next);
         if (next === 1 && !mediaName) onPickMedia();
       }} />
       {paint === 1 && (
         <div className="panel-select-row panel-select-named driver-video-row panel-child-row">
           <span className="panel-row-name">File</span>
-          <span className="driver-video-name" data-tip={mediaName ? `The 3D Object's image or video: ${mediaName}` : "No image or video yet: the picture paints the object"}>{mediaName ?? "None"}</span>
+          <span className="driver-video-name" data-tip={mediaName ? `The 3D Object's image or video: ${mediaName}` : "No image or video yet: Slot A paints the object"}>{mediaName ?? "None"}</span>
           <button className="button secondary small" onClick={onPickMedia} data-tip="Pick an image or a video to paint the 3D Object with. The scene file keeps a copy.">Choose…</button>
           {mediaName && (
             <button className="button secondary small" onClick={onRemoveMedia} data-tip="Take the image or video off the 3D Object" aria-label="Remove the 3D Object's image or video">

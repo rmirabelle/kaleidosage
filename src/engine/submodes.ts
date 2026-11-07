@@ -166,8 +166,8 @@ export const SOLID_MAP_KEYS: Record<SolidMap, ParamKey[]> = { 0: ["solidTiles"],
 export const SOLID_MAPS = [[0, "Wrap"], [1, "Project"], [2, "Mirror"]] as const;
 /** The Moravian star's Wrap choices (see SolidWrap). */
 export const SOLID_WRAPS = [[0, "Globe"], [1, "Faces"], [2, "Six sides"], [3, "Points"]] as const;
-/** What paints the 3D Object (see SolidPaint). */
-export const SOLID_PAINTS = [[0, "Picture"], [1, "Image or Video"], [2, "Source B"]] as const;
+/** What paints the 3D Object, the Source menu (see SolidPaint): Slot A is the picture made so far (Source A after the effects above the 3D Object). */
+export const SOLID_PAINTS = [[0, "Slot A"], [2, "Slot B"], [1, "Image or Video"]] as const;
 
 /** The Opacity mask's types, and the sliders each shows under the gradient (Strength always shows, above it). */
 export const MASK_MODES = [[0, "Brightness"], [1, "Radial"]] as const;
