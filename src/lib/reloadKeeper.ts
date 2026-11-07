@@ -262,6 +262,7 @@ export function keepUnopened(docs: KeptDoc[]) {
 
 let snapshot: (() => Kept | null) | null = null;
 let timer = 0;
+let pruneTimer = 0;
 
 const writeKept = () => {
   if (!snapshot) return;
@@ -285,7 +286,28 @@ export function keepScenes(take: () => Kept | null) {
   timer = window.setInterval(writeKept, KEEP_MS);
   window.addEventListener("pagehide", writeKept);
   window.addEventListener("beforeunload", writeKept);
-  window.setInterval(() => void pruneImages(), 60_000);
+  pruneTimer = window.setInterval(() => void pruneImages(), 60_000);
+}
+
+/**
+ * A hot update of this file starts a second copy of it, with its own
+ * image keys. Before (found 2026-11-07), both copies kept running: they
+ * wrote snapshots in turn, and the new copy's pruning deleted the old
+ * copy's image bytes, so after the next reload a snapshot from the old
+ * copy named images that were gone (Source A was lost twice). Now the old
+ * copy writes its last snapshot and stops; App starts the new copy (its
+ * start-up effect runs again), which stores the images again under its
+ * own keys.
+ */
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    writeKept();
+    window.clearInterval(timer);
+    window.clearInterval(pruneTimer);
+    window.removeEventListener("pagehide", writeKept);
+    window.removeEventListener("beforeunload", writeKept);
+    snapshot = null;
+  });
 }
 
 /** Removes the stored bytes that neither the latest snapshot nor this page uses (those of a page before this one). */
