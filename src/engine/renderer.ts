@@ -1446,11 +1446,12 @@ export class KaleidoRenderer {
     this.drawStack(v, freeze.before, null, width, height);
     const paint = this.layerTarget("solid paint", width, height);
     this.output = paint.framebuffer;
-    this.drawStack(v, freeze.object, image.texture, width, height);
+    /* The object steps change the 3D Object's Source: Slot A (the picture made so far), Slot B or its own image or video (found 2026-11-07: Slot B skipped them). */
+    this.drawStack(v, freeze.object, this.solidSource(v, image.texture), width, height);
     const into = freeze.after.length > 0 ? this.layerTarget("stack", width, height) : null;
     this.output = null;
     this.timer.begin("solid");
-    this.drawSolid(v, paint.texture, into, width, height, image.texture);
+    this.drawSolid(v, paint.texture, into, width, height, image.texture, true);
     this.timer.end();
     if (into) this.drawStack(v, freeze.after, into.texture, width, height);
     this.endFrame(active);
@@ -2349,9 +2350,20 @@ export class KaleidoRenderer {
    * picture, or with Freeze background the picture kept at the 3D Object's
    * place, see render).
    */
-  private drawSolid(v: FrameValues, picture: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture) {
-    /* Paint: Image or Video puts the 3D Object's own file on it in place of the picture (until its first frame comes, the picture); Source B, the scene's second image (the engine sends Picture while there is none). */
-    const source = v.solidPaint === 2 ? this.imageTextures[1] : (v.solidPaint === 1 ? this.solidMediaFrame() : null) ?? picture;
+  /**
+   * The picture that paints the 3D Object, by its Source: Slot A is
+   * "picture" (the picture made so far); Slot B the scene's second image
+   * (the engine sends Slot A while there is none); Image or Video its own
+   * file (until its first frame comes, Slot A).
+   */
+  private solidSource(v: FrameValues, picture: WebGLTexture): WebGLTexture {
+    if (v.solidPaint === 2) return this.imageTextures[1];
+    return (v.solidPaint === 1 ? this.solidMediaFrame() : null) ?? picture;
+  }
+
+  /** "painted": the picture is already the Source, changed by the object steps (Freeze background); else the Source is picked here. */
+  private drawSolid(v: FrameValues, picture: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture, painted = false) {
+    const source = painted ? picture : this.solidSource(v, picture);
     if (MESH_SHAPES.has(v.solidShape)) {
       this.drawMesh(v, source, target, width, height, back);
       return;
