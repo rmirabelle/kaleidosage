@@ -21,8 +21,9 @@ picture.
 ## Menus
 
 - **Shape** (presets): Sphere, Cube, Morph, Blobs, Wobbly ball, Spike ball,
-  Octahedron, Icosahedron, Pyramid, Menger sponge, Moravian star (drawn
-  as a mesh, see below). Morph, Blobs, Wobbly ball and Spike ball (first named Star) came
+  Octahedron, Icosahedron, Pyramid, Menger sponge, Moravian star. The
+  Cube, Octahedron, Icosahedron, Pyramid and Moravian star are drawn as
+  meshes (see below). Morph, Blobs, Wobbly ball and Spike ball (first named Star) came
   on 2026-10-24 in place of the Cylinder, Cone, Torus and Capsule (no scene
   used them; the new shapes took their numbers, 2 to 5). The Moravian star
   (2026-11-06) is the paper star: a core with a flat-sided pyramid on each
@@ -160,6 +161,22 @@ test).
   and softened by 16 reads in a disk. So its soft edge is the same width
   everywhere, where the rays' grew with the distance from the shape.
 - The mesh is rebuilt only when its core, Point length or Hollow changes.
+
+## The flat-faced shapes as meshes
+
+Changed 2026-11-06, after the Moravian star. The Cube, Octahedron,
+Icosahedron and Pyramid are meshes too (`flatMesh.ts`), so their edges are
+smooth (4 samples per pixel). Each face of the sharp shape is a grid of
+triangles from its middle to each edge, closer near the edges and corners.
+Roundness does not change the mesh: the vertex shader moves each point
+along its direction from the middle onto the rounded surface (a few
+Newton's steps on the same distance the rays used: the rounded box for the
+Cube, the smooth largest of the planes for the others), and takes that
+surface's normal. So the rounded shapes look as before, and a moving
+Roundness costs nothing on the CPU. Wrap reads the faces as the rays did
+(the face planes and the picture wrap are shared GLSL: SOLID_PLANES_GLSL,
+SOLID_WRAP_GLSL). The ray shader still has these shapes' distances; it
+draws them no more.
 
 ## Open points
 

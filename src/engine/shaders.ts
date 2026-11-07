@@ -4759,6 +4759,129 @@ void main() {
 }`;
 
 /**
+ * The face planes of the 3D Object's flat-faced shapes, which the ray
+ * shader (the distance and Wrap) and the mesh shaders (the rounded surface
+ * and Wrap) share. It needs u_shape.
+ */
+const SOLID_PLANES_GLSL = `
+/*
+ * The face planes of the shapes with flat faces (u_shape 6 to 8): each
+ * plane's outward direction (of length 1) and its distance from the middle.
+ * The distance to the shape and Wrap both read them.
+ */
+int facePlanes(out vec3 normal[20], out float offset[20]) {
+  if (u_shape == 6) {
+    /* The octahedron: the eight directions (±1, ±1, ±1). */
+    for (int i = 0; i < 8; i++) {
+      normal[i] = normalize(vec3(i & 1, (i >> 1) & 1, (i >> 2) & 1) * 2.0 - 1.0);
+      offset[i] = 0.62;
+    }
+    return 8;
+  }
+  if (u_shape == 7) {
+    /* The icosahedron's 20 face directions are a dodecahedron's corners: (±1, ±1, ±1) and the cyclic turns of (0, ±1/g, ±g). */
+    const float g = 1.61803399;
+    int n = 0;
+    for (int i = 0; i < 8; i++) normal[n++] = normalize(vec3(i & 1, (i >> 1) & 1, (i >> 2) & 1) * 2.0 - 1.0);
+    for (int i = 0; i < 4; i++) {
+      vec2 s = vec2(i & 1, (i >> 1) & 1) * 2.0 - 1.0;
+      vec2 a = s * vec2(1.0 / g, g);
+      normal[n++] = normalize(vec3(0.0, a.x, a.y));
+      normal[n++] = normalize(vec3(a.x, a.y, 0.0));
+      normal[n++] = normalize(vec3(a.y, 0.0, a.x));
+    }
+    for (int i = 0; i < 20; i++) offset[i] = 0.82;
+    return 20;
+  }
+  /* A square pyramid: its tip at y = 0.9, its base at y = -0.7, 0.95 from the middle to each side. */
+  vec2 side = normalize(vec2(1.6, 0.95));
+  normal[0] = vec3(side.x, side.y, 0.0);
+  normal[1] = vec3(-side.x, side.y, 0.0);
+  normal[2] = vec3(0.0, side.y, side.x);
+  normal[3] = vec3(0.0, side.y, -side.x);
+  for (int i = 0; i < 4; i++) offset[i] = side.y * 0.9;
+  normal[4] = vec3(0.0, -1.0, 0.0);
+  offset[4] = 0.7;
+  return 5;
+}
+`;
+
+/**
+ * Wrap: the picture on the 3D Object's surface, shared by the ray shader
+ * and the mesh shader. It needs u_tex, u_tiles, u_shape, PI, straight,
+ * fold, radius and facePlanes.
+ */
+const SOLID_WRAP_GLSL = `
+/**
+ * A read of the picture at a place of the surface, with Tiles and the
+ * mirrored fold. Every read of u_tex here is textureLod at level 0 (the
+ * picture has no smaller levels, so it is the same color): a plain texture()
+ * after the ray's loop makes the Windows (Direct3D) shader compiler copy out
+ * the whole loop, which made the Star about 7 times slower.
+ */
+vec3 readAt(vec2 uv) { return straight(textureLod(u_tex, fold(uv * u_tiles), 0.0)); }
+
+/* The picture lying flat on a face with this outward direction, across the face. */
+vec2 onFace(vec3 q, vec3 axis) {
+  vec3 t1 = normalize(cross(abs(axis.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), axis));
+  vec3 t2 = cross(axis, t1);
+  return vec2(dot(q, t1), dot(q, t2)) * 0.6 + 0.5;
+}
+
+/*
+ * Wrap: the picture's color at a point of the surface, in the shape's
+ * frame. A face lays the picture flat on it, across the face, along
+ * directions set by the face itself, so the picture does not turn with the
+ * curve of a round edge. Where Roundness curves one face into the next, the
+ * faces' pictures blend by how much the surface faces each one: the box by
+ * its normal (Morph too), and the shapes with flat faces by the same
+ * weights that round their edges (see faces). The ball, the blobs, the
+ * wobbly ball, the spike ball and the Moravian star take the ball's map:
+ * around and up.
+ */
+vec3 wrapAt(vec3 q, vec3 n) {
+  float around = atan(q.z, q.x) / (2.0 * PI) + 0.5;
+  if (u_shape == 0 || u_shape == 3 || u_shape == 4 || u_shape == 5 || u_shape == 10) {
+    vec3 d = normalize(q);
+    return readAt(vec2(around * 2.0, asin(clamp(d.y, -1.0, 1.0)) / PI + 0.5));
+  }
+  if (u_shape == 1 || u_shape == 2 || u_shape == 9) {
+    /* The box (Morph and the Menger sponge too): each axis's face, weighted by a high power of the normal, so a flat face reads only itself. */
+    vec3 w = pow(abs(n), vec3(8.0));
+    w /= w.x + w.y + w.z;
+    vec3 color = vec3(0.0);
+    if (w.x > 0.01) color += w.x * readAt(onFace(q, vec3(sign(n.x), 0.0, 0.0)));
+    if (w.y > 0.01) color += w.y * readAt(onFace(q, vec3(0.0, sign(n.y), 0.0)));
+    if (w.z > 0.01) color += w.z * readAt(onFace(q, vec3(0.0, 0.0, sign(n.z))));
+    return color / max(dot(w, step(0.01, w)), 1e-4);
+  }
+  /* The shapes with flat faces: each face's picture, weighted as the smooth maximum weights its plane. */
+  vec3 normal[20];
+  float offset[20];
+  float d[20];
+  int count = facePlanes(normal, offset);
+  float m = -1e9;
+  int best = 0;
+  for (int i = 0; i < 20; i++) {
+    d[i] = i < count ? dot(q, normal[i]) - offset[i] : -1e9;
+    if (d[i] > m) { m = d[i]; best = i; }
+  }
+  float k = radius() * 0.3;
+  if (k < 1e-3) return readAt(onFace(q, normal[best]));
+  vec3 color = vec3(0.0);
+  float total = 0.0;
+  for (int i = 0; i < 20; i++) {
+    if (i >= count) break;
+    float w = exp((d[i] - m) / k);
+    if (w < 0.01) continue;
+    color += w * readAt(onFace(q, normal[i]));
+    total += w;
+  }
+  return color / total;
+}
+`;
+
+/**
  * The 3D Object's color at a point of its surface (q in the shape's own
  * frame, n the normal and rd the ray in the view, uv the pixel's place):
  * the picture by Map, then the light and the shine. The ray shader
@@ -5061,46 +5184,7 @@ float faces(float d[20], int count) {
   for (int i = 0; i < 20; i++) if (i < count) sum += exp((d[i] - m) / k);
   return m + k * log(sum);
 }
-/*
- * The face planes of the shapes with flat faces (u_shape 6 to 8): each
- * plane's outward direction (of length 1) and its distance from the middle.
- * The distance to the shape and Wrap both read them.
- */
-int facePlanes(out vec3 normal[20], out float offset[20]) {
-  if (u_shape == 6) {
-    /* The octahedron: the eight directions (±1, ±1, ±1). */
-    for (int i = 0; i < 8; i++) {
-      normal[i] = normalize(vec3(i & 1, (i >> 1) & 1, (i >> 2) & 1) * 2.0 - 1.0);
-      offset[i] = 0.62;
-    }
-    return 8;
-  }
-  if (u_shape == 7) {
-    /* The icosahedron's 20 face directions are a dodecahedron's corners: (±1, ±1, ±1) and the cyclic turns of (0, ±1/g, ±g). */
-    const float g = 1.61803399;
-    int n = 0;
-    for (int i = 0; i < 8; i++) normal[n++] = normalize(vec3(i & 1, (i >> 1) & 1, (i >> 2) & 1) * 2.0 - 1.0);
-    for (int i = 0; i < 4; i++) {
-      vec2 s = vec2(i & 1, (i >> 1) & 1) * 2.0 - 1.0;
-      vec2 a = s * vec2(1.0 / g, g);
-      normal[n++] = normalize(vec3(0.0, a.x, a.y));
-      normal[n++] = normalize(vec3(a.x, a.y, 0.0));
-      normal[n++] = normalize(vec3(a.y, 0.0, a.x));
-    }
-    for (int i = 0; i < 20; i++) offset[i] = 0.82;
-    return 20;
-  }
-  /* A square pyramid: its tip at y = 0.9, its base at y = -0.7, 0.95 from the middle to each side. */
-  vec2 side = normalize(vec2(1.6, 0.95));
-  normal[0] = vec3(side.x, side.y, 0.0);
-  normal[1] = vec3(-side.x, side.y, 0.0);
-  normal[2] = vec3(0.0, side.y, side.x);
-  normal[3] = vec3(0.0, side.y, -side.x);
-  for (int i = 0; i < 4; i++) offset[i] = side.y * 0.9;
-  normal[4] = vec3(0.0, -1.0, 0.0);
-  offset[4] = 0.7;
-  return 5;
-}
+${SOLID_PLANES_GLSL}
 
 /* The distance to a shape with flat faces: the largest of its planes' distances (see faces). */
 float flatShape(vec3 q) {
@@ -5147,72 +5231,7 @@ vec4 probe(vec3 p, float e) {
   return sum;
 }
 
-/**
- * A read of the picture at a place of the surface, with Tiles and the
- * mirrored fold. Every read of u_tex here is textureLod at level 0 (the
- * picture has no smaller levels, so it is the same color): a plain texture()
- * after the ray's loop makes the Windows (Direct3D) shader compiler copy out
- * the whole loop, which made the Star about 7 times slower.
- */
-vec3 readAt(vec2 uv) { return straight(textureLod(u_tex, fold(uv * u_tiles), 0.0)); }
-
-/* The picture lying flat on a face with this outward direction, across the face. */
-vec2 onFace(vec3 q, vec3 axis) {
-  vec3 t1 = normalize(cross(abs(axis.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), axis));
-  vec3 t2 = cross(axis, t1);
-  return vec2(dot(q, t1), dot(q, t2)) * 0.6 + 0.5;
-}
-
-/*
- * Wrap: the picture's color at a point of the surface, in the shape's
- * frame. A face lays the picture flat on it, across the face, along
- * directions set by the face itself, so the picture does not turn with the
- * curve of a round edge. Where Roundness curves one face into the next, the
- * faces' pictures blend by how much the surface faces each one: the box by
- * its normal (Morph too), and the shapes with flat faces by the same
- * weights that round their edges (see faces). The ball, the blobs, the
- * wobbly ball and the star take the ball's map: around and up.
- */
-vec3 wrapAt(vec3 q, vec3 n) {
-  float around = atan(q.z, q.x) / (2.0 * PI) + 0.5;
-  if (u_shape == 0 || u_shape == 3 || u_shape == 4 || u_shape == 5) {
-    vec3 d = normalize(q);
-    return readAt(vec2(around * 2.0, asin(clamp(d.y, -1.0, 1.0)) / PI + 0.5));
-  }
-  if (u_shape == 1 || u_shape == 2 || u_shape == 9) {
-    /* The box (Morph and the Menger sponge too): each axis's face, weighted by a high power of the normal, so a flat face reads only itself. */
-    vec3 w = pow(abs(n), vec3(8.0));
-    w /= w.x + w.y + w.z;
-    vec3 color = vec3(0.0);
-    if (w.x > 0.01) color += w.x * readAt(onFace(q, vec3(sign(n.x), 0.0, 0.0)));
-    if (w.y > 0.01) color += w.y * readAt(onFace(q, vec3(0.0, sign(n.y), 0.0)));
-    if (w.z > 0.01) color += w.z * readAt(onFace(q, vec3(0.0, 0.0, sign(n.z))));
-    return color / max(dot(w, step(0.01, w)), 1e-4);
-  }
-  /* The shapes with flat faces: each face's picture, weighted as the smooth maximum weights its plane. */
-  vec3 normal[20];
-  float offset[20];
-  float d[20];
-  int count = facePlanes(normal, offset);
-  float m = -1e9;
-  int best = 0;
-  for (int i = 0; i < 20; i++) {
-    d[i] = i < count ? dot(q, normal[i]) - offset[i] : -1e9;
-    if (d[i] > m) { m = d[i]; best = i; }
-  }
-  float k = radius() * 0.3;
-  if (k < 1e-3) return readAt(onFace(q, normal[best]));
-  vec3 color = vec3(0.0);
-  float total = 0.0;
-  for (int i = 0; i < 20; i++) {
-    if (i >= count) break;
-    float w = exp((d[i] - m) / k);
-    if (w < 0.01) continue;
-    color += w * readAt(onFace(q, normal[i]));
-    total += w;
-  }
-  return color / total;
-}
+${SOLID_WRAP_GLSL}
 ${SOLID_PAINT_GLSL}
 /**
  * The cast shadow: the picture is a wall a little behind the shape (WALL
@@ -5314,8 +5333,8 @@ void main() {
 
 
 /**
- * The Moravian star as a mesh (see starMesh.ts and docs/SOLIDS.md): the
- * corners of its triangles. a_pos and a_normal are in the shape's unit
+ * The 3D Object's mesh shapes (the Moravian star, see starMesh.ts, and the
+ * flat-faced shapes, see flatMesh.ts): the corners of their triangles. a_pos and a_normal are in the shape's unit
  * frame; u_turn, u_size and u_center place them in the view, as toShape
  * does the other way in SOLID_SHADER. The eye is EYE screen heights in front
  * of the screen, as for the rays, so both ways draw the same picture.
@@ -5333,6 +5352,8 @@ uniform float u_size;
 uniform float u_aspect;
 uniform vec3 u_light;
 uniform int u_pass;
+uniform int u_shape;
+uniform float u_round;
 out vec3 v_world;
 out vec3 v_normal;
 out vec3 v_shape;
@@ -5340,12 +5361,68 @@ const float EYE = 3.0;
 const float WALL = 0.9;
 const float NEAR = 0.1;
 const float FAR = 20.0;
+float radius() { return u_round * 0.6; }
+${SOLID_PLANES_GLSL}
+/**
+ * The rounded surface of a flat-faced shape, as the rays see it: its
+ * distance at q and its gradient. The Cube is the rounded box (box in
+ * SOLID_SHADER), the others the smooth largest of their planes (faces).
+ */
+float rounded(vec3 q, out vec3 grad) {
+  if (u_shape == 1) {
+    float r = radius();
+    vec3 d = abs(q) - vec3(0.8 - r);
+    vec3 outside = max(d, 0.0);
+    float l = length(outside);
+    if (l > 1e-6) {
+      grad = sign(q) * outside / l;
+      return l - r;
+    }
+    float most = max(d.x, max(d.y, d.z));
+    grad = most == d.x ? vec3(sign(q.x), 0.0, 0.0) : most == d.y ? vec3(0.0, sign(q.y), 0.0) : vec3(0.0, 0.0, sign(q.z));
+    return most - r;
+  }
+  vec3 normal[20];
+  float offset[20];
+  int count = facePlanes(normal, offset);
+  float m = -1e9;
+  for (int i = 0; i < 20; i++) if (i < count) m = max(m, dot(q, normal[i]) - offset[i]);
+  float k = radius() * 0.3;
+  float sum = 0.0;
+  vec3 g = vec3(0.0);
+  for (int i = 0; i < 20; i++) {
+    if (i >= count) break;
+    float w = exp((dot(q, normal[i]) - offset[i] - m) / k);
+    sum += w;
+    g += w * normal[i];
+  }
+  grad = g / sum;
+  return m + k * log(sum);
+}
 void main() {
   float scale = 0.5 * u_size;
-  vec3 world = u_turn * (a_pos * scale) + vec3(u_center, 0.0);
+  vec3 shape = a_pos;
+  vec3 facing = a_normal;
+  /**
+   * Roundness: the point moves along its direction from the middle onto
+   * the rounded surface (Newton's steps from outside, where the sharp
+   * shape is), and its normal is the surface's. Sharp, it stays on its
+   * face with the face's direction.
+   */
+  bool round = u_shape == 1 ? radius() > 1e-4 : u_shape != 10 && radius() * 0.3 >= 1e-3;
+  if (round) {
+    vec3 dir = normalize(a_pos);
+    float reach = length(a_pos);
+    vec3 grad;
+    for (int i = 0; i < 8; i++) reach -= rounded(dir * reach, grad) / max(dot(grad, dir), 0.1);
+    shape = dir * reach;
+    rounded(shape, grad);
+    facing = normalize(grad);
+  }
+  vec3 world = u_turn * (shape * scale) + vec3(u_center, 0.0);
   v_world = world;
-  v_normal = u_turn * a_normal;
-  v_shape = a_pos;
+  v_normal = u_turn * facing;
+  v_shape = shape;
   if (u_pass == 1) {
     vec3 wall = world - u_light * ((world.z + WALL * scale) / u_light.z);
     gl_Position = vec4(wall.x / (0.5 * u_aspect), wall.y / 0.5, 0.0, 1.0);
@@ -5411,8 +5488,8 @@ void main() {
 }`;
 
 /**
- * The mesh star's triangles: painted as the ray shader paints its surface
- * (SOLID_PAINT_GLSL, with the ball's map for Wrap), over the picture behind
+ * The mesh shapes' triangles: painted as the ray shader paints its surface
+ * (SOLID_PAINT_GLSL and SOLID_WRAP_GLSL), over the picture behind
  * with Blend and Opacity. A face seen from its back (the inside of a
  * hollow star's bars) turns its normal to the eye. u_pass 1 marks the
  * shadow's outline.
@@ -5428,6 +5505,8 @@ out vec4 o;
 uniform sampler2D u_tex;
 uniform vec2 u_view;
 uniform int u_pass;
+uniform int u_shape;
+uniform float u_round;
 uniform int u_map;
 uniform int u_blend;
 uniform float u_opacity;
@@ -5452,13 +5531,9 @@ vec3 blendLayer(vec3 base, vec3 top, int mode) {
   return top;
 }
 vec2 fold(vec2 uv) { return 1.0 - abs(1.0 - 2.0 * fract(uv * 0.5)); }
-vec3 readAt(vec2 uv) { return straight(textureLod(u_tex, fold(uv * u_tiles), 0.0)); }
-/* Wrap: the ball's map, around and up (as wrapAt in SOLID_SHADER for the star). */
-vec3 wrapAt(vec3 q, vec3 n) {
-  float around = atan(q.z, q.x) / (2.0 * PI) + 0.5;
-  vec3 d = normalize(q);
-  return readAt(vec2(around * 2.0, asin(clamp(d.y, -1.0, 1.0)) / PI + 0.5));
-}
+float radius() { return u_round * 0.6; }
+${SOLID_PLANES_GLSL}
+${SOLID_WRAP_GLSL}
 ${SOLID_PAINT_GLSL}
 void main() {
   if (u_pass == 1) {

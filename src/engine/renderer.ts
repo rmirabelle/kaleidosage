@@ -2,6 +2,7 @@ import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
 import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, BUBBLE_SHADER, MASK_SHADER, OUTLINE_SHADER, OUTLINE_GLOW_SHADER, OUTLINE_LINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, SOLID_MESH_VERTEX, SOLID_MESH_SHADER, SOLID_BACK_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { MESH_SHAPES, flatMesh } from "./flatMesh";
 import { starKinds, starMesh } from "./starMesh";
 import { halveGrid, type TerrainData } from "./terrain";
 import type { VrEye, VrScreen, XrLayer, XrSession } from "./vr";
@@ -1004,7 +1005,7 @@ export class KaleidoRenderer {
   private readonly terrainProgram: Program;
   private readonly terrainField: Program;
   private readonly solidProgram: Program;
-  /** The Moravian star as a mesh (see drawStarMesh): its triangles, and the picture behind them. */
+  /** The 3D Object's mesh shapes (see drawMesh): their triangles, and the picture behind them. */
   private readonly starProgram: Program;
   private readonly starBackProgram: Program;
   /** The star's triangles, one buffer per core drawn (two while Points fades between two counts), rebuilt when their settings change. */
@@ -2333,14 +2334,14 @@ export class KaleidoRenderer {
    * place, see render).
    */
   private drawSolid(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture) {
-    if (v.solidShape === 10) {
-      this.drawStarMesh(v, source, target, width, height, back);
+    if (MESH_SHAPES.has(v.solidShape)) {
+      this.drawMesh(v, source, target, width, height, back);
       return;
     }
     this.drawSolidPass(v, source, target, width, height, back);
   }
 
-  /** The 3D Object's turn, place, map and light settings, which the ray shader and the mesh star share. */
+  /** The 3D Object's turn, place, map and light settings, which the ray shader and the mesh shapes share. */
   private solidLook(s: Program, v: FrameValues) {
     const gl = this.gl;
     const [cs, ss] = [Math.cos(v.solidSpin), Math.sin(v.solidSpin)];
@@ -2362,18 +2363,22 @@ export class KaleidoRenderer {
   }
 
   /**
-   * The Moravian star as a mesh of triangles (see starMesh.ts), which the
-   * graphics card draws with 4 samples per pixel, so its edges are smooth
-   * at little cost. The shadow's outline goes first into a small picture
+   * The 3D Object as a mesh of triangles: the Moravian star (see
+   * starMesh.ts) and the flat-faced shapes (see flatMesh.ts, rounded by
+   * the vertex shader). The graphics card draws them with 4 samples per
+   * pixel, so their edges are smooth at little cost. The shadow's outline goes first into a small picture
    * (each core in its own channel). Then for each core: the picture behind
    * on the whole screen, the triangles over it (nearest in front), and the
    * 4 samples averaged into one picture. While Points is between two
    * counts, the first core's picture is drawn first, and the second core's
    * fades in over it.
    */
-  private drawStarMesh(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture) {
+  private drawMesh(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture) {
     const gl = this.gl;
-    const cores = starKinds(v.solidPoints).map((each, slot) => ({ ...each, mesh: this.starVertices(slot, each.kind, v.solidPointLength, v.solidHollow) }));
+    const shape = v.solidShape;
+    const cores = shape === 10
+      ? starKinds(v.solidPoints).map((each, slot) => ({ ...each, mesh: this.meshVertices(slot, `star ${each.kind} ${v.solidPointLength} ${v.solidHollow}`, () => starMesh(each.kind, v.solidPointLength, v.solidHollow)) }))
+      : [{ kind: shape, weight: 1, mesh: this.meshVertices(0, `flat ${shape}`, () => flatMesh(shape)) }];
     const shadow = Math.min(1, Math.max(0, v.solidShadow));
     const shadeSize: [number, number] = [Math.max(1, Math.ceil(width / 4)), Math.max(1, Math.ceil(height / 4))];
     const shade = this.layerTarget("solid star shade", shadeSize[0], shadeSize[1]);
@@ -2392,6 +2397,8 @@ export class KaleidoRenderer {
       gl.uniform1f(s.uniforms.u_background, Math.min(1, Math.max(0, v.solidBackground)));
       gl.uniform2f(s.uniforms.u_shadeMix, slot === 0 ? 1 : 0, slot === 0 ? 0 : 1);
       gl.uniform1f(s.uniforms.u_fade, fade);
+      gl.uniform1i(s.uniforms.u_shape, shape);
+      gl.uniform1f(s.uniforms.u_round, Math.min(1, Math.max(0, v.solidRound)));
       const textures: [WebGLTexture, string][] = [[source, "u_tex"], [back, "u_back"], [under, "u_under"], [shadeTexture, "u_shade"]];
       textures.forEach(([texture, name], unit) => {
         gl.activeTexture(gl.TEXTURE0 + unit);
@@ -2447,8 +2454,8 @@ export class KaleidoRenderer {
     }
   }
 
-  /** The vertex buffer for one core of the mesh star, rebuilt only when its core, Point length or Hollow changes. */
-  private starVertices(slot: number, kind: number, pointLength: number, hollow: number) {
+  /** The vertex buffer in one slot (two for the star while it fades between two cores), rebuilt only when its key changes (the shape, and the star's core, Point length and Hollow). */
+  private meshVertices(slot: number, key: string, build: () => Float32Array) {
     const gl = this.gl;
     let entry = this.starBuffers[slot];
     if (!entry) {
@@ -2464,9 +2471,8 @@ export class KaleidoRenderer {
       entry = { vertices, buffer, key: "", count: 0 };
       this.starBuffers[slot] = entry;
     }
-    const key = `${kind} ${pointLength} ${hollow}`;
     if (entry.key !== key) {
-      const data = starMesh(kind, pointLength, hollow);
+      const data = build();
       gl.bindBuffer(gl.ARRAY_BUFFER, entry.buffer);
       gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
       entry.key = key;

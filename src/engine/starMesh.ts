@@ -14,7 +14,7 @@
  * each bar is one strip, and each tip stays one point.
  */
 
-type V3 = [number, number, number];
+export type V3 = [number, number, number];
 
 /** The point counts of the 8 cores. */
 export const STAR_COUNTS = [4, 6, 8, 12, 14, 20, 26, 32] as const;
@@ -80,7 +80,7 @@ export interface Core {
 }
 
 /** The faces of a convex shape around the middle: every plane through three corners with all corners on its inner side. */
-function hull(points: V3[]): CoreFace[] {
+export function hull(points: V3[]): CoreFace[] {
   const faces: CoreFace[] = [];
   const seen = new Set<string>();
   const eps = 1e-6;
