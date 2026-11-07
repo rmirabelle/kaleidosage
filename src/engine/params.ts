@@ -864,7 +864,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    */
   solidPoints: { label: "Points", min: 4, max: 32, step: 1, value: 26, drift: "wave", low: 8, high: 26, on: false },
   solidPointLength: { label: "Point length", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.3, high: 0.9, on: false },
-  solidHollow: { label: "Hollow", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.4, high: 1, on: false },
+  solidHollow: { label: "Hollow", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.3, high: 1, on: false },
   solidSpin: { label: "Spin", min: -60, max: 60, step: 0.1, value: 6, unit: " rpm", drift: "wave", low: 3, high: 12, on: false },
   solidTumble: { label: "Tumble", min: -60, max: 60, step: 0.1, value: 0, unit: " rpm", drift: "wave", low: -3, high: 3, on: false },
   solidTilt: { label: "Tilt", min: -90, max: 90, step: 1, value: 20, unit: "°", drift: "wave", low: -30, high: 30, on: false },
@@ -2037,5 +2037,7 @@ function randomizeAll(params: Params, state?: PlayState) {
   /* Last, so the Moravian star's settings (2026-11-06) do not change the random picks above. */
   set("solidPoints", [4, 6, 8, 12, 14, 20, 26, 32][Math.floor(Math.random() * 8)], rand(0, 2));
   set("solidPointLength", rand(0.3, 0.9), rand(0, 0.2));
-  set("solidHollow", Math.random() < 0.6 ? 0 : rand(0.5, 1), rand(0, 0.2));
+  /* Hollow: 0 solid, above 0 open windows, below 0 windows turned over (see starMesh barSize). */
+  const hollow = Math.random();
+  set("solidHollow", hollow < 0.6 ? 0 : hollow < 0.88 ? rand(0.3, 1) : rand(-1, -0.3), rand(0, 0.2));
 }

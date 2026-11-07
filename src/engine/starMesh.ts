@@ -127,12 +127,25 @@ export function core(kind: number): Core {
   return cores[kind];
 }
 
-/** The bars' width across a face and their thickness, from Hollow (as in starKind: the bar is 0.53 near Hollow 0 and 0.03 at 1). */
-export function barSize(hollow: number) {
-  const open = Math.min(1, Math.max(0, hollow));
-  if (open <= 0) return { width: 0, thick: 0 };
-  const bar = 0.03 + 0.5 * (1 - open) * (1 - open);
-  return { width: 1.6 * bar, thick: Math.min(bar, 0.06) };
+/** The bars' width at Hollow 1, and at Hollow -1. */
+const THIN = 0.012;
+const WIDE = 0.85;
+
+/**
+ * The bars' width across a face and their thickness, from Hollow (-1 to
+ * 1), for a star whose largest triangle has this inner radius (the
+ * largest circle inside it). 0 is solid. Above 0 the windows open: at
+ * just above 0 the bars fill even the largest triangle, and toward 1 they
+ * thin to THIN (evenly, as a part of the width each step). Below 0 the
+ * bars are wider than the triangles, so each window turns over and reaches
+ * out past its triangle (a look the user liked when it came by mistake);
+ * -1 is WIDE. The thickness is the width over 1.6, at most 0.06.
+ */
+export function barSize(hollow: number, largest: number) {
+  const h = Math.min(1, Math.max(-1, hollow));
+  if (h === 0) return { width: 0, thick: 0, over: false };
+  const width = h > 0 ? largest * (THIN / largest) ** h : mix(largest, WIDE, -h);
+  return { width, thick: Math.min(width / 1.6, 0.06), over: h < 0 };
 }
 
 /** A triangle of the star: its three corners (indexes into the star's points) and the bar width along each side (a to b, b to c, c to a). */
@@ -148,9 +161,9 @@ interface Tri {
 export function starMesh(kind: number, pointLength: number, hollow: number): Float32Array {
   const c = core(kind);
   const reach = Math.min(1, Math.max(0, pointLength));
-  const { width, thick } = barSize(hollow);
   const points: V3[] = [...c.points];
   const tris: Tri[] = [];
+  const grows: number[] = [];
   for (const face of c.faces) {
     const r = dot(face.normal, c.points[face.corners[0]]);
     const tip = mix(r, TIP, reach);
@@ -160,9 +173,18 @@ export function starMesh(kind: number, pointLength: number, hollow: number): Flo
     points.push(mul(face.normal, tip));
     const count = face.corners.length;
     for (let i = 0; i < count; i++) {
-      tris.push({ at: [face.corners[i], face.corners[(i + 1) % count], apex], widths: [width, width * grow, width * grow] });
+      tris.push({ at: [face.corners[i], face.corners[(i + 1) % count], apex], widths: [0, 0, 0] });
+      grows.push(grow);
     }
   }
+  /* The largest inner radius of the triangles: twice the area over the length around. */
+  const largest = Math.max(...tris.map((t) => {
+    const [a, b, d] = t.at.map((index) => points[index]);
+    const around = length(sub(b, a)) + length(sub(d, b)) + length(sub(a, d));
+    return length(cross(sub(b, a), sub(d, a))) / Math.max(around, 1e-9);
+  }));
+  const { width, thick, over } = barSize(hollow, Math.max(largest, THIN));
+  tris.forEach((t, i) => { t.widths = [width, width * grows[i], width * grows[i]]; });
   const out: number[] = [];
   const corner = (p: V3, n: V3) => out.push(p[0], p[1], p[2], n[0], n[1], n[2]);
   const triangle = (a: V3, b: V3, d: V3, n: V3) => {
@@ -185,7 +207,7 @@ export function starMesh(kind: number, pointLength: number, hollow: number): Flo
     const [a, b, d] = t.at.map((index) => points[index]);
     const [ia, ib, id] = t.at.map((index) => inner[index]);
     const back = mul(n, -1);
-    const win = windowOf([a, b, d], t.widths, n);
+    const win = windowOf([a, b, d], t.widths, n, over);
     if (!win) {
       triangle(a, b, d, n);
       triangle(ia, id, ib, back);
@@ -209,9 +231,10 @@ export function starMesh(kind: number, pointLength: number, hollow: number): Flo
 /**
  * The window of a triangle: each side moved in by its bar width, and the
  * corners where the moved sides meet. None when the bars fill the triangle
- * (the moved sides cross).
+ * (the moved sides cross), unless over: then a window that turned over
+ * (its corners past the opposite sides) is kept.
  */
-function windowOf(corners: V3[], widths: [number, number, number], n: V3): V3[] | null {
+function windowOf(corners: V3[], widths: [number, number, number], n: V3, over: boolean): V3[] | null {
   const out: V3[] = [];
   for (let i = 0; i < 3; i++) {
     const here = corners[i];
@@ -226,7 +249,10 @@ function windowOf(corners: V3[], widths: [number, number, number], n: V3): V3[] 
   }
   const area = dot(cross(sub(out[1], out[0]), sub(out[2], out[0])), n);
   const whole = dot(cross(sub(corners[1], corners[0]), sub(corners[2], corners[0])), n);
-  return area > whole * 1e-4 ? out : null;
+  if (area <= whole * 1e-4) return null;
+  /* Inside: each window corner on the inner side of every side of the triangle. */
+  const inside = out.every((p) => [0, 1, 2].every((i) => dot(cross(sub(corners[(i + 1) % 3], corners[i]), sub(p, corners[i])), n) >= 0));
+  return inside || over ? out : null;
 }
 
 /**

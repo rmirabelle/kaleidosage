@@ -53,7 +53,7 @@ picture.
 | Spike length | Spike ball only: how long its spikes are; at 0 they stay inside the ball, so it is a smooth ball. |
 | Points | Moravian star only: 4 (tetrahedron), 6 (cube), 8 (octahedron: the Merkaba), 12 (dodecahedron), 14 (cuboctahedron: cube and octahedron), 20 (icosahedron), 26 (rhombicuboctahedron: the paper star) or 32 (icosidodecahedron). A count between two of them morphs between the two shapes. |
 | Point length | Moravian star only: how far out the points reach; at 0 only the bare core shows. Points 8 at 0.6 is the exact Merkaba. |
-| Hollow | Moravian star only: 0 is solid; higher keeps only bars along the edges, thinner toward 1 (a frame, like a string-art star). |
+| Hollow | Moravian star only, -1 to 1: 0 is solid. Above 0 each triangle opens a window and keeps bars along its edges, thinner toward 1 (a frame, like a string-art star; 0.012 wide at 1). Below 0 the bars are wider than the triangles, so each window turns over and reaches out past its triangle (a look that first came by mistake, and the user kept). |
 | Spikes | Spike ball only: how many spikes (4 to 32), thinner as there are more. 6, 8, 12 and 20 sit on the corners of an octahedron, a cube, an icosahedron and a dodecahedron; other counts sit evenly on a spiral over the ball. |
 | Spike shape | Spike ball only: from pointed (0) to capped, as wide at the end as at the foot (1). |
 | Levels | Menger sponge only: how many levels of holes (1 to 5). Between two whole numbers the next level's holes grow, so a range opens and closes them smoothly. |
@@ -145,9 +145,13 @@ test).
   smaller triangle (the window) inside it, and three bars between them;
   no cutting, so Hollow only moves the window's corners. The bars have a
   thickness: an inner surface (each point moved in so it is the thickness
-  behind all its faces) and a wall around each window. Bar width and
-  thickness come from Hollow as the ray star's did (width 1.6 times the
-  bar, thickness the bar, at most 0.06). The side bars of a point shrink
+  behind all its faces) and a wall around each window. The bar width
+  (barSize): just above Hollow 0 it is the largest triangle's inner radius
+  (all closed), and it thins evenly to 0.012 at 1; below 0 it grows from
+  that radius to 0.85 at -1, and the windows turn over. The thickness is
+  the width over 1.6, at most 0.06. (Until 2026-11-06 Hollow went 0 to 1
+  and the width came from the ray star's bar: 0.85 near 0, 0.048 at 1, so
+  its lower half showed the turned-over windows.) The side bars of a point shrink
   away as the point gets short, so a bare core is framed only along its
   own edges.
 - Points between two counts: the two meshes fade (the user's choice; a

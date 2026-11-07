@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { STAR_COUNTS, core, starKinds, starMesh } from "./starMesh";
+import { STAR_COUNTS, barSize, core, starKinds, starMesh } from "./starMesh";
 
 /** Each edge of the triangles (by its two ends' places), and how many triangles have it. */
 function edgeCounts(data: Float32Array) {
@@ -51,6 +51,17 @@ describe("Moravian star mesh", () => {
         expect([...counts.values()].every((count) => count % 2 === 0)).toBe(true);
       }
     }
+  });
+
+  it("thins the bars toward Hollow 1, and turns the windows over below 0", () => {
+    const span = (data: Float32Array) => data.length;
+    expect(span(starMesh(6, 0.6, 0))).toBeLessThan(span(starMesh(6, 0.6, 0.5)));
+    expect(span(starMesh(6, 0.6, -0.5))).toBeGreaterThan(span(starMesh(6, 0.6, 0)));
+    expect(barSize(1, 0.2).width).toBeCloseTo(0.012);
+    expect(barSize(0, 0.2).width).toBe(0);
+    expect(barSize(1e-6, 0.2).width).toBeCloseTo(0.2, 3);
+    expect(barSize(-1, 0.2).width).toBeCloseTo(0.85);
+    expect(barSize(-1, 0.2).over).toBe(true);
   });
 
   it("stays inside the tips' reach", () => {
