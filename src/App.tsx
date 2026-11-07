@@ -2216,6 +2216,12 @@ export default function App() {
     /* The kept tabs that did not open; they wait for the next reload (see keepUnopened). */
     const unopened: KeptDoc[] = [];
     /**
+     * The names of the tabs whose first image is gone, where the checkerboard
+     * stands in. Such a tab is marked unsaved, and a warning says not to save
+     * it: a save would write the checkerboard over the file's own image.
+     */
+    const standIns: string[] = [];
+    /**
      * After a reload, the tabs open again as they were: each scene with its
      * images, file and unsaved mark, and the selected tab selected. Undo
      * starts again from the scene as it is. Keeping starts only once they
@@ -2267,9 +2273,11 @@ export default function App() {
         }
         /* A scene needs its first image: with it gone, the checkerboard stands in, so the settings are not lost. */
         let first = await loadKeptImage(keptDoc.images[0]);
+        const lostFirst = !first;
         if (!first) {
           console.error(`reload: tab ${keptDoc.id} (${keptDoc.path ?? "untitled"}) lost its first image; the checkerboard stands in`);
           first = standInImage();
+          standIns.push(keptDoc.path?.split(/[\\/]/).pop() ?? "an untitled scene");
         }
         const second = await loadKeptImage(keptDoc.images[1]);
         let driver: DriverVideo | null = null;
@@ -2280,7 +2288,7 @@ export default function App() {
         const picture = keptDoc.picture ? await loadKeptImage(keptDoc.picture) : null;
         const solidMedia = keptDoc.solidMedia ? await loadKeptImage(keptDoc.solidMedia) : null;
         const terrain = keptDoc.terrain ? await keptTerrain(keptDoc.terrain) : null;
-        loaded.push({ doc: { id: keptDoc.id, sceneId: keptIds[kept.docs.indexOf(keptDoc)], path: keptDoc.path, untitled: keptDoc.untitled, dirty: keptDoc.dirty }, params, state, images: [first, second], driver, picture, terrain, solidMedia, openGroup: keptDoc.openGroup });
+        loaded.push({ doc: { id: keptDoc.id, sceneId: keptIds[kept.docs.indexOf(keptDoc)], path: keptDoc.path, untitled: keptDoc.untitled, dirty: keptDoc.dirty || lostFirst }, params, state, images: [first, second], driver, picture, terrain, solidMedia, openGroup: keptDoc.openGroup });
       }
       if (loaded.length === 0 || activeIdRef.current !== null) {
         /* Nothing opened, or a scene opened first: the kept tabs wait for the next reload. */
@@ -2323,7 +2331,8 @@ export default function App() {
         fileSavedRef.current = kept.file.saved;
       }
       setStartScreen(false);
-      showStatus(loaded.length === 1 ? "Reopened the scene after the reload" : `Reopened ${loaded.length} scenes after the reload`);
+      if (standIns.length) showError(`After the reload, Source A of ${standIns.join(", ")} could not be reopened; the checkerboard stands in. Do not save it: open the saved file again, or pick Source A again.`);
+      else showStatus(loaded.length === 1 ? "Reopened the scene after the reload" : `Reopened ${loaded.length} scenes after the reload`);
     };
     restoringKept = true;
     void restore().catch((error: unknown) => {
