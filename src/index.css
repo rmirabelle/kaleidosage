@@ -944,6 +944,8 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 /* A layer's blend mode: the name at the left, the menu filling the rest of the row. */
 .panel-layer-blend, .panel-select-named { display: flex; align-items: center; gap: 10px; padding: 6px 14px; }
 .panel-layer-blend .dropdown-button, .panel-select-named .dropdown-button { flex: 1; min-width: 0; }
+/* One label width for the rows with a name and a menu (or a file), so their menus line up and are the same width; a longer name (Shadow type) pushes its menu. */
+.panel-layer-blend > .panel-row-name, .panel-select-named > .panel-row-name { flex: 0 0 auto; min-width: 58px; }
 /* The light cycles' Color and Shape buttons: they fill the row, in equal cells. */
 .cycles-paint-row .panel-buttons { flex: 1; min-width: 0; width: auto; }
 .cycles-paint-row .panel-button { flex: 1; height: 26px; }

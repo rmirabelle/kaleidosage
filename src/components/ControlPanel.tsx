@@ -1151,8 +1151,6 @@ function SolidSection({ engine, row, mediaName, onPickMedia, onRemoveMedia }: { 
         setShape(next);
         if (next === 10) standStarUp(engine);
       }} />
-      <ModeSelect engine={engine} stateKey="solidMap" options={SOLID_MAPS} name="Map" onChange={setMap} />
-      {shape === 10 && map === 0 && <ModeSelect engine={engine} stateKey="solidWrap" options={SOLID_WRAPS} name="Wrap" child />}
       {/* Source: Slot A (the picture made so far), Slot B, or the 3D Object's own image or video; picking Image or Video with no file opens the Open dialog. */}
       <ModeSelect engine={engine} stateKey="solidPaint" options={SOLID_PAINTS} name="Source" onChange={(next) => {
         setPaint(next);
@@ -1170,6 +1168,8 @@ function SolidSection({ engine, row, mediaName, onPickMedia, onRemoveMedia }: { 
           )}
         </div>
       )}
+      <ModeSelect engine={engine} stateKey="solidMap" options={SOLID_MAPS} name="Map" onChange={setMap} />
+      {shape === 10 && map === 0 && <ModeSelect engine={engine} stateKey="solidWrap" options={SOLID_WRAPS} name="Wrap" child />}
       <KeepBackground engine={engine} />
       <SplitRows keys={SOLID_KEYS.filter(shown)} row={row} blend={<ModeSelect engine={engine} stateKey="solidBlend" options={LAYER_BLENDS} name="Blend" />} />
     </>
