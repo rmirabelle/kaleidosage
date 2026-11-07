@@ -41,7 +41,7 @@ import { scenePosition } from "./engine/loop";
 import { SCENE_EXTENSION, applyScene, blobToSceneImage, sceneFingerprint, serializeScene, type SceneImage } from "./engine/scene";
 import { loadSceneMedia, loadSceneSource, readScene, writeScene } from "./lib/scenes";
 import { DEFAULT_LAND_KM, loadTerrain, randomLandPlace, terrainFromScene, terrainToScene } from "./lib/terrain";
-import { adoptImage, keepAnalyses, keepImage, keepScenes, keepTerrain, keptAnalysisText, keptImageBytes, keptTerrain, readKept, type Kept, type KeptImage } from "./lib/reloadKeeper";
+import { adoptImage, keepAnalyses, keepImage, keepScenes, keepTerrain, keptAnalysisText, keptImageBytes, keptTerrain, readKept, readUnopened, keepUnopened, type Kept, type KeptDoc, type KeptImage } from "./lib/reloadKeeper";
 import type { ImageSource } from "./engine/renderer";
 import {
   makeThumbnail,
@@ -2198,11 +2198,23 @@ export default function App() {
     }
     startedRef.current = true;
     markClean();
-    const kept = readKept();
-    if (!kept) {
+    /**
+     * The snapshot, and the tabs an earlier restore could not reopen (tried
+     * again here, as extra tabs, with new tab ids; see keepUnopened).
+     */
+    const snapshot = readKept();
+    const retried = readUnopened().filter((doc) => !snapshot?.docs.some((open) => open.sceneId !== undefined && open.sceneId === doc.sceneId));
+    if (!snapshot && retried.length === 0) {
       keepScenes(takeKept);
       return;
     }
+    const firstRetryId = Math.max(0, ...(snapshot?.docs ?? []).map((doc) => doc.id)) + 1;
+    const kept: Kept = {
+      ...(snapshot ?? { activeId: null }),
+      docs: [...(snapshot?.docs ?? []), ...retried.map((doc, index): KeptDoc => ({ ...doc, id: firstRetryId + index, dirty: true }))]
+    };
+    /* The kept tabs that did not open; they wait for the next reload (see keepUnopened). */
+    const unopened: KeptDoc[] = [];
     /**
      * After a reload, the tabs open again as they were: each scene with its
      * images, file and unsaved mark, and the selected tab selected. Undo
@@ -2217,15 +2229,27 @@ export default function App() {
           loaded = await loadSceneMedia({ type: image.video.mime, video: image.video.id });
         } else {
           const blob = image.key ? await keptImageBytes(image.key) : null;
-          if (!blob) return null;
-          loaded = { source: await loadSceneSource(blob), blob };
+          /* A test pattern is drawn again when its bytes are gone. */
+          const pattern = blob ? null : PATTERNS.find((candidate) => candidate.id === image.patternId);
+          if (!blob && !pattern) {
+            console.warn(`reload: the image "${image.label}" could not be read back`);
+            return null;
+          }
+          loaded = pattern ? { source: drawPattern(pattern) } : { source: await loadSceneSource(blob!), blob: blob! };
         }
         const slot: SlotImage = { ...loaded, label: image.label, thumbnail: makeThumbnail(loaded.source), patternId: image.patternId, id: nextImageId++ };
         if (image.key) adoptImage(slot, image.key);
         return slot;
-      } catch {
+      } catch (error) {
+        console.warn(`reload: the image "${image.label}" could not be loaded again`, error);
         return null;
       }
+    };
+    /** The large checkerboard of a new scene, for a kept tab whose first image is gone: its settings still open. */
+    const standInImage = (): SlotImage => {
+      const pattern = PATTERNS.find((candidate) => candidate.id === "checker-large") ?? PATTERNS[0];
+      const source = drawPattern(pattern);
+      return { source, label: pattern.label, thumbnail: makeThumbnail(source), patternId: pattern.id, id: nextImageId++ };
     };
     const restore = async () => {
       /* Each kept tab's scene ID; a snapshot from before the IDs gets new ones, and its song map picks (tab indexes) go to them (see songFollow.preload). */
@@ -2236,12 +2260,17 @@ export default function App() {
         const state = createPlayState();
         try {
           applyScene(keptDoc.scene, params, state);
-        } catch {
+        } catch (error) {
+          console.error(`reload: tab ${keptDoc.id} (${keptDoc.path ?? "untitled"}) could not be read; it waits for the next reload`, error);
+          unopened.push(keptDoc);
           continue;
         }
-        /* A scene needs its first image. */
-        const first = await loadKeptImage(keptDoc.images[0]);
-        if (!first) continue;
+        /* A scene needs its first image: with it gone, the checkerboard stands in, so the settings are not lost. */
+        let first = await loadKeptImage(keptDoc.images[0]);
+        if (!first) {
+          console.error(`reload: tab ${keptDoc.id} (${keptDoc.path ?? "untitled"}) lost its first image; the checkerboard stands in`);
+          first = standInImage();
+        }
         const second = await loadKeptImage(keptDoc.images[1]);
         let driver: DriverVideo | null = null;
         if (keptDoc.driver) {
@@ -2253,7 +2282,13 @@ export default function App() {
         const terrain = keptDoc.terrain ? await keptTerrain(keptDoc.terrain) : null;
         loaded.push({ doc: { id: keptDoc.id, sceneId: keptIds[kept.docs.indexOf(keptDoc)], path: keptDoc.path, untitled: keptDoc.untitled, dirty: keptDoc.dirty }, params, state, images: [first, second], driver, picture, terrain, solidMedia, openGroup: keptDoc.openGroup });
       }
-      if (loaded.length === 0 || activeIdRef.current !== null) return;
+      if (loaded.length === 0 || activeIdRef.current !== null) {
+        /* Nothing opened, or a scene opened first: the kept tabs wait for the next reload. */
+        console.error(`reload: ${kept.docs.length} kept tab(s) did not open (${loaded.length === 0 ? "none could be read" : "another scene opened first"}); they wait for the next reload`);
+        keepUnopened(kept.docs);
+        return;
+      }
+      keepUnopened(unopened);
       /* Each tab's Undo history is made on the engine's settings, as addDoc makes it, starting from that scene. */
       for (const { doc, params, state, images, driver, picture, terrain, solidMedia, openGroup } of loaded) {
         Object.assign(engine.params, structuredClone(params));
@@ -2291,7 +2326,11 @@ export default function App() {
       showStatus(loaded.length === 1 ? "Reopened the scene after the reload" : `Reopened ${loaded.length} scenes after the reload`);
     };
     restoringKept = true;
-    void restore().catch((error: unknown) => console.error("Could not reopen the kept scenes", error)).finally(() => {
+    void restore().catch((error: unknown) => {
+      /* The tabs that did not open wait for the next reload; those that opened are kept as usual. */
+      console.error("reload: could not reopen the kept scenes; they wait for the next reload", error);
+      keepUnopened(kept.docs.filter((doc) => !docsRef.current.some((open) => open.id === doc.id)));
+    }).finally(() => {
       restoringKept = false;
       keepScenes(takeKept);
     });

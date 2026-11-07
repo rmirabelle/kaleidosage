@@ -77,6 +77,12 @@ interface ImageLike {
 }
 
 const STORE_KEY = "kaleidosage.kept-scenes";
+/**
+ * The tabs a restore could not reopen (see keepUnopened): the next reload
+ * tries them again, as extra tabs, since by then the keeper has written
+ * over the snapshot they came from.
+ */
+const UNOPENED_KEY = "kaleidosage.kept-scenes.unopened";
 const DB_NAME = "kaleidosage-kept";
 const BLOBS = "blobs";
 const KEEP_MS = 1000;
@@ -228,6 +234,32 @@ export function readKept(): Kept | null {
   }
 }
 
+/** Tabs that a restore before this page could not reopen, or none. */
+export function readUnopened(): KeptDoc[] {
+  if (!enabled) return [];
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(UNOPENED_KEY) ?? "[]") as unknown;
+    return Array.isArray(parsed) ? parsed as KeptDoc[] : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Keeps the tabs this restore could not reopen for the next reload (none:
+ * forgets them). Their images' bytes stay in IndexedDB while they are kept
+ * here (see pruneImages).
+ */
+export function keepUnopened(docs: KeptDoc[]) {
+  if (!enabled) return;
+  try {
+    if (docs.length) sessionStorage.setItem(UNOPENED_KEY, JSON.stringify(docs));
+    else sessionStorage.removeItem(UNOPENED_KEY);
+  } catch {
+    /* Too large to keep: they are lost, as before. */
+  }
+}
+
 let snapshot: (() => Kept | null) | null = null;
 let timer = 0;
 
@@ -259,7 +291,7 @@ export function keepScenes(take: () => Kept | null) {
 /** Removes the stored bytes that neither the latest snapshot nor this page uses (those of a page before this one). */
 async function pruneImages() {
   const kept = readKept();
-  const used = new Set([...keysHere, ...(kept?.docs ?? []).flatMap((doc) => [...doc.images.map((image) => image?.key), doc.picture?.key, doc.solidMedia?.key, doc.terrain]), ...Object.values(kept?.file?.analyses ?? {})].filter(Boolean));
+  const used = new Set([...keysHere, ...[...(kept?.docs ?? []), ...readUnopened()].flatMap((doc) => [...doc.images.map((image) => image?.key), doc.picture?.key, doc.solidMedia?.key, doc.terrain]), ...Object.values(kept?.file?.analyses ?? {})].filter(Boolean));
   try {
     const keys = await blobStore<IDBValidKey[]>("readonly", (store) => store.getAllKeys());
     for (const key of keys) if (typeof key === "string" && !used.has(key)) await blobStore("readwrite", (store) => store.delete(key));
