@@ -1676,7 +1676,15 @@ export class KaleidoRenderer {
     gl.uniform1i(k.uniforms.u_picture, picture ? 1 : 0);
     gl.uniform2f(k.uniforms.u_res, width, height);
     gl.uniform1f(k.uniforms.u_pad, picture ? 0 : pad);
-    gl.uniform2f(k.uniforms.u_center, v.centerX, v.centerY);
+    /**
+     * The Kaleidoscope's Offset moves its fold point, so only a pass that
+     * holds the Kaleidoscope gets it. Before (2026-11-07) every pass did: a
+     * pass with no fold, as the one that draws the source image ahead of a
+     * Kaleidoscope later in the list, slid the whole image (with Freeze
+     * background, the frozen background moved).
+     */
+    const folds = steps.includes("kaleidoscope");
+    gl.uniform2f(k.uniforms.u_center, folds ? v.centerX : 0, folds ? v.centerY : 0);
     gl.uniform1i(k.uniforms.u_warpMode, v.warpMode);
     gl.uniform1f(k.uniforms.u_warpAmount, v.warpAmount);
     gl.uniform1f(k.uniforms.u_warpScale, v.warpScale);
