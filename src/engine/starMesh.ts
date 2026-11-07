@@ -119,9 +119,11 @@ export function hull(points: V3[]): CoreFace[] {
  * The turn that stands a core up: one point straight up (a face with the
  * most sides, so the 26-point star hangs from a square's point, as paper
  * stars do), and turned about the upright so the most level of the other
- * points (the lower one, if two are as level) faces the viewer. So the
- * 8-point star (the Merkaba) shows a point up, a point down, and a lower
- * point toward the viewer. Returns the turn as a function.
+ * points (the upper one, if two are as level) faces the viewer. So the
+ * 8-point star (the Merkaba) shows a point up, a point down, an upper
+ * point toward the viewer, and a whole face of the upright tetrahedron
+ * (a big flat triangle, its tip up) facing the viewer, as in the user's
+ * photo of a Merkaba. Returns the turn as a function.
  */
 function standUp(faces: CoreFace[]): (p: V3) => V3 {
   const most = Math.max(...faces.map((face) => face.corners.length));
@@ -141,8 +143,8 @@ function standUp(faces: CoreFace[]): (p: V3) => V3 {
     const level = Math.abs(n[1]) - Math.abs(best[1]);
     if (level < -1e-6) return n;
     if (level > 1e-6) return best;
-    if (n[1] < best[1] - 1e-6) return n;
-    if (n[1] > best[1] + 1e-6) return best;
+    if (n[1] > best[1] + 1e-6) return n;
+    if (n[1] < best[1] - 1e-6) return best;
     return n[2] > best[2] ? n : best;
   });
   const angle = Math.atan2(front[0], front[2]);

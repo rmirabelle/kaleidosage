@@ -110,11 +110,13 @@ const WHOLE_SNAP_KEYS: ParamKey[] = ["drosteSpirals", "segments", "bubbleSegment
  * Settings with well-known values the handles snap to, each with a tick
  * mark. The values between still work. The usual lens lengths of a 35 mm
  * camera; the Moravian star's whole shapes (between them it fades from one
- * to the next); Tilt every 30°; Tiles at the whole repeats (and a half).
+ * to the next), and its Point length 0.6 (8 points make the exact Merkaba,
+ * two tetrahedra); Tilt every 30°; Tiles at the whole repeats (and a half).
  */
 const VALUE_SNAPS: Partial<Record<ParamKey, number[]>> = {
   cameraLens: [14, 18, 24, 35, 50, 85, 135, 200],
   solidPoints: [4, 6, 8, 12, 14, 20, 26, 32],
+  solidPointLength: [0.6],
   cameraTilt: [-90, -60, -30, 30, 60],
   solidTilt: [-90, -60, -30, 30, 60, 90],
   solidTiles: [0.5, 1, 2, 3, 4, 6, 8]

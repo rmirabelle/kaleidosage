@@ -157,9 +157,11 @@ test).
 - Standing up (2026-11-06, the user's photo of a Merkaba): each core is
   turned so one point is straight up (on a face with the most sides, so
   the 26-point star hangs from a square's point, as paper stars do), and
-  the most level of the other points (the lower one, when two are as
+  the most level of the other points (the upper one, when two are as
   level) faces the viewer. The 8-point star shows a point up, a point down
-  and a lower point toward the viewer.
+  and an upper point toward the viewer, so a whole face of the upright
+  tetrahedron (a big flat triangle, tip up) faces the viewer, as in the
+  user's photo. Point length snaps to 0.6, the exact Merkaba.
 - Points between two counts: the two meshes fade (the user's choice; a
   mesh cannot morph between cores with different faces). The first core's
   finished picture is drawn, and the second fades in over it.

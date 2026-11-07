@@ -25,9 +25,9 @@ describe("Moravian star mesh", () => {
   it("stands each core with a point straight up", () => {
     const has = (kind: number, n: number[]) => core(kind).faces.some((face) => face.normal.every((x, k) => Math.abs(x - n[k]) < 1e-5));
     for (let kind = 0; kind < 8; kind++) expect(has(kind, [0, 1, 0])).toBe(true);
-    /* The Merkaba: a point down too, and a lower point toward the viewer. */
+    /* The Merkaba: a point down too, and an upper point toward the viewer. */
     expect(has(2, [0, -1, 0])).toBe(true);
-    expect(has(2, [0, -1 / 3, Math.sqrt(8) / 3])).toBe(true);
+    expect(has(2, [0, 1 / 3, Math.sqrt(8) / 3])).toBe(true);
     /* The paper star hangs from a square's point. */
     expect(core(6).faces.find((face) => face.normal[1] > 0.9999)?.corners.length).toBe(4);
   });
