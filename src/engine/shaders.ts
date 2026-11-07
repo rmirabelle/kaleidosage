@@ -3870,6 +3870,9 @@ vec2 project(vec2 q) {
 /* The gradient at place t, there and back once around the outline, so it meets itself with no seam. */
 float around(float t) { return 1.0 - abs(2.0 * fract(t) - 1.0); }
 
+/* How much white-hot center a color gets: its brightest part (black: none). */
+float hot(vec3 color) { return clamp(max(color.r, max(color.g, color.b)), 0.0, 1.0); }
+
 /* The gradient at t (0 to 1), as gradientColorAt in params.ts. */
 vec3 stopColor(float t) {
   if (t <= u_stopAt[0]) return u_stopColor[0];
@@ -4101,7 +4104,12 @@ void main() {
 #if PASS != 1
     float across = n.x / u_width;
     float core = exp(-4.0 * across * across);
-    light += (color + 0.6) * core * shown;
+    /**
+     * The core's white-hot center scales with the color's brightest part, so
+     * a black stretch of the gradient adds nothing (2026-11-07: a fixed 0.6
+     * of white made black ends of the lines gray).
+     */
+    light += (color + 0.6 * hot(color)) * core * shown;
     /* The head's bright spot while the outline is drawn or chased. */
     if (moving && u_emitter > 0.0) {
       float near = length(p - project(outlinePoint(b, r))) / u_emitter;
@@ -4124,7 +4132,7 @@ void main() {
 #endif
   float glowMax = u_glow;
   if (glowSum > 0.0) light += glowColor / glowSum * glowMax * (1.0 - exp(-glowSum / max(glowMax, 1e-4)));
-  light += (spotColor + 0.5) * spot * (0.5 + min(u_glow, 1.0));
+  light += (spotColor + 0.5 * hot(spotColor)) * spot * (0.5 + min(u_glow, 1.0));
   o = addLight(texture(u_picture, v_uv), u_amount * light);
 #endif
 }`;
