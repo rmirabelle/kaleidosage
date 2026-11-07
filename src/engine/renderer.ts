@@ -1,7 +1,8 @@
 import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, BUBBLE_SHADER, MASK_SHADER, OUTLINE_SHADER, OUTLINE_GLOW_SHADER, OUTLINE_LINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, SOLID_FILTER_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, BUBBLE_SHADER, MASK_SHADER, OUTLINE_SHADER, OUTLINE_GLOW_SHADER, OUTLINE_LINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, SOLID_FILTER_SHADER, SOLID_MESH_VERTEX, SOLID_MESH_SHADER, SOLID_BACK_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { starKinds, starMesh } from "./starMesh";
 import { halveGrid, type TerrainData } from "./terrain";
 import type { VrEye, VrScreen, XrLayer, XrSession } from "./vr";
 
@@ -1006,6 +1007,13 @@ export class KaleidoRenderer {
   private readonly terrainField: Program;
   private readonly solidProgram: Program;
   private readonly solidFilterProgram: Program;
+  /** The Moravian star as a mesh (see drawStarMesh): its triangles, and the picture behind them. */
+  private readonly starProgram: Program;
+  private readonly starBackProgram: Program;
+  /** The star's triangles, one buffer per core drawn (two while Points fades between two counts), rebuilt when their settings change. */
+  private readonly starBuffers: { vertices: WebGLVertexArrayObject; buffer: WebGLBuffer; key: string; count: number }[] = [];
+  /** The picture the star is drawn into, with 4 samples per pixel for smooth edges, and its depth. */
+  private starSamples: { framebuffer: WebGLFramebuffer; color: WebGLRenderbuffer; depth: WebGLRenderbuffer; size: [number, number] } | null = null;
   private readonly maxPass: Program;
   private readonly contours: Program;
   private readonly contourField: Program;
@@ -1171,6 +1179,8 @@ export class KaleidoRenderer {
     this.terrainField = this.createProgram(TERRAIN_FIELD_SHADER);
     this.solidProgram = this.createProgram(SOLID_SHADER);
     this.solidFilterProgram = this.createProgram(SOLID_FILTER_SHADER);
+    this.starProgram = this.createProgram(SOLID_MESH_SHADER, SOLID_MESH_VERTEX);
+    this.starBackProgram = this.createProgram(SOLID_BACK_SHADER);
     this.maxPass = this.createProgram(MAX_SHADER);
     this.contours = this.createProgram(CONTOUR_SHADER);
     this.contourField = this.createProgram(CONTOUR_FIELD_SHADER);
@@ -2327,6 +2337,10 @@ export class KaleidoRenderer {
    * place, see render).
    */
   private drawSolid(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture) {
+    if (v.solidShape === 10) {
+      this.drawStarMesh(v, source, target, width, height, back);
+      return;
+    }
     if (v.solidEdges !== 1) {
       this.drawSolidPass(v, source, target, width, height, back);
       return;
@@ -2348,6 +2362,162 @@ export class KaleidoRenderer {
     /* The sphere around the shape (1.45 shape sizes, as in the shader) seen from the eye, with some room. */
     gl.uniform1f(f.uniforms.u_radius, 0.5 * Math.max(0.01, v.solidSize) * 1.45 * 1.25 + 4 / height);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /** The 3D Object's turn, place, map and light settings, which the ray shader and the mesh star share. */
+  private solidLook(s: Program, v: FrameValues) {
+    const gl = this.gl;
+    const [cs, ss] = [Math.cos(v.solidSpin), Math.sin(v.solidSpin)];
+    const tilt = v.solidTilt + v.solidTumble;
+    const [ct, st] = [Math.cos(tilt), Math.sin(tilt)];
+    /* Rows of (turn about x by tilt) times (spin about y), given by columns for GLSL. */
+    const rows = [[cs, 0, ss], [st * ss, ct, -st * cs], [-ct * ss, st, ct * cs]];
+    gl.uniformMatrix3fv(s.uniforms.u_turn, false, [0, 1, 2].flatMap((column) => rows.map((row) => row[column])));
+    gl.uniform2f(s.uniforms.u_center, v.solidX, v.solidY);
+    gl.uniform1f(s.uniforms.u_bend, Math.max(0, v.solidBend));
+    gl.uniform1f(s.uniforms.u_frost, Math.min(1, Math.max(0, v.solidFrost)));
+    gl.uniform1f(s.uniforms.u_tiles, Math.max(0.01, v.solidTiles));
+    const light = [Math.cos(v.solidLight), Math.sin(v.solidLight), 1.2];
+    const length = Math.hypot(...light);
+    gl.uniform3f(s.uniforms.u_light, light[0] / length, light[1] / length, light[2] / length);
+    gl.uniform1f(s.uniforms.u_shading, Math.min(1, Math.max(0, v.solidShading)));
+    gl.uniform1f(s.uniforms.u_shine, Math.min(1, Math.max(0, v.solidShine)));
+    gl.uniform1f(s.uniforms.u_shadow, Math.min(1, Math.max(0, v.solidShadow)));
+  }
+
+  /**
+   * The Moravian star as a mesh of triangles (see starMesh.ts), which the
+   * graphics card draws with 4 samples per pixel, so its edges are smooth
+   * at little cost. The shadow's outline goes first into a small picture
+   * (each core in its own channel). Then for each core: the picture behind
+   * on the whole screen, the triangles over it (nearest in front), and the
+   * 4 samples averaged into one picture. While Points is between two
+   * counts, the first core's picture is drawn first, and the second core's
+   * fades in over it.
+   */
+  private drawStarMesh(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture) {
+    const gl = this.gl;
+    const cores = starKinds(v.solidPoints).map((each, slot) => ({ ...each, mesh: this.starVertices(slot, each.kind, v.solidPointLength, v.solidHollow) }));
+    const shadow = Math.min(1, Math.max(0, v.solidShadow));
+    const shadeSize: [number, number] = [Math.max(1, Math.ceil(width / 4)), Math.max(1, Math.ceil(height / 4))];
+    const shade = this.layerTarget("solid star shade", shadeSize[0], shadeSize[1]);
+    const p = this.starProgram;
+    const b = this.starBackProgram;
+    /* The settings both programs read (each skips the ones it does not have). */
+    const common = (s: Program, under: WebGLTexture, slot: number, fade: number, shadeTexture: WebGLTexture = shade.texture) => {
+      gl.useProgram(s.program);
+      this.solidLook(s, v);
+      gl.uniform1f(s.uniforms.u_aspect, width / height);
+      gl.uniform1f(s.uniforms.u_size, Math.max(0.01, v.solidSize));
+      gl.uniform2f(s.uniforms.u_view, width, height);
+      gl.uniform1i(s.uniforms.u_map, v.solidMap);
+      gl.uniform1i(s.uniforms.u_blend, v.solidBlend);
+      gl.uniform1f(s.uniforms.u_opacity, Math.min(1, Math.max(0, v.solid)));
+      gl.uniform1f(s.uniforms.u_background, Math.min(1, Math.max(0, v.solidBackground)));
+      gl.uniform2f(s.uniforms.u_shadeMix, slot === 0 ? 1 : 0, slot === 0 ? 0 : 1);
+      gl.uniform1f(s.uniforms.u_fade, fade);
+      const textures: [WebGLTexture, string][] = [[source, "u_tex"], [back, "u_back"], [under, "u_under"], [shadeTexture, "u_shade"]];
+      textures.forEach(([texture, name], unit) => {
+        gl.activeTexture(gl.TEXTURE0 + unit);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.uniform1i(s.uniforms[name], unit);
+      });
+    };
+    if (shadow > 0) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, shade.framebuffer);
+      gl.viewport(0, 0, shadeSize[0], shadeSize[1]);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      /* The shadow pass draws into the shade picture, so it must not also read it. */
+      common(p, back, 0, 1, back);
+      gl.uniform1i(p.uniforms.u_pass, 1);
+      cores.forEach(({ mesh }, slot) => {
+        gl.colorMask(slot === 0, slot === 1, false, false);
+        gl.bindVertexArray(mesh.vertices);
+        gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
+      });
+      gl.colorMask(true, true, true, true);
+      gl.bindVertexArray(null);
+    }
+    const samples = this.starSampleTarget(width, height);
+    const under = cores.length > 1 ? this.layerTarget("solid star under", width, height) : null;
+    const whole = target ?? this.layerTarget("solid star", width, height);
+    cores.forEach(({ mesh, weight }, slot) => {
+      const fade = slot === 0 ? 1 : weight;
+      const below = slot === 0 || !under ? back : under.texture;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, samples.framebuffer);
+      gl.viewport(0, 0, width, height);
+      gl.clear(gl.DEPTH_BUFFER_BIT);
+      common(b, below, slot, fade);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      common(p, below, slot, fade);
+      gl.uniform1i(p.uniforms.u_pass, 0);
+      gl.enable(gl.DEPTH_TEST);
+      gl.depthFunc(gl.LESS);
+      gl.bindVertexArray(mesh.vertices);
+      gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
+      gl.bindVertexArray(null);
+      gl.disable(gl.DEPTH_TEST);
+      const into = slot < cores.length - 1 && under ? under : whole;
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, samples.framebuffer);
+      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, into.framebuffer);
+      gl.blitFramebuffer(0, 0, width, height, 0, 0, width, height, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    });
+    gl.activeTexture(gl.TEXTURE0);
+    if (!target) {
+      gl.viewport(0, 0, width, height);
+      this.drawCopy(whole.texture);
+    }
+  }
+
+  /** The vertex buffer for one core of the mesh star, rebuilt only when its core, Point length or Hollow changes. */
+  private starVertices(slot: number, kind: number, pointLength: number, hollow: number) {
+    const gl = this.gl;
+    let entry = this.starBuffers[slot];
+    if (!entry) {
+      const vertices = gl.createVertexArray()!;
+      const buffer = gl.createBuffer()!;
+      gl.bindVertexArray(vertices);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0);
+      gl.enableVertexAttribArray(1);
+      gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+      gl.bindVertexArray(null);
+      entry = { vertices, buffer, key: "", count: 0 };
+      this.starBuffers[slot] = entry;
+    }
+    const key = `${kind} ${pointLength} ${hollow}`;
+    if (entry.key !== key) {
+      const data = starMesh(kind, pointLength, hollow);
+      gl.bindBuffer(gl.ARRAY_BUFFER, entry.buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+      entry.key = key;
+      entry.count = data.length / 6;
+    }
+    return entry;
+  }
+
+  /** The star's picture with 4 samples per pixel (fewer where the graphics card has fewer for this format), and its depth, the size of the screen. */
+  private starSampleTarget(width: number, height: number) {
+    const gl = this.gl;
+    if (this.starSamples && this.starSamples.size[0] === width && this.starSamples.size[1] === height) return this.starSamples;
+    const target = this.starSamples ?? { framebuffer: gl.createFramebuffer()!, color: gl.createRenderbuffer()!, depth: gl.createRenderbuffer()!, size: [0, 0] as [number, number] };
+    const format = this.trailFormat.internal;
+    const offered = gl.getInternalformatParameter(gl.RENDERBUFFER, format, gl.SAMPLES) as Int32Array | null;
+    const count = [...(offered ?? [])].find((n) => n <= 4) ?? 0;
+    gl.bindRenderbuffer(gl.RENDERBUFFER, target.color);
+    gl.renderbufferStorageMultisample(gl.RENDERBUFFER, count, format, width, height);
+    gl.bindRenderbuffer(gl.RENDERBUFFER, target.depth);
+    gl.renderbufferStorageMultisample(gl.RENDERBUFFER, count, gl.DEPTH_COMPONENT24, width, height);
+    gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, target.color);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, target.depth);
+    target.size = [width, height];
+    this.starSamples = target;
+    return target;
   }
 
   private drawSolidPass(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture) {
@@ -2381,22 +2551,7 @@ export class KaleidoRenderer {
     gl.uniform1i(s.uniforms.u_extra, v.solidEdges === 2 ? 1 : 0);
     gl.uniform1f(s.uniforms.u_levels, v.solidLevels);
     gl.uniform1f(s.uniforms.u_time, v.solidTime);
-    const [cs, ss] = [Math.cos(v.solidSpin), Math.sin(v.solidSpin)];
-    const tilt = v.solidTilt + v.solidTumble;
-    const [ct, st] = [Math.cos(tilt), Math.sin(tilt)];
-    /* Rows of (turn about x by tilt) times (spin about y), given by columns for GLSL. */
-    const rows = [[cs, 0, ss], [st * ss, ct, -st * cs], [-ct * ss, st, ct * cs]];
-    gl.uniformMatrix3fv(s.uniforms.u_turn, false, [0, 1, 2].flatMap((column) => rows.map((row) => row[column])));
-    gl.uniform2f(s.uniforms.u_center, v.solidX, v.solidY);
-    gl.uniform1f(s.uniforms.u_bend, Math.max(0, v.solidBend));
-    gl.uniform1f(s.uniforms.u_frost, Math.min(1, Math.max(0, v.solidFrost)));
-    gl.uniform1f(s.uniforms.u_tiles, Math.max(0.01, v.solidTiles));
-    const light = [Math.cos(v.solidLight), Math.sin(v.solidLight), 1.2];
-    const length = Math.hypot(...light);
-    gl.uniform3f(s.uniforms.u_light, light[0] / length, light[1] / length, light[2] / length);
-    gl.uniform1f(s.uniforms.u_shading, Math.min(1, Math.max(0, v.solidShading)));
-    gl.uniform1f(s.uniforms.u_shine, Math.min(1, Math.max(0, v.solidShine)));
-    gl.uniform1f(s.uniforms.u_shadow, Math.min(1, Math.max(0, v.solidShadow)));
+    this.solidLook(s, v);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, back);
     gl.uniform1i(s.uniforms.u_back, 1);

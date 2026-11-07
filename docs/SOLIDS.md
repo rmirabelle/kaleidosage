@@ -129,6 +129,39 @@ so a range on them changes the speed, not the angle.
   hollow star went from about 1.8 to 3.2 ms. More rays at the outline and
   at inner edges too cost about twice as much again and were no better.
 
+## The Moravian star as a mesh
+
+Changed 2026-11-06. The Moravian star is no longer drawn by rays: it is a
+mesh of triangles (`starMesh.ts`), which the graphics card draws with 4
+samples per pixel. The user saw its hollow bars crawl as it turned; more
+rays at creases and an edge filter on the finished picture both helped
+only a little, and the rays cost about 1.4 ms more at 2560 x 1440. A
+mesh gets smooth edges from the graphics card at almost no cost, and the
+whole star costs far less (about 0.04 ms against 0.39 ms at 960 x 540 in a
+test).
+
+- The mesh: the 8 cores (found from their corners), a point on each face.
+  Point length moves the tips. Hollow makes each triangle a frame: a
+  smaller triangle (the window) inside it, and three bars between them;
+  no cutting, so Hollow only moves the window's corners. The bars have a
+  thickness: an inner surface (each point moved in so it is the thickness
+  behind all its faces) and a wall around each window. Bar width and
+  thickness come from Hollow as the ray star's did (width 1.6 times the
+  bar, thickness the bar, at most 0.06). The side bars of a point shrink
+  away as the point gets short, so a bare core is framed only along its
+  own edges.
+- Points between two counts: the two meshes fade (the user's choice; a
+  mesh cannot morph between cores with different faces). The first core's
+  finished picture is drawn, and the second fades in over it.
+- The picture behind, Background, Blend, Opacity and the Map are as for
+  the rays (the painting code is shared, SOLID_PAINT_GLSL). A face seen from
+  its back (the inside of a bar) turns its normal to the eye.
+- The shadow: the triangles are moved along the light onto the wall
+  behind (as in castLight) into a picture a quarter of the screen's size,
+  and softened by 16 reads in a disk. So its soft edge is the same width
+  everywhere, where the rays' grew with the distance from the shape.
+- The mesh is rebuilt only when its core, Point length or Hollow changes.
+
 ## Open points
 
 - Next: a Mandelbulb, and a cut gem.

@@ -4759,6 +4759,51 @@ void main() {
 }`;
 
 /**
+ * The 3D Object's color at a point of its surface (q in the shape's own
+ * frame, n the normal and rd the ray in the view, uv the pixel's place):
+ * the picture by Map, then the light and the shine. The ray shader
+ * (SOLID_SHADER) and the mesh shader (SOLID_MESH_SHADER) share it; each
+ * has its own wrapAt, fold and readAt before it.
+ */
+const SOLID_PAINT_GLSL = `
+vec3 paint(vec3 q, vec3 n, vec3 rd, vec2 uv) {
+  vec3 color;
+  if (u_map == 1) {
+    vec2 lens = uv + n.xy * u_bend * 0.3 * vec2(1.0 / u_aspect, 1.0);
+    if (u_frost > 0.001) {
+      /**
+       * Frost: frosted glass. The picture is read at 16 places in a
+       * disk around the lens point (up to 0.05 screen heights across at
+       * Frost 1), turned by a random angle that sticks to the surface,
+       * so it is soft and grainy and the grain turns with the shape.
+       * The glass scatters light, so it also looks a little milky.
+       */
+      vec3 grainAt = q * 731.0;
+      float spin = 6.2831853 * fract(sin(dot(grainAt, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+      float reach = u_frost * u_frost * 0.05;
+      vec3 sum = vec3(0.0);
+      for (int k = 0; k < 16; k++) {
+        float angle = float(k) * 2.39996323 + spin;
+        vec2 tap = vec2(cos(angle), sin(angle)) * sqrt((float(k) + 0.5) / 16.0) * reach;
+        sum += straight(textureLod(u_tex, fold(lens + tap * vec2(1.0 / u_aspect, 1.0)), 0.0));
+      }
+      color = mix(sum / 16.0, vec3(1.0), u_frost * 0.12);
+    } else {
+      color = straight(textureLod(u_tex, fold(lens), 0.0));
+    }
+  } else if (u_map == 2) {
+    vec3 r = reflect(rd, n);
+    color = straight(textureLod(u_tex, vec2(abs(atan(r.x, -r.z)) / PI, asin(clamp(r.y, -1.0, 1.0)) / PI + 0.5), 0.0));
+  } else {
+    color = wrapAt(q, transpose(u_turn) * n);
+  }
+  float lit = mix(1.0, 0.18 + 0.82 * max(dot(n, u_light), 0.0), u_shading);
+  float shine = pow(max(dot(reflect(-u_light, n), -rd), 0.0), 40.0) * u_shine;
+  return color * lit + shine;
+}
+`;
+
+/**
  * 3D Object (see docs/SOLIDS.md): one shape over the picture. Each pixel
  * sends a ray from the viewer (EYE screen heights in front of the screen);
  * rays that miss a sphere around the shape show the background at once.
@@ -5310,7 +5355,7 @@ vec3 wrapAt(vec3 q, vec3 n) {
   }
   return color / total;
 }
-
+${SOLID_PAINT_GLSL}
 /**
  * The cast shadow: the picture is a wall a little behind the shape (WALL
  * shape sizes behind its middle), and a ray from this place on the wall
@@ -5407,39 +5452,7 @@ vec4 shoot(vec3 eye, vec3 rd, float from, out bool edgy, out float close) {
    */
   if (hit && abs(around.w - 4.0 * dHit) > CREASE * length(around.xyz)) edgy = true;
   vec3 n = normalize(around.xyz);
-  vec3 color;
-  if (u_map == 1) {
-    vec2 lens = v_uv + n.xy * u_bend * 0.3 * vec2(1.0 / u_aspect, 1.0);
-    if (u_frost > 0.001) {
-      /**
-       * Frost: frosted glass. The picture is read at 16 places in a
-       * disk around the lens point (up to 0.05 screen heights across at
-       * Frost 1), turned by a random angle that sticks to the surface,
-       * so it is soft and grainy and the grain turns with the shape.
-       * The glass scatters light, so it also looks a little milky.
-       */
-      vec3 grainAt = toShape(p) * 731.0;
-      float spin = 6.2831853 * fract(sin(dot(grainAt, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
-      float reach = u_frost * u_frost * 0.05;
-      vec3 sum = vec3(0.0);
-      for (int k = 0; k < 16; k++) {
-        float angle = float(k) * 2.39996323 + spin;
-        vec2 tap = vec2(cos(angle), sin(angle)) * sqrt((float(k) + 0.5) / 16.0) * reach;
-        sum += straight(textureLod(u_tex, fold(lens + tap * vec2(1.0 / u_aspect, 1.0)), 0.0));
-      }
-      color = mix(sum / 16.0, vec3(1.0), u_frost * 0.12);
-    } else {
-      color = straight(textureLod(u_tex, fold(lens), 0.0));
-    }
-  } else if (u_map == 2) {
-    vec3 r = reflect(rd, n);
-    color = straight(textureLod(u_tex, vec2(abs(atan(r.x, -r.z)) / PI, asin(clamp(r.y, -1.0, 1.0)) / PI + 0.5), 0.0));
-  } else {
-    color = wrapAt(toShape(p), transpose(u_turn) * n);
-  }
-  float lit = mix(1.0, 0.18 + 0.82 * max(dot(n, u_light), 0.0), u_shading);
-  float shine = pow(max(dot(reflect(-u_light, n), -rd), 0.0), 40.0) * u_shine;
-  return vec4((color * lit + shine) * cover, cover);
+  return vec4(paint(toShape(p), n, rd, v_uv) * cover, cover);
 }
 
 void main() {
@@ -5521,5 +5534,167 @@ void main() {
   vec4 far = near * 0.5 + 0.25 * (at(v_uv - dir * 0.5) + at(v_uv + dir * 0.5));
   float lf = luma(far);
   o = lf < low || lf > high ? near : far;
+}`;
+
+/**
+ * The Moravian star as a mesh (see starMesh.ts and docs/SOLIDS.md): the
+ * corners of its triangles. a_pos and a_normal are in the shape's unit
+ * frame; u_turn, u_size and u_center place them in the view, as toShape
+ * does the other way in SOLID_SHADER. The eye is EYE screen heights in front
+ * of the screen, as for the rays, so both ways draw the same picture.
+ *
+ * u_pass 1 draws the shadow's outline instead: each point moved along the
+ * light onto the wall WALL shape sizes behind the shape's middle (as in
+ * castLight), where it covers the screen at its own x and y.
+ */
+export const SOLID_MESH_VERTEX = `#version 300 es
+layout(location = 0) in vec3 a_pos;
+layout(location = 1) in vec3 a_normal;
+uniform mat3 u_turn;
+uniform vec2 u_center;
+uniform float u_size;
+uniform float u_aspect;
+uniform vec3 u_light;
+uniform int u_pass;
+out vec3 v_world;
+out vec3 v_normal;
+out vec3 v_shape;
+const float EYE = 3.0;
+const float WALL = 0.9;
+const float NEAR = 0.1;
+const float FAR = 20.0;
+void main() {
+  float scale = 0.5 * u_size;
+  vec3 world = u_turn * (a_pos * scale) + vec3(u_center, 0.0);
+  v_world = world;
+  v_normal = u_turn * a_normal;
+  v_shape = a_pos;
+  if (u_pass == 1) {
+    vec3 wall = world - u_light * ((world.z + WALL * scale) / u_light.z);
+    gl_Position = vec4(wall.x / (0.5 * u_aspect), wall.y / 0.5, 0.0, 1.0);
+    return;
+  }
+  /* The screen is the plane z = 0, seen from the eye: x and y shrink by EYE over the distance from the eye. */
+  float w = EYE - world.z;
+  gl_Position = vec4(world.x * EYE / (0.5 * u_aspect), world.y * EYE / 0.5, (FAR + NEAR) / (FAR - NEAR) * w - 2.0 * FAR * NEAR / (FAR - NEAR), w);
+}`;
+
+/**
+ * The picture behind the mesh star, for its background pass and its
+ * triangles: Background dims it, and the shadow darkens it. The shadow's
+ * outline (u_shade, a quarter of the screen's size: red the first core,
+ * green the second while Points fades between two) is softened by 16 reads
+ * in a disk.
+ *
+ * u_fade: while Points is between two counts, the first core's finished
+ * picture is u_under, and the second core's picture goes over it by u_fade
+ * (1 draws the picture alone).
+ */
+const SOLID_BEHIND_GLSL = `
+uniform sampler2D u_back;
+uniform sampler2D u_under;
+uniform sampler2D u_shade;
+uniform vec2 u_shadeMix;
+uniform float u_fade;
+uniform float u_aspect;
+uniform float u_size;
+uniform float u_background;
+uniform float u_shadow;
+${COVER_GLSL}
+float shadowAt(vec2 uv) {
+  if (u_shadow <= 0.0) return 0.0;
+  float reach = 0.06 * u_size;
+  float sum = 0.0;
+  for (int k = 0; k < 16; k++) {
+    float angle = float(k) * 2.39996323;
+    vec2 tap = vec2(cos(angle), sin(angle)) * sqrt((float(k) + 0.5) / 16.0) * reach;
+    sum += dot(textureLod(u_shade, uv + tap * vec2(1.0 / u_aspect, 1.0), 0.0).rg, u_shadeMix);
+  }
+  return smoothstep(0.0, 1.0, sum / 16.0);
+}
+/* The picture behind, with its cover (premultiplied), and its color dimmed by Background and the shadow. */
+vec3 behind(vec2 uv, out float cover) {
+  vec4 picture = textureLod(u_back, uv, 0.0);
+  cover = picture.a;
+  return straight(picture) * u_background * (1.0 - u_shadow * 0.75 * shadowAt(uv));
+}
+vec4 faded(vec2 uv, vec4 color) { return u_fade >= 1.0 ? color : mix(textureLod(u_under, uv, 0.0), color, u_fade); }
+`;
+
+/** The mesh star's background pass: the picture behind it (see SOLID_BEHIND_GLSL) on the whole screen. */
+export const SOLID_BACK_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+${SOLID_BEHIND_GLSL}
+void main() {
+  float cover;
+  vec3 base = behind(v_uv, cover);
+  o = faded(v_uv, covered(base, cover));
+}`;
+
+/**
+ * The mesh star's triangles: painted as the ray shader paints its surface
+ * (SOLID_PAINT_GLSL, with the ball's map for Wrap), over the picture behind
+ * with Blend and Opacity. A face seen from its back (the inside of a
+ * hollow star's bars) turns its normal to the eye. u_pass 1 marks the
+ * shadow's outline.
+ */
+export const SOLID_MESH_SHADER = `#version 300 es
+precision highp float;
+/* The same precision as the vertex shader's, for the uniforms both have. */
+precision highp int;
+in vec3 v_world;
+in vec3 v_normal;
+in vec3 v_shape;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform vec2 u_view;
+uniform int u_pass;
+uniform int u_map;
+uniform int u_blend;
+uniform float u_opacity;
+uniform mat3 u_turn;
+uniform float u_bend;
+uniform float u_frost;
+uniform float u_tiles;
+uniform vec3 u_light;
+uniform float u_shading;
+uniform float u_shine;
+${SOLID_BEHIND_GLSL}
+const float PI = 3.14159265359;
+const float EYE = 3.0;
+vec3 blendLayer(vec3 base, vec3 top, int mode) {
+  if (mode == 1) return 1.0 - (1.0 - base) * (1.0 - top);
+  if (mode == 2) return base * top;
+  if (mode == 3) return mix(2.0 * base * top, 1.0 - 2.0 * (1.0 - base) * (1.0 - top), step(0.5, base));
+  if (mode == 4) return abs(base - top);
+  if (mode == 5) return max(base, top);
+  if (mode == 6) return min(base, top);
+  if (mode == 7) return min(base + top, 1.0);
+  return top;
+}
+vec2 fold(vec2 uv) { return 1.0 - abs(1.0 - 2.0 * fract(uv * 0.5)); }
+vec3 readAt(vec2 uv) { return straight(textureLod(u_tex, fold(uv * u_tiles), 0.0)); }
+/* Wrap: the ball's map, around and up (as wrapAt in SOLID_SHADER for the star). */
+vec3 wrapAt(vec3 q, vec3 n) {
+  float around = atan(q.z, q.x) / (2.0 * PI) + 0.5;
+  vec3 d = normalize(q);
+  return readAt(vec2(around * 2.0, asin(clamp(d.y, -1.0, 1.0)) / PI + 0.5));
+}
+${SOLID_PAINT_GLSL}
+void main() {
+  if (u_pass == 1) {
+    o = vec4(1.0);
+    return;
+  }
+  vec2 uv = gl_FragCoord.xy / u_view;
+  vec3 rd = normalize(v_world - vec3(0.0, 0.0, EYE));
+  vec3 n = normalize(v_normal);
+  if (dot(n, rd) > 0.0) n = -n;
+  vec3 color = paint(v_shape, n, rd, uv);
+  float cover;
+  vec3 base = behind(uv, cover);
+  o = faded(uv, covered(mix(base, blendLayer(base, color, u_blend), u_opacity), mix(cover, 1.0, u_opacity)));
 }`;
 
