@@ -1115,7 +1115,7 @@ export function addEffect(state: PlayState, step: FxStep) {
   state.groups[step] = true;
 }
 
-/** Takes an effect out of the list and turns its group off. Its settings stay, for when it is added again. */
+/** Takes an effect out of the list and turns its group off. Its settings stay until it is added again, which starts it fresh (see freshEffect). */
 export function removeEffect(state: PlayState, step: FxStep) {
   state.fxOrder = state.fxOrder.filter((item) => item !== step);
   state.groups[step] = false;
@@ -1497,84 +1497,129 @@ export function resetEffects(params: Params, state: PlayState) {
     }
     state.groups[group] = false;
   }
-  if (!state.locks.warp) {
+  for (const group of Object.keys(GROUP_MODES) as GroupKey[]) if (!state.locks[group]) GROUP_MODES[group]!(state, fresh);
+  /* The camera's sky and repeat are shared: they stay while either effect is locked. */
+  if (!state.locks.camera && !state.locks.terrain) freshCameraShared(state, fresh);
+  /* The unlocked effects leave the list (their groups are off now); the locked ones stay, in their order. */
+  state.fxOrder = state.fxOrder.filter((step) => state.locks[step]);
+}
+
+/**
+ * Each effect's own modes and other play state, set back to "fresh"'s
+ * (Reset and freshEffect use it). The Camera's sky and repeat, which the
+ * Camera and Terrain share, are in freshCameraShared. The 3D Object and
+ * Outlines also go back to their starting turn.
+ */
+const GROUP_MODES: Partial<Record<GroupKey, (state: PlayState, fresh: PlayState) => void>> = {
+  warp: (state, fresh) => {
     state.warpMode = fresh.warpMode;
     state.warpType = fresh.warpType;
-  }
-  if (!state.locks.map) {
+    state.layerBlend.warp = 0;
+  },
+  map: (state, fresh) => {
     state.mapMode = fresh.mapMode;
     state.mandelPlace = fresh.mandelPlace;
-  }
-  if (!state.locks.kaleidoscope) state.foldMode = fresh.foldMode;
-  if (!state.locks.blur) state.blurMask = fresh.blurMask;
-  if (!state.locks.trails) {
+    state.layerBlend.map = 0;
+  },
+  kaleidoscope: (state, fresh) => {
+    state.foldMode = fresh.foldMode;
+    state.layerBlend.kaleidoscope = 0;
+  },
+  blur: (state, fresh) => { state.blurMask = fresh.blurMask; },
+  trails: (state, fresh) => {
     state.trailMode = fresh.trailMode;
     state.trailColor = fresh.trailColor;
-  }
-  if (!state.locks.smear) state.smearShape = fresh.smearShape;
-  if (!state.locks.contours) {
+  },
+  smear: (state, fresh) => { state.smearShape = fresh.smearShape; },
+  contours: (state, fresh) => {
     state.contourTone = fresh.contourTone;
     state.contourBlend = fresh.contourBlend;
-  }
-  if (!state.locks.camera) state.viewBlend = fresh.viewBlend;
-  /* The camera's sky and repeat are shared: they stay while either effect is locked. */
-  if (!state.locks.camera && !state.locks.terrain) {
-    state.skyColor = fresh.skyColor;
-    state.cameraRepeat = fresh.cameraRepeat;
-  }
-  if (!state.locks.terrain) {
+  },
+  camera: (state, fresh) => { state.viewBlend = fresh.viewBlend; },
+  terrain: (state, fresh) => {
     state.cameraBlend = fresh.cameraBlend;
     state.cameraHeightSource = fresh.cameraHeightSource;
     state.cameraColors = fresh.cameraColors;
     state.cameraStops = fresh.cameraStops;
-  }
-  if (!state.locks.sort) state.sortOrder = fresh.sortOrder;
-  if (!state.locks.lasers) state.laserBlend = fresh.laserBlend;
-  if (!state.locks.picture) state.pictureBlend = fresh.pictureBlend;
-  if (!state.locks.particles) {
+  },
+  sort: (state, fresh) => { state.sortOrder = fresh.sortOrder; },
+  lasers: (state, fresh) => { state.laserBlend = fresh.laserBlend; },
+  picture: (state, fresh) => { state.pictureBlend = fresh.pictureBlend; },
+  particles: (state, fresh) => {
     state.particleBlend = fresh.particleBlend;
     state.particleShape = fresh.particleShape;
     state.particleStops = fresh.particleStops;
-  }
-  if (!state.locks.solid) {
+  },
+  solid: (state, fresh) => {
     state.solidShape = fresh.solidShape;
     state.solidMap = fresh.solidMap;
     state.solidBlend = fresh.solidBlend;
     state.solidKeep = fresh.solidKeep;
-  }
-  if (!state.locks.cycles) {
+    state.solidSpinTurns = 0;
+    state.solidTumbleTurns = 0;
+  },
+  cycles: (state, fresh) => {
     state.cyclesMove = fresh.cyclesMove;
     state.cyclesBlend = fresh.cyclesBlend;
     state.cyclesPaint = fresh.cyclesPaint;
     state.cyclesStops = fresh.cyclesStops;
-  }
-  if (!state.locks.outlines) {
+  },
+  outlines: (state, fresh) => {
     state.outlineShape = fresh.outlineShape;
     state.outlineDraw = fresh.outlineDraw;
     state.outlineStops = fresh.outlineStops;
-  }
-  if (!state.locks.mask) {
+    state.outlineSpinTurns = 0;
+    state.outlineTumbleTurns = 0;
+  },
+  mask: (state, fresh) => {
     state.maskMode = fresh.maskMode;
     state.maskStops = fresh.maskStops;
-  }
-  if (!state.locks.bubble) {
+  },
+  bubble: (state, fresh) => {
     state.bubbleShape = fresh.bubbleShape;
     state.bubbleBlend = fresh.bubbleBlend;
     state.bubbleShadow = fresh.bubbleShadow;
-  }
-  if (!state.locks.driver) {
+  },
+  driver: (state, fresh) => {
     state.driverSource = fresh.driverSource;
     state.driverMode = fresh.driverMode;
-  }
-  if (!state.locks.color) {
+  },
+  color: (state, fresh) => {
     state.overlayColor = fresh.overlayColor;
     state.colorBlend = fresh.colorBlend;
     state.colorFill = fresh.colorFill;
     state.colorStops = fresh.colorStops;
   }
-  for (const step of ["warp", "map", "kaleidoscope"] as const) if (!state.locks[step]) state.layerBlend[step] = 0;
-  /* The unlocked effects leave the list (their groups are off now); the locked ones stay, in their order. */
-  state.fxOrder = state.fxOrder.filter((step) => state.locks[step]);
+};
+
+/** The Camera's sky and repeat, which the Camera and Terrain share. */
+function freshCameraShared(state: PlayState, fresh: PlayState) {
+  state.skyColor = fresh.skyColor;
+  state.cameraRepeat = fresh.cameraRepeat;
+}
+
+/**
+ * An effect added to the list starts fresh: its settings, modes and turn
+ * go back to their start-up defaults (the user's wish, 2026-11-07; before,
+ * an effect taken out and added again came back as it was). A locked
+ * effect keeps its settings. Settings the effect shares with another
+ * effect in the list (the Camera's camera with Terrain's) stay, so adding
+ * one does not change the other.
+ */
+export function freshEffect(params: Params, state: PlayState, step: GroupKey) {
+  if (state.locks[step]) return;
+  const fresh = createPlayState();
+  const others = (Object.keys(GROUP_PARAMS) as GroupKey[]).filter((group) => group !== step && (state.fxOrder as string[]).includes(group));
+  const shared = new Set(others.flatMap((group) => GROUP_PARAMS[group]));
+  const keep = lockedKeys(state);
+  for (const key of GROUP_PARAMS[step]) {
+    if (shared.has(key) || keep.has(key)) continue;
+    const { value, low, high, on, ease } = SPECS[key];
+    Object.assign(params[key], { value, low, high, on, ease, custom: false, startTime: 0 });
+  }
+  GROUP_MODES[step]?.(state, fresh);
+  const partner = step === "camera" ? "terrain" : step === "terrain" ? "camera" : null;
+  if (partner && !others.includes(partner) && !state.locks[partner]) freshCameraShared(state, fresh);
 }
 
 /** The parameters in each settings group, for locking. */

@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExt
 import { createPortal } from "react-dom";
 import { CaretRight, DiceFive, DotsSixVertical, Eye, EyeSlash, LockSimple, LockSimpleOpen, Play, SpeakerSimpleHigh, Trash, Wind, X } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
-import { GROUP_PARAMS, addEffect, applyRadialStart, createParams, removeEffect, type GroupKey, type ParamKey, type PlayState } from "../engine/params";
+import { GROUP_PARAMS, addEffect, applyRadialStart, createParams, freshEffect, removeEffect, type GroupKey, type ParamKey, type PlayState } from "../engine/params";
 import { midi } from "../lib/midi";
 import { audioInput } from "../lib/audioInput";
 import { settingButtons } from "../lib/settingButtons";
@@ -278,6 +278,8 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
    * visibly does something; an effect with settings of its own keeps them.
    */
   const add = (step: FxStep) => {
+    /* A newly added effect starts from its defaults, not from the settings it had when it was taken out. */
+    if (!engine.state.fxOrder.includes(step)) freshEffect(engine.params, engine.state, step);
     const start = (key: ParamKey, value: number) => {
       const param = engine.params[key];
       if (param.value === 0 && !param.on) param.value = value;

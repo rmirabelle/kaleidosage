@@ -271,7 +271,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - A scene keeps its Image or Video file only while the effect is in its list.
 - Random all never adds Image or Video, as it needs a picked image or video.
 - Adding Contours with no lines sets black lines, 16 levels and 1.5 px width.
-- The X button takes an effect out of the list and keeps its settings.
+- The X button takes an effect out of the list. Adding it again starts it fresh: its settings, modes and turn go back to their defaults (changed 2026-11-07; before, it came back as it was). A locked effect keeps its settings, and a setting it shares with another effect in the list (the Camera's camera with Terrain) stays.
 - You drag a group by its grip to change the order, and the picture changes live.
 - An effect at strength 0, or a shape effect at opacity 0, is skipped.
 - Terrain shows its view while on, also at opacity 0 (then the land is flat).

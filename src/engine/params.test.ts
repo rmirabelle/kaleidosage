@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GROUP_PARAMS, PARAM_KEYS, applyRadialStart, createParams, gradientColorAt, rgbToHex, createPlayState, defaultValue, fullRange, NUDGE, hexToRgb, hslToHex, liveValue, NO_EFFECT, nudgeParams, randomizeGroup, randomizeParams, resetEffects, setCustomTime, startRangeAt, withKindOrder, openRange, addEffect, removeEffect, toSlider, fromSlider, SLIDER_STEPS } from "./params";
+import { GROUP_PARAMS, PARAM_KEYS, applyRadialStart, createParams, gradientColorAt, rgbToHex, createPlayState, defaultValue, fullRange, NUDGE, hexToRgb, hslToHex, liveValue, NO_EFFECT, nudgeParams, randomizeGroup, randomizeParams, resetEffects, setCustomTime, startRangeAt, withKindOrder, openRange, addEffect, removeEffect, freshEffect, toSlider, fromSlider, SLIDER_STEPS } from "./params";
 
 /** A play state at this many seconds, on both clocks: animation time (the shared cycle) and real time (custom ranges). */
 const at = (time: number) => ({ ...createPlayState(), time, clock: time });
@@ -540,6 +540,32 @@ describe("effect order", () => {
     removeEffect(state, "blur");
     expect(state.fxOrder).toEqual(["kaleidoscope"]);
     expect(state.groups.blur).toBe(false);
+  });
+
+  it("starts an added effect fresh: settings, modes and turn back to defaults", () => {
+    const params = createParams();
+    const state = createPlayState();
+    Object.assign(params.solidTilt, { value: 45, on: true, low: 10, high: 60 });
+    Object.assign(state, { solidShape: 10, solidMap: 2, solidSpinTurns: 0.4, solidTumbleTurns: 0.3 });
+    freshEffect(params, state, "solid");
+    const defaults = createParams();
+    expect([params.solidTilt.value, params.solidTilt.on]).toEqual([defaults.solidTilt.value, defaults.solidTilt.on]);
+    expect([state.solidShape, state.solidMap, state.solidSpinTurns, state.solidTumbleTurns]).toEqual([createPlayState().solidShape, 0, 0, 0]);
+  });
+
+  it("keeps a locked effect, and the camera that Terrain in the list shares", () => {
+    const params = createParams();
+    const state = createPlayState();
+    params.solidSize.value = 1.7;
+    state.locks.solid = true;
+    freshEffect(params, state, "solid");
+    expect(params.solidSize.value).toBe(1.7);
+    addEffect(state, "terrain");
+    params.cameraTilt.value = -10;
+    params.viewAmount.value = 0.3;
+    freshEffect(params, state, "camera");
+    expect(params.cameraTilt.value).toBe(-10);
+    expect(params.viewAmount.value).toBe(createParams().viewAmount.value);
   });
 });
 
