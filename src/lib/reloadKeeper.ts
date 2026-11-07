@@ -37,6 +37,8 @@ export interface KeptDoc {
   driver: { video: VideoFile; name: string } | null;
   /** The Image or Video effect's image or video; missing in a snapshot from before the Image or Video effect. */
   picture?: KeptImage | null;
+  /** The 3D Object's own image or video; missing in a snapshot from before it. */
+  solidMedia?: KeptImage | null;
   /** Terrain's real land: its key in IndexedDB (see keepTerrain); missing when there is none. */
   terrain?: string | null;
   openGroup: string | null;
@@ -257,7 +259,7 @@ export function keepScenes(take: () => Kept | null) {
 /** Removes the stored bytes that neither the latest snapshot nor this page uses (those of a page before this one). */
 async function pruneImages() {
   const kept = readKept();
-  const used = new Set([...keysHere, ...(kept?.docs ?? []).flatMap((doc) => [...doc.images.map((image) => image?.key), doc.picture?.key, doc.terrain]), ...Object.values(kept?.file?.analyses ?? {})].filter(Boolean));
+  const used = new Set([...keysHere, ...(kept?.docs ?? []).flatMap((doc) => [...doc.images.map((image) => image?.key), doc.picture?.key, doc.solidMedia?.key, doc.terrain]), ...Object.values(kept?.file?.analyses ?? {})].filter(Boolean));
   try {
     const keys = await blobStore<IDBValidKey[]>("readonly", (store) => store.getAllKeys());
     for (const key of keys) if (typeof key === "string" && !used.has(key)) await blobStore("readwrite", (store) => store.delete(key));

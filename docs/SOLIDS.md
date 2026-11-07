@@ -44,6 +44,14 @@ picture.
   - **Project**: the picture stays still, facing the viewer, and the shape
     bends it like a glass lens. Bend sets how strongly.
   - **Mirror**: the shape is chrome and reflects the picture around it.
+- **Paint** (2026-11-07): what the Map puts on the shape. Picture is the
+  picture made so far, as before. Image or Video is the 3D Object's own
+  file (a File row under it picks one; picking Image or Video with none
+  opens the Open dialog). A video plays on the scene's clock, as the Image
+  or Video effect's does. The scene file keeps the file while the 3D Object
+  is in the list and paints with it (a video embedded like a source
+  video: scene_archive.rs names the slot solidMedia). Until the file has
+  a frame, the picture paints the shape.
 - **Blend**: the 8 layer blends of the other effects, for how the shape
   goes over the picture behind it.
 

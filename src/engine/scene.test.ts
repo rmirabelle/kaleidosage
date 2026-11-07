@@ -140,6 +140,17 @@ describe("scene files", () => {
     expect([loaded.solidShape, loaded.solidMap, loaded.solidBlend, loaded.solidSpinTurns, loaded.solidTumbleTurns]).toEqual([7, 2, 3, 0.25, 0.5]);
   });
 
+  it("keep the 3D object's Wrap and Paint, and its own image or video", () => {
+    const state = createPlayState();
+    Object.assign(state, { solidWrap: 3, solidPaint: 1 });
+    const scene = JSON.parse(serializeScene(createParams(), state, { image: IMAGE }));
+    scene.solidMedia = { ...IMAGE, name: "logo.png" };
+    const loaded = createPlayState();
+    const media = applyScene(JSON.stringify(scene), createParams(), loaded);
+    expect([loaded.solidWrap, loaded.solidPaint]).toEqual([3, 1]);
+    expect(media.solidMedia).toEqual({ media: IMAGE, name: "logo.png" });
+  });
+
   it("keep the 3D object's Freeze background, which is off in a scene from before it", () => {
     const state = createPlayState();
     state.solidKeep = true;

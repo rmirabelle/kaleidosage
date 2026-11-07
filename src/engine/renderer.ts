@@ -333,6 +333,8 @@ export type SolidShape = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 export type SolidMap = 0 | 1 | 2;
 /** How Wrap lays the picture on the Moravian star: 0 Globe (around the upright), 1 Faces (flat on each triangle), 2 Six sides (cast from six directions, blended), 3 Points (around each point). */
 export type SolidWrap = 0 | 1 | 2 | 3;
+/** What paints the 3D Object: 0 the picture made so far, 1 its own image or video (see setSolidMedia). */
+export type SolidPaint = 0 | 1;
 /** How the two images fade: 0 = crossfade, 1 = dissolve by brightness (light areas change first). */
 export type BlendMode = 0 | 1;
 /**
@@ -614,6 +616,7 @@ export interface FrameValues {
   solidShape: SolidShape;
   solidMap: SolidMap;
   solidWrap: SolidWrap;
+  solidPaint: SolidPaint;
   solidBlend: LayerBlend;
   solidBackground: number;
   solidSize: number;
@@ -2338,7 +2341,9 @@ export class KaleidoRenderer {
    * picture, or with Freeze background the picture kept at the 3D Object's
    * place, see render).
    */
-  private drawSolid(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture) {
+  private drawSolid(v: FrameValues, picture: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture) {
+    /* Paint: Image or Video puts the 3D Object's own file on it in place of the picture (until its first frame comes, the picture). */
+    const source = (v.solidPaint === 1 ? this.solidMediaFrame() : null) ?? picture;
     if (MESH_SHAPES.has(v.solidShape)) {
       this.drawMesh(v, source, target, width, height, back);
       return;
@@ -3238,18 +3243,19 @@ export class KaleidoRenderer {
     }
     if (!this.pictureTexture) this.pictureTexture = gl.createTexture()!;
     this.pictureSize = sourceSize(source);
-    if (!(source instanceof HTMLVideoElement)) this.uploadPicture(source, true);
+    if (!(source instanceof HTMLVideoElement)) this.uploadPicture(this.pictureTexture, source, true);
   }
 
   /**
-   * Puts the overlay's picture in its texture, with its clear parts kept
+   * Puts an image or a video frame in a texture (the overlay's, or the 3D
+ * Object's own), with its clear parts kept
    * (premultiplied, see COVER_GLSL). A still image gets smaller copies (mip
    * levels), so a small Size does not shimmer; a video frame does not.
    */
-  private uploadPicture(source: TexImageSource, still: boolean) {
+  private uploadPicture(texture: WebGLTexture | null, source: TexImageSource, still: boolean) {
     const gl = this.gl;
     gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.pictureTexture);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
@@ -3263,12 +3269,46 @@ export class KaleidoRenderer {
     gl.activeTexture(gl.TEXTURE0);
   }
 
+  /** The 3D Object's own image or video (Paint: Image or Video), or null; see setSolidMedia. */
+  private solidMedia: ImageSource | null = null;
+  private solidMediaTexture: WebGLTexture | null = null;
+  /** The video time of the frame in the texture (-1: none yet). */
+  private solidMediaTime = -1;
+
+  /** Sets the 3D Object's own image or video, or none. A still image goes to its texture at once; a video, frame by frame (see solidMediaFrame). */
+  setSolidMedia(source: ImageSource | null) {
+    const gl = this.gl;
+    this.solidMedia = source;
+    this.solidMediaTime = -1;
+    if (!source) {
+      if (this.solidMediaTexture) gl.deleteTexture(this.solidMediaTexture);
+      this.solidMediaTexture = null;
+      return;
+    }
+    if (!this.solidMediaTexture) this.solidMediaTexture = gl.createTexture()!;
+    if (!(source instanceof HTMLVideoElement)) {
+      this.uploadPicture(this.solidMediaTexture, source, true);
+      this.solidMediaTime = 0;
+    }
+  }
+
+  /** The 3D Object's own texture with its latest frame (a video's new frame is uploaded first), or null while it has none yet. */
+  private solidMediaFrame(): WebGLTexture | null {
+    const media = this.solidMedia;
+    if (!media || !this.solidMediaTexture) return null;
+    if (media instanceof HTMLVideoElement && media.readyState >= 2 && media.currentTime !== this.solidMediaTime) {
+      this.uploadPicture(this.solidMediaTexture, media, false);
+      this.solidMediaTime = media.currentTime;
+    }
+    return this.solidMediaTime >= 0 ? this.solidMediaTexture : null;
+  }
+
   /** Image or Video: the file over the picture made so far, in one pass (PICTURE_SHADER). A video's new frame is uploaded first. */
   private drawPicture(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
     const gl = this.gl;
     const video = this.pictureSource instanceof HTMLVideoElement ? this.pictureSource : null;
     if (video && video.readyState >= 2 && video.videoWidth > 0 && video.currentTime !== this.pictureVideoTime) {
-      this.uploadPicture(video, false);
+      this.uploadPicture(this.pictureTexture, video, false);
       this.pictureVideoTime = video.currentTime;
       this.pictureSize = [video.videoWidth, video.videoHeight];
     }
@@ -3934,6 +3974,7 @@ export class KaleidoRenderer {
     this.stopVideo(0);
     this.stopVideo(1);
     this.pictureSource = null;
+    this.solidMedia = null;
     this.gl.getExtension("WEBGL_lose_context")?.loseContext();
   }
 

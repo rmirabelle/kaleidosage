@@ -204,6 +204,13 @@ export class Engine {
       } else if (this.pictureSource) {
         copy.setPicture(this.pictureSource);
       }
+      if (this.solidMedia instanceof HTMLVideoElement) {
+        const video = await copyVideo(this.solidMedia);
+        copy.ownVideos.push(video);
+        copy.setSolidMedia(video);
+      } else if (this.solidMedia) {
+        copy.setSolidMedia(this.solidMedia);
+      }
     } catch (error) {
       copy.dispose();
       throw error;
@@ -452,6 +459,36 @@ export class Engine {
     const video = this.pictureSource;
     if (!(video instanceof HTMLVideoElement) || !(video.duration > 0) || !this.state.groups.picture || !this.state.fxOrder.includes("picture")) return null;
     return this.state.clock % video.duration;
+  }
+
+  /** The 3D Object's own image or video (Paint: Image or Video), or null. Its owner (the scene) keeps it; the engine plays a video while it is in use. */
+  private solidMedia: ImageSource | null = null;
+
+  setSolidMedia(source: ImageSource | null) {
+    this.wake();
+    if (this.solidMedia instanceof HTMLVideoElement && this.solidMedia !== source) this.solidMedia.pause();
+    this.solidMedia = source;
+    this.renderer.setSolidMedia(source);
+  }
+
+  /** Where the 3D Object's video should be: the scene's clock around its length, as the overlay's (see pictureVideoTarget). Null while it is not in use. */
+  private solidMediaTarget() {
+    const video = this.solidMedia;
+    if (!(video instanceof HTMLVideoElement) || !(video.duration > 0) || !this.state.groups.solid || !this.state.fxOrder.includes("solid") || this.state.solidPaint !== 1) return null;
+    return this.state.clock % video.duration;
+  }
+
+  /** Keeps the 3D Object's video at its place, and stops it while it is not used. */
+  private syncSolidMedia(paused: boolean) {
+    const video = this.solidMedia;
+    if (!(video instanceof HTMLVideoElement)) return;
+    const target = this.solidMediaTarget();
+    if (target === null) {
+      if (!video.paused) video.pause();
+      return;
+    }
+    video.playbackRate = 1;
+    syncVideo(video, target, paused || this.gated);
   }
 
   /** Freeze background's three parts of the FX list (see FrameValues.freeze), or null. */
@@ -1238,6 +1275,8 @@ export class Engine {
     if (this.driverVideo && driverTarget !== null) await seekVideo(this.driverVideo, driverTarget);
     const pictureTarget = this.pictureVideoTarget();
     if (this.pictureSource instanceof HTMLVideoElement && pictureTarget !== null) await seekVideo(this.pictureSource, pictureTarget);
+    const solidTarget = this.solidMediaTarget();
+    if (this.solidMedia instanceof HTMLVideoElement && solidTarget !== null) await seekVideo(this.solidMedia, solidTarget);
     this.renderer.updateVideos(true);
   }
 
@@ -1256,6 +1295,7 @@ export class Engine {
     }
     this.syncDriverVideo(paused);
     this.syncPictureVideo(paused);
+    this.syncSolidMedia(paused);
     if (this.renderer.updateVideos()) this.wake();
 
     /* In VR the controllers move the screen (see moveVrScreen), before this frame draws at its shape. */
@@ -1560,6 +1600,7 @@ export class Engine {
       solidShape: this.state.solidShape,
       solidMap: this.state.solidMap,
       solidWrap: this.state.solidWrap,
+      solidPaint: this.state.solidPaint,
       solidBlend: this.state.solidBlend,
       solidBackground: this.live("solidBackground"),
       solidSize: this.live("solidSize"),
