@@ -3391,6 +3391,8 @@ uniform float u_amount;
 uniform float u_opacity;
 uniform int u_blend;
 /* The same layer blends as the shape steps' (see blendLayer in KALEIDO_SHADER). */
+/* How much white-hot center a color gets: its brightest part (black: none). */
+float hot(vec3 color) { return clamp(max(color.r, max(color.g, color.b)), 0.0, 1.0); }
 vec3 blendLayer(vec3 base, vec3 top, int mode) {
   if (mode == 1) return 1.0 - (1.0 - base) * (1.0 - top);
   if (mode == 2) return base * top;
@@ -3438,7 +3440,8 @@ void main() {
     vec3 color = hueColor(fract(u_hue + u_rainbow * float(i) / float(max(u_count, 1))));
     /* Fade dims the beam along its length; a short beam also fades out toward its end. */
     float fade = exp(-u_fade * max(along, 0.0) / u_res.y) * (1.0 - smoothstep(beamLength * 0.4, beamLength, along));
-    light += (color + 0.6) * core * start * fade;
+    /* The white-hot center scales with the color's brightest part, so a black color adds nothing (as in Light shapes, 2026-11-07). */
+    light += (color + 0.6 * hot(color)) * core * start * fade;
     glowSum += glow * fade;
     glowColor += color * glow * fade;
     float near = length(d) / max(u_emitter, 1e-3);
@@ -3454,7 +3457,7 @@ void main() {
    */
   float glowMax = u_glow;
   if (glowSum > 0.0) light += glowColor / glowSum * glowMax * (1.0 - exp(-glowSum / max(glowMax, 1e-4)));
-  light += (spotColor + 0.5) * spot * (0.5 + min(u_glow, 1.0));
+  light += (spotColor + 0.5 * hot(spotColor)) * spot * (0.5 + min(u_glow, 1.0));
   light *= u_amount;
   vec4 picture = texture(u_picture, v_uv);
   /* Add (7): the light adds with no limit, so Bloom can pick up the bright cores. */
