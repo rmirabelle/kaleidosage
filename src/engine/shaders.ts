@@ -4812,6 +4812,8 @@ uniform float u_levels;
 uniform float u_points;
 uniform float u_pointLength;
 uniform float u_hollow;
+/* 1: a pixel on a crease takes more rays (see main); 0: one ray (Edges Off or Filter, a test switch). */
+uniform int u_extra;
 uniform float u_time;
 /* From the shape's own frame to the view. */
 uniform mat3 u_turn;
@@ -5467,7 +5469,7 @@ void main() {
     bool edgy;
     float close;
     sum += shoot(eye, normalize(vec3(screen + shift, 0.0) - eye), from, edgy, close);
-    if (s == 0 && edgy) {
+    if (s == 0 && edgy && u_extra == 1) {
       rays = 5;
       from = close;
     }
@@ -5476,5 +5478,48 @@ void main() {
   vec3 color = sum.a > 0.0 ? sum.rgb / sum.a : vec3(0.0);
   float shown = sum.a * u_opacity;
   o = covered(mix(base, blendLayer(base, color, u_blend), shown), mix(picture.a, 1.0, shown));
+}`;
+
+/**
+ * A test of an edge filter for the 3D Object (Edges: Filter), to compare
+ * with more rays at creases. It works on the finished picture, as FXAA does:
+ * where the brightness changes sharply, it reads the picture along the edge
+ * and blends. Only the disk around the shape is filtered (u_center, u_radius
+ * in screen heights); the rest is copied.
+ */
+export const SOLID_FILTER_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform vec2 u_texel;
+uniform float u_aspect;
+uniform vec2 u_center;
+uniform float u_radius;
+float luma(vec4 c) { return dot(c.rgb, vec3(0.299, 0.587, 0.114)); }
+vec4 at(vec2 uv) { return textureLod(u_tex, uv, 0.0); }
+void main() {
+  vec4 middle = at(v_uv);
+  vec2 screen = vec2((v_uv.x - 0.5) * u_aspect, v_uv.y - 0.5);
+  if (length(screen - u_center) > u_radius) {
+    o = middle;
+    return;
+  }
+  float nw = luma(at(v_uv + vec2(-1.0, 1.0) * u_texel));
+  float ne = luma(at(v_uv + vec2(1.0, 1.0) * u_texel));
+  float sw = luma(at(v_uv + vec2(-1.0, -1.0) * u_texel));
+  float se = luma(at(v_uv + vec2(1.0, -1.0) * u_texel));
+  float m = luma(middle);
+  float low = min(m, min(min(nw, ne), min(sw, se)));
+  float high = max(m, max(max(nw, ne), max(sw, se)));
+  /* The direction along the edge, from the four corners. */
+  vec2 dir = vec2(-((nw + ne) - (sw + se)), (nw + sw) - (ne + se));
+  float reduce = max((nw + ne + sw + se) * 0.25 * (1.0 / 8.0), 1.0 / 128.0);
+  float scale = 1.0 / (min(abs(dir.x), abs(dir.y)) + reduce);
+  dir = clamp(dir * scale, -8.0, 8.0) * u_texel;
+  vec4 near = 0.5 * (at(v_uv + dir * (1.0 / 3.0 - 0.5)) + at(v_uv + dir * (2.0 / 3.0 - 0.5)));
+  vec4 far = near * 0.5 + 0.25 * (at(v_uv - dir * 0.5) + at(v_uv + dir * 0.5));
+  float lf = luma(far);
+  o = lf < low || lf > high ? near : far;
 }`;
 
