@@ -238,7 +238,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Scenes with the old Light shapes Star open with the Radial shape and the same star: its Points stay, and Inner radius is set to match.
 - Light shapes Draw: Draw and erase draws the outline from the top, then erases it from the top; Chase sends a part of Length around it, brightest at its head; Whole shows it all.
 - Light shapes has Count copies, each smaller by Spacing and later in its draw by Delay. One draw takes Draw time seconds.
-- Light shapes colors come from a gradient along the outline, there and back once around it, so its ends meet with no seam; Color flow moves them along it.
+- Light shapes colors come from a gradient. With a head (Draw, Chase, Snake) the head shows the first color and the line runs through the gradient behind it (Chase over its Length, Draw over one whole outline, Snake to its tail). Whole goes along the outline, there and back once around it, so its ends meet with no seam. Color flow moves the colors along the line (changed 2026-11-07; before, every mode colored by the place on the outline).
 - Light shapes Spin and Tumble (rpm) turn each outline in 3D around its upright and its level line, with a little perspective. Each copy turns Delay later than the one before.
 - Only the drawn part of an outline glows, and its ends are round.
 - Random all puts Light shapes at the end of the list when it picks it.

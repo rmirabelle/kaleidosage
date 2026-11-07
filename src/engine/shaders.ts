@@ -3762,9 +3762,10 @@ void main() {
  * it whole. A snake (u_shape 4) is an open path that wanders and never
  * repeats (its corners come from renderer.ts each frame); u_draw does not
  * count for it: all of it shows, brightest at its head, fading toward its
- * tail. The color is the gradient (u_stopAt, u_stopColor) at s, moved
- * along by u_shift, there and back once around the outline, so its ends
- * meet with no seam. The core, the glow and the head's spot are as in
+ * tail. The color is the gradient (u_stopAt, u_stopColor): with a head,
+ * by the distance back from it (the head is the first color); for Whole, at
+ * s, there and back once around the outline, so its ends meet with no
+ * seam. u_shift (Color flow) moves it along. The core, the glow and the head's spot are as in
  * LASER_SHADER, so the lights look the same; the head's spot is u_emitter
  * pixels across (0 = no spot). Sizes are in pixels.
  *
@@ -4094,7 +4095,24 @@ void main() {
     float shown = u_shape == 4 ? clamp(n.y / 0.6, 0.0, 1.0) : u_draw == 1 ? clamp((n.y - a) / max(u_length, 1e-3), 0.0, 1.0) : 1.0;
     float copyLight = 1.0 - u_copyFade * float(i) / float(max(u_count - 1, 1));
     shown *= copyLight;
-    vec3 color = stopColor(around(n.y + u_shift));
+    /**
+     * The color: with a head (Draw, Chase, a snake), by the distance back
+     * from the head, so the head always shows the gradient's first color and
+     * the line runs through the gradient behind it (Chase: over its Length to
+     * its tail; Draw: one whole outline back from the head; a snake: to its
+     * tail). Whole has no head: by the place on the outline. Color flow moves
+     * the gradient there and back along the line (2026-11-07; before, every
+     * mode colored by the place, so the head showed any color).
+     */
+    vec3 color;
+    if (u_shape == 4 || u_draw != 2) {
+      float head = u_shape == 4 ? 1.0 : b;
+      float span = u_shape != 4 && u_draw == 1 ? max(u_length, 1e-3) : 1.0;
+      float back = clamp((head - n.y) / span, 0.0, 1.0);
+      color = stopColor(around(0.5 * back + u_shift));
+    } else {
+      color = stopColor(around(n.y + u_shift));
+    }
 #if PASS == 0
     float glow = u_glow * 0.5 * exp(-n.x / haze);
 #elif PASS == 1
@@ -4119,7 +4137,8 @@ void main() {
       float headSpot = exp(-near * near) * copyLight;
       if (headSpot > spot) {
         spot = headSpot;
-        spotColor = stopColor(around(b + u_shift));
+        /* The head is the gradient's first color (moved by Color flow). */
+        spotColor = stopColor(around(u_shift));
       }
     }
 #endif
