@@ -896,13 +896,15 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
 type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "bubbleShape" | "bubbleBlend" | "bubbleShadow" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidWrap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
 
 /** A menu that sets one of the engine's mode values. */
-export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange }: {
+export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange, child }: {
   engine: Engine;
   stateKey: K;
   options: readonly (readonly [PlayState[K], string])[];
   /** A name at the left of the menu, like the Blend menu's. */
   name?: string;
   onChange?: (mode: PlayState[K]) => void;
+  /** A setting that shows only for one choice of the menu above it: it joins that row, with no line between (see .panel-child-row). */
+  child?: boolean;
 }) {
   const [mode, setMode] = useState<PlayState[K]>(engine.state[stateKey]);
   /**
@@ -916,7 +918,7 @@ export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name,
     (submode!.keys[value as number] ?? []).some((key) => mapped.has(key) && !(submode!.keys[mode as number] ?? []).includes(key));
   const marks = new Set(options.map(([value]) => value).filter((value) => value !== mode && hiddenHere(value)));
   return (
-    <div className={name ? "panel-select-row panel-select-named" : "panel-select-row"}>
+    <div className={`${name ? "panel-select-row panel-select-named" : "panel-select-row"}${child ? " panel-child-row" : ""}`}>
       {name && <span className="panel-row-name">{name}</span>}
       <Dropdown
         value={mode}
@@ -964,7 +966,7 @@ function MapSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => R
   return (
     <>
       <ModeSelect engine={engine} stateKey="mapMode" options={MAP_MODES} name="Type" onChange={setMode} />
-      {mode === 9 && <ModeSelect engine={engine} stateKey="mandelPlace" options={MANDEL_PLACES} name="Place" />}
+      {mode === 9 && <ModeSelect engine={engine} stateKey="mandelPlace" options={MANDEL_PLACES} name="Place" child />}
       <SplitRows keys={[...MAP_KEYS[mode].filter((key) => !hidden.includes(key)), OPACITY_KEY.map]} row={row} blend={<LayerBlend engine={engine} step="map" />} />
     </>
   );
@@ -1108,7 +1110,7 @@ function CyclesSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =
         ])}
       </div>
       {position && (
-        <div className="panel-select-row panel-select-named cycles-paint-row">
+        <div className="panel-select-row panel-select-named cycles-paint-row panel-child-row">
           <span className="panel-row-name">Shape</span>
           {buttons([
             [2, "Linear", "The gradient runs across the screen, at Angle", paint === 2],
@@ -1145,7 +1147,7 @@ function SolidSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =>
         if (next === 10) standStarUp(engine);
       }} />
       <ModeSelect engine={engine} stateKey="solidMap" options={SOLID_MAPS} name="Map" onChange={setMap} />
-      {shape === 10 && map === 0 && <ModeSelect engine={engine} stateKey="solidWrap" options={SOLID_WRAPS} name="Wrap" />}
+      {shape === 10 && map === 0 && <ModeSelect engine={engine} stateKey="solidWrap" options={SOLID_WRAPS} name="Wrap" child />}
       <KeepBackground engine={engine} />
       <SplitRows keys={SOLID_KEYS.filter(shown)} row={row} blend={<ModeSelect engine={engine} stateKey="solidBlend" options={LAYER_BLENDS} name="Blend" />} />
     </>
@@ -1305,7 +1307,7 @@ function DriverSection({ engine, row, videoName, onPickVideo }: { engine: Engine
         }}
       />
       {source === 5 && (
-        <div className="panel-select-row panel-select-named driver-video-row">
+        <div className="panel-select-row panel-select-named driver-video-row panel-child-row">
           <span className="panel-row-name">Video</span>
           <span className="driver-video-name" data-tip={videoName ? `The driver video: ${videoName}` : "No driver video yet"}>{videoName ?? "None"}</span>
           <button className="button secondary small" onClick={onPickVideo} data-tip="Pick a video file. Its brightness drives the effect; the scene file keeps a copy of it.">Choose…</button>
