@@ -170,7 +170,8 @@ test).
   its back (the inside of a bar) turns its normal to the eye.
 - The shadow: the triangles are moved along the light onto the wall
   behind (as in castLight) into a picture a quarter of the screen's size,
-  and softened by 16 reads in a disk. So its soft edge is the same width
+  and softened in two passes, across and then up and down (25 reads each,
+  bell-shaped; 16 reads in a disk left steps at the edge, 2026-11-07). So its soft edge is the same width
   everywhere, where the rays' grew with the distance from the shape.
 - The mesh is rebuilt only when its core, Point length or Hollow changes.
 

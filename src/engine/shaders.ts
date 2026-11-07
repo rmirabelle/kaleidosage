@@ -5434,11 +5434,11 @@ void main() {
 }`;
 
 /**
- * The picture behind the mesh star, for its background pass and its
+ * The picture behind the mesh shapes, for their background pass and their
  * triangles: Background dims it, and the shadow darkens it. The shadow's
  * outline (u_shade, a quarter of the screen's size: red the first core,
- * green the second while Points fades between two) is softened by 16 reads
- * in a disk.
+ * green the second while Points fades between two) comes already softened
+ * (SOLID_SHADE_BLUR_SHADER).
  *
  * u_fade: while Points is between two counts, the first core's finished
  * picture is u_under, and the second core's picture goes over it by u_fade
@@ -5457,14 +5457,7 @@ uniform float u_shadow;
 ${COVER_GLSL}
 float shadowAt(vec2 uv) {
   if (u_shadow <= 0.0) return 0.0;
-  float reach = 0.06 * u_size;
-  float sum = 0.0;
-  for (int k = 0; k < 16; k++) {
-    float angle = float(k) * 2.39996323;
-    vec2 tap = vec2(cos(angle), sin(angle)) * sqrt((float(k) + 0.5) / 16.0) * reach;
-    sum += dot(textureLod(u_shade, uv + tap * vec2(1.0 / u_aspect, 1.0), 0.0).rg, u_shadeMix);
-  }
-  return smoothstep(0.0, 1.0, sum / 16.0);
+  return smoothstep(0.0, 1.0, dot(textureLod(u_shade, uv, 0.0).rg, u_shadeMix));
 }
 /* The picture behind, with its cover (premultiplied), and its color dimmed by Background and the shadow. */
 vec3 behind(vec2 uv, out float cover) {
@@ -5474,6 +5467,30 @@ vec3 behind(vec2 uv, out float cover) {
 }
 vec4 faded(vec2 uv, vec4 color) { return u_fade >= 1.0 ? color : mix(textureLod(u_under, uv, 0.0), color, u_fade); }
 `;
+
+/**
+ * Softens the mesh shapes' shadow outline: a bell-shaped average of 25
+ * reads along one direction (u_step apart, in the picture's 0 to 1 frame),
+ * run once across and once up and down. The two passes give a smooth soft
+ * edge; 16 reads in a disk left steps (2026-11-07).
+ */
+export const SOLID_SHADE_BLUR_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform vec2 u_step;
+void main() {
+  vec4 sum = vec4(0.0);
+  float total = 0.0;
+  for (int i = -12; i <= 12; i++) {
+    float x = float(i) / 12.0;
+    float w = exp(-2.0 * x * x);
+    sum += w * textureLod(u_tex, v_uv + u_step * float(i), 0.0);
+    total += w;
+  }
+  o = sum / total;
+}`;
 
 /** The mesh star's background pass: the picture behind it (see SOLID_BEHIND_GLSL) on the whole screen. */
 export const SOLID_BACK_SHADER = `#version 300 es

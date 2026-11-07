@@ -1,7 +1,7 @@
 import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, BUBBLE_SHADER, MASK_SHADER, OUTLINE_SHADER, OUTLINE_GLOW_SHADER, OUTLINE_LINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, SOLID_MESH_VERTEX, SOLID_MESH_SHADER, SOLID_BACK_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, BUBBLE_SHADER, MASK_SHADER, OUTLINE_SHADER, OUTLINE_GLOW_SHADER, OUTLINE_LINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, SOLID_MESH_VERTEX, SOLID_MESH_SHADER, SOLID_BACK_SHADER, SOLID_SHADE_BLUR_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 import { MESH_SHAPES, flatMesh } from "./flatMesh";
 import { starKinds, starMesh } from "./starMesh";
 import { halveGrid, type TerrainData } from "./terrain";
@@ -1008,6 +1008,7 @@ export class KaleidoRenderer {
   /** The 3D Object's mesh shapes (see drawMesh): their triangles, and the picture behind them. */
   private readonly starProgram: Program;
   private readonly starBackProgram: Program;
+  private readonly shadeBlurProgram: Program;
   /** The star's triangles, one buffer per core drawn (two while Points fades between two counts), rebuilt when their settings change. */
   private readonly starBuffers: { vertices: WebGLVertexArrayObject; buffer: WebGLBuffer; key: string; count: number }[] = [];
   /** The picture the star is drawn into, with 4 samples per pixel for smooth edges, and its depth. */
@@ -1178,6 +1179,7 @@ export class KaleidoRenderer {
     this.solidProgram = this.createProgram(SOLID_SHADER);
     this.starProgram = this.createProgram(SOLID_MESH_SHADER, SOLID_MESH_VERTEX);
     this.starBackProgram = this.createProgram(SOLID_BACK_SHADER);
+    this.shadeBlurProgram = this.createProgram(SOLID_SHADE_BLUR_SHADER);
     this.maxPass = this.createProgram(MAX_SHADER);
     this.contours = this.createProgram(CONTOUR_SHADER);
     this.contourField = this.createProgram(CONTOUR_FIELD_SHADER);
@@ -2421,6 +2423,21 @@ export class KaleidoRenderer {
       });
       gl.colorMask(true, true, true, true);
       gl.bindVertexArray(null);
+      /* Softened across into a second picture, then up and down back into the first; the edge is about 0.06 shape sizes wide either way. */
+      const across = this.layerTarget("solid star shade across", shadeSize[0], shadeSize[1]);
+      const reach = 0.06 * Math.max(0.01, v.solidSize) / 12;
+      const f = this.shadeBlurProgram;
+      gl.useProgram(f.program);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.uniform1i(f.uniforms.u_tex, 0);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, across.framebuffer);
+      gl.bindTexture(gl.TEXTURE_2D, shade.texture);
+      gl.uniform2f(f.uniforms.u_step, reach * height / width, 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, shade.framebuffer);
+      gl.bindTexture(gl.TEXTURE_2D, across.texture);
+      gl.uniform2f(f.uniforms.u_step, 0, reach);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
     const samples = this.starSampleTarget(width, height);
     const under = cores.length > 1 ? this.layerTarget("solid star under", width, height) : null;
