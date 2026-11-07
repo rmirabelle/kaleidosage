@@ -5226,9 +5226,20 @@ vec3 toShape(vec3 p) { return transpose(u_turn) * (p - vec3(u_center, 0.0)) / sc
 
 float scene(vec3 p) { return unitShape(toShape(p)) * scale(); }
 
-vec3 normalAt(vec3 p, float e) {
-  const vec2 k = vec2(1.0, -1.0);
-  return normalize(k.xyy * scene(p + k.xyy * e) + k.yyx * scene(p + k.yyx * e) + k.yxy * scene(p + k.yxy * e) + k.xxx * scene(p + k.xxx * e));
+/**
+ * Four samples of the distance around p (the corners of a tetrahedron, e
+ * out), in a loop: one call of the shape in the code, so the Direct3D
+ * compiler is quicker (6.8 s down to 4.5 s). xyz is the gradient times 4e
+ * (its direction is the normal), w the sum of the four distances.
+ */
+vec4 probe(vec3 p, float e) {
+  const vec3 TAPS[4] = vec3[4](vec3(1.0, -1.0, -1.0), vec3(-1.0, -1.0, 1.0), vec3(-1.0, 1.0, -1.0), vec3(1.0));
+  vec4 sum = vec4(0.0);
+  for (int i = 0; i < 4; i++) {
+    float d = scene(p + TAPS[i] * e);
+    sum += vec4(TAPS[i] * d, d);
+  }
+  return sum;
 }
 
 /**
@@ -5339,84 +5350,131 @@ float castLight(vec2 screen) {
   return smoothstep(0.0, 1.0, clamp(light, 0.0, 1.0));
 }
 
+/**
+ * One ray from the eye, from the place from on: the shape's color
+ * (premultiplied by its cover) and how much of the pixel the shape covers
+ * (a soft outline, half a pixel wide). edgy says the ray hit next to a
+ * crease, so the pixel needs more rays. close is where the ray first came
+ * within 3 pixels of the shape: a ray less than a pixel beside it can start
+ * there, as nothing is in its way before.
+ */
+const float CREASE = 0.1;
+vec4 shoot(vec3 eye, vec3 rd, float from, out bool edgy, out float close) {
+  edgy = false;
+  close = 0.0;
+  /* The sphere around the shape: rays that miss it miss the shape. */
+  vec3 oc = eye - vec3(u_center, 0.0);
+  float b = dot(oc, rd);
+  float bound = 1.45 * scale();
+  float h = b * b - (dot(oc, oc) - bound * bound);
+  if (h <= 0.0) return vec4(0.0);
+  float t = max(max(-b - sqrt(h), 0.0), from);
+  float end = -b + sqrt(h);
+  close = end;
+  /* The nearest the ray comes to the shape, in pixels, and where. */
+  float nearest = 1e9;
+  float nearestT = t;
+  float dHit = 0.0;
+  bool hit = false;
+  for (int i = 0; i < STEPS; i++) {
+    float d = scene(eye + rd * t);
+    float footprint = u_pixel * t / EYE;
+    float ratio = d / footprint;
+    if (ratio < nearest) {
+      nearest = ratio;
+      nearestT = t;
+    }
+    if (ratio < 3.0) close = min(close, t);
+    if (d < footprint * 0.25) {
+      hit = true;
+      dHit = d;
+      break;
+    }
+    t += d;
+    if (t > end) break;
+  }
+  float cover = hit ? 1.0 : clamp(0.5 - nearest, 0.0, 1.0);
+  if (cover <= 0.0) return vec4(0.0);
+  float at = hit ? t : nearestT;
+  vec3 p = eye + rd * at;
+  vec4 around = probe(p, max(u_pixel * at / EYE * 0.5, 1e-4));
+  /**
+   * A crease: on a flat surface the four samples' mean is the distance at
+   * the hit (the tetrahedron's corners sum to 0). A crease or corner less
+   * than a pixel away bends them off it, by a part of the gradient's step.
+   */
+  if (hit && abs(around.w - 4.0 * dHit) > CREASE * length(around.xyz)) edgy = true;
+  vec3 n = normalize(around.xyz);
+  vec3 color;
+  if (u_map == 1) {
+    vec2 lens = v_uv + n.xy * u_bend * 0.3 * vec2(1.0 / u_aspect, 1.0);
+    if (u_frost > 0.001) {
+      /**
+       * Frost: frosted glass. The picture is read at 16 places in a
+       * disk around the lens point (up to 0.05 screen heights across at
+       * Frost 1), turned by a random angle that sticks to the surface,
+       * so it is soft and grainy and the grain turns with the shape.
+       * The glass scatters light, so it also looks a little milky.
+       */
+      vec3 grainAt = toShape(p) * 731.0;
+      float spin = 6.2831853 * fract(sin(dot(grainAt, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+      float reach = u_frost * u_frost * 0.05;
+      vec3 sum = vec3(0.0);
+      for (int k = 0; k < 16; k++) {
+        float angle = float(k) * 2.39996323 + spin;
+        vec2 tap = vec2(cos(angle), sin(angle)) * sqrt((float(k) + 0.5) / 16.0) * reach;
+        sum += straight(textureLod(u_tex, fold(lens + tap * vec2(1.0 / u_aspect, 1.0)), 0.0));
+      }
+      color = mix(sum / 16.0, vec3(1.0), u_frost * 0.12);
+    } else {
+      color = straight(textureLod(u_tex, fold(lens), 0.0));
+    }
+  } else if (u_map == 2) {
+    vec3 r = reflect(rd, n);
+    color = straight(textureLod(u_tex, vec2(abs(atan(r.x, -r.z)) / PI, asin(clamp(r.y, -1.0, 1.0)) / PI + 0.5), 0.0));
+  } else {
+    color = wrapAt(toShape(p), transpose(u_turn) * n);
+  }
+  float lit = mix(1.0, 0.18 + 0.82 * max(dot(n, u_light), 0.0), u_shading);
+  float shine = pow(max(dot(reflect(-u_light, n), -rd), 0.0), 40.0) * u_shine;
+  return vec4((color * lit + shine) * cover, cover);
+}
+
 void main() {
   vec2 screen = vec2((v_uv.x - 0.5) * u_aspect, v_uv.y - 0.5);
   /* The picture carries its cover (premultiplied): Background and the shadow dim its color; the shape covers it. */
   vec4 picture = texture(u_back, v_uv);
   vec3 base = straight(picture) * u_background;
   vec3 eye = vec3(0.0, 0.0, EYE);
-  vec3 rd = normalize(vec3(screen, 0.0) - eye);
 
   if (u_shadow > 0.0) base *= 1.0 - u_shadow * 0.75 * (1.0 - castLight(screen));
 
-  /* The sphere around the shape: rays that miss it miss the shape. */
-  vec3 oc = eye - vec3(u_center, 0.0);
-  float b = dot(oc, rd);
-  float bound = 1.45 * scale();
-  float h = b * b - (dot(oc, oc) - bound * bound);
-  float cover = 0.0;
-  vec3 color = vec3(0.0);
-  if (h > 0.0) {
-    float t = max(-b - sqrt(h), 0.0);
-    float end = -b + sqrt(h);
-    /* The nearest the ray comes to the shape, in pixels, and where. */
-    float nearest = 1e9;
-    float nearestT = t;
-    bool hit = false;
-    for (int i = 0; i < STEPS; i++) {
-      float d = scene(eye + rd * t);
-      float footprint = u_pixel * t / EYE;
-      if (d / footprint < nearest) {
-        nearest = d / footprint;
-        nearestT = t;
-      }
-      if (d < footprint * 0.25) {
-        hit = true;
-        break;
-      }
-      t += d;
-      if (t > end) break;
-    }
-    cover = hit ? 1.0 : clamp(1.0 - nearest, 0.0, 1.0);
-    if (cover > 0.0) {
-      float at = hit ? t : nearestT;
-      vec3 p = eye + rd * at;
-      vec3 n = normalAt(p, max(u_pixel * at / EYE * 0.5, 1e-4));
-      if (u_map == 1) {
-        vec2 lens = v_uv + n.xy * u_bend * 0.3 * vec2(1.0 / u_aspect, 1.0);
-        if (u_frost > 0.001) {
-          /**
-           * Frost: frosted glass. The picture is read at 16 places in a
-           * disk around the lens point (up to 0.05 screen heights across at
-           * Frost 1), turned by a random angle that sticks to the surface,
-           * so it is soft and grainy and the grain turns with the shape.
-           * The glass scatters light, so it also looks a little milky.
-           */
-          vec3 grainAt = toShape(p) * 731.0;
-          float spin = 6.2831853 * fract(sin(dot(grainAt, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
-          float reach = u_frost * u_frost * 0.05;
-          vec3 sum = vec3(0.0);
-          for (int k = 0; k < 16; k++) {
-            float angle = float(k) * 2.39996323 + spin;
-            vec2 tap = vec2(cos(angle), sin(angle)) * sqrt((float(k) + 0.5) / 16.0) * reach;
-            sum += straight(textureLod(u_tex, fold(lens + tap * vec2(1.0 / u_aspect, 1.0)), 0.0));
-          }
-          color = mix(sum / 16.0, vec3(1.0), u_frost * 0.12);
-        } else {
-          color = straight(textureLod(u_tex, fold(lens), 0.0));
-        }
-      } else if (u_map == 2) {
-        vec3 r = reflect(rd, n);
-        color = straight(textureLod(u_tex, vec2(abs(atan(r.x, -r.z)) / PI, asin(clamp(r.y, -1.0, 1.0)) / PI + 0.5), 0.0));
-      } else {
-        color = wrapAt(toShape(p), transpose(u_turn) * n);
-      }
-      float lit = mix(1.0, 0.18 + 0.82 * max(dot(n, u_light), 0.0), u_shading);
-      float shine = pow(max(dot(reflect(-u_light, n), -rd), 0.0), 40.0) * u_shine;
-      color = color * lit + shine;
+  /**
+   * One ray through the middle of the pixel. A pixel on a crease (where
+   * the light changes at once, as on the edges of a hollow star's bars)
+   * takes four more rays (a turned grid, so no two share a row or a
+   * column), and the five are averaged, so creases do not crawl as the
+   * shape turns. More rays at the outline too cost twice as much and looked
+   * no better. The loop's end is set at run time, so the Direct3D compiler
+   * does not copy it out five times.
+   */
+  const vec2 SUB[4] = vec2[4](vec2(0.125, 0.375), vec2(-0.375, 0.125), vec2(-0.125, -0.375), vec2(0.375, -0.125));
+  vec4 sum = vec4(0.0);
+  int rays = 1;
+  float from = 0.0;
+  for (int s = 0; s < rays; s++) {
+    vec2 shift = s == 0 ? vec2(0.0) : SUB[s - 1] * u_pixel;
+    bool edgy;
+    float close;
+    sum += shoot(eye, normalize(vec3(screen + shift, 0.0) - eye), from, edgy, close);
+    if (s == 0 && edgy) {
+      rays = 5;
+      from = close;
     }
   }
-  float shown = cover * u_opacity;
+  sum /= float(rays);
+  vec3 color = sum.a > 0.0 ? sum.rgb / sum.a : vec3(0.0);
+  float shown = sum.a * u_opacity;
   o = covered(mix(base, blendLayer(base, color, u_blend), shown), mix(picture.a, 1.0, shown));
 }`;
 

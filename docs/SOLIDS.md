@@ -117,8 +117,17 @@ so a range on them changes the speed, not the angle.
   shape gives the soft edge (the usual soft shadow of a distance
   function, improved: the closest point between two samples is estimated
   from both). Only rays that cross the sphere around the shape walk it.
-- A smooth edge, one pixel wide, from the distance at the last step, so
-  the outline does not stair-step.
+- A smooth edge, half a pixel wide, from the nearest the ray comes to the
+  shape, so the outline does not stair-step (one pixel wide until
+  2026-11-06; half a pixel is nearer to a picture made with 16 rays per
+  pixel).
+- Creases (2026-11-06): where the four normal samples show a crease or a
+  corner less than a pixel away, the pixel takes four more rays and the
+  five are averaged, so sharp edges (the Moravian star's Hollow bars) do
+  not crawl as the shape turns. The extra rays start where the first ray
+  came within 3 pixels of the shape. At 2560 x 1440 on an RTX 5090 the
+  hollow star went from about 1.8 to 3.2 ms. More rays at the outline and
+  at inner edges too cost about twice as much again and were no better.
 
 ## Open points
 
