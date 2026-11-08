@@ -13,7 +13,7 @@ use std::{
 use tauri::{
     ipc::{InvokeBody, Request},
     path::BaseDirectory,
-    AppHandle, Manager, State,
+    Manager, State, WebviewWindow,
 };
 
 /** Windows process flags: no console window, and the app and its picture stay ahead of the encoder for the processor. */
@@ -31,7 +31,89 @@ struct VideoSettings<'a> {
     spherical: bool,
 }
 
+/**
+ * The webview's shared memory object. It is held only to keep the memory,
+ * and must be released on the window's thread (see SharedFrame's drop). The
+ * window calls stay out of the test build, because a test program has no
+ * manifest for the Windows libraries that they load.
+ */
+#[cfg(all(windows, not(test)))]
+#[allow(dead_code)]
+struct ComBuffer(webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2SharedBuffer);
+#[cfg(all(windows, not(test)))]
+unsafe impl Send for ComBuffer {}
+
+/**
+ * One frame of memory that the webview and the app share. Sending a 4K frame
+ * through the normal call to the app takes about 270 ms, because the webview
+ * copies all of its 33 MB. With this memory, the page writes the pixels into
+ * it and only says that a frame is ready.
+ */
+#[cfg(all(windows, not(test)))]
+struct SharedFrame {
+    app: tauri::AppHandle,
+    buffer: Option<ComBuffer>,
+    data: *const u8,
+    bytes: usize,
+}
+#[cfg(all(windows, not(test)))]
+unsafe impl Send for SharedFrame {}
+
+#[cfg(all(windows, not(test)))]
+impl Drop for SharedFrame {
+    fn drop(&mut self) {
+        if let Some(buffer) = self.buffer.take() {
+            let _ = self.app.run_on_main_thread(move || drop(buffer));
+        }
+    }
+}
+
+#[cfg(any(not(windows), test))]
+struct SharedFrame {
+    data: *const u8,
+    bytes: usize,
+}
+#[cfg(any(not(windows), test))]
+unsafe impl Send for SharedFrame {}
+
+/** Makes a shared frame and gives it to the page, which gets a "sharedbufferreceived" event. None when this webview cannot do it: the frames then go the slow way. */
+#[cfg(all(windows, not(test)))]
+fn share_frame(window: &WebviewWindow, bytes: usize) -> Option<SharedFrame> {
+    use webview2_com::Microsoft::Web::WebView2::Win32::{ICoreWebView2Environment12, ICoreWebView2_17, COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_WRITE};
+    use windows_core::{Interface, PCWSTR};
+    let (sender, receiver) = std::sync::mpsc::channel();
+    window
+        .with_webview(move |webview| {
+            let made = (|| -> windows_core::Result<(ComBuffer, usize)> {
+                unsafe {
+                    let environment: ICoreWebView2Environment12 = webview.environment().cast()?;
+                    let buffer = environment.CreateSharedBuffer(bytes as u64)?;
+                    let mut data = std::ptr::null_mut();
+                    buffer.Buffer(&mut data)?;
+                    let core: ICoreWebView2_17 = webview.controller().CoreWebView2()?.cast()?;
+                    core.PostSharedBufferToScript(&buffer, COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_WRITE, PCWSTR::null())?;
+                    Ok((ComBuffer(buffer), data as usize))
+                }
+            })();
+            let _ = sender.send(made);
+        })
+        .ok()?;
+    match receiver.recv().ok()? {
+        Ok((buffer, data)) => Some(SharedFrame { app: window.app_handle().clone(), buffer: Some(buffer), data: data as *const u8, bytes }),
+        Err(error) => {
+            eprintln!("Could not share memory with the page: {error}");
+            None
+        }
+    }
+}
+
+#[cfg(any(not(windows), test))]
+fn share_frame(_window: &WebviewWindow, _bytes: usize) -> Option<SharedFrame> {
+    None
+}
+
 struct OpenExport {
+    shared: Option<SharedFrame>,
     target: PathBuf,
     part: PathBuf,
     child: Child,
@@ -177,13 +259,27 @@ impl Exports {
         });
         let frame_bytes = width as usize * height as usize * 4;
         let id = self.next.fetch_add(1, Ordering::Relaxed);
-        self.open.lock().map_err(|_| "The export writer is unavailable")?.insert(id, OpenExport { target, part, child, stdin, errors, frame_bytes, spherical });
+        self.open.lock().map_err(|_| "The export writer is unavailable")?.insert(id, OpenExport { shared: None, target, part, child, stdin, errors, frame_bytes, spherical });
         Ok(id)
     }
 
     /** Gives FFmpeg one frame. This waits while FFmpeg is busy, so frames never pile up in memory. */
     fn write(&self, id: u32, bytes: &[u8]) -> Result<(), String> {
         let mut open = self.open.lock().map_err(|_| "The export writer is unavailable")?;
+        Self::send(&mut open, id, bytes)
+    }
+
+    /** Gives FFmpeg the frame that the page wrote into the shared memory. The page waits for this before it writes another. */
+    fn write_shared(&self, id: u32) -> Result<(), String> {
+        let mut open = self.open.lock().map_err(|_| "The export writer is unavailable")?;
+        let export = open.get(&id).ok_or("This export is no longer open")?;
+        let shared = export.shared.as_ref().ok_or("This export has no shared memory")?;
+        /* The shared memory stays mapped until the export closes, and send ends its use of the frame before it can close the export. */
+        let frame = unsafe { std::slice::from_raw_parts(shared.data, shared.bytes) };
+        Self::send(&mut open, id, frame)
+    }
+
+    fn send(open: &mut HashMap<u32, OpenExport>, id: u32, bytes: &[u8]) -> Result<(), String> {
         let export = open.get_mut(&id).ok_or("This export is no longer open")?;
         if bytes.len() != export.frame_bytes {
             return Err(format!("A video frame has {} bytes, not {}", bytes.len(), export.frame_bytes));
@@ -261,9 +357,21 @@ pub fn free_export_paths(folder: String, names: Vec<String>) -> Result<Vec<PathB
 /** Starts a video export to "path" (an .mp4): returns its id for write_export and finish_export. "spherical" marks it as a 360 video. */
 #[tauri::command(async)]
 #[allow(clippy::too_many_arguments)]
-pub fn begin_export(app: AppHandle, exports: State<'_, Exports>, path: String, width: u32, height: u32, fps: u32, quality: String, spherical: bool) -> Result<u32, String> {
-    let ffmpeg = app.path().resolve("ffmpeg/ffmpeg.exe", BaseDirectory::Resource).map_err(|error| format!("Could not find FFmpeg: {error}"))?;
-    exports.begin(&ffmpeg, &path, VideoSettings { width, height, fps, quality: &quality, spherical })
+pub fn begin_export(window: WebviewWindow, exports: State<'_, Exports>, path: String, width: u32, height: u32, fps: u32, quality: String, spherical: bool) -> Result<u32, String> {
+    let ffmpeg = window.path().resolve("ffmpeg/ffmpeg.exe", BaseDirectory::Resource).map_err(|error| format!("Could not find FFmpeg: {error}"))?;
+    let id = exports.begin(&ffmpeg, &path, VideoSettings { width, height, fps, quality: &quality, spherical })?;
+    if let Some(shared) = share_frame(&window, width as usize * height as usize * 4) {
+        if let Some(export) = exports.open.lock().map_err(|_| "The export writer is unavailable")?.get_mut(&id) {
+            export.shared = Some(shared);
+        }
+    }
+    Ok(id)
+}
+
+/** Gives FFmpeg the frame in the shared memory (see SharedFrame). It can wait for FFmpeg, so it stays off the window's thread. */
+#[tauri::command(async)]
+pub fn write_shared_frame(exports: State<'_, Exports>, id: u32) -> Result<(), String> {
+    exports.write_shared(id)
 }
 
 /** Gives FFmpeg one frame: the raw request body, for the export in the "export-id" header. It can wait for FFmpeg, so it stays off the window's thread. */

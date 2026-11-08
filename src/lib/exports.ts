@@ -61,19 +61,51 @@ export async function writeExport(path: string, blob: Blob) {
   await invoke("save_export", bytes, { headers: { path: encodeURIComponent(path) } });
 }
 
+/** The part of the WebView2 page interface that shares memory with the app. */
+interface WebViewHost {
+  addEventListener(type: "sharedbufferreceived", listener: (event: { getBuffer(): ArrayBuffer }) => void): void;
+  removeEventListener(type: "sharedbufferreceived", listener: (event: { getBuffer(): ArrayBuffer }) => void): void;
+  releaseBuffer(buffer: ArrayBuffer): void;
+}
+
+/** How long to wait for the app's shared memory before frames go the slow way, in milliseconds. */
+const SHARED_FRAME_WAIT_MS = 3000;
+
+/** The memory that the next begin_export shares with the page, or null when it does not come. */
+function nextSharedBuffer(host: WebViewHost | undefined) {
+  return new Promise<ArrayBuffer | null>((resolve) => {
+    if (!host) return resolve(null);
+    const done = (buffer: ArrayBuffer | null) => {
+      host.removeEventListener("sharedbufferreceived", listener);
+      window.clearTimeout(timeout);
+      resolve(buffer);
+    };
+    const listener = (event: { getBuffer(): ArrayBuffer }) => done(event.getBuffer());
+    const timeout = window.setTimeout(() => done(null), SHARED_FRAME_WAIT_MS);
+    host.addEventListener("sharedbufferreceived", listener);
+  });
+}
+
 /**
  * A video export that FFmpeg makes (Rust: export_stream.rs), so a long or
- * large video never has to fit in memory. "writeFrame" gives FFmpeg one
- * frame of plain pixels and waits until it takes them. "finish" waits for
- * FFmpeg and keeps the file; "discard" removes it (a stopped or failed export).
+ * large video never has to fit in memory. "frame" is the memory it shares
+ * with the app, or null. "writeFrame" gives FFmpeg one frame of plain pixels
+ * and waits until it takes them: with "frame", the pixels must be in it.
+ * "finish" waits for FFmpeg and keeps the file; "discard" removes it (a
+ * stopped or failed export).
  */
 export async function openExportFile(path: string, settings: { width: number; height: number; fps: VideoFps; quality: VideoQuality; spherical: boolean }) {
+  const host = (window as unknown as { chrome?: { webview?: WebViewHost } }).chrome?.webview;
+  const received = nextSharedBuffer(host);
   const id = await invoke<number>("begin_export", { path, ...settings });
+  const buffer = await received;
   const headers = { "export-id": String(id) };
+  const release = () => { if (buffer) host?.releaseBuffer(buffer); };
   return {
-    writeFrame: (pixels: Uint8Array) => invoke<void>("write_export", pixels, { headers }),
-    finish: () => invoke<void>("finish_export", { id, discard: false }),
-    discard: () => invoke<void>("finish_export", { id, discard: true }).catch(() => {})
+    frame: buffer ? new Uint8Array(buffer) : null,
+    writeFrame: (pixels: Uint8Array) => buffer ? invoke<void>("write_shared_frame", { id }) : invoke<void>("write_export", pixels, { headers }),
+    finish: () => invoke<void>("finish_export", { id, discard: false }).finally(release),
+    discard: () => invoke<void>("finish_export", { id, discard: true }).catch(() => {}).finally(release)
   };
 }
 

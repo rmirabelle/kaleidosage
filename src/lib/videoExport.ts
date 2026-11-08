@@ -641,7 +641,7 @@ export async function encodeVideo(
    * run at once, so the export does not wait for the GPU.
    */
   type Read = (into: Uint8Array) => Promise<void>;
-  const pixels = new Uint8Array(width * height * 4);
+  const pixels = file?.frame ?? new Uint8Array(width * height * 4);
   let otherPixels: Uint8Array | null = null;
   let readMs = 0;
   let sendMs = 0;

@@ -136,9 +136,6 @@ function drosteTravel(copies: number, size: number) {
   return (copies - Math.floor(copies)) * drosteCopy(size);
 }
 
-/** The time between screen draws while a video is made, in milliseconds. */
-const HELD_DRAW_MS = 250;
-
 /** What a video needs of a scene. The scene can be any open scene, not only the one on the screen. */
 export interface SceneSource {
   params: Params;
@@ -177,9 +174,8 @@ export class Engine {
     this.renderer = new KaleidoRenderer(canvas, size);
   }
 
-  /** While a video is made: the screen draws only about four times a second, so the graphics card works on the video. */
+  /** While a video is made, the screen keeps its last picture, so the graphics card works on the video (see needsDraw). */
   private screenHeld = false;
-  private lastHeldDraw = 0;
   /** The time between screen frames when the export started, in milliseconds: every scene of the export moves in the same steps (see openClip). */
   exportFrameMs = 0;
 
@@ -187,15 +183,6 @@ export class Engine {
     if (held && !this.screenHeld) this.exportFrameMs = this.stats.frameMs;
     this.screenHeld = held;
     if (!held) this.wake();
-  }
-
-  /** Whether the screen skips this frame (see holdScreen). A headset and the Show window always get every frame. */
-  private skipHeldFrame(now: number) {
-    if (!this.screenHeld || this.vr || this.cast || now - this.lastHeldDraw >= HELD_DRAW_MS) {
-      this.lastHeldDraw = now;
-      return false;
-    }
-    return true;
   }
 
   /** The scene on the screen now, for an export: a copy of its settings, and its media. */
@@ -1182,6 +1169,8 @@ export class Engine {
     const trails = values.fxOrder.includes("trails") && values.trailMode !== 0;
     const forced = this.awake || Boolean(this.fade) || this.fadeWaiters.length > 0 || this.snapshotWaiters.length > 0;
     this.awake = false;
+    /* While a video is made, only a forced frame draws (see holdScreen). A headset and the Show window still get every frame. */
+    if (this.screenHeld && !forced && !this.vr && !this.cast) return false;
     if ((!this.state.paused && !this.gated) || trails || forced) {
       this.stillKey = null;
       return true;
@@ -1359,7 +1348,7 @@ export class Engine {
 
     const renderStart = performance.now();
     const values = this.frameValues(animated, elapsed);
-    this.stats.drawing = this.needsDraw(values, now) && !this.skipHeldFrame(now);
+    this.stats.drawing = this.needsDraw(values, now);
     if (this.stats.drawing) {
       this.renderer.render(values);
       this.drawFade();

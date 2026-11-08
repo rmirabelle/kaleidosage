@@ -132,6 +132,7 @@ pub fn run() {
             files::save_export,
             export_stream::begin_export,
             export_stream::write_export,
+            export_stream::write_shared_frame,
             export_stream::finish_export,
             export_stream::free_export_paths,
             files::default_export_folder,
