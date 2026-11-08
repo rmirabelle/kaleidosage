@@ -119,7 +119,8 @@ const VALUE_SNAPS: Partial<Record<ParamKey, number[]>> = {
   solidPointLength: [0.6],
   cameraTilt: [-90, -60, -30, 30, 60],
   solidTilt: [-90, -60, -30, 30, 60, 90],
-  solidTiles: [0.5, 1, 2, 3, 4, 6, 8]
+  solidTiles: [0.5, 1, 2, 3, 4, 6, 8],
+  solidRepeats: [0.5, 1, 2, 3, 4, 6, 8, 12, 16]
 };
 
 /** An angle setting that spans a whole turn (0 to 360°, or -180 to 180°). */

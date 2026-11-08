@@ -1624,6 +1624,7 @@ export class Engine {
       solidBend: this.live("solidBend"),
       solidFrost: this.live("solidFrost"),
       solidTiles: this.live("solidTiles"),
+      solidRepeats: this.live("solidRepeats"),
       solidLight: this.live("solidLight") * DEGREES,
       solidShading: this.live("solidShading"),
       solidShine: this.live("solidShine"),

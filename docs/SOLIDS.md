@@ -78,6 +78,7 @@ picture.
 | Tilt | How far the axis leans toward the viewer, in degrees. |
 | Bend | Project only: how strongly the shape bends the picture. |
 | Tiles | Wrap only: how many times the picture goes around the shape. |
+| Repeats | Mirror only (added 2026-11-07): how many times the picture goes around the reflection, counted from the direction straight back at the viewer. A flat face reflects only a narrow set of directions, so at 1 it shows a small part of the picture, much enlarged, that rushes past as the shape turns; more repeats show more of the picture on each face. 1 is the first Mirror look. |
 | Light angle | The direction the light comes from, around the shape. |
 | Shading | How dark the side away from the light is. 0 is flat, with no light and shade. |
 | Shine | A bright highlight where the light reflects toward the viewer. |

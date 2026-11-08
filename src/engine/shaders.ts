@@ -4936,6 +4936,13 @@ const SOLID_PAINT_GLSL = `
  * before.
  */
 uniform bool u_turnCopy;
+/**
+ * Mirror's Repeats: how many times the picture goes around the reflected
+ * ball, counted from the direction straight back at the viewer, so that
+ * place stays put as it changes. A flat face reflects only a narrow set of
+ * directions, so more repeats show more of the picture on it.
+ */
+uniform float u_repeats;
 
 vec3 paint(vec3 q, vec3 n, vec3 rd, vec2 uv) {
   vec3 color;
@@ -4967,7 +4974,8 @@ vec3 paint(vec3 q, vec3 n, vec3 rd, vec2 uv) {
   } else if (u_map == 2) {
     vec3 r = reflect(rd, n);
     if (u_turnCopy) r = transpose(u_turn) * r;
-    color = straight(textureLod(u_tex, vec2(abs(atan(r.x, -r.z)) / PI, asin(clamp(r.y, -1.0, 1.0)) / PI + 0.5), 0.0));
+    vec2 ball = vec2(abs(atan(r.x, -r.z)) / PI - 1.0, asin(clamp(r.y, -1.0, 1.0)) / PI);
+    color = straight(textureLod(u_tex, fold(vec2(1.0, 0.5) + ball * u_repeats), 0.0));
   } else {
     color = wrapAt(q, transpose(u_turn) * n);
   }

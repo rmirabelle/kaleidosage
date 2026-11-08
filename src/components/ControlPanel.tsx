@@ -1144,7 +1144,7 @@ function SolidSection({ engine, row, mediaName, onPickMedia, onRemoveMedia }: { 
   const [map, setMap] = useState<SolidMap>(engine.state.solidMap);
   const [paint, setPaint] = useState<SolidPaint>(engine.state.solidPaint);
   const shown = (key: ParamKey) => SOLID_SHAPE_ONLY.includes(key) ? SOLID_SHAPE_KEYS[shape].includes(key)
-    : key === "solidTiles" || key === "solidBend" || key === "solidFrost" ? SOLID_MAP_KEYS[map].includes(key) : true;
+    : key === "solidTiles" || key === "solidRepeats" || key === "solidBend" || key === "solidFrost" ? SOLID_MAP_KEYS[map].includes(key) : true;
   return (
     <>
       <ModeSelect engine={engine} stateKey="solidShape" options={SOLID_SHAPES} name="Shape" onChange={(next) => {

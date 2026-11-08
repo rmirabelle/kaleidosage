@@ -646,6 +646,8 @@ export interface FrameValues {
   /** Project's frost: 0 clear glass, 1 frosted (see SOLID_SHADER). */
   solidFrost: number;
   solidTiles: number;
+  /** Mirror's Repeats: how many times the picture goes around the reflection (see SOLID_PAINT_GLSL). */
+  solidRepeats: number;
   solidLight: number;
   solidShading: number;
   solidShine: number;
@@ -2386,6 +2388,7 @@ export class KaleidoRenderer {
     gl.uniform1f(s.uniforms.u_bend, Math.max(0, v.solidBend));
     gl.uniform1f(s.uniforms.u_frost, Math.min(1, Math.max(0, v.solidFrost)));
     gl.uniform1f(s.uniforms.u_tiles, Math.max(0.01, v.solidTiles));
+    gl.uniform1f(s.uniforms.u_repeats, Math.max(0.01, v.solidRepeats));
     const light = [Math.cos(v.solidLight), Math.sin(v.solidLight), 1.2];
     const length = Math.hypot(...light);
     gl.uniform3f(s.uniforms.u_light, light[0] / length, light[1] / length, light[2] / length);
