@@ -76,31 +76,69 @@ fn part_path(target: &Path) -> PathBuf {
     PathBuf::from(name)
 }
 
+/** Starts a program with no console window, and below the app in priority. */
+fn quiet(command: &mut Command) -> &mut Command {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(PROCESS_FLAGS);
+    }
+    command
+}
+
 /**
  * The FFmpeg options after the input, for a quality. Standard and High are
  * H.264 with halved color, which every player opens. Best is H.265 with
  * full color in 10 bits; a 360 video keeps halved color, because headsets
  * cannot decode full color. All are converted with the BT.709 colors that
  * players expect from a video of this size.
+ *
+ * "gpu" uses the NVIDIA video encoder, about eight times as fast at 4K as
+ * x264's slow preset. Its quantizers were measured against the x264 and x265
+ * settings on a lossless 4K source, to give the same picture error at about
+ * the same file size.
  */
-fn encoder_args(quality: &str, fps: u32, spherical: bool) -> Result<Vec<String>, String> {
-    let (codec, preset, crf, format) = match (quality, spherical) {
-        ("standard", _) => ("libx264", "medium", "20", "yuv420p"),
-        ("high", _) => ("libx264", "slow", "14", "yuv420p"),
-        ("best", false) => ("libx265", "medium", "12", "yuv444p10le"),
-        ("best", true) => ("libx265", "medium", "12", "yuv420p10le"),
+fn encoder_args(quality: &str, fps: u32, spherical: bool, gpu: bool) -> Result<Vec<String>, String> {
+    let (format, software, preset, crf, hardware, quantizer) = match (quality, spherical) {
+        ("standard", _) => ("yuv420p", "libx264", "medium", "20", "h264_nvenc", "25"),
+        ("high", _) => ("yuv420p", "libx264", "slow", "14", "h264_nvenc", "20"),
+        ("best", false) => ("yuv444p10le", "libx265", "medium", "12", "hevc_nvenc", "18"),
+        ("best", true) => ("yuv420p10le", "libx265", "medium", "12", "hevc_nvenc", "18"),
         _ => return Err(format!("Unknown video quality: {quality}")),
     };
     let filter = format!("scale=out_color_matrix=bt709:out_range=tv:flags=lanczos+accurate_rnd+full_chroma_int,format={format}");
     let key_frames = (fps * 2).to_string();
-    let mut args: Vec<String> = ["-vf", &filter, "-c:v", codec, "-preset", preset, "-crf", crf, "-g", &key_frames, "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv"]
+    let codec = if gpu { hardware } else { software };
+    let mut args: Vec<String> = ["-vf", &filter, "-c:v", codec, "-g", &key_frames, "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv"]
         .iter()
         .map(|arg| arg.to_string())
         .collect();
+    if gpu {
+        args.extend(["-preset", "p5", "-tune", "hq", "-rc", "constqp", "-qp", quantizer].map(String::from));
+    } else {
+        args.extend(["-preset", preset, "-crf", crf].map(String::from));
+    }
     if codec == "libx265" {
-        args.extend(["-tag:v", "hvc1", "-x265-params", "log-level=error"].map(String::from));
+        args.extend(["-x265-params", "log-level=error"].map(String::from));
+    }
+    if codec == "libx265" || codec == "hevc_nvenc" {
+        args.extend(["-tag:v", "hvc1"].map(String::from));
     }
     Ok(args)
+}
+
+/** Whether this PC's graphics card can encode with "args" at this size: FFmpeg encodes two black frames, and the result is thrown away. */
+fn gpu_can_encode(ffmpeg: &Path, width: u32, height: u32, fps: u32, args: &[String]) -> bool {
+    let source = format!("color=black:size={width}x{height}:rate={fps}");
+    let mut command = Command::new(ffmpeg);
+    command
+        .args(["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", &source, "-frames:v", "2"])
+        .args(args)
+        .args(["-f", "null", "-"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    quiet(&mut command).status().is_ok_and(|status| status.success())
 }
 
 impl Exports {
@@ -113,7 +151,9 @@ impl Exports {
         if width == 0 || height == 0 || width > MAX_SIDE || height > MAX_SIDE || width % 2 != 0 || height % 2 != 0 || !matches!(fps, 30 | 60) {
             return Err(format!("The video size is invalid: {width} x {height}, {fps} frames a second"));
         }
-        let encoder = encoder_args(quality, fps, spherical)?;
+        /* The graphics card's encoder when this PC has one that can make this video, else the processor. */
+        let gpu = encoder_args(quality, fps, spherical, true)?;
+        let encoder = if gpu_can_encode(ffmpeg, width, height, fps, &gpu) { gpu } else { encoder_args(quality, fps, spherical, false)? };
         let part = part_path(&target);
         let (size, rate) = (format!("{width}x{height}"), fps.to_string());
         let mut command = Command::new(ffmpeg);
@@ -125,12 +165,7 @@ impl Exports {
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::piped());
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            command.creation_flags(PROCESS_FLAGS);
-        }
-        let mut child = command.spawn().map_err(|error| format!("Could not start FFmpeg: {error}"))?;
+        let mut child = quiet(&mut command).spawn().map_err(|error| format!("Could not start FFmpeg: {error}"))?;
         let stdin = child.stdin.take();
         /* A thread empties FFmpeg's error text, so FFmpeg can never wait for room to write it. */
         let errors = child.stderr.take().map(|mut stderr| {
@@ -224,7 +259,7 @@ pub fn free_export_paths(folder: String, names: Vec<String>) -> Result<Vec<PathB
 }
 
 /** Starts a video export to "path" (an .mp4): returns its id for write_export and finish_export. "spherical" marks it as a 360 video. */
-#[tauri::command]
+#[tauri::command(async)]
 #[allow(clippy::too_many_arguments)]
 pub fn begin_export(app: AppHandle, exports: State<'_, Exports>, path: String, width: u32, height: u32, fps: u32, quality: String, spherical: bool) -> Result<u32, String> {
     let ffmpeg = app.path().resolve("ffmpeg/ffmpeg.exe", BaseDirectory::Resource).map_err(|error| format!("Could not find FFmpeg: {error}"))?;
@@ -352,7 +387,7 @@ mod tests {
 
     #[test]
     fn only_a_flat_best_video_keeps_full_color() {
-        let format = |quality, spherical| encoder_args(quality, 60, spherical).unwrap()[1].clone();
+        let format = |quality, spherical| encoder_args(quality, 60, spherical, false).unwrap()[1].clone();
         assert!(format("standard", false).ends_with("format=yuv420p"));
         assert!(format("high", false).ends_with("format=yuv420p"));
         assert!(format("best", false).ends_with("format=yuv444p10le"));
@@ -368,6 +403,17 @@ mod tests {
         assert_eq!(got, ["A.mp4", "a (3).mp4", "B (2).mp4"]);
     }
 
+    #[test]
+    fn the_gpu_encoder_keeps_the_codec_of_its_quality() {
+        let codec = |quality| {
+            let args = encoder_args(quality, 60, false, true).unwrap();
+            args[args.iter().position(|arg| arg == "-c:v").unwrap() + 1].clone()
+        };
+        assert_eq!(codec("standard"), "h264_nvenc");
+        assert_eq!(codec("high"), "h264_nvenc");
+        assert_eq!(codec("best"), "hevc_nvenc");
+    }
+
     fn real_ffmpeg() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("ffmpeg/ffmpeg.exe")
     }
@@ -377,26 +423,45 @@ mod tests {
         [red, green, blue, 0].repeat(64 * 64)
     }
 
-    #[test]
-    #[ignore = "needs src-tauri/ffmpeg/ffmpeg.exe"]
-    fn each_quality_makes_a_video_with_the_right_colors() {
+    /** Makes a video of each quality at this size, and checks a decoded pixel's color. */
+    fn check_colors(side: u32) {
         let folder = tempfile::tempdir().unwrap();
+        let pixels = side as usize * side as usize;
         for quality in ["standard", "high", "best"] {
             let exports = Exports::default();
             let path = folder.path().join(format!("{quality}.mp4"));
-            let id = exports.begin(&real_ffmpeg(), path.to_str().unwrap(), settings(quality, false)).unwrap();
+            let id = exports.begin(&real_ffmpeg(), path.to_str().unwrap(), VideoSettings { width: side, height: side, ..settings(quality, false) }).unwrap();
             for _ in 0..30 {
-                exports.write(id, &solid_frame(200, 40, 90)).unwrap();
+                exports.write(id, &[200, 40, 90, 0].repeat(pixels)).unwrap();
             }
             assert!(!path.exists());
             exports.finish(id, false).unwrap();
             assert!(path.exists() && !part_path(&path).exists());
             let decoded = Command::new(real_ffmpeg()).args(["-v", "error", "-i"]).arg(&path).args(["-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]).output().unwrap().stdout;
-            assert_eq!(decoded.len(), 64 * 64 * 3);
+            assert_eq!(decoded.len(), pixels * 3);
             for (got, want) in decoded[..3].iter().zip([200i32, 40, 90]) {
-                assert!((i32::from(*got) - want).abs() <= 3, "{quality}: {:?}", &decoded[..3]);
+                assert!((i32::from(*got) - want).abs() <= 3, "{quality} at {side}: {:?}", &decoded[..3]);
             }
         }
+    }
+
+    /** NVENC refuses a frame this small, so this also proves the fallback to the processor. */
+    #[test]
+    #[ignore = "needs src-tauri/ffmpeg/ffmpeg.exe"]
+    fn the_processor_encoders_give_the_right_colors() {
+        let args = encoder_args("high", 30, false, true).unwrap();
+        assert!(!gpu_can_encode(&real_ffmpeg(), 64, 64, 30, &args));
+        check_colors(64);
+    }
+
+    #[test]
+    #[ignore = "needs src-tauri/ffmpeg/ffmpeg.exe and an NVIDIA graphics card"]
+    fn the_gpu_encoders_give_the_right_colors() {
+        for quality in ["standard", "high", "best"] {
+            let args = encoder_args(quality, 30, false, true).unwrap();
+            assert!(gpu_can_encode(&real_ffmpeg(), 256, 256, 30, &args), "{quality}");
+        }
+        check_colors(256);
     }
 
     #[test]

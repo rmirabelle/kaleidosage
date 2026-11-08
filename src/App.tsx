@@ -898,6 +898,7 @@ export default function App() {
     const controller = new AbortController();
     const size = videoDimensions(options.size, screenAspect(), options.resolution);
     const saved: string[] = [];
+    engine.holdScreen(true);
     try {
       for (const [index, job] of jobs.entries()) {
         setVideoJob({ path: job.path, progress: 0, controller, step: jobs.length > 1 ? `${index + 1} of ${jobs.length}` : null });
@@ -937,6 +938,7 @@ export default function App() {
       if (controller.signal.aborted) showStatus(saved.length ? `Video export stopped; ${saved.length} saved` : "Video export stopped");
       else showError(`Could not make the video. ${error instanceof Error ? error.message : String(error)}`);
     } finally {
+      engine.holdScreen(false);
       setVideoJob((current) => current?.controller === controller ? null : current);
     }
   }, [engine, openSceneSources, showError, showSaved, showStatus]);

@@ -426,9 +426,10 @@ const smoothstep = (value: number) => {
 
 /**
  * The export works in slices of about this many milliseconds, then lets
- * the window draw a frame, so the app stays usable while the video is made.
+ * the window draw a frame. The window also runs while the export waits for
+ * the GPU and FFmpeg, so the app stays usable with a long slice.
  */
-const SLICE_MS = 12;
+const SLICE_MS = 100;
 
 /** A message is faster than a 0 ms timer, which the browser slows down. */
 const nextTask = () => new Promise<void>((resolve) => {
@@ -489,7 +490,7 @@ async function openClip(source: Engine, scene: SceneSource, shape: ExportShape, 
    * break into stripes with large steps), so the video moves in the same
    * steps as the screen and looks the same.
    */
-  const screenMs = source.stats.frameMs;
+  const screenMs = source.exportFrameMs;
   const substeps = screenMs > 0 ? Math.min(MAX_SUBSTEPS, Math.max(1, Math.round(1000 / fps / screenMs))) : 1;
   /** The real time of one step; the whole video is exactly "seconds" long, so it repeats exactly. */
   const realStep = seconds / (frames * substeps);
@@ -642,24 +643,35 @@ export async function encodeVideo(
   type Read = (into: Uint8Array) => Promise<void>;
   const pixels = new Uint8Array(width * height * 4);
   let otherPixels: Uint8Array | null = null;
+  let readMs = 0;
+  let sendMs = 0;
   const reads: { read: Read; other: Read | null; blend: number; shown: number }[] = [];
   const encodeOldest = async () => {
     const { read, other, blend, shown } = reads.shift()!;
+    const readStart = performance.now();
     await read(pixels);
     if (other) {
       otherPixels ??= new Uint8Array(pixels.length);
       await other(otherPixels);
       mixFrames(pixels, otherPixels, blend);
     }
+    const sendStart = performance.now();
+    readMs += sendStart - readStart;
     await sink.add(pixels, shown);
+    sendMs += performance.now() - sendStart;
   };
   let out = 0;
+  /** Milliseconds spent drawing frames, for the line in the log at the end. */
+  let drawMs = 0;
+  const startedAt = performance.now();
   /** Adds the next frame of the video: from "clip", mixed with "over" when a crossfade runs. */
   const addFrame = async (clip: Clip, over: Clip | null, blend: number) => {
     stopIfAsked();
     const titleShows = overlay ? titleAlpha(out / fps, seconds, options.fadeOutMs) : 0;
+    const drawStart = performance.now();
     const read = await clip.next(titleShows);
     const other = over ? await over.next(titleShows) : null;
+    drawMs += performance.now() - drawStart;
     reads.push({ read, other, blend, shown: out });
     out++;
     done++;
@@ -683,6 +695,8 @@ export async function encodeVideo(
     }
     while (reads.length) await encodeOldest();
     const video = await sink.finish();
+    const elapsed = (performance.now() - startedAt) / 1000;
+    console.warn(`video export: ${out} frames in ${elapsed.toFixed(1)} s (${(out / elapsed).toFixed(1)} a second); draw ${(drawMs / 1000).toFixed(1)} s, read ${(readMs / 1000).toFixed(1)} s, send ${(sendMs / 1000).toFixed(1)} s`);
     onProgress(1);
     return video;
   } finally {

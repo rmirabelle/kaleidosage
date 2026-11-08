@@ -212,7 +212,7 @@ export function ExportVideoDialog({ engine, screenSize, sceneSeconds, onCancel, 
           </div>
           {quality === "best" && sizeId !== "sphere" && (
             <p className="video-note">
-              Best keeps all the color detail, but it takes much longer. VLC can open the file; many other players and phones cannot. Use High for a video that plays everywhere.
+              Best keeps all the color detail. VLC can open the file; many other players and phones cannot. Use High for a video that plays everywhere.
             </p>
           )}
           <div className="video-row">
