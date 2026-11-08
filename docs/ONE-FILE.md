@@ -155,6 +155,8 @@ The start screen gets "New" and "Open". The Playlist menu goes.
   scene's name for a new file.
 - Rename (scene list or tab) renames the scene inside the file. The file
   counts as changed.
+- A saved file with one scene names its tab by the file, not by the scene
+  inside it, and that tab has no Rename (2026-11-08, the user's wish).
 - Save skips a new blank scene with no changes, as Save Playlist does now.
   A changed scene with no source A stops the save with a message that
   names the scene.

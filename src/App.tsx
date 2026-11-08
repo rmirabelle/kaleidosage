@@ -2675,6 +2675,14 @@ export default function App() {
     ? { id: doc.id, sceneId: doc.sceneId, fileName: docFileName(scenePath, doc.untitled), path: scenePath, dirty }
     : { id: doc.id, sceneId: doc.sceneId, fileName: docFileName(doc.path, doc.untitled), path: doc.path, dirty: doc.dirty });
   const sceneFileName = tabs.find((tab) => tab.id === activeId)?.fileName ?? "Untitled Scene";
+  /**
+   * A saved file with one scene names its one tab by the file, not by the
+   * scene inside it (the user's wish, 2026-11-08). That tab has no Rename,
+   * which would rename the scene that the tab does not show.
+   */
+  const singleName = docs.length === 1 && filePath !== null ? fileNameOf(filePath) : null;
+  const singleFile = singleName !== null;
+  const tabRow = singleName !== null ? tabs.map((tab) => ({ ...tab, fileName: singleName })) : tabs;
 
   return (
     <div
@@ -2774,7 +2782,7 @@ export default function App() {
         </div>
         {/* The picture under its document tab; full screen hides the tab. */}
         <div className="document">
-          {!fullscreen && !startScreen && !sceneListMode && <DocumentTabs tabs={tabs} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={(id, name) => void renameDoc(id, name)} />}
+          {!fullscreen && !startScreen && !sceneListMode && <DocumentTabs tabs={tabRow} activeId={activeId} onSelect={(id) => void crossfadeToDoc(id)} onClose={closeTab} onReorder={reorderDocs} onRename={singleFile ? undefined : (id, name) => void renameDoc(id, name)} />}
           <main className={`stage ${cursorIdle ? "cursor-idle" : ""} ${inVr ? "in-vr" : ""} ${casting ? "casting" : ""}`}>
             <canvas ref={canvasRef} onDoubleClick={() => void toggleFullscreen()} />
             {engine && statsOpen && <StatsOverlay engine={engine} />}
