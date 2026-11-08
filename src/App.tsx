@@ -843,11 +843,12 @@ export default function App() {
    * Asks where to save the video, then makes it in the background: frames
    * are rendered off the screen in short slices, so the app stays usable.
    * The video uses the settings as they were when the export started.
+   * The file name starts as the typed title, else as "sceneName".
    */
-  const exportVideo = useCallback(async (options: VideoOptions) => {
+  const exportVideo = useCallback(async (options: VideoOptions, sceneName: string) => {
     setVideoDialogOpen(false);
     if (!engine || videoJobRef.current) return;
-    const title = options.style === "title" ? options.title : "";
+    const title = (options.style === "title" && options.title.trim()) || sceneName;
     /* Headset players also know a 360 video by "_360" at the end of its name. */
     const sphere = options.size === "sphere";
     const path = isTauri() ? await chooseExportPath("mp4", title, sphere ? "_360" : "") : "kaleido.mp4";
@@ -2950,7 +2951,7 @@ export default function App() {
           engine={engine}
           screenSize={videoSize(screenAspect())}
           onCancel={() => setVideoDialogOpen(false)}
-          onExport={(options) => void exportVideo(options)}
+          onExport={(options) => void exportVideo(options, (singleName ?? sceneFileName).replace(/\.ksage$/i, ""))}
         />
       )}
       {/* The welcome card, over the whole window: the app waits for one of its two buttons. */}
