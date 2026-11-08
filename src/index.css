@@ -952,7 +952,7 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 /* The particles' life gradient (see GradientEditor): the bar, with a handle under it for each color stop. */
 /* It sits right under the Gradient slider, as part of its row: no line above it, and the row's side padding. */
 .panel-group-inner > .gradient-row { padding: 0 14px 8px; border-top: 0; }
-/* A setting that shows only for one choice of the menu above it (Algorithm Place, 3D Object Wrap, Light cycles Shape, Driver Video): part of that row, with no line between. */
+/* A setting that belongs to the menu above it (see childRows in ControlPanel; Algorithm Place, 3D Object Wrap and its Map's sliders, Light cycles Shape, Driver Video): part of that row, with no line between. */
 .panel-group-inner > .panel-child-row { border-top: 0; padding-top: 0; }
 /* The Common part at the bottom of an effect (see SplitRows): a dark band with its name, and the names of the common settings in lavender. */
 .panel-common-head { padding: 6px 14px 5px; color: #c3b5ff; background: #1b1e25; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; cursor: default; }

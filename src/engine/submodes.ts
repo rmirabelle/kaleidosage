@@ -247,6 +247,11 @@ export function submodeNote(key: ParamKey): string {
   return shown.length <= hidden.length ? shown.join(", ") : `except ${hidden.join(", ")}`;
 }
 
+/** The sliders of one choice that no other choice of the same menu shows, in that choice's order. */
+export function uniqueTo(keys: Readonly<Record<number, readonly ParamKey[]>>, choice: number): ParamKey[] {
+  return (keys[choice] ?? []).filter((key) => Object.entries(keys).every(([value, each]) => Number(value) === choice || !each.includes(key)));
+}
+
 /** The names of the choices that show the slider, or none when every choice shows it (or it has no submode). */
 export function shownIn(key: ParamKey): string[] {
   const submode = submodeOf(key);

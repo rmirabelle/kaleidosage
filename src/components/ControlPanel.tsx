@@ -12,7 +12,7 @@ import { DEFAULT_LAND_KM, loadTerrain, randomLandPlace } from "../lib/terrain";
 import type { TerrainData } from "../engine/terrain";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
-import { BUBBLE_SHAPES, BUBBLE_SHAPE_KEYS, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_PAINTS, SOLID_WRAPS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote } from "../engine/submodes";
+import { BUBBLE_SHAPES, BUBBLE_SHAPE_KEYS, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_PAINTS, SOLID_WRAPS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote, uniqueTo } from "../engine/submodes";
 import type { BlurMask, BubbleShape, ColorFill, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, MaskMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidPaint, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -939,6 +939,22 @@ export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name,
   );
 }
 
+/**
+ * The settings that belong to the menu above them go right under it, as
+ * part of its row, with no line between (see .panel-child-row): all the
+ * settings that only some choices of a later menu show, and of an effect's
+ * first menu the settings that only one choice shows (the user's rule,
+ * 2026-11-07). Common settings stay under Common.
+ */
+const childKeys = (keys: readonly ParamKey[]) => keys.filter((key) => !commonRole(key));
+const childRows = (keys: readonly ParamKey[], row: (key: ParamKey) => ReactNode) =>
+  childKeys(keys).map((key) => <div key={key} className="panel-child-row">{row(key)}</div>);
+/** "keys" without the ones that "moved" puts under their menu (see childKeys). */
+const without = (keys: readonly ParamKey[], moved: readonly ParamKey[]) => {
+  const gone = childKeys(moved);
+  return keys.filter((key) => !gone.includes(key));
+};
+
 /** The Algorithm group: the complex map picker, and the sliders for the picked map. */
 /** The warp type picker, the sliders the picked type uses, and the layer settings. */
 function WarpSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
@@ -946,7 +962,8 @@ function WarpSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => 
   return (
     <>
       <ModeSelect engine={engine} stateKey="warpType" options={WARP_TYPES} name="Type" onChange={setType} />
-      <SplitRows keys={[...WARP_KEYS[type], OPACITY_KEY.warp]} row={row} blend={<LayerBlend engine={engine} step="warp" />} />
+      {childRows(uniqueTo(WARP_KEYS, type), row)}
+      <SplitRows keys={[...without(WARP_KEYS[type], uniqueTo(WARP_KEYS, type)), OPACITY_KEY.warp]} row={row} blend={<LayerBlend engine={engine} step="warp" />} />
     </>
   );
 }
@@ -967,11 +984,14 @@ function MapSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => R
   const [idle, setIdle] = useState(() => idleKeys(engine));
   useEffect(() => engine.onFrame(() => setIdle(idleKeys(engine))), [engine]);
   const hidden = idle.split(",");
+  const keys = MAP_KEYS[mode].filter((key) => !hidden.includes(key));
+  const own = uniqueTo(MAP_KEYS, mode).filter((key) => keys.includes(key));
   return (
     <>
       <ModeSelect engine={engine} stateKey="mapMode" options={MAP_MODES} name="Type" onChange={setMode} />
       {mode === 9 && <ModeSelect engine={engine} stateKey="mandelPlace" options={MANDEL_PLACES} name="Place" child />}
-      <SplitRows keys={[...MAP_KEYS[mode].filter((key) => !hidden.includes(key)), OPACITY_KEY.map]} row={row} blend={<LayerBlend engine={engine} step="map" />} />
+      {childRows(own, row)}
+      <SplitRows keys={[...without(keys, own), OPACITY_KEY.map]} row={row} blend={<LayerBlend engine={engine} step="map" />} />
     </>
   );
 }
@@ -989,7 +1009,8 @@ function SmearSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =>
   return (
     <>
       <ModeSelect engine={engine} stateKey="smearShape" options={SMEAR_SHAPES} onChange={setShape} />
-      <SplitRows keys={SMEAR_KEYS[shape]} row={row} />
+      {childRows(uniqueTo(SMEAR_KEYS, shape), row)}
+      <SplitRows keys={without(SMEAR_KEYS[shape], uniqueTo(SMEAR_KEYS, shape))} row={row} />
     </>
   );
 }
@@ -1002,18 +1023,18 @@ function SmearSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =>
  * Blend menu and Opacity.
  */
 /**
- * Particles' settings: the Shape menu, then the sliders, with Ring radius
- * after Size only for rings, and the life gradient's colors under its
+ * Particles' settings: the Shape menu (with Ring radius under it for
+ * rings), then the sliders, and the life gradient's colors under its
  * Gradient slider, in the same row block (no line between them).
  */
 function ParticleSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
   const [shape, setShape] = useState<ParticleShape>(engine.state.particleShape);
-  const keys = PARTICLE_KEYS.flatMap((key): ParamKey[] => key === "particleSize" && shape === 2 ? [key, "particleRingRadius"] : [key]);
   return (
     <>
       <ModeSelect engine={engine} stateKey="particleShape" options={PARTICLE_SHAPES} name="Shape" onChange={setShape} />
+      {shape === 2 && childRows(["particleRingRadius"], row)}
       <SplitRows
-        keys={[...keys, "particleAmount"]}
+        keys={[...PARTICLE_KEYS, "particleAmount"]}
         row={(key) => key === "particleGradient" ? <Fragment key={key}>{row(key)}<GradientEditor engine={engine} /></Fragment> : row(key)}
         blend={<ModeSelect engine={engine} stateKey="particleBlend" options={PARTICLE_BLENDS} name="Blend" />}
       />
@@ -1033,11 +1054,16 @@ function OutlineSection({ engine, row }: { engine: Engine; row: (key: ParamKey) 
   const snake = shape === 4;
   const crawls = draw === 1 || snake;
   const keys = OUTLINE_KEYS.filter((key) => (key !== "outlineLength" || crawls) && (key !== "outlineEmitter" || draw !== 2 || snake) && ((key !== "outlinePoints" && key !== "outlineInner") || shape === 3) && (key !== "outlineDelay" || !snake));
+  /* Points and Inner radius are Radial's own, so they go under Shape; Length and Emitter belong to Draw (for a snake, which has no Draw menu, they stay in the list). */
+  const radial: ParamKey[] = shape === 3 ? ["outlinePoints", "outlineInner"] : [];
+  const drawn: ParamKey[] = snake ? [] : keys.filter((key) => key === "outlineLength" || key === "outlineEmitter");
   return (
     <>
       <ModeSelect engine={engine} stateKey="outlineShape" options={OUTLINE_SHAPES} name="Shape" onChange={setShape} />
+      {childRows(radial, row)}
       {!snake && <ModeSelect engine={engine} stateKey="outlineDraw" options={OUTLINE_DRAWS} name="Draw" onChange={setDraw} />}
-      {keys.map((key) => key === "outlineFlow"
+      {childRows(drawn, row)}
+      {without(keys, [...radial, ...drawn]).map((key) => key === "outlineFlow"
         ? <Fragment key={key}><GradientEditor engine={engine} stateKey="outlineStops" />{row(key)}</Fragment>
         : row(key))}
     </>
@@ -1057,8 +1083,9 @@ function BubbleSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =
   return (
     <>
       <ModeSelect engine={engine} stateKey="bubbleShape" options={BUBBLE_SHAPES} name="Shape" onChange={setShape} />
+      {childRows(uniqueTo(BUBBLE_SHAPE_KEYS, shape), row)}
       <SplitRows
-        keys={[...BUBBLE_SHAPE_KEYS[shape], ...BUBBLE_KEYS]}
+        keys={[...without(BUBBLE_SHAPE_KEYS[shape], uniqueTo(BUBBLE_SHAPE_KEYS, shape)), ...BUBBLE_KEYS]}
         row={row}
         below={(
           <>
@@ -1073,17 +1100,19 @@ function BubbleSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =
 }
 
 /**
- * The Opacity mask's settings: the Type menu, Strength, the gradient of
- * grays (its ends named for the type), then Radial's own sliders.
+ * The Opacity mask's settings: the Type menu with Radial's own sliders
+ * under it, Strength, then the gradient of grays (its ends named for the
+ * type).
  */
 function MaskSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
   const [mode, setMode] = useState<MaskMode>(engine.state.maskMode);
   return (
     <>
       <ModeSelect engine={engine} stateKey="maskMode" options={MASK_MODES} name="Type" onChange={setMode} />
+      {childRows(uniqueTo(MASK_KEYS, mode), row)}
       {row("maskAmount")}
       <GradientEditor engine={engine} stateKey="maskStops" gray ends={mode === 0 ? ["Dark", "Bright"] : ["Center", "Edge"]} />
-      {MASK_KEYS[mode].map(row)}
+      {without(MASK_KEYS[mode], uniqueTo(MASK_KEYS, mode)).map(row)}
     </>
   );
 }
@@ -1124,13 +1153,17 @@ function CyclesSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =
       )}
     </Fragment>
   );
+  /* Grid size is Grid's own, so it goes under Move; the sliders that only some color choices show go under Color (and Shape). */
+  const moveOwn = uniqueTo(CYCLE_KEYS, move);
+  const paintOwn = CYCLE_PAINT_KEYS[paint].filter((key) => !Object.values(CYCLE_PAINT_KEYS).every((keys) => keys.includes(key)));
   return (
     <>
       <ModeSelect engine={engine} stateKey="cyclesMove" options={CYCLE_MOVES} name="Move" onChange={setMove} />
+      {childRows(moveOwn, row)}
       <SplitRows
-        keys={[...CYCLE_KEYS[move], ...CYCLE_PAINT_KEYS[paint]]}
+        keys={[...without(CYCLE_KEYS[move], moveOwn), ...without(CYCLE_PAINT_KEYS[paint], paintOwn)]}
         row={(key) => key === "cyclesGradient"
-          ? <Fragment key={key}>{colorRows}{row(key)}<GradientEditor engine={engine} stateKey="cyclesStops" /></Fragment>
+          ? <Fragment key={key}>{colorRows}{childRows(paintOwn, row)}{row(key)}<GradientEditor engine={engine} stateKey="cyclesStops" /></Fragment>
           : row(key)}
         blend={<ModeSelect engine={engine} stateKey="cyclesBlend" options={LAYER_BLENDS} name="Blend" />}
       />
@@ -1143,14 +1176,18 @@ function SolidSection({ engine, row, mediaName, onPickMedia, onRemoveMedia }: { 
   const [shape, setShape] = useState<SolidShape>(engine.state.solidShape);
   const [map, setMap] = useState<SolidMap>(engine.state.solidMap);
   const [paint, setPaint] = useState<SolidPaint>(engine.state.solidPaint);
+  const mapOnly = Object.values(SOLID_MAP_KEYS).flat();
   const shown = (key: ParamKey) => SOLID_SHAPE_ONLY.includes(key) ? SOLID_SHAPE_KEYS[shape].includes(key)
-    : key === "solidTiles" || key === "solidRepeats" || key === "solidBend" || key === "solidFrost" ? SOLID_MAP_KEYS[map].includes(key) : true;
+    : mapOnly.includes(key) ? SOLID_MAP_KEYS[map].includes(key) : true;
+  /* The shape's own sliders go under Shape, and the map's under Map (see childRows); Roundness, which most shapes show, stays in the list. */
+  const shapeOwn = uniqueTo(SOLID_SHAPE_KEYS, shape);
   return (
     <>
       <ModeSelect engine={engine} stateKey="solidShape" options={SOLID_SHAPES} name="Shape" onChange={(next) => {
         setShape(next);
         if (next === 10) standStarUp(engine);
       }} />
+      {childRows(shapeOwn, row)}
       {/* Source: Slot A (the picture made so far), Slot B, or the 3D Object's own image or video; picking Image or Video with no file opens the Open dialog. */}
       <ModeSelect engine={engine} stateKey="solidPaint" options={SOLID_PAINTS} name="Source" onChange={(next) => {
         setPaint(next);
@@ -1170,8 +1207,9 @@ function SolidSection({ engine, row, mediaName, onPickMedia, onRemoveMedia }: { 
       )}
       <ModeSelect engine={engine} stateKey="solidMap" options={SOLID_MAPS} name="Map" onChange={setMap} />
       {shape === 10 && map === 0 && <ModeSelect engine={engine} stateKey="solidWrap" options={SOLID_WRAPS} name="Wrap" child />}
+      {childRows(SOLID_MAP_KEYS[map], row)}
       <KeepBackground engine={engine} />
-      <SplitRows keys={SOLID_KEYS.filter(shown)} row={row} blend={<ModeSelect engine={engine} stateKey="solidBlend" options={LAYER_BLENDS} name="Blend" />} />
+      <SplitRows keys={without(SOLID_KEYS.filter(shown), [...shapeOwn, ...SOLID_MAP_KEYS[map]])} row={row} blend={<ModeSelect engine={engine} stateKey="solidBlend" options={LAYER_BLENDS} name="Blend" />} />
     </>
   );
 }
@@ -1246,7 +1284,9 @@ function ColorSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =>
       </div>
       {fill !== 0 && <GradientEditor engine={engine} stateKey="colorStops" ends={fill === 1 ? ["Start", "End"] : ["Center", "Edge"]} />}
       <Fragment key={fill}>
-        <SplitRows keys={[...COLOR_FILL_KEYS[fill], ...COLOR_KEYS]} row={row} blend={<ColorBlend engine={engine} />} />
+        {/* Linear's Angle and Radial's Stretch and Turn go under Fill and its gradient (see childRows). */}
+        {childRows(uniqueTo(COLOR_FILL_KEYS, fill), row)}
+        <SplitRows keys={[...without(COLOR_FILL_KEYS[fill], uniqueTo(COLOR_FILL_KEYS, fill)), ...COLOR_KEYS]} row={row} blend={<ColorBlend engine={engine} />} />
       </Fragment>
     </>
   );
@@ -1492,7 +1532,8 @@ function KaleidoscopeSection({ engine, row }: { engine: Engine; row: (key: Param
     <>
       <ModeSelect engine={engine} stateKey="foldMode" options={FOLD_MODES} name="Type" onChange={pick} />
       <Fragment key={revision}>
-        <SplitRows keys={[...KALEIDOSCOPE_KEYS[mode], OPACITY_KEY.kaleidoscope]} row={row} blend={<LayerBlend engine={engine} step="kaleidoscope" />} />
+        {childRows(uniqueTo(KALEIDOSCOPE_KEYS, mode), row)}
+        <SplitRows keys={[...without(KALEIDOSCOPE_KEYS[mode], uniqueTo(KALEIDOSCOPE_KEYS, mode)), OPACITY_KEY.kaleidoscope]} row={row} blend={<LayerBlend engine={engine} step="kaleidoscope" />} />
       </Fragment>
     </>
   );
@@ -1516,7 +1557,10 @@ function BlurSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => 
   return (
     <>
       <ModeSelect engine={engine} stateKey="blurMask" options={BLUR_MASKS} onChange={pick} />
-      <Fragment key={revision}>{BLUR_KEYS[mode].map(row)}</Fragment>
+      <Fragment key={revision}>
+        {childRows(uniqueTo(BLUR_KEYS, mode), row)}
+        {without(BLUR_KEYS[mode], uniqueTo(BLUR_KEYS, mode)).map(row)}
+      </Fragment>
     </>
   );
 }
