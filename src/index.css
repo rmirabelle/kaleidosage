@@ -1678,7 +1678,7 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .confirm-dialog-list strong { color: #f1f2f4; font-size: 13px; font-weight: 600; }
 .confirm-dialog-list span { color: #9ca1af; font-size: 11px; }
 /* Export Video: the About dialog's frame, with a header like the Open dialog's. */
-.about-dialog.video-dialog { width: min(900px, 100%); }
+.about-dialog.video-dialog { width: min(700px, 100%); }
 .video-dialog-header { display: flex; align-items: center; gap: 15px; padding: 14px 54px 14px 16px; border-bottom: 1px solid #3a3e4d; background: linear-gradient(180deg, #2c303b, #272b35); }
 .video-dialog-header h2 { margin: 0 0 4px; color: #f4f4f5; font-size: 18px; font-weight: 650; }
 .video-dialog-header p { margin: 0; color: #a2a7b5; font-size: 12px; line-height: 1.45; }
