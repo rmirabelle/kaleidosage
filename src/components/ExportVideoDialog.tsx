@@ -84,6 +84,7 @@ export function ExportVideoDialog({ engine, screenSize, sceneSeconds, onCancel, 
   const [style, setStyle] = useState<VideoStyle>(stored.style === "title" ? "title" : "loop");
   const [quality, setQuality] = useState<VideoQuality>(QUALITY_CHOICES.some((choice) => choice.value === stored.quality) ? stored.quality! : "high");
   const [fps, setFps] = useState<VideoFps>(stored.fps === 30 ? 30 : 60);
+  const [motionBlur, setMotionBlur] = useState(stored.motionBlur !== false);
   const [allScenes, setAllScenes] = useState(stored.scenes === "separate" || stored.scenes === "stitched");
   const [joining, setJoining] = useState<Exclude<VideoScenes, "current">>(stored.scenes === "stitched" ? "stitched" : "separate");
   const sceneCount = sceneSeconds.length;
@@ -104,7 +105,7 @@ export function ExportVideoDialog({ engine, screenSize, sceneSeconds, onCancel, 
   const submit = () => {
     const typed = Number(fadeOut);
     const fadeOutMs = fadeOut.trim() && Number.isFinite(typed) ? Math.max(0, Math.round(typed)) : null;
-    const options: VideoOptions = { scenes, size: sizeId, resolution, style, title, fadeOutMs, loops, quality, fps };
+    const options: VideoOptions = { scenes, size: sizeId, resolution, style, title, fadeOutMs, loops, quality, fps, motionBlur };
     try { localStorage.setItem(STORE_KEY, JSON.stringify(options)); } catch { /* Remembering is a convenience only. */ }
     onExport(options);
   };
@@ -226,6 +227,15 @@ export function ExportVideoDialog({ engine, screenSize, sceneSeconds, onCancel, 
               ))}
             </div>
           </div>
+          <ChoiceRow
+            label="Motion blur"
+            value={motionBlur ? "on" : "off"}
+            onChange={(value) => setMotionBlur(value === "on")}
+            choices={[
+              { value: "on", label: "Half-frame", note: "Smoother fast motion" },
+              { value: "off", label: "None", note: "Sharpest, can be faster" }
+            ]}
+          />
           <div className="video-row">
             <span className="video-label">Style</span>
             <div className="video-styles" role="radiogroup" aria-label="Style">

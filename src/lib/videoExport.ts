@@ -2,7 +2,7 @@ import { ArrayBufferTarget, Muxer } from "mp4-muxer";
 import type { ExportFile } from "./exports";
 import type { Engine, SceneSource } from "../engine/engine";
 import { baseLoopSeconds, fittedCustomSeconds, needsSeamFade, trailSettleTime, warpFlowCorrection } from "../engine/loop";
-import { PARAM_KEYS, startRangeAt, type ParamKey } from "../engine/params";
+import { PARAM_KEYS, startRangeAt, type GroupKey, type ParamKey } from "../engine/params";
 import { getAppVersion } from "./updater";
 
 /**
@@ -59,6 +59,8 @@ export interface VideoOptions {
   loops: number;
   quality: VideoQuality;
   fps: VideoFps;
+  /** Blends the second half of each frame's time into the frame, as a film camera does. */
+  motionBlur: boolean;
 }
 
 /** Seconds of the crossfade between two scenes in a stitched video. */
@@ -453,6 +455,8 @@ const afterNextFrame = () => document.hidden
     }));
   });
 
+/** The moments that motion blur draws and blends for one video frame. */
+const MOTION_BLUR_SAMPLES = 6;
 /** Frames the encoder may hold before the export waits for it, so frames do not pile up in memory. */
 const ENCODER_QUEUE = 12;
 /** The most steps per video frame (see encodeVideo's "substeps"). */
@@ -491,7 +495,20 @@ async function openClip(source: Engine, scene: SceneSource, shape: ExportShape, 
    * steps as the screen and looks the same.
    */
   const screenMs = source.exportFrameMs;
-  const substeps = screenMs > 0 ? Math.min(MAX_SUBSTEPS, Math.max(1, Math.round(1000 / fps / screenMs))) : 1;
+  const screenSteps = screenMs > 0 ? Math.min(MAX_SUBSTEPS, Math.max(1, Math.round(1000 / fps / screenMs))) : 1;
+  /**
+   * Only these effects use the frames before this one. Without them, a draw
+   * that does not show is wasted, so only the frames that show are drawn. With
+   * them, every step must draw, in the same steps as the screen, so the
+   * motion blur has only those draws to blend: their own memory already
+   * smooths the motion.
+   */
+  const inStack = (group: GroupKey) => state.groups[group] && (state.fxOrder as string[]).includes(group);
+  const keepsMemory = (inStack("trails") && state.trailMode !== 0) || inStack("smear") || inStack("contours") || inStack("particles") || inStack("cycles");
+  const substeps = options.motionBlur && !keepsMemory ? MOTION_BLUR_SAMPLES * 2 : screenSteps;
+  const samples = !options.motionBlur ? 1 : keepsMemory ? Math.ceil(screenSteps / 2) : MOTION_BLUR_SAMPLES;
+  /* The samples are the last steps of the frame, so the frame's last sample is at the frame's own time, and a seamless loop still repeats exactly. */
+  const firstSample = substeps - samples;
   /** The real time of one step; the whole video is exactly "seconds" long, so it repeats exactly. */
   const realStep = seconds / (frames * substeps);
   const animatedStep = realStep * engine.speed;
@@ -540,9 +557,11 @@ async function openClip(source: Engine, scene: SceneSource, shape: ExportShape, 
   const step = async () => {
     for (let count = 0; count < substeps; count++) {
       const animated = engine.step(realStep);
-      if (hasVideo && count === substeps - 1) await engine.seekVideos();
-      engine.draw(animated, realStep);
+      if (hasVideo && count === firstSample) await engine.seekVideos();
+      if (keepsMemory || count >= firstSample) engine.draw(animated, realStep);
+      if (samples > 1 && count >= firstSample) engine.addBlurSample(count - firstSample);
     }
+    if (samples > 1) engine.drawBlurResult();
     return index++ - lead;
   };
   return {

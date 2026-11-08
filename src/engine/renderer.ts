@@ -3723,6 +3723,8 @@ export class KaleidoRenderer {
   /** Video export: the overlay pass and the title box texture (made when first used). */
   private overlayProgram: Program | null = null;
   private overlayTexture: WebGLTexture | null = null;
+  /** Video export: the copy of the canvas and the running blend of the motion blur (made when first used). */
+  private blurTargets: { copy: ExportTarget; sum: ExportTarget } | null = null;
   /** Video export: the textures that frames wait in to be read, "width" by "height", that no read uses now. */
   private readTargets: { width: number; height: number; free: ExportTarget[] } = { width: 0, height: 0, free: [] };
   /** 360 video export: the sphere pass and the copy of the canvas it reads (made when first used). */
@@ -3851,11 +3853,35 @@ export class KaleidoRenderer {
     if (this.overlayTexture) this.drawOver(this.overlayTexture, alpha, false);
   }
 
-  private drawOver(texture: WebGLTexture, alpha: number, opaque: boolean) {
+  /**
+   * Motion blur for a video: adds the picture now on the canvas to the
+   * blend of this video frame. "index" counts the samples of the frame from
+   * 0. Each sample has the weight 1 / (index + 1), so the blend stays the
+   * plain average of its samples.
+   */
+  addBlurSample(index: number) {
+    const gl = this.gl;
+    const [width, height] = this.frameSize;
+    this.blurTargets ??= { copy: this.exportTarget(width, height, gl.NEAREST), sum: this.exportTarget(width, height, gl.NEAREST, this.trailFormat.internal) };
+    const { copy, sum } = this.blurTargets;
+    /* The canvas cannot be read as a texture, so the blend reads a copy of it. */
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, copy.framebuffer);
+    gl.blitFramebuffer(0, 0, width, height, 0, 0, width, height, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+    this.drawOver(copy.texture, 1 / (index + 1), true, sum.framebuffer);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+
+  /** Motion blur for a video: puts the blend of the samples on the canvas (see addBlurSample). */
+  drawBlurResult() {
+    if (this.blurTargets) this.drawOver(this.blurTargets.sum.texture, 1, true);
+  }
+
+  private drawOver(texture: WebGLTexture, alpha: number, opaque: boolean, target: WebGLFramebuffer | null = null) {
     const gl = this.gl;
     this.overlayProgram ??= this.createProgram(OVERLAY_SHADER);
     const o = this.overlayProgram;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target);
     gl.viewport(0, 0, this.frameSize[0], this.frameSize[1]);
     gl.useProgram(o.program);
     gl.activeTexture(gl.TEXTURE0);
@@ -3921,11 +3947,11 @@ export class KaleidoRenderer {
   }
 
   /** Video export: a texture "width" by "height" with a framebuffer that draws into it. */
-  private exportTarget(width: number, height: number, filter: number): ExportTarget {
+  private exportTarget(width: number, height: number, filter: number, format: number = this.gl.RGBA8): ExportTarget {
     const gl = this.gl;
     const texture = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, width, height);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, format, width, height);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);

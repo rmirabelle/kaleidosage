@@ -1201,6 +1201,8 @@ export class Engine {
   releaseFrame(texture: WebGLTexture) { this.renderer.releaseFrame(texture); }
   setOverlay(source: HTMLCanvasElement | null) { this.renderer.setOverlay(source); }
   drawFrameOver(texture: WebGLTexture, alpha: number) { this.renderer.drawFrameOver(texture, alpha); }
+  addBlurSample(index: number) { this.renderer.addBlurSample(index); }
+  drawBlurResult() { this.renderer.drawBlurResult(); }
   drawOverlay(alpha: number) { this.renderer.drawOverlay(alpha); }
   startRead() { return this.renderer.startRead(); }
   startSphereRead(width: number, height: number) { return this.renderer.startSphereRead(width, height); }
