@@ -875,7 +875,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   solidBend: { label: "Bend", min: 0, max: 1, step: 0.01, value: 0.4, drift: "wave", low: 0.2, high: 0.7, on: false },
   solidFrost: { label: "Frost", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.6, on: false },
   solidTiles: { label: "Tiles", min: 0.25, max: 8, step: 0.01, scale: "log", value: 1, drift: "wave", low: 1, high: 3, on: false },
-  /** Mirror only: how many times the picture goes around the reflection. More shows more of the picture on a flat face (1 is the first Mirror look). */
+  /** Project and Mirror: how many times the picture repeats through the shape, or goes around the reflection. More shows more of the picture (1 is the first look). */
   solidRepeats: { label: "Repeats", min: 0.25, max: 16, step: 0.01, scale: "log", value: 1, drift: "wave", low: 1, high: 4, on: false },
   solidLight: { label: "Light angle", min: 0, max: 360, step: 1, value: 135, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   solidShading: { label: "Shading", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.3, high: 0.9, on: false },

@@ -161,8 +161,8 @@ export const SOLID_SHAPE_KEYS: Record<SolidShape, ParamKey[]> = {
 /** The sliders that only some shapes show (see SOLID_SHAPE_KEYS). */
 export const SOLID_SHAPE_ONLY: readonly ParamKey[] = ["solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidPoints", "solidPointLength", "solidHollow", "solidLevels"];
 export const SOLID_SHAPES = [[0, "Sphere"], [1, "Cube"], [2, "Morph"], [3, "Blobs"], [4, "Wobbly ball"], [5, "Spike ball"], [6, "Octahedron"], [7, "Icosahedron"], [8, "Pyramid"], [9, "Menger sponge"], [10, "Moravian star"]] as const;
-/** Tiles is for Wrap; Bend for Project. */
-export const SOLID_MAP_KEYS: Record<SolidMap, ParamKey[]> = { 0: ["solidTiles"], 1: ["solidBend", "solidFrost"], 2: ["solidRepeats"] };
+/** Tiles is for Wrap; Bend and Frost for Project; Repeats for Project and Mirror. */
+export const SOLID_MAP_KEYS: Record<SolidMap, ParamKey[]> = { 0: ["solidTiles"], 1: ["solidBend", "solidFrost", "solidRepeats"], 2: ["solidRepeats"] };
 export const SOLID_MAPS = [[0, "Wrap"], [1, "Project"], [2, "Mirror"]] as const;
 /** The Moravian star's Wrap choices (see SolidWrap). */
 export const SOLID_WRAPS = [[0, "Globe"], [1, "Faces"], [2, "Six sides"], [3, "Points"]] as const;

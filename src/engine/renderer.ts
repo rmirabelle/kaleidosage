@@ -646,7 +646,7 @@ export interface FrameValues {
   /** Project's frost: 0 clear glass, 1 frosted (see SOLID_SHADER). */
   solidFrost: number;
   solidTiles: number;
-  /** Mirror's Repeats: how many times the picture goes around the reflection (see SOLID_PAINT_GLSL). */
+  /** Repeats (Project and Mirror): how many times the picture repeats through the shape or around the reflection (see SOLID_PAINT_GLSL). */
   solidRepeats: number;
   solidLight: number;
   solidShading: number;

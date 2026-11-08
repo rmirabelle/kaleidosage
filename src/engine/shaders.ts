@@ -4937,10 +4937,13 @@ const SOLID_PAINT_GLSL = `
  */
 uniform bool u_turnCopy;
 /**
- * Mirror's Repeats: how many times the picture goes around the reflected
+ * Repeats. Mirror: how many times the picture goes around the reflected
  * ball, counted from the direction straight back at the viewer, so that
  * place stays put as it changes. A flat face reflects only a narrow set of
- * directions, so more repeats show more of the picture on it.
+ * directions, so more repeats show more of the picture on it. Project
+ * (added 2026-11-07): the picture seen through the shape is that many
+ * times smaller, counted from the shape's center, and repeats (mirrored)
+ * past its edges.
  */
 uniform float u_repeats;
 
@@ -4950,6 +4953,8 @@ vec3 paint(vec3 q, vec3 n, vec3 rd, vec2 uv) {
     vec3 bent = u_turnCopy ? transpose(u_turn) * n : n;
     vec2 lens = uv + bent.xy * u_bend * 0.3 * vec2(1.0 / u_aspect, 1.0);
     if (u_turnCopy) lens += (q - u_turn * q).xy * 0.5 * u_size * vec2(1.0 / u_aspect, 1.0);
+    vec2 middle = 0.5 + u_center * vec2(1.0 / u_aspect, 1.0);
+    lens = middle + (lens - middle) * u_repeats;
     if (u_frost > 0.001) {
       /**
        * Frost: frosted glass. The picture is read at 16 places in a
@@ -4965,7 +4970,7 @@ vec3 paint(vec3 q, vec3 n, vec3 rd, vec2 uv) {
       for (int k = 0; k < 16; k++) {
         float angle = float(k) * 2.39996323 + spin;
         vec2 tap = vec2(cos(angle), sin(angle)) * sqrt((float(k) + 0.5) / 16.0) * reach;
-        sum += straight(textureLod(u_tex, fold(lens + tap * vec2(1.0 / u_aspect, 1.0)), 0.0));
+        sum += straight(textureLod(u_tex, fold(lens + tap * u_repeats * vec2(1.0 / u_aspect, 1.0)), 0.0));
       }
       color = mix(sum / 16.0, vec3(1.0), u_frost * 0.12);
     } else {
@@ -5594,6 +5599,8 @@ uniform int u_map;
 uniform int u_blend;
 uniform float u_opacity;
 uniform mat3 u_turn;
+/* The shape's place, as in SOLID_MESH_VERTEX (Project's Repeats counts from it). */
+uniform vec2 u_center;
 uniform float u_bend;
 uniform float u_frost;
 uniform float u_tiles;
