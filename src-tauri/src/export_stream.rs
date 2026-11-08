@@ -191,6 +191,38 @@ impl Exports {
     }
 }
 
+/**
+ * A path in "folder" for each of "names" that no file has yet, and that no
+ * other name takes: "Clip.mp4", then "Clip (2).mp4". So an export of several
+ * videos never replaces a file. Windows file names ignore case.
+ */
+fn free_paths(folder: &Path, names: &[String], exists: impl Fn(&Path) -> bool) -> Vec<PathBuf> {
+    let mut taken = std::collections::HashSet::new();
+    names
+        .iter()
+        .map(|name| {
+            let (stem, extension) = name.rsplit_once('.').unwrap_or((name, "mp4"));
+            let mut candidate = name.clone();
+            let mut number = 2;
+            while exists(&folder.join(&candidate)) || !taken.insert(candidate.to_lowercase()) {
+                candidate = format!("{stem} ({number}).{extension}");
+                number += 1;
+            }
+            folder.join(candidate)
+        })
+        .collect()
+}
+
+/** See free_paths. */
+#[tauri::command]
+pub fn free_export_paths(folder: String, names: Vec<String>) -> Result<Vec<PathBuf>, String> {
+    let folder = PathBuf::from(folder);
+    if !folder.is_absolute() {
+        return Err("The export folder is invalid".into());
+    }
+    Ok(free_paths(&folder, &names, Path::exists))
+}
+
 /** Starts a video export to "path" (an .mp4): returns its id for write_export and finish_export. "spherical" marks it as a 360 video. */
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
@@ -325,6 +357,15 @@ mod tests {
         assert!(format("high", false).ends_with("format=yuv420p"));
         assert!(format("best", false).ends_with("format=yuv444p10le"));
         assert!(format("best", true).ends_with("format=yuv420p10le"));
+    }
+
+    #[test]
+    fn free_paths_never_reuse_a_name_or_a_file() {
+        let names = ["A.mp4", "a.mp4", "B.mp4"].map(String::from);
+        let exists = |path: &Path| path.ends_with("B.mp4") || path.ends_with("a (2).mp4");
+        let paths = free_paths(Path::new("C:/out"), &names, exists);
+        let got: Vec<_> = paths.iter().map(|path| path.file_name().unwrap().to_str().unwrap()).collect();
+        assert_eq!(got, ["A.mp4", "a (3).mp4", "B (2).mp4"]);
     }
 
     fn real_ffmpeg() -> PathBuf {

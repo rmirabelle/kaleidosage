@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { save } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { snapshotFileName } from "./images";
 import type { VideoFps, VideoQuality } from "./videoExport";
 
@@ -18,7 +18,7 @@ const TITLES: Record<ExportKind, string> = { png: "Save PNG", mp4: "Export Video
 const folderOf = (path: string) => path.replace(/[\\/][^\\/]*$/, "");
 
 /** A title as a Windows file name: no characters Windows forbids, no dots or spaces at the end, at most 120 characters. */
-const safeFileName = (title: string) => title
+export const safeFileName = (title: string) => title
   .replace(/[<>:"/\\|?*\u0000-\u001f]/g, " ")
   .replace(/\s+/g, " ")
   .trim()
@@ -42,6 +42,17 @@ export async function chooseExportPath(kind: ExportKind, title = "", suffix = ""
   if (!path.toLowerCase().endsWith(`.${kind}`)) path += `.${kind}`;
   try { localStorage.setItem(FOLDER_KEY, folderOf(path)); } catch { /* Remembering is a convenience only. */ }
   return path;
+}
+
+/** Asks for a folder for several videos. It starts in the folder used last, or in Pictures\Kaleido Sage. Returns null when the user cancels. */
+export async function chooseExportFolder(): Promise<string | null> {
+  let folder: string | null = null;
+  try { folder = localStorage.getItem(FOLDER_KEY); } catch { /* Remembering is a convenience only. */ }
+  if (!folder) folder = await invoke<string>("default_export_folder").catch(() => null);
+  const picked = await open({ title: "Export Videos to Folder", directory: true, defaultPath: folder ?? undefined });
+  if (typeof picked !== "string") return null;
+  try { localStorage.setItem(FOLDER_KEY, picked); } catch { /* Remembering is a convenience only. */ }
+  return picked;
 }
 
 /** Writes an export to the path the user picked. */

@@ -200,7 +200,7 @@ export const HELP_TOPICS = {
       "Size 360° makes a video that goes all around you in a Quest or another VR headset.",
       "View, Enter VR shows the picture live on a big screen in a headset (Quest: turn on Link).",
       "A video plays the ranges; audio sensors do not move in it.",
-      "The video is made in the background; the app stays usable.",
+      "All Scenes: one file per scene, or one video with 2-second crossfades.",
       "PNG files go to Pictures, Kaleido Sage, unless you pick another folder."
     ],
     keywords: ["png", "snapshot", "picture", "video", "mp4", "export", "loop", "vr", "quest", "headset", "360"]

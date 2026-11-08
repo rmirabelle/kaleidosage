@@ -30,14 +30,14 @@ import type { TerrainData } from "./engine/terrain";
 import { DocumentTabs, type DocumentTabInfo } from "./components/DocumentTabs";
 import { StageControls } from "./components/StageControls";
 import { VrScreenCard } from "./components/VrScreenCard";
-import { Engine } from "./engine/engine";
+import { Engine, type SceneSource } from "./engine/engine";
 import { vrAvailable, vrSupported } from "./engine/vr";
 
 /** Set once VR has worked on this PC (see toggleVr). */
 const VR_USED_KEY = "kaleidosage.vr-used";
 import { createParams, createPlayState, nudgeParams, randomizeGroup, randomizeParams, resetEffects, type GroupKey, type Params, type PlayState } from "./engine/params";
 import { SettingsHistory } from "./engine/history";
-import { scenePosition } from "./engine/loop";
+import { baseLoopSeconds, scenePosition } from "./engine/loop";
 import { SCENE_EXTENSION, applyScene, blobToSceneImage, sceneFingerprint, serializeScene, type SceneImage } from "./engine/scene";
 import { loadSceneMedia, loadSceneSource, readScene, writeScene } from "./lib/scenes";
 import { DEFAULT_LAND_KM, loadTerrain, randomLandPlace, terrainFromScene, terrainToScene } from "./lib/terrain";
@@ -51,7 +51,7 @@ import {
   loadRandomImage,
   type CommonsPhoto
 } from "./lib/images";
-import { chooseExportPath, fileNameOf, openExportFile, writeExport } from "./lib/exports";
+import { chooseExportFolder, chooseExportPath, fileNameOf, openExportFile, safeFileName, writeExport } from "./lib/exports";
 import { PATTERNS, drawPattern, type Pattern } from "./lib/patterns";
 import { midi } from "./lib/midi";
 import { audioInput, type InputKind } from "./lib/audioInput";
@@ -498,7 +498,7 @@ export default function App() {
   /** The slot that the photo search dialog loads into, while it is open. */
   const [searchSlot, setSearchSlot] = useState<ImageSlot | null>(null);
   /** The video being made in the background: its file, progress from 0 to 1, and the controller that stops it. */
-  const [videoJob, setVideoJob] = useState<{ path: string; progress: number; controller: AbortController } | null>(null);
+  const [videoJob, setVideoJob] = useState<{ path: string; progress: number; controller: AbortController; step: string | null } | null>(null);
   const videoJobRef = useRef(videoJob);
   videoJobRef.current = videoJob;
   /** The open scene file (null until a scene is opened or saved), and whether it has unsaved changes. */
@@ -839,59 +839,107 @@ export default function App() {
     else setVideoDialogOpen(true);
   }, [engine, showStatus]);
 
+  /** Each open scene in tab order, with its name, as a copy for an export. */
+  const openSceneSources = useCallback((): { name: string; scene: SceneSource }[] => {
+    if (!engine) return [];
+    return docsRef.current.flatMap((doc) => {
+      const name = docFileName(doc.id === activeIdRef.current ? scenePathRef.current : doc.path, doc.untitled).replace(/\.ksage$/i, "");
+      if (doc.id === activeIdRef.current) return [{ name, scene: engine.exportScene() }];
+      const stored = storedRef.current.get(doc.id);
+      if (!stored) return [];
+      return [{
+        name,
+        scene: {
+          params: structuredClone(stored.params),
+          state: structuredClone(stored.state),
+          images: [stored.images[0]?.source ?? null, stored.images[1]?.source ?? null] as SceneSource["images"],
+          driver: stored.driver?.video ?? null,
+          picture: stored.picture?.source ?? null,
+          solidMedia: stored.solidMedia?.source ?? null,
+          terrain: stored.terrain ?? null
+        }
+      }];
+    });
+  }, [engine]);
+
   /**
-   * Asks where to save the video, then makes it in the background: frames
-   * are rendered off the screen in short slices, so the app stays usable.
-   * The video uses the settings as they were when the export started.
-   * The file name starts as the typed title, else as "sceneName".
+   * Asks where to save, then makes the video or videos in the background:
+   * frames are rendered off the screen in short slices, so the app stays
+   * usable. A video uses the settings as they were when the export started.
+   * With several videos, Stop or a failure ends the export, and the videos
+   * already made stay.
    */
   const exportVideo = useCallback(async (options: VideoOptions, sceneName: string) => {
     setVideoDialogOpen(false);
     if (!engine || videoJobRef.current) return;
-    const title = (options.style === "title" && options.title.trim()) || sceneName;
     /* Headset players also know a 360 video by "_360" at the end of its name. */
     const sphere = options.size === "sphere";
-    const path = isTauri() ? await chooseExportPath("mp4", title, sphere ? "_360" : "") : "kaleido.mp4";
-    if (!path) return;
+    const suffix = sphere ? "_360" : "";
+    const typed = options.style === "title" ? options.title.trim() : "";
+    const all = isTauri() && docsRef.current.length > 1 ? options.scenes : "current";
+    const sources = openSceneSources();
+    let jobs: { path: string; scenes: SceneSource[]; options: VideoOptions }[];
+    if (all === "separate") {
+      const folder = await chooseExportFolder();
+      if (!folder) return;
+      const names = sources.map(({ name }) => `${safeFileName(name) || "Scene"}${suffix}.mp4`);
+      const paths = await invoke<string[]>("free_export_paths", { folder, names }).catch((error: unknown) => {
+        showError(`Could not make the videos. ${String(error)}`);
+        return null;
+      });
+      if (!paths) return;
+      jobs = sources.map(({ name, scene }, index) => ({ path: paths[index], scenes: [scene], options: { ...options, title: name } }));
+    } else {
+      const project = filePathRef.current ? fileNameOf(filePathRef.current).replace(/\.ksage$/i, "") : "Untitled Project";
+      const path = isTauri() ? await chooseExportPath("mp4", typed || (all === "stitched" ? project : sceneName), suffix) : "kaleido.mp4";
+      if (!path) return;
+      jobs = [{ path, scenes: all === "stitched" ? sources.map(({ scene }) => scene) : [engine.exportScene()], options }];
+    }
     const controller = new AbortController();
     const size = videoDimensions(options.size, screenAspect(), options.resolution);
-    const job = { path, progress: 0, controller };
-    setVideoJob(job);
-    let shown = 0;
-    const progress = (fraction: number) => {
-      const percent = Math.floor(fraction * 100);
-      if (percent === shown) return;
-      shown = percent;
-      setVideoJob((current) => current?.controller === controller ? { ...current, progress: fraction } : current);
-    };
-    /* In the app FFmpeg makes the video (see openExportFile); a stopped or failed export removes the file. */
-    const file = isTauri() ? await openExportFile(path, { ...size, fps: options.fps, quality: options.quality, spherical: sphere }).catch((error: unknown) => {
-      showError(`Could not make the video. ${error instanceof Error ? error.message : String(error)}`);
-      return null;
-    }) : null;
-    if (isTauri() && !file) {
-      setVideoJob((current) => current?.controller === controller ? null : current);
-      return;
-    }
+    const saved: string[] = [];
     try {
-      const blob = await encodeVideo(engine, size, options, progress, controller.signal, file);
-      if (file) {
-        await file.finish();
-        showSaved(path, 8000);
-      } else if (blob) {
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = path;
-        link.click();
+      for (const [index, job] of jobs.entries()) {
+        setVideoJob({ path: job.path, progress: 0, controller, step: jobs.length > 1 ? `${index + 1} of ${jobs.length}` : null });
+        let shown = 0;
+        const progress = (fraction: number) => {
+          const percent = Math.floor(fraction * 100);
+          if (percent === shown) return;
+          shown = percent;
+          setVideoJob((current) => current?.controller === controller ? { ...current, progress: fraction } : current);
+        };
+        /* In the app FFmpeg makes the video (see openExportFile); a stopped or failed export removes the file. */
+        const file = isTauri() ? await openExportFile(job.path, { ...size, fps: options.fps, quality: options.quality, spherical: sphere }) : null;
+        try {
+          const blob = await encodeVideo(engine, job.scenes, size, job.options, progress, controller.signal, file);
+          if (file) {
+            await file.finish();
+            saved.push(job.path);
+          } else if (blob) {
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = job.path;
+            link.click();
+          }
+        } catch (error) {
+          await file?.discard();
+          throw error;
+        }
+      }
+      if (saved.length === 1) showSaved(saved[0], 8000);
+      else if (saved.length > 1) {
+        showStatus(`Saved ${saved.length} videos`, 8000, {
+          label: "Show",
+          run: () => void invoke("reveal_file", { path: saved[0] }).catch((error) => showError(String(error)))
+        });
       }
     } catch (error) {
-      await file?.discard();
-      if (controller.signal.aborted) showStatus("Video export stopped");
+      if (controller.signal.aborted) showStatus(saved.length ? `Video export stopped; ${saved.length} saved` : "Video export stopped");
       else showError(`Could not make the video. ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setVideoJob((current) => current?.controller === controller ? null : current);
     }
-  }, [engine, showError, showSaved, showStatus]);
+  }, [engine, openSceneSources, showError, showSaved, showStatus]);
 
   /** The current scene's fingerprint (see sceneFingerprint). */
   const fingerprint = useCallback(() => {
@@ -2823,7 +2871,7 @@ export default function App() {
             )}
             {videoJob && (
               <div className="export-job" role="status">
-                <span className="export-job-label">Making {fileNameOf(videoJob.path)}… {Math.floor(videoJob.progress * 100)}%</span>
+                <span className="export-job-label">Making {fileNameOf(videoJob.path)}{videoJob.step ? ` (${videoJob.step})` : ""}… {Math.floor(videoJob.progress * 100)}%</span>
                 <span className="export-job-bar"><i style={{ width: `${videoJob.progress * 100}%` }} /></span>
                 <button onClick={() => videoJob.controller.abort()}>Stop</button>
               </div>
@@ -2950,6 +2998,10 @@ export default function App() {
         <ExportVideoDialog
           engine={engine}
           screenSize={videoSize(screenAspect())}
+          sceneSeconds={isTauri() ? docs.flatMap((doc) => {
+            const scene = doc.id === activeId ? engine : storedRef.current.get(doc.id);
+            return scene ? [baseLoopSeconds(scene.params, scene.state)] : [];
+          }) : []}
           onCancel={() => setVideoDialogOpen(false)}
           onExport={(options) => void exportVideo(options, (singleName ?? sceneFileName).replace(/\.ksage$/i, ""))}
         />

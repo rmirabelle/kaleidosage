@@ -1,4 +1,4 @@
-import { GROUP_PARAMS, NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, defaultValue, hexToRgb, lensAngle, liveValue, rangeAt, rangeClock, startRangeAt, type GroupKey, type ParamKey } from "./params";
+import { GROUP_PARAMS, NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, defaultValue, hexToRgb, lensAngle, liveValue, rangeAt, rangeClock, startRangeAt, type GroupKey, type ParamKey, type Params, type PlayState } from "./params";
 import { KaleidoRenderer, LASER_BEAMS, type FrameValues, type ImageSource } from "./renderer";
 import type { TerrainData } from "./terrain";
 import { MANDEL_CENTERS } from "./submodes";
@@ -136,6 +136,17 @@ function drosteTravel(copies: number, size: number) {
   return (copies - Math.floor(copies)) * drosteCopy(size);
 }
 
+/** What a video needs of a scene. The scene can be any open scene, not only the one on the screen. */
+export interface SceneSource {
+  params: Params;
+  state: PlayState;
+  images: [ImageSource | null, ImageSource | null];
+  driver: HTMLVideoElement | null;
+  picture: ImageSource | null;
+  solidMedia: ImageSource | null;
+  terrain: TerrainData | null;
+}
+
 export class Engine {
   readonly params = createParams();
   readonly state = createPlayState();
@@ -163,13 +174,26 @@ export class Engine {
     this.renderer = new KaleidoRenderer(canvas, size);
   }
 
+  /** The scene on the screen now, for an export: a copy of its settings, and its media. */
+  exportScene(): SceneSource {
+    return {
+      params: structuredClone(this.params),
+      state: structuredClone(this.state),
+      images: [this.sources[0], this.sources[1]],
+      driver: this.driverVideo,
+      picture: this.pictureSource,
+      solidMedia: this.solidMedia,
+      terrain: this.terrain
+    };
+  }
+
   /**
-   * A copy of this engine that renders off the screen at a fixed size, for
-   * video export: the same settings and images, its own clock and trails.
-   * A video gets its own copy, so the export can move it frame by frame
-   * while the picture on the screen plays on. Dispose it when done.
+   * A copy of this engine that renders "scene" off the screen at a fixed
+   * size, for video export: its own clock and trails. A video gets its own
+   * copy, so the export can move it frame by frame while the picture on the
+   * screen plays on. Dispose it when done.
    */
-  async forExport(width: number, height: number) {
+  async forExport(width: number, height: number, scene: SceneSource) {
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
@@ -177,11 +201,11 @@ export class Engine {
     /* Effects that work in pixels use the screen's pixel size, so the video looks like the screen. */
     const screenHeight = this.renderer.canvasSize[1];
     if (screenHeight > 0) copy.renderer.texelScale = height / screenHeight;
-    Object.assign(copy.params, structuredClone(this.params));
-    Object.assign(copy.state, structuredClone(this.state));
+    Object.assign(copy.params, structuredClone(scene.params));
+    Object.assign(copy.state, structuredClone(scene.state));
     try {
       for (const slot of [0, 1] as const) {
-        const source = this.sources[slot];
+        const source = scene.images[slot];
         if (!source) continue;
         if (source instanceof HTMLVideoElement) {
           const video = await copyVideo(source);
@@ -192,30 +216,30 @@ export class Engine {
           copy.setImage(source, slot);
         }
       }
-      if (this.driverVideo) {
-        const video = await copyVideo(this.driverVideo);
+      if (scene.driver) {
+        const video = await copyVideo(scene.driver);
         copy.ownVideos.push(video);
         copy.setDriverVideo(video);
       }
-      if (this.pictureSource instanceof HTMLVideoElement) {
-        const video = await copyVideo(this.pictureSource);
+      if (scene.picture instanceof HTMLVideoElement) {
+        const video = await copyVideo(scene.picture);
         copy.ownVideos.push(video);
         copy.setPicture(video);
-      } else if (this.pictureSource) {
-        copy.setPicture(this.pictureSource);
+      } else if (scene.picture) {
+        copy.setPicture(scene.picture);
       }
-      if (this.solidMedia instanceof HTMLVideoElement) {
-        const video = await copyVideo(this.solidMedia);
+      if (scene.solidMedia instanceof HTMLVideoElement) {
+        const video = await copyVideo(scene.solidMedia);
         copy.ownVideos.push(video);
         copy.setSolidMedia(video);
-      } else if (this.solidMedia) {
-        copy.setSolidMedia(this.solidMedia);
+      } else if (scene.solidMedia) {
+        copy.setSolidMedia(scene.solidMedia);
       }
+      if (scene.terrain) copy.setTerrain(scene.terrain);
     } catch (error) {
       copy.dispose();
       throw error;
     }
-    copy.hasSecondImage = this.hasSecondImage;
     return copy;
   }
 

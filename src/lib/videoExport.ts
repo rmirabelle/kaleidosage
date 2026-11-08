@@ -1,6 +1,6 @@
 import { ArrayBufferTarget, Muxer } from "mp4-muxer";
 import type { ExportFile } from "./exports";
-import type { Engine } from "../engine/engine";
+import type { Engine, SceneSource } from "../engine/engine";
 import { baseLoopSeconds, fittedCustomSeconds, needsSeamFade, trailSettleTime, warpFlowCorrection } from "../engine/loop";
 import { PARAM_KEYS, startRangeAt, type ParamKey } from "../engine/params";
 import { getAppVersion } from "./updater";
@@ -30,6 +30,8 @@ export type VideoStyle = "title" | "loop";
 /** Standard keeps the file small; High and Best keep a fixed picture quality, so the file grows with the detail. */
 export type VideoQuality = "standard" | "high" | "best";
 export type VideoFps = 30 | 60;
+/** The scene on the screen, one file for each open scene, or one video of all open scenes. */
+export type VideoScenes = "current" | "separate" | "stitched";
 /** The detail of a video: 4K has twice the width and height of 1080p. A 360 video has its own size. */
 export type VideoResolution = "1080p" | "4k";
 /** "screen" keeps the picture's shape on the screen; the others are fixed sizes for video sites. */
@@ -45,6 +47,7 @@ export const VIDEO_SIZES: { id: Exclude<VideoSizeId, "screen">; ratio: string; s
 ];
 
 export interface VideoOptions {
+  scenes: VideoScenes;
   size: VideoSizeId;
   resolution: VideoResolution;
   style: VideoStyle;
@@ -58,6 +61,8 @@ export interface VideoOptions {
   fps: VideoFps;
 }
 
+/** Seconds of the crossfade between two scenes in a stitched video. */
+export const STITCH_FADE = 2;
 /** Seconds the title box shows fully before it fades out. */
 export const TITLE_HOLD = 4;
 /** The longest seam crossfade, in seconds; a short video gets a shorter one. */
@@ -383,6 +388,37 @@ export function titleAlpha(seconds: number, length: number, fadeOutMs: number | 
   return Math.max(0, 1 - (seconds - start) / fade);
 }
 
+/**
+ * How a stitched video joins its scenes: the crossfade of each join, in
+ * frames, and the video's whole length. A crossfade takes at most half of
+ * each scene it joins, so a short scene can fade in and out. With "wrap", a
+ * last join crossfades the last scene into the first, so the video repeats.
+ */
+export function stitchPlan(frames: number[], fps: number, wrap: boolean) {
+  const count = frames.length;
+  const joins = count < 2 ? 0 : wrap ? count : count - 1;
+  const fades = Array.from({ length: joins }, (_, index) =>
+    Math.min(Math.round(STITCH_FADE * fps), Math.floor(Math.min(frames[index], frames[(index + 1) % count]) / 2)));
+  const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
+  return { fades, total: sum(frames) - sum(fades) };
+}
+
+/** Mixes "other" into "into" (RGBA pixels of the same size): 0 keeps "into", 1 gives "other". */
+export function mixFrames(into: Uint8Array, other: Uint8Array, amount: number) {
+  const first = new Uint32Array(into.buffer, into.byteOffset, into.length >> 2);
+  const second = new Uint32Array(other.buffer, other.byteOffset, other.length >> 2);
+  const weight = Math.round(amount * 256);
+  const keep = 256 - weight;
+  /* Each pixel is worked on as two pairs of channels at once: this runs on every pixel of a 4K frame. */
+  for (let index = 0; index < first.length; index++) {
+    const a = first[index];
+    const b = second[index];
+    const redBlue = (((a & 0xff00ff) * keep + (b & 0xff00ff) * weight) >>> 8) & 0xff00ff;
+    const greenAlpha = ((((a >>> 8) & 0xff00ff) * keep + ((b >>> 8) & 0xff00ff) * weight) & 0xff00ff00);
+    first[index] = redBlue | greenAlpha;
+  }
+}
+
 const smoothstep = (value: number) => {
   const t = Math.min(1, Math.max(0, value));
   return t * t * (3 - 2 * t);
@@ -423,14 +459,131 @@ const MAX_SUBSTEPS = 4;
 /** Frames being read back from the GPU at once; the oldest is usually done by the time it is needed. */
 const READS_AHEAD = 3;
 
+/** The size of the frames, and of the picture that a 360 video wraps around the viewer. */
+interface ExportShape {
+  frameWidth: number;
+  width: number;
+  height: number;
+  fps: VideoFps;
+  sphere: boolean;
+}
+
+/** One scene's frames, in order, from its own off-screen engine. */
+type Clip = Awaited<ReturnType<typeof openClip>>;
+
 /**
- * Renders and encodes the video. "onProgress" gets 0 to 1; an aborted
- * "signal" stops it with an AbortError. With "file" (in the app) FFmpeg
- * makes the video, and the result is null; with none (a plain browser) the
- * result is the video.
+ * Opens a scene for export. It starts where Stop puts the scene. "skip"
+ * frames at its start are played but not shown. "seamless" makes the scene
+ * repeat by itself.
+ */
+async function openClip(source: Engine, scene: SceneSource, shape: ExportShape, options: VideoOptions, seamless: boolean, skip: number, overlay: HTMLCanvasElement | null) {
+  const { frameWidth, width, height, fps, sphere } = shape;
+  const engine = await source.forExport(frameWidth, height, scene);
+  const { params, state } = engine;
+  const loop = baseLoopSeconds(params, state);
+  const seconds = loop * Math.max(1, Math.round(options.loops));
+  const frames = Math.max(1, Math.round(seconds * fps));
+  /**
+   * Steps per video frame: as many as the screen draws in that time.
+   * Trails change a little each step (trail flow most of all, which can
+   * break into stripes with large steps), so the video moves in the same
+   * steps as the screen and looks the same.
+   */
+  const screenMs = source.stats.frameMs;
+  const substeps = screenMs > 0 ? Math.min(MAX_SUBSTEPS, Math.max(1, Math.round(1000 / fps / screenMs))) : 1;
+  /** The real time of one step; the whole video is exactly "seconds" long, so it repeats exactly. */
+  const realStep = seconds / (frames * substeps);
+  const animatedStep = realStep * engine.speed;
+
+  /* The scene starts where Stop puts it, but playing. */
+  state.paused = false;
+  for (const key of PARAM_KEYS) if (params[key].drift) startRangeAt(params[key], 0);
+  state.time = 0;
+  state.clock = 0;
+  state.warpTime = 0;
+  state.driverTime = 0;
+  state.mapTravel = 0;
+  state.cameraX = 0;
+  state.cameraY = 0;
+  if (seamless) {
+    /* A source video crossfades its end into its start, so it never jumps. */
+    state.videoCrossfade = true;
+    for (const [key, fitted] of Object.entries(fittedCustomSeconds(params, seconds))) params[key as ParamKey].seconds = fitted;
+    /* Time smear restarts follow the play clock; they get the nearest time that repeats a whole number of times in the video. */
+    const restart = params.smearRestart;
+    if (restart.value > 0) restart.value = seconds / Math.max(1, Math.round(seconds / restart.value));
+    engine.warpFlowOffset = warpFlowCorrection(params, state, frames * substeps, animatedStep, realStep);
+  }
+  const fadeFrames = seamless && needsSeamFade(params, state) ? Math.max(2, Math.min(Math.round(SEAM_FADE * fps), Math.floor(frames / 4))) : 0;
+  /**
+   * The scene plays unseen first, until the trails no longer hold the
+   * still picture they started from (at most one loop), and long enough
+   * to keep the frames the seam crossfades to.
+   */
+  const trails = state.groups.trails && state.trailMode !== 0;
+  const trailFrames = trails ? Math.min(Math.round(loop * fps), Math.ceil(trailSettleTime(params) / (animatedStep * substeps))) : 0;
+  /* The time smear shows up to its longest delay ago, so the scene plays at least that long unseen. */
+  const smearDelay = params.smearDelay;
+  const smearSeconds = state.groups.smear ? (smearDelay.on ? Math.max(smearDelay.low ?? 0, smearDelay.high ?? 0) : smearDelay.value) : 0;
+  const smearFrames = Math.ceil(smearSeconds * fps);
+  const lead = Math.max(trailFrames, fadeFrames, smearFrames);
+  /* Each frame steps the clocks and draws, "substeps" times; after "lead" + 1 frames the time is 0 for the first video frame. */
+  state.time = -(lead + 1) * substeps * animatedStep;
+  state.clock = -(lead + 1) * substeps * realStep;
+  if (overlay) engine.setOverlay(overlay);
+
+  const hasVideo = engine.hasVideo;
+  const tail: WebGLTexture[] = [];
+  let index = 0;
+  /** Draws the next frame, and gives its place in the video (below 0: before the first frame). */
+  const step = async () => {
+    for (let count = 0; count < substeps; count++) {
+      const animated = engine.step(realStep);
+      if (hasVideo && count === substeps - 1) await engine.seekVideos();
+      engine.draw(animated, realStep);
+    }
+    return index++ - lead;
+  };
+  return {
+    /** Frames still to show. */
+    get left() { return lead + frames - index; },
+    /** Frames that "warm" plays unseen. */
+    unseen: lead + skip,
+    /** Plays the unseen frames; "tick" runs after each one. */
+    async warm(tick: () => Promise<void>) {
+      while (index < lead + skip) {
+        const place = index;
+        await step();
+        /* The last unseen frames are kept for the seam crossfade. */
+        if (place < lead && place >= lead - fadeFrames) tail.push(engine.captureFrame());
+        await tick();
+      }
+    },
+    /** Draws the next frame and starts reading it. The WebGL canvas holds the frame only until the next task, so the read starts at once. */
+    async next(titleShows: number) {
+      const shown = await step();
+      const into = fadeFrames ? shown - (frames - fadeFrames) : -1;
+      if (into >= 0) engine.drawFrameOver(tail[into], smoothstep(into / (fadeFrames - 1)));
+      if (titleShows > 0) engine.drawOverlay(titleShows);
+      return sphere ? engine.startSphereRead(width, height) : engine.startRead();
+    },
+    dispose() {
+      for (const texture of tail) engine.releaseFrame(texture);
+      engine.dispose();
+    }
+  };
+}
+
+/**
+ * Renders and encodes a video of "scenes": one scene, or several joined by
+ * crossfades (see stitchPlan). "onProgress" gets 0 to 1; an aborted "signal"
+ * stops it with an AbortError. With "file" (in the app) FFmpeg makes the
+ * video, and the result is null; with none (a plain browser) the result is
+ * the video.
  */
 export async function encodeVideo(
   source: Engine,
+  scenes: SceneSource[],
   size: { width: number; height: number },
   options: VideoOptions,
   onProgress: (fraction: number) => void,
@@ -442,123 +595,98 @@ export async function encodeVideo(
   /* The web view's encoder is picked first: a 360 video may get a smaller size or frame rate than asked for. */
   const picked = file ? null : await pickEncoder(size, options.fps, options.quality, sphere);
   const { width, height, fps } = picked ?? { ...size, fps: options.fps };
-  const frameWidth = sphere ? height : width;
-  const engine = await source.forExport(frameWidth, height);
-  const tail: WebGLTexture[] = [];
+  const shape: ExportShape = { frameWidth: sphere ? height : width, width, height, fps, sphere };
+  const wrap = options.style === "loop";
+  const sceneFrames = scenes.map((scene) => Math.max(1, Math.round(baseLoopSeconds(scene.params, scene.state) * Math.max(1, Math.round(options.loops)) * fps)));
+  const { fades, total } = stitchPlan(sceneFrames, fps, wrap);
+  const seconds = total / fps;
+  const seamless = wrap && scenes.length === 1;
+  /* In a 360 video the title box is half the size, so it sits in front of the viewer and does not wrap far around. */
+  const overlay = options.style === "title" ? await titleOverlay(shape.frameWidth, height, options.title, sphere ? 0.5 : 1) : null;
+  const sink = file ? ffmpegSink(file) : webCodecsSink(picked!);
+
+  const open = new Set<Clip>();
+  let done = 0;
+  let expected = total;
+  let shownProgress = 0;
+  let sliceStart = performance.now();
+  /** Ends the slice when its time is up: reports the progress and lets the window draw. */
+  const pause = async () => {
+    if (performance.now() - sliceStart < SLICE_MS) return;
+    shownProgress = Math.max(shownProgress, Math.min(1, done / expected));
+    onProgress(shownProgress);
+    await afterNextFrame();
+    sliceStart = performance.now();
+  };
+  const stopIfAsked = () => {
+    if (signal.aborted) throw new DOMException("The video export was stopped.", "AbortError");
+  };
+  const tick = async () => {
+    stopIfAsked();
+    done++;
+    await pause();
+  };
+  const openScene = async (index: number, skip: number) => {
+    const clip = await openClip(source, scenes[index], shape, options, seamless, skip, overlay);
+    open.add(clip);
+    expected += clip.unseen;
+    await clip.warm(tick);
+    return clip;
+  };
+
+  /**
+   * Frames go from the GPU to the encoder as plain pixels: reading them
+   * back is much faster than handing the encoder the canvas. A few reads
+   * run at once, so the export does not wait for the GPU.
+   */
+  type Read = (into: Uint8Array) => Promise<void>;
+  const pixels = new Uint8Array(width * height * 4);
+  let otherPixels: Uint8Array | null = null;
+  const reads: { read: Read; other: Read | null; blend: number; shown: number }[] = [];
+  const encodeOldest = async () => {
+    const { read, other, blend, shown } = reads.shift()!;
+    await read(pixels);
+    if (other) {
+      otherPixels ??= new Uint8Array(pixels.length);
+      await other(otherPixels);
+      mixFrames(pixels, otherPixels, blend);
+    }
+    await sink.add(pixels, shown);
+  };
+  let out = 0;
+  /** Adds the next frame of the video: from "clip", mixed with "over" when a crossfade runs. */
+  const addFrame = async (clip: Clip, over: Clip | null, blend: number) => {
+    stopIfAsked();
+    const titleShows = overlay ? titleAlpha(out / fps, seconds, options.fadeOutMs) : 0;
+    const read = await clip.next(titleShows);
+    const other = over ? await over.next(titleShows) : null;
+    reads.push({ read, other, blend, shown: out });
+    out++;
+    done++;
+    if (reads.length >= READS_AHEAD) await encodeOldest();
+    await pause();
+  };
   try {
-    const { params, state } = engine;
-    const loop = baseLoopSeconds(params, state);
-    const seconds = loop * Math.max(1, Math.round(options.loops));
-    const frames = Math.max(1, Math.round(seconds * fps));
-    /**
-     * Steps per video frame: as many as the screen draws in that time.
-     * Trails change a little each step (trail flow most of all, which can
-     * break into stripes with large steps), so the video moves in the same
-     * steps as the screen and looks the same.
-     */
-    const screenMs = source.stats.frameMs;
-    const substeps = screenMs > 0 ? Math.min(MAX_SUBSTEPS, Math.max(1, Math.round(1000 / fps / screenMs))) : 1;
-    /** The real time of one step; the whole video is exactly "seconds" long, so it repeats exactly. */
-    const realStep = seconds / (frames * substeps);
-    const animatedStep = realStep * engine.speed;
-    const seamless = options.style === "loop";
-
-    /* The scene starts where Stop puts it, but playing. */
-    state.paused = false;
-    for (const key of PARAM_KEYS) if (params[key].drift) startRangeAt(params[key], 0);
-    state.time = 0;
-    state.clock = 0;
-    state.warpTime = 0;
-    state.driverTime = 0;
-    state.mapTravel = 0;
-    state.cameraX = 0;
-    state.cameraY = 0;
-    if (seamless) {
-      /* A source video crossfades its end into its start, so it never jumps. */
-      state.videoCrossfade = true;
-      for (const [key, fitted] of Object.entries(fittedCustomSeconds(params, seconds))) params[key as ParamKey].seconds = fitted;
-      /* Time smear restarts follow the play clock; they get the nearest time that repeats a whole number of times in the video. */
-      const restart = params.smearRestart;
-      if (restart.value > 0) restart.value = seconds / Math.max(1, Math.round(seconds / restart.value));
-      engine.warpFlowOffset = warpFlowCorrection(params, state, frames * substeps, animatedStep, realStep);
-    }
-    const fadeFrames = seamless && needsSeamFade(params, state) ? Math.max(2, Math.min(Math.round(SEAM_FADE * fps), Math.floor(frames / 4))) : 0;
-    /**
-     * The scene plays unseen first, until the trails no longer hold the
-     * still picture they started from (at most one loop), and long enough
-     * to keep the frames the seam crossfades to.
-     */
-    const trails = state.groups.trails && state.trailMode !== 0;
-    const trailFrames = trails ? Math.min(Math.round(loop * fps), Math.ceil(trailSettleTime(params) / (animatedStep * substeps))) : 0;
-    /* The time smear shows up to its longest delay ago, so the scene plays at least that long unseen. */
-    const smearDelay = params.smearDelay;
-    const smearSeconds = state.groups.smear ? (smearDelay.on ? Math.max(smearDelay.low ?? 0, smearDelay.high ?? 0) : smearDelay.value) : 0;
-    const smearFrames = Math.ceil(smearSeconds * fps);
-    const lead = Math.max(trailFrames, fadeFrames, smearFrames);
-    /* Each frame steps the clocks and draws, "substeps" times; after "lead" + 1 frames the time is 0 for the first video frame. */
-    state.time = -(lead + 1) * substeps * animatedStep;
-    state.clock = -(lead + 1) * substeps * realStep;
-
-    /* In a 360 video the title box is half the size, so it sits in front of the viewer and does not wrap far around. */
-    const overlay = options.style === "title" ? await titleOverlay(frameWidth, height, options.title, sphere ? 0.5 : 1) : null;
-    const sink = file ? ffmpegSink(file) : webCodecsSink(picked!);
-
-    if (overlay) engine.setOverlay(overlay);
-    const hasVideo = engine.hasVideo;
-    const total = lead + frames;
-    let sliceStart = performance.now();
-    /** Ends the slice when its time is up: reports the progress and lets the window draw. */
-    const pause = async (index: number) => {
-      if (performance.now() - sliceStart < SLICE_MS) return;
-      onProgress(index / total);
-      await afterNextFrame();
-      sliceStart = performance.now();
-    };
-    /**
-     * Frames go from the GPU to the encoder as plain pixels: reading them
-     * back is much faster than handing the encoder the canvas. A few reads
-     * run at once, so the export does not wait for the GPU.
-     */
-    const pixels = new Uint8Array(width * height * 4);
-    const reads: { finish: (into: Uint8Array) => Promise<void>; shown: number }[] = [];
-    const encodeOldest = async () => {
-      const { finish, shown } = reads.shift()!;
-      await finish(pixels);
-      await sink.add(pixels, shown);
-    };
-    try {
-      for (let index = 0; index < total; index++) {
-        if (signal.aborted) throw new DOMException("The video export was stopped.", "AbortError");
-        for (let step = 0; step < substeps; step++) {
-          const animated = engine.step(realStep);
-          if (hasVideo && step === substeps - 1) await engine.seekVideos();
-          engine.draw(animated, realStep);
-        }
-        /* The WebGL canvas holds the frame only until the next task, so everything below uses it at once. */
-        const shown = index - lead;
-        if (shown < 0) {
-          /* The last unseen frames are kept for the seam crossfade. */
-          if (index >= lead - fadeFrames) tail.push(engine.captureFrame());
-          await pause(index);
-          continue;
-        }
-        const into = fadeFrames ? shown - (frames - fadeFrames) : -1;
-        if (into >= 0) engine.drawFrameOver(tail[into], smoothstep(into / (fadeFrames - 1)));
-        const titleShows = overlay ? titleAlpha(shown / fps, seconds, options.fadeOutMs) : 0;
-        if (titleShows > 0) engine.drawOverlay(titleShows);
-        reads.push({ finish: sphere ? engine.startSphereRead(width, height) : engine.startRead(), shown });
-        if (reads.length >= READS_AHEAD) await encodeOldest();
-        await pause(index);
-      }
+    /* With a last crossfade back into the first scene, the video starts just after the frames that crossfade shows. */
+    let clip = await openScene(0, wrap ? fades[scenes.length - 1] ?? 0 : 0);
+    for (let index = 0; index < scenes.length; index++) {
+      const fade = fades[index] ?? 0;
+      while (clip.left > fade) await addFrame(clip, null, 0);
+      if (!fade) continue;
+      const next = await openScene((index + 1) % scenes.length, 0);
+      for (let frame = 0; frame < fade; frame++) await addFrame(clip, next, smoothstep((frame + 1) / (fade + 1)));
+      /* A read still running needs its engine. */
       while (reads.length) await encodeOldest();
-      const video = await sink.finish();
-      onProgress(1);
-      return video;
-    } finally {
-      sink.close();
+      clip.dispose();
+      open.delete(clip);
+      clip = next;
     }
+    while (reads.length) await encodeOldest();
+    const video = await sink.finish();
+    onProgress(1);
+    return video;
   } finally {
-    for (const texture of tail) engine.releaseFrame(texture);
-    engine.dispose();
+    sink.close();
+    for (const clip of open) clip.dispose();
   }
 }

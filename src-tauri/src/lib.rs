@@ -133,6 +133,7 @@ pub fn run() {
             export_stream::begin_export,
             export_stream::write_export,
             export_stream::finish_export,
+            export_stream::free_export_paths,
             files::default_export_folder,
             scene_archive::save_scene,
             scene_archive::read_scene,
