@@ -68,7 +68,7 @@ import { FILE_EXTENSION, fileFingerprint, isFileCopy, matchingScenes, newSceneId
 import { revealMainWindow } from "./lib/splash";
 import { isVideoPath, isVideoType, loadVideoBlob, loadVideoFile, stageVideoBlob, type VideoFile } from "./lib/videos";
 import { checkForUpdate, getAppVersion, type UpdateInfo } from "./lib/updater";
-import { encodeVideo, videoDimensions, videoSize, type VideoOptions } from "./lib/videoExport";
+import { CROSSFADE_SECONDS, encodeVideo, videoDimensions, videoSize, type SongJob, type VideoOptions } from "./lib/videoExport";
 import { attachCameraDrag } from "./lib/cameraDrag";
 import { cast, screenLabel, type CastScreen } from "./lib/cast";
 
@@ -90,7 +90,6 @@ interface Status {
 
 const CURSOR_IDLE_MS = 2000;
 /** A switch to another scene tab fades from the old scene to the new one over this time (see Engine.fadeOut). */
-const CROSSFADE_SECONDS = 1.5;
 
 /** The image in one of the two slots: the first (A) or the second (B), which the picture can fade to. */
 export interface SlotImage {
@@ -876,24 +875,42 @@ export default function App() {
     const sphere = options.size === "sphere";
     const suffix = sphere ? "_360" : "";
     const typed = options.style === "title" ? options.title.trim() : "";
-    const all = isTauri() && docsRef.current.length > 1 ? options.scenes : "current";
+    const all = !isTauri() ? "current" : options.scenes === "song" || docsRef.current.length > 1 ? options.scenes : "current";
     const sources = openSceneSources();
-    let jobs: { path: string; scenes: SceneSource[]; options: VideoOptions }[];
-    if (all === "separate") {
+    /** Free paths in a folder that the user picks, or null. */
+    const pathsInFolder = async (names: string[]) => {
       const folder = await chooseExportFolder();
-      if (!folder) return;
-      const names = sources.map(({ name }) => `${safeFileName(name) || "Scene"}${suffix}.mp4`);
-      const paths = await invoke<string[]>("free_export_paths", { folder, names }).catch((error: unknown) => {
+      if (!folder) return null;
+      return invoke<string[]>("free_export_paths", { folder, names: names.map((name) => `${safeFileName(name) || "Video"}${suffix}.mp4`) }).catch((error: unknown) => {
         showError(`Could not make the videos. ${String(error)}`);
         return null;
       });
+    };
+    let jobs: { path: string; scenes: SceneSource[]; options: VideoOptions; song: SongJob | null }[];
+    if (all === "song") {
+      const schedule = songFollow.schedule(docsRef.current.map((doc) => doc.sceneId));
+      const picked = tracks.list.flatMap((track, index) => {
+        const script = songFollow.scriptOf(track.path);
+        return script && (options.song === "all" || options.song === track.path)
+          ? [{ name: track.name.replace(/\.(mp3|wav|flac|m4a|aac|ogg|opus|wma)$/i, ""), song: { script, slices: schedule[index] ?? [], audio: track.path } }]
+          : [];
+      });
+      if (picked.length === 0) return;
+      const paths = picked.length === 1
+        ? await chooseExportPath("mp4", picked[0].name, suffix).then((path) => path ? [path] : null)
+        : await pathsInFolder(picked.map(({ name }) => name));
       if (!paths) return;
-      jobs = sources.map(({ name, scene }, index) => ({ path: paths[index], scenes: [scene], options: { ...options, title: name } }));
+      const scenes = sources.map(({ scene }) => scene);
+      jobs = picked.map(({ name, song }, index) => ({ path: paths[index], scenes, options: { ...options, title: name }, song }));
+    } else if (all === "separate") {
+      const paths = await pathsInFolder(sources.map(({ name }) => name));
+      if (!paths) return;
+      jobs = sources.map(({ name, scene }, index) => ({ path: paths[index], scenes: [scene], options: { ...options, title: name }, song: null }));
     } else {
       const project = filePathRef.current ? fileNameOf(filePathRef.current).replace(/\.ksage$/i, "") : "Untitled Project";
       const path = isTauri() ? await chooseExportPath("mp4", typed || (all === "stitched" ? project : sceneName), suffix) : "kaleido.mp4";
       if (!path) return;
-      jobs = [{ path, scenes: all === "stitched" ? sources.map(({ scene }) => scene) : [engine.exportScene()], options }];
+      jobs = [{ path, scenes: all === "stitched" ? sources.map(({ scene }) => scene) : [engine.exportScene()], options, song: null }];
     }
     const controller = new AbortController();
     const size = videoDimensions(options.size, screenAspect(), options.resolution);
@@ -910,9 +927,9 @@ export default function App() {
           setVideoJob((current) => current?.controller === controller ? { ...current, progress: fraction } : current);
         };
         /* In the app FFmpeg makes the video (see openExportFile); a stopped or failed export removes the file. */
-        const file = isTauri() ? await openExportFile(job.path, { ...size, fps: options.fps, quality: options.quality, spherical: sphere }) : null;
+        const file = isTauri() ? await openExportFile(job.path, { ...size, fps: options.fps, quality: options.quality, spherical: sphere, audio: job.song?.audio }) : null;
         try {
-          const blob = await encodeVideo(engine, job.scenes, size, job.options, progress, controller.signal, file);
+          const blob = await encodeVideo(engine, job.scenes, size, job.options, progress, controller.signal, file, job.song);
           if (file) {
             await file.finish();
             saved.push(job.path);
@@ -3000,6 +3017,10 @@ export default function App() {
         <ExportVideoDialog
           engine={engine}
           screenSize={videoSize(screenAspect())}
+          songs={isTauri() ? tracks.list.flatMap((track) => {
+            const script = songFollow.scriptOf(track.path);
+            return script ? [{ path: track.path, name: track.name, seconds: script.duration }] : [];
+          }) : []}
           sceneSeconds={isTauri() ? docs.flatMap((doc) => {
             const scene = doc.id === activeId ? engine : storedRef.current.get(doc.id);
             return scene ? [baseLoopSeconds(scene.params, scene.state)] : [];

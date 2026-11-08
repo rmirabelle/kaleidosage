@@ -199,7 +199,7 @@ export const HELP_TOPICS = {
       "Quality: High plays everywhere. Best has full color, but many players cannot open it.",
       "Size 360° makes a video that goes all around you in a Quest or another VR headset.",
       "View, Enter VR shows the picture live on a big screen in a headset (Quest: turn on Link).",
-      "A video plays the ranges; audio sensors do not move in it.",
+      "A scene video plays its ranges. Song makes the video of a song, with its sound.",
       "All Scenes: one file per scene, or one video with 2-second crossfades.",
       "PNG files go to Pictures, Kaleido Sage, unless you pick another folder."
     ],

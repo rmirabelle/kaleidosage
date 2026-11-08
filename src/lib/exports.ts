@@ -94,7 +94,7 @@ function nextSharedBuffer(host: WebViewHost | undefined) {
  * "finish" waits for FFmpeg and keeps the file; "discard" removes it (a
  * stopped or failed export).
  */
-export async function openExportFile(path: string, settings: { width: number; height: number; fps: VideoFps; quality: VideoQuality; spherical: boolean }) {
+export async function openExportFile(path: string, settings: { width: number; height: number; fps: VideoFps; quality: VideoQuality; spherical: boolean; audio?: string }) {
   const host = (window as unknown as { chrome?: { webview?: WebViewHost } }).chrome?.webview;
   const received = nextSharedBuffer(host);
   const id = await invoke<number>("begin_export", { path, ...settings });

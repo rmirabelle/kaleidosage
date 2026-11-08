@@ -96,6 +96,11 @@ class SongFollow {
     return this.path;
   }
 
+  /** A track's script, or undefined when it has none yet. */
+  scriptOf(path: string) {
+    return this.made.get(path);
+  }
+
   /** A track's analysis, or undefined when it has none yet. */
   analysisFor(path: string) {
     return this.analyses.get(path);

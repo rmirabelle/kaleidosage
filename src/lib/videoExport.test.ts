@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { atResolution, mixFrames, stitchPlan } from "./videoExport";
+import type { ScheduledSlice } from "../engine/showSchedule";
+import { atResolution, mixFrames, songCues, stitchPlan } from "./videoExport";
 
 describe("stitchPlan", () => {
   it("joins scenes with 2-second crossfades and shortens the video by them", () => {
@@ -16,6 +17,23 @@ describe("stitchPlan", () => {
 
   it("has no crossfade with one scene", () => {
     expect(stitchPlan([600], 60, true)).toEqual({ fades: [], total: 600 });
+  });
+});
+
+describe("songCues", () => {
+  const slice = (start: number, scene: number | null, drop = false): ScheduledSlice => ({ start, tier: null, scene, lastPick: scene, drop, runStart: start });
+
+  it("changes scene only at slices with a pick", () => {
+    expect(songCues([slice(0, 2), slice(10, null), slice(20, 1)], 120, 60).map(({ scene }) => scene)).toEqual([2, 1]);
+  });
+
+  it("brings a scene in one frame early, at the start of the video at the earliest", () => {
+    expect(songCues([slice(0, 0), slice(10, 1)], 120, 60).map(({ frame }) => frame)).toEqual([0, 599]);
+  });
+
+  it("cuts on a drop and crossfades for two beats otherwise, for at most 1.5 seconds", () => {
+    expect(songCues([slice(5, 1, true), slice(10, 2)], 120, 60).map(({ fadeFrames }) => fadeFrames)).toEqual([0, 60]);
+    expect(songCues([slice(10, 2)], 60, 60)[0].fadeFrames).toBe(90);
   });
 });
 

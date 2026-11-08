@@ -1,6 +1,8 @@
 import { ArrayBufferTarget, Muxer } from "mp4-muxer";
 import type { ExportFile } from "./exports";
 import type { Engine, SceneSource } from "../engine/engine";
+import type { ScheduledSlice } from "../engine/showSchedule";
+import type { SongScript } from "../engine/songScript";
 import { baseLoopSeconds, fittedCustomSeconds, needsSeamFade, trailSettleTime, warpFlowCorrection } from "../engine/loop";
 import { PARAM_KEYS, startRangeAt, type GroupKey, type ParamKey } from "../engine/params";
 import { getAppVersion } from "./updater";
@@ -30,8 +32,8 @@ export type VideoStyle = "title" | "loop";
 /** Standard keeps the file small; High and Best keep a fixed picture quality, so the file grows with the detail. */
 export type VideoQuality = "standard" | "high" | "best";
 export type VideoFps = 30 | 60;
-/** The scene on the screen, one file for each open scene, or one video of all open scenes. */
-export type VideoScenes = "current" | "separate" | "stitched";
+/** The scene on the screen, one file for each open scene, one video of all open scenes, or a song as it plays. */
+export type VideoScenes = "current" | "separate" | "stitched" | "song";
 /** The detail of a video: 4K has twice the width and height of 1080p. A 360 video has its own size. */
 export type VideoResolution = "1080p" | "4k";
 /** "screen" keeps the picture's shape on the screen; the others are fixed sizes for video sites. */
@@ -48,6 +50,8 @@ export const VIDEO_SIZES: { id: Exclude<VideoSizeId, "screen">; ratio: string; s
 
 export interface VideoOptions {
   scenes: VideoScenes;
+  /** With "song" scenes: the song's path, or "all" for one file per song. */
+  song: string;
   size: VideoSizeId;
   resolution: VideoResolution;
   style: VideoStyle;
@@ -63,6 +67,16 @@ export interface VideoOptions {
   motionBlur: boolean;
 }
 
+/** The longest crossfade between two scenes on the screen, in seconds. */
+export const CROSSFADE_SECONDS = 1.5;
+/** A song to export: its script, its slices with their scenes, and its sound file. */
+export interface SongJob {
+  script: SongScript;
+  slices: readonly ScheduledSlice[];
+  audio: string;
+}
+/** The most scenes of a song kept open at once. A page can have only 16 WebGL contexts, and each open scene has one. */
+const MAX_SONG_CLIPS = 10;
 /** Seconds of the crossfade between two scenes in a stitched video. */
 export const STITCH_FADE = 2;
 /** Seconds the title box shows fully before it fades out. */
@@ -405,6 +419,20 @@ export function stitchPlan(frames: number[], fps: number, wrap: boolean) {
   return { fades, total: sum(frames) - sum(fades) };
 }
 
+/**
+ * Where a song's scenes change, as playing the song changes them: each slice
+ * with a picked scene brings it in, one frame early so a cut lands on its
+ * beat, with a cut on a drop and with a crossfade of up to two beats otherwise.
+ */
+export function songCues(slices: readonly ScheduledSlice[], tempo: number, fps: number) {
+  const beat = tempo > 0 ? 60 / tempo : 0.5;
+  return slices.flatMap((slice) => slice.scene === null ? [] : [{
+    frame: Math.max(0, Math.ceil((slice.start - 1 / 60) * fps)),
+    scene: slice.scene,
+    fadeFrames: slice.drop ? 0 : Math.round(Math.min(CROSSFADE_SECONDS, 2 * beat) * fps)
+  }]);
+}
+
 /** Mixes "other" into "into" (RGBA pixels of the same size): 0 keeps "into", 1 gives "other". */
 export function mixFrames(into: Uint8Array, other: Uint8Array, amount: number) {
   const first = new Uint32Array(into.buffer, into.byteOffset, into.length >> 2);
@@ -479,14 +507,16 @@ type Clip = Awaited<ReturnType<typeof openClip>>;
 /**
  * Opens a scene for export. It starts where Stop puts the scene. "skip"
  * frames at its start are played but not shown. "seamless" makes the scene
- * repeat by itself.
+ * repeat by itself. With "songScript", the song's clock moves the scene, as
+ * when the song plays (see next's "songTime").
  */
-async function openClip(source: Engine, scene: SceneSource, shape: ExportShape, options: VideoOptions, seamless: boolean, skip: number, overlay: HTMLCanvasElement | null) {
+async function openClip(source: Engine, scene: SceneSource, shape: ExportShape, options: VideoOptions, seamless: boolean, skip: number, overlay: HTMLCanvasElement | null, songScript: SongScript | null = null) {
   const { frameWidth, width, height, fps, sphere } = shape;
   const engine = await source.forExport(frameWidth, height, scene);
   const { params, state } = engine;
   const loop = baseLoopSeconds(params, state);
-  const seconds = loop * Math.max(1, Math.round(options.loops));
+  /* With a song, the clip has no length of its own: each step is a part of one video frame. */
+  const seconds = songScript ? 1 / fps : loop * Math.max(1, Math.round(options.loops));
   const frames = Math.max(1, Math.round(seconds * fps));
   /**
    * Steps per video frame: as many as the screen draws in that time.
@@ -544,19 +574,23 @@ async function openClip(source: Engine, scene: SceneSource, shape: ExportShape, 
   const smearDelay = params.smearDelay;
   const smearSeconds = state.groups.smear ? (smearDelay.on ? Math.max(smearDelay.low ?? 0, smearDelay.high ?? 0) : smearDelay.value) : 0;
   const smearFrames = Math.ceil(smearSeconds * fps);
-  const lead = Math.max(trailFrames, fadeFrames, smearFrames);
+  /* A scene that comes in during a song starts its trails from the picture, as on the screen. */
+  const lead = songScript ? 0 : Math.max(trailFrames, fadeFrames, smearFrames);
   /* Each frame steps the clocks and draws, "substeps" times; after "lead" + 1 frames the time is 0 for the first video frame. */
   state.time = -(lead + 1) * substeps * animatedStep;
   state.clock = -(lead + 1) * substeps * realStep;
   if (overlay) engine.setOverlay(overlay);
+  let songClock = 0;
+  if (songScript) engine.script = { script: songScript, time: () => songClock, playing: () => true };
 
   const hasVideo = engine.hasVideo;
   const tail: WebGLTexture[] = [];
   let index = 0;
   /** Draws the next frame, and gives its place in the video (below 0: before the first frame). */
-  const step = async () => {
+  const step = async (songTime = 0) => {
     for (let count = 0; count < substeps; count++) {
-      const animated = engine.step(realStep);
+      songClock = Math.max(0, songTime - (substeps - 1 - count) * realStep);
+      const animated = songScript ? engine.stepSong() : engine.step(realStep);
       if (hasVideo && count === firstSample) await engine.seekVideos();
       if (keepsMemory || count >= firstSample) engine.draw(animated, realStep);
       if (samples > 1 && count >= firstSample) engine.addBlurSample(count - firstSample);
@@ -580,12 +614,17 @@ async function openClip(source: Engine, scene: SceneSource, shape: ExportShape, 
       }
     },
     /** Draws the next frame and starts reading it. The WebGL canvas holds the frame only until the next task, so the read starts at once. */
-    async next(titleShows: number) {
-      const shown = await step();
+    async next(titleShows: number, songTime = 0) {
+      const shown = await step(songTime);
       const into = fadeFrames ? shown - (frames - fadeFrames) : -1;
       if (into >= 0) engine.drawFrameOver(tail[into], smoothstep(into / (fadeFrames - 1)));
       if (titleShows > 0) engine.drawOverlay(titleShows);
       return sphere ? engine.startSphereRead(width, height) : engine.startRead();
+    },
+    /** A scene that comes in again during a song: its clocks catch up with the song, and its trails start again. */
+    enter() {
+      engine.followAgain();
+      engine.resetTrails();
     },
     dispose() {
       for (const texture of tail) engine.releaseFrame(texture);
@@ -596,10 +635,10 @@ async function openClip(source: Engine, scene: SceneSource, shape: ExportShape, 
 
 /**
  * Renders and encodes a video of "scenes": one scene, or several joined by
- * crossfades (see stitchPlan). "onProgress" gets 0 to 1; an aborted "signal"
- * stops it with an AbortError. With "file" (in the app) FFmpeg makes the
- * video, and the result is null; with none (a plain browser) the result is
- * the video.
+ * crossfades (see stitchPlan), or with "song" the song's scenes as it plays
+ * them. "onProgress" gets 0 to 1; an aborted "signal" stops it with an
+ * AbortError. With "file" (in the app) FFmpeg makes the video, and the result
+ * is null; with none (a plain browser) the result is the video.
  */
 export async function encodeVideo(
   source: Engine,
@@ -608,7 +647,8 @@ export async function encodeVideo(
   options: VideoOptions,
   onProgress: (fraction: number) => void,
   signal: AbortSignal,
-  file: ExportFile | null = null
+  file: ExportFile | null = null,
+  song: SongJob | null = null
 ): Promise<Blob | null> {
   /* A 360 video draws a square picture as tall as the video, then wraps it around the viewer. */
   const sphere = options.size === "sphere";
@@ -618,9 +658,9 @@ export async function encodeVideo(
   const shape: ExportShape = { frameWidth: sphere ? height : width, width, height, fps, sphere };
   const wrap = options.style === "loop";
   const sceneFrames = scenes.map((scene) => Math.max(1, Math.round(baseLoopSeconds(scene.params, scene.state) * Math.max(1, Math.round(options.loops)) * fps)));
-  const { fades, total } = stitchPlan(sceneFrames, fps, wrap);
+  const { fades, total } = song ? { fades: [] as number[], total: Math.max(1, Math.round(song.script.duration * fps)) } : stitchPlan(sceneFrames, fps, wrap);
   const seconds = total / fps;
-  const seamless = wrap && scenes.length === 1;
+  const seamless = wrap && scenes.length === 1 && !song;
   /* In a 360 video the title box is half the size, so it sits in front of the viewer and does not wrap far around. */
   const overlay = options.style === "title" ? await titleOverlay(shape.frameWidth, height, options.title, sphere ? 0.5 : 1) : null;
   const sink = file ? ffmpegSink(file) : webCodecsSink(picked!);
@@ -662,11 +702,13 @@ export async function encodeVideo(
   type Read = (into: Uint8Array) => Promise<void>;
   const pixels = file?.frame ?? new Uint8Array(width * height * 4);
   let otherPixels: Uint8Array | null = null;
+  /** During a song's crossfade: the last frame of the scene before. */
+  let heldPixels: Uint8Array | null = null;
   let readMs = 0;
   let sendMs = 0;
-  const reads: { read: Read; other: Read | null; blend: number; shown: number }[] = [];
+  const reads: { read: Read; other: Read | null; blend: number; hold: number; shown: number }[] = [];
   const encodeOldest = async () => {
-    const { read, other, blend, shown } = reads.shift()!;
+    const { read, other, blend, hold, shown } = reads.shift()!;
     const readStart = performance.now();
     await read(pixels);
     if (other) {
@@ -674,6 +716,7 @@ export async function encodeVideo(
       await other(otherPixels);
       mixFrames(pixels, otherPixels, blend);
     }
+    if (hold > 0) mixFrames(pixels, heldPixels!, hold);
     const sendStart = performance.now();
     readMs += sendStart - readStart;
     await sink.add(pixels, shown);
@@ -683,24 +726,76 @@ export async function encodeVideo(
   /** Milliseconds spent drawing frames, for the line in the log at the end. */
   let drawMs = 0;
   const startedAt = performance.now();
-  /** Adds the next frame of the video: from "clip", mixed with "over" when a crossfade runs. */
-  const addFrame = async (clip: Clip, over: Clip | null, blend: number) => {
+  /** Adds the next frame of the video: from "clip", mixed with "over" when a crossfade runs. "hold" is how much of the held frame shows over it. */
+  const addFrame = async (clip: Clip, over: Clip | null, blend: number, hold = 0, songTime = 0) => {
     stopIfAsked();
     const titleShows = overlay ? titleAlpha(out / fps, seconds, options.fadeOutMs) : 0;
     const drawStart = performance.now();
-    const read = await clip.next(titleShows);
+    const read = await clip.next(titleShows, songTime);
     const other = over ? await over.next(titleShows) : null;
     drawMs += performance.now() - drawStart;
-    reads.push({ read, other, blend, shown: out });
+    reads.push({ read, other, blend, hold, shown: out });
     out++;
     done++;
     if (reads.length >= READS_AHEAD) await encodeOldest();
     await pause();
   };
+  /**
+   * Makes a song's frames. At each cue another scene comes in; as on the
+   * screen, the last frame of the scene before fades out over it. Scenes
+   * stay open for the next time they come in, as opening one takes a while.
+   */
+  const playSong = async ({ script, slices }: SongJob) => {
+    const cues = songCues(slices, script.tempo, fps);
+    const opened = new Map<number, Clip>();
+    const clipFor = async (index: number) => {
+      const known = opened.get(index);
+      if (known) {
+        opened.delete(index);
+        opened.set(index, known);
+        known.enter();
+        return known;
+      }
+      if (opened.size >= MAX_SONG_CLIPS) {
+        const [oldest, gone] = opened.entries().next().value as [number, Clip];
+        opened.delete(oldest);
+        gone.dispose();
+        open.delete(gone);
+      }
+      const clip = await openClip(source, scenes[index], shape, options, false, 0, overlay, script);
+      open.add(clip);
+      opened.set(index, clip);
+      return clip;
+    };
+    let sceneNow = cues[0]?.frame === 0 ? cues[0].scene : 0;
+    let clip = await clipFor(sceneNow);
+    let next = 0;
+    let fadeStart = 0;
+    let fadeFrames = 0;
+    for (let frame = 0; frame < total; frame++) {
+      while (next < cues.length && cues[next].frame <= frame) {
+        const cue = cues[next++];
+        if (cue.scene === sceneNow || !scenes[cue.scene]) continue;
+        sceneNow = cue.scene;
+        /* With every read done, "pixels" holds the last frame. */
+        while (reads.length) await encodeOldest();
+        fadeFrames = frame > 0 ? cue.fadeFrames : 0;
+        fadeStart = frame;
+        if (fadeFrames > 0) {
+          heldPixels ??= new Uint8Array(pixels.length);
+          heldPixels.set(pixels);
+        }
+        clip = await clipFor(cue.scene);
+      }
+      const into = frame - fadeStart;
+      await addFrame(clip, null, 0, into < fadeFrames ? 1 - smoothstep(into / fadeFrames) : 0, frame / fps);
+    }
+  };
   try {
+    if (song) await playSong(song);
     /* With a last crossfade back into the first scene, the video starts just after the frames that crossfade shows. */
-    let clip = await openScene(0, wrap ? fades[scenes.length - 1] ?? 0 : 0);
-    for (let index = 0; index < scenes.length; index++) {
+    let clip = song ? null : await openScene(0, wrap ? fades[scenes.length - 1] ?? 0 : 0);
+    for (let index = 0; clip && index < scenes.length; index++) {
       const fade = fades[index] ?? 0;
       while (clip.left > fade) await addFrame(clip, null, 0);
       if (!fade) continue;

@@ -1307,6 +1307,11 @@ export class Engine {
     return Math.max(0, step);
   }
 
+  /** For video export: moves the clocks to the song's time now (see songStep). Returns the animation time that passed. */
+  stepSong() {
+    return this.step(this.songStep());
+  }
+
   /** For video export: moves each video copy to its exact place, waits for it, and uploads its frame. */
   async seekVideos() {
     for (const slot of [0, 1] as const) await Promise.all(this.placeVideo(slot, (video, target) => seekVideo(video, target)));

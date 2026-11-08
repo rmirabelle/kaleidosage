@@ -29,6 +29,8 @@ struct VideoSettings<'a> {
     fps: u32,
     quality: &'a str,
     spherical: bool,
+    /** A sound file that the video carries, or None. */
+    audio: Option<&'a str>,
 }
 
 /**
@@ -229,7 +231,7 @@ impl Exports {
         if !is_video_export(&target) {
             return Err("The export path is invalid".into());
         }
-        let VideoSettings { width, height, fps, quality, spherical } = settings;
+        let VideoSettings { width, height, fps, quality, spherical, audio } = settings;
         if width == 0 || height == 0 || width > MAX_SIDE || height > MAX_SIDE || width % 2 != 0 || height % 2 != 0 || !matches!(fps, 30 | 60) {
             return Err(format!("The video size is invalid: {width} x {height}, {fps} frames a second"));
         }
@@ -240,7 +242,11 @@ impl Exports {
         let (size, rate) = (format!("{width}x{height}"), fps.to_string());
         let mut command = Command::new(ffmpeg);
         command
-            .args(["-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo", "-pixel_format", "rgb0", "-video_size", &size, "-framerate", &rate, "-i", "pipe:0"])
+            .args(["-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo", "-pixel_format", "rgb0", "-video_size", &size, "-framerate", &rate, "-i", "pipe:0"]);
+        if let Some(audio) = audio {
+            command.arg("-i").arg(audio).args(["-map", "0:v", "-map", "1:a", "-c:a", "aac", "-b:a", "320k", "-shortest"]);
+        }
+        command
             .args(encoder)
             .args(["-f", "mp4"])
             .arg(&part)
@@ -357,9 +363,9 @@ pub fn free_export_paths(folder: String, names: Vec<String>) -> Result<Vec<PathB
 /** Starts a video export to "path" (an .mp4): returns its id for write_export and finish_export. "spherical" marks it as a 360 video. */
 #[tauri::command(async)]
 #[allow(clippy::too_many_arguments)]
-pub fn begin_export(window: WebviewWindow, exports: State<'_, Exports>, path: String, width: u32, height: u32, fps: u32, quality: String, spherical: bool) -> Result<u32, String> {
+pub fn begin_export(window: WebviewWindow, exports: State<'_, Exports>, path: String, width: u32, height: u32, fps: u32, quality: String, spherical: bool, audio: Option<String>) -> Result<u32, String> {
     let ffmpeg = window.path().resolve("ffmpeg/ffmpeg.exe", BaseDirectory::Resource).map_err(|error| format!("Could not find FFmpeg: {error}"))?;
-    let id = exports.begin(&ffmpeg, &path, VideoSettings { width, height, fps, quality: &quality, spherical })?;
+    let id = exports.begin(&ffmpeg, &path, VideoSettings { width, height, fps, quality: &quality, spherical, audio: audio.as_deref() })?;
     if let Some(shared) = share_frame(&window, width as usize * height as usize * 4) {
         if let Some(export) = exports.open.lock().map_err(|_| "The export writer is unavailable")?.get_mut(&id) {
             export.shared = Some(shared);
@@ -479,7 +485,7 @@ mod tests {
     use super::*;
 
     fn settings(quality: &str, spherical: bool) -> VideoSettings<'_> {
-        VideoSettings { width: 64, height: 64, fps: 30, quality, spherical }
+        VideoSettings { width: 64, height: 64, fps: 30, quality, spherical, audio: None }
     }
 
     #[test]
@@ -583,6 +589,25 @@ mod tests {
         exports.finish(id, false).unwrap();
         let bytes = std::fs::read(&path).unwrap();
         assert!(bytes.windows(SPHERICAL_UUID.len()).any(|window| window == SPHERICAL_UUID));
+    }
+
+    #[test]
+    #[ignore = "needs src-tauri/ffmpeg/ffmpeg.exe"]
+    fn a_song_video_carries_the_sound() {
+        let folder = tempfile::tempdir().unwrap();
+        let sound = folder.path().join("song.wav");
+        let made = Command::new(real_ffmpeg()).args(["-v", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=1"]).arg(&sound).status().unwrap();
+        assert!(made.success());
+        let exports = Exports::default();
+        let path = folder.path().join("song.mp4");
+        let id = exports.begin(&real_ffmpeg(), path.to_str().unwrap(), VideoSettings { audio: sound.to_str(), ..settings("high", false) }).unwrap();
+        for _ in 0..30 {
+            exports.write(id, &solid_frame(10, 20, 30)).unwrap();
+        }
+        exports.finish(id, false).unwrap();
+        let probe = Command::new(real_ffmpeg()).arg("-hide_banner").arg("-i").arg(&path).output().unwrap();
+        let text = String::from_utf8_lossy(&probe.stderr);
+        assert!(text.contains("Audio: aac") && text.contains("Video: h264"), "{text}");
     }
 
     #[test]
