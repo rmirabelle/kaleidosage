@@ -854,7 +854,7 @@ export default function App() {
     const path = isTauri() ? await chooseExportPath("mp4", title, sphere ? "_360" : "") : "kaleido.mp4";
     if (!path) return;
     const controller = new AbortController();
-    const size = videoDimensions(options.size, screenAspect());
+    const size = videoDimensions(options.size, screenAspect(), options.resolution);
     const job = { path, progress: 0, controller };
     setVideoJob(job);
     let shown = 0;
@@ -864,8 +864,8 @@ export default function App() {
       shown = percent;
       setVideoJob((current) => current?.controller === controller ? { ...current, progress: fraction } : current);
     };
-    /* In the app the video goes to its file while it is made (see openExportFile); a stopped or failed export removes the file. */
-    const file = isTauri() ? await openExportFile(path, sphere).catch((error: unknown) => {
+    /* In the app FFmpeg makes the video (see openExportFile); a stopped or failed export removes the file. */
+    const file = isTauri() ? await openExportFile(path, { ...size, fps: options.fps, quality: options.quality, spherical: sphere }).catch((error: unknown) => {
       showError(`Could not make the video. ${error instanceof Error ? error.message : String(error)}`);
       return null;
     }) : null;

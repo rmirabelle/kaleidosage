@@ -1,7 +1,7 @@
 import { FilmStrip, X } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import type { Engine } from "../engine/engine";
-import { TITLE_HOLD, VIDEO_SIZES, formatLength, loopSeconds, seamlessChanges, type VideoFps, type VideoOptions, type VideoQuality, type VideoSizeId, type VideoStyle } from "../lib/videoExport";
+import { TITLE_HOLD, VIDEO_SIZES, atResolution, formatLength, loopSeconds, seamlessChanges, type VideoFps, type VideoOptions, type VideoQuality, type VideoResolution, type VideoSizeId, type VideoStyle } from "../lib/videoExport";
 import { help } from "../help/topics";
 
 /** The choices made last time, so the dialog opens with them. */
@@ -17,6 +17,10 @@ const readStored = (): Partial<VideoOptions> => {
 };
 
 const LOOP_CHOICES = [1, 2, 3];
+const RESOLUTION_CHOICES: { value: VideoResolution; label: string; note: string }[] = [
+  { value: "4k", label: "4K", note: "Sharpest" },
+  { value: "1080p", label: "1080p", note: "Faster, smaller file" }
+];
 const QUALITY_CHOICES: { value: VideoQuality; label: string; note: string }[] = [
   { value: "standard", label: "Standard", note: "Smallest file" },
   { value: "high", label: "High", note: "Larger file" },
@@ -48,7 +52,9 @@ export function ExportVideoDialog({ engine, screenSize, onCancel, onExport }: Pr
   const stored = readStored();
   const sizeChoices = [{ id: "screen" as VideoSizeId, ratio: "Screen", sites: "Same shape", ...screenSize }, ...VIDEO_SIZES];
   const [sizeId, setSizeId] = useState<VideoSizeId>(sizeChoices.some((choice) => choice.id === stored.size) ? stored.size! : "screen");
-  const size = sizeChoices.find((choice) => choice.id === sizeId)!;
+  const [resolution, setResolution] = useState<VideoResolution>(stored.resolution === "1080p" ? "1080p" : "4k");
+  const choice = sizeChoices.find((option) => option.id === sizeId)!;
+  const size = { ...choice, ...atResolution(choice.id, choice, resolution) };
   const [loops, setLoops] = useState(() => LOOP_CHOICES.includes(stored.loops ?? 0) ? stored.loops! : 1);
   const [style, setStyle] = useState<VideoStyle>(stored.style === "title" ? "title" : "loop");
   const [quality, setQuality] = useState<VideoQuality>(QUALITY_CHOICES.some((choice) => choice.value === stored.quality) ? stored.quality! : "high");
@@ -62,7 +68,7 @@ export function ExportVideoDialog({ engine, screenSize, onCancel, onExport }: Pr
   const submit = () => {
     const typed = Number(fadeOut);
     const fadeOutMs = fadeOut.trim() && Number.isFinite(typed) ? Math.max(0, Math.round(typed)) : null;
-    const options: VideoOptions = { size: sizeId, style, title, fadeOutMs, loops, quality, fps };
+    const options: VideoOptions = { size: sizeId, resolution, style, title, fadeOutMs, loops, quality, fps };
     try { localStorage.setItem(STORE_KEY, JSON.stringify(options)); } catch { /* Remembering is a convenience only. */ }
     onExport(options);
   };
@@ -96,7 +102,7 @@ export function ExportVideoDialog({ engine, screenSize, onCancel, onExport }: Pr
                   role="radio"
                   aria-checked={sizeId === choice.id}
                   className={`video-choice ${sizeId === choice.id ? "active" : ""}`}
-                  data-tip={`${choice.width} × ${choice.height}`}
+                  data-tip={`${atResolution(choice.id, choice, resolution).width} × ${atResolution(choice.id, choice, resolution).height}`}
                   onClick={() => setSizeId(choice.id)}
                 >
                   <span className="video-shape" aria-hidden="true"><i style={shapeStyle(choice.width, choice.height)} /></span>
@@ -106,9 +112,28 @@ export function ExportVideoDialog({ engine, screenSize, onCancel, onExport }: Pr
               ))}
             </div>
           </div>
+          {sizeId !== "sphere" && (
+            <div className="video-row">
+              <span className="video-label">Resolution</span>
+              <div className="video-choices" role="radiogroup" aria-label="Resolution">
+                {RESOLUTION_CHOICES.map((option) => (
+                  <button
+                    key={option.value}
+                    role="radio"
+                    aria-checked={resolution === option.value}
+                    className={`video-choice ${resolution === option.value ? "active" : ""}`}
+                    onClick={() => setResolution(option.value)}
+                  >
+                    <strong>{option.label}</strong>
+                    <span>{option.note}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {sizeId === "sphere" && (
             <p className="video-note">
-              The picture goes all around you: its center is in front of you, and its mirror image is behind you. Copy the file to the headset and open it in its video player. When this PC's video encoder cannot make {size.width} × {size.height}, the video gets 30 frames a second or a smaller size (3840 × 1920 or 2880 × 1440).
+              The picture goes all around you: its center is in front of you, and its mirror image is behind you. Copy the file to the headset and open it in its video player.
             </p>
           )}
           <div className="video-row">
@@ -145,6 +170,11 @@ export function ExportVideoDialog({ engine, screenSize, onCancel, onExport }: Pr
               ))}
             </div>
           </div>
+          {quality === "best" && sizeId !== "sphere" && (
+            <p className="video-note">
+              Best keeps all the color detail, but it takes much longer. VLC can open the file; many other players and phones cannot. Use High for a video that plays everywhere.
+            </p>
+          )}
           <div className="video-row">
             <span className="video-label">Frame rate</span>
             <div className="video-styles" role="radiogroup" aria-label="Frame rate">

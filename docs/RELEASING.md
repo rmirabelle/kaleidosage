@@ -31,6 +31,12 @@ and the other XSage desktop applications:
 - No key or token is embedded in the binary. Random images come from
   Wikimedia Commons searches and NASA's GIBS map service, which need no key.
 
+- Video export runs `ffmpeg.exe`, which the installer places in `ffmpeg\` with
+  its `LICENSE.txt` and `SOURCE.txt`. It is a GPL build (it has x264 and x265),
+  so those two text files must ship with it. The exe is too large for GitHub:
+  it is not in the repository. Run `.\tools\get-ffmpeg.ps1` in a new checkout,
+  and update the build line in `SOURCE.txt` when you get a newer build.
+
 `publish.ps1` validates these rules before it creates a tag and validates the
 generated executable and NSIS script again after the release build.
 

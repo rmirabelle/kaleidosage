@@ -1,4 +1,4 @@
-import { ArrayBufferTarget, Muxer, StreamTarget } from "mp4-muxer";
+import { ArrayBufferTarget, Muxer } from "mp4-muxer";
 import type { ExportFile } from "./exports";
 import type { Engine } from "../engine/engine";
 import { baseLoopSeconds, fittedCustomSeconds, needsSeamFade, trailSettleTime, warpFlowCorrection } from "../engine/loop";
@@ -7,8 +7,9 @@ import { getAppVersion } from "./updater";
 
 /**
  * Video export, after Image Sage's slideshow video: frames are rendered off
- * the screen faster than real time, encoded as H.264 with the web view's own
- * video encoder (WebCodecs) and written as MP4 with `mp4-muxer` (MIT).
+ * the screen faster than real time. In the app, FFmpeg encodes them (see
+ * export_stream.rs). In a plain browser, the web view's own video encoder
+ * (WebCodecs) does, and `mp4-muxer` (MIT) writes the MP4.
  *
  * The video starts where Stop puts the scene (every range at its start
  * handle) and runs a whole number of loops. Before the first frame, the
@@ -29,6 +30,8 @@ export type VideoStyle = "title" | "loop";
 /** Standard keeps the file small; High and Best keep a fixed picture quality, so the file grows with the detail. */
 export type VideoQuality = "standard" | "high" | "best";
 export type VideoFps = 30 | 60;
+/** The detail of a video: 4K has twice the width and height of 1080p. A 360 video has its own size. */
+export type VideoResolution = "1080p" | "4k";
 /** "screen" keeps the picture's shape on the screen; the others are fixed sizes for video sites. */
 export type VideoSizeId = "screen" | "landscape" | "vertical" | "square" | "portrait" | "sphere";
 
@@ -43,6 +46,7 @@ export const VIDEO_SIZES: { id: Exclude<VideoSizeId, "screen">; ratio: string; s
 
 export interface VideoOptions {
   size: VideoSizeId;
+  resolution: VideoResolution;
   style: VideoStyle;
   /** The title in the title box; empty shows only the credit. */
   title: string;
@@ -94,10 +98,15 @@ export function videoSize(aspect: number) {
   return { width: even(width), height: even(height) };
 }
 
+/** A size choice at a resolution. */
+export function atResolution(id: VideoSizeId, size: { width: number; height: number }, resolution: VideoResolution) {
+  const scale = resolution === "4k" && id !== "sphere" ? 2 : 1;
+  return { width: size.width * scale, height: size.height * scale };
+}
+
 /** The pixel size of a size choice; "screen" is the screen's shape (see videoSize). */
-export function videoDimensions(id: VideoSizeId, screenAspect: number) {
-  const fixed = VIDEO_SIZES.find((choice) => choice.id === id);
-  return fixed ? { width: fixed.width, height: fixed.height } : videoSize(screenAspect);
+export function videoDimensions(id: VideoSizeId, screenAspect: number, resolution: VideoResolution) {
+  return atResolution(id, VIDEO_SIZES.find((choice) => choice.id === id) ?? videoSize(screenAspect), resolution);
 }
 
 /** One loop of the scene, in seconds: the shortest time after which it repeats. */
@@ -160,6 +169,63 @@ async function pickEncoder(size: { width: number; height: number }, fps: VideoFp
   throw new Error(sphere
     ? "The video encoder on this PC cannot make a 360 video, even at 2880 × 1440 and 30 frames a second."
     : "No H.264 video encoder is available on this PC.");
+}
+
+/** Where the frames go. "finish" gives the video when it is in memory, or null when it went to a file. */
+interface FrameSink {
+  add(pixels: Uint8Array, shown: number): Promise<void>;
+  finish(): Promise<Blob | null>;
+  close(): void;
+}
+
+/** In the app: each frame goes to FFmpeg, and waits until FFmpeg takes it. */
+const ffmpegSink = (file: ExportFile): FrameSink => ({
+  add: (pixels) => file.writeFrame(pixels),
+  finish: () => Promise.resolve(null),
+  close: () => {}
+});
+
+/** In a plain browser: the web view's encoder, with the MP4 made in memory, its index first. */
+function webCodecsSink({ config, quantizer, width, height, fps }: Awaited<ReturnType<typeof pickEncoder>>): FrameSink {
+  const muxer = new Muxer({ target: new ArrayBufferTarget(), video: { codec: "avc", width, height, frameRate: fps }, fastStart: "in-memory" });
+  let failure: Error | null = null;
+  const encoder = new VideoEncoder({
+    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+    error: (error) => { failure = error instanceof Error ? error : new Error(String(error)); }
+  });
+  encoder.configure(config);
+  const microseconds = 1_000_000 / fps;
+  const keyFrameEvery = fps * KEY_FRAME_SECONDS;
+  /** Waits until the encoder has room; it says so each time it takes a frame from its queue. */
+  const encoderRoom = () => new Promise<void>((resolve) => {
+    if (encoder.encodeQueueSize <= ENCODER_QUEUE || encoder.state !== "configured") resolve();
+    else encoder.addEventListener("dequeue", () => resolve(), { once: true });
+  });
+  return {
+    async add(pixels, shown) {
+      if (failure) throw failure;
+      const videoFrame = new VideoFrame(pixels, {
+        format: "RGBX",
+        codedWidth: width,
+        codedHeight: height,
+        timestamp: Math.round(shown * microseconds),
+        duration: Math.round(microseconds)
+      });
+      const keyFrame = shown % keyFrameEvery === 0;
+      encoder.encode(videoFrame, quantizer === null ? { keyFrame } : { keyFrame, avc: { quantizer } });
+      videoFrame.close();
+      await encoderRoom();
+    },
+    async finish() {
+      await encoder.flush();
+      if (failure) throw failure;
+      muxer.finalize();
+      return new Blob([muxer.target.buffer], { type: "video/mp4" });
+    },
+    close() {
+      if (encoder.state !== "closed") encoder.close();
+    }
+  };
 }
 
 /** The app icon, cut at its right at the last visible pixel, so the space after it is only the column gap. */
@@ -359,9 +425,9 @@ const READS_AHEAD = 3;
 
 /**
  * Renders and encodes the video. "onProgress" gets 0 to 1; an aborted
- * "signal" stops it with an AbortError. With "file" (in the app) the video
- * goes to it as it is made, and the result is null; with none (the
- * browser) the result is the video.
+ * "signal" stops it with an AbortError. With "file" (in the app) FFmpeg
+ * makes the video, and the result is null; with none (a plain browser) the
+ * result is the video.
  */
 export async function encodeVideo(
   source: Engine,
@@ -373,8 +439,9 @@ export async function encodeVideo(
 ): Promise<Blob | null> {
   /* A 360 video draws a square picture as tall as the video, then wraps it around the viewer. */
   const sphere = options.size === "sphere";
-  /* The encoder is picked first: a 360 video may get a smaller size or frame rate than asked for. */
-  const { config, quantizer, width, height, fps } = await pickEncoder(size, options.fps, options.quality, sphere);
+  /* The web view's encoder is picked first: a 360 video may get a smaller size or frame rate than asked for. */
+  const picked = file ? null : await pickEncoder(size, options.fps, options.quality, sphere);
+  const { width, height, fps } = picked ?? { ...size, fps: options.fps };
   const frameWidth = sphere ? height : width;
   const engine = await source.forExport(frameWidth, height);
   const tail: WebGLTexture[] = [];
@@ -434,42 +501,19 @@ export async function encodeVideo(
 
     /* In a 360 video the title box is half the size, so it sits in front of the viewer and does not wrap far around. */
     const overlay = options.style === "title" ? await titleOverlay(frameWidth, height, options.title, sphere ? 0.5 : 1) : null;
-    /**
-     * With a file, the MP4 goes to it in parts as it is made (see
-     * openExportFile), and its index at the end; so a long or large video
-     * never has to fit in memory. With no file (the browser), it is made in
-     * memory, its index first.
-     */
-    const muxer = file
-      ? new Muxer({ target: new StreamTarget({ onData: (data, position) => file.write(data, position), chunked: true }), video: { codec: "avc", width, height, frameRate: fps }, fastStart: false })
-      : new Muxer({ target: new ArrayBufferTarget(), video: { codec: "avc", width, height, frameRate: fps }, fastStart: "in-memory" });
-    let failure: Error | null = null;
-    const encoder = new VideoEncoder({
-      output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-      error: (error) => { failure = error instanceof Error ? error : new Error(String(error)); }
-    });
-    encoder.configure(config);
+    const sink = file ? ffmpegSink(file) : webCodecsSink(picked!);
 
     if (overlay) engine.setOverlay(overlay);
     const hasVideo = engine.hasVideo;
     const total = lead + frames;
-    const microseconds = 1_000_000 / fps;
-    const keyFrameEvery = fps * KEY_FRAME_SECONDS;
     let sliceStart = performance.now();
     /** Ends the slice when its time is up: reports the progress and lets the window draw. */
     const pause = async (index: number) => {
       if (performance.now() - sliceStart < SLICE_MS) return;
-      /* The parts sent to the file are written before more are made, so they never pile up in memory. */
-      await file?.flush();
       onProgress(index / total);
       await afterNextFrame();
       sliceStart = performance.now();
     };
-    /** Waits until the encoder has room; it says so each time it takes a frame from its queue. */
-    const encoderRoom = () => new Promise<void>((resolve) => {
-      if (encoder.encodeQueueSize <= ENCODER_QUEUE || encoder.state !== "configured") resolve();
-      else encoder.addEventListener("dequeue", () => resolve(), { once: true });
-    });
     /**
      * Frames go from the GPU to the encoder as plain pixels: reading them
      * back is much faster than handing the encoder the canvas. A few reads
@@ -480,22 +524,11 @@ export async function encodeVideo(
     const encodeOldest = async () => {
       const { finish, shown } = reads.shift()!;
       await finish(pixels);
-      const videoFrame = new VideoFrame(pixels, {
-        format: "RGBX",
-        codedWidth: width,
-        codedHeight: height,
-        timestamp: Math.round(shown * microseconds),
-        duration: Math.round(microseconds)
-      });
-      const keyFrame = shown % keyFrameEvery === 0;
-      encoder.encode(videoFrame, quantizer === null ? { keyFrame } : { keyFrame, avc: { quantizer } });
-      videoFrame.close();
-      await encoderRoom();
+      await sink.add(pixels, shown);
     };
     try {
       for (let index = 0; index < total; index++) {
         if (signal.aborted) throw new DOMException("The video export was stopped.", "AbortError");
-        if (failure) throw failure;
         for (let step = 0; step < substeps; step++) {
           const animated = engine.step(realStep);
           if (hasVideo && step === substeps - 1) await engine.seekVideos();
@@ -518,18 +551,12 @@ export async function encodeVideo(
         await pause(index);
       }
       while (reads.length) await encodeOldest();
-      await encoder.flush();
+      const video = await sink.finish();
+      onProgress(1);
+      return video;
     } finally {
-      if (encoder.state !== "closed") encoder.close();
+      sink.close();
     }
-    if (failure) throw failure;
-    muxer.finalize();
-    onProgress(1);
-    if (file) {
-      await file.flush();
-      return null;
-    }
-    return new Blob([(muxer.target as ArrayBufferTarget).buffer], { type: "video/mp4" });
   } finally {
     for (const texture of tail) engine.releaseFrame(texture);
     engine.dispose();

@@ -1,30 +1,64 @@
-//! A video export is written to disk while it is made: the webview sends the
-//! MP4 in parts, each with the place in the file it goes to (the muxer goes
-//! back to fill in sizes it learns later). So a long or large video never
-//! has to fit in memory. The parts go to "<file>.part", which takes the
-//! file's name only when the export is complete, so a stopped or failed
-//! export leaves no broken video behind. A 360 video gets the mark that
-//! makes headset players show it all around the viewer (see tag_spherical).
 use std::{
     collections::HashMap,
-    fs::{File, OpenOptions},
+    fs::OpenOptions,
     io::{Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
+    process::{Child, ChildStdin, Command, ExitStatus, Stdio},
     sync::{
         atomic::{AtomicU32, Ordering},
         Mutex,
     },
+    thread::JoinHandle,
 };
-use tauri::ipc::{InvokeBody, Request};
+use tauri::{
+    ipc::{InvokeBody, Request},
+    path::BaseDirectory,
+    AppHandle, Manager, State,
+};
+
+/** Windows process flags: no console window, and the app and its picture stay ahead of the encoder for the processor. */
+#[cfg(windows)]
+const PROCESS_FLAGS: u32 = 0x0800_0000 | 0x0000_4000;
+
+/** The largest video side, in pixels. */
+const MAX_SIDE: u32 = 8192;
+
+struct VideoSettings<'a> {
+    width: u32,
+    height: u32,
+    fps: u32,
+    quality: &'a str,
+    spherical: bool,
+}
 
 struct OpenExport {
     target: PathBuf,
     part: PathBuf,
-    file: File,
+    child: Child,
+    stdin: Option<ChildStdin>,
+    errors: Option<JoinHandle<Vec<u8>>>,
+    frame_bytes: usize,
     spherical: bool,
 }
 
-/** The video exports that are being written, by id. */
+impl OpenExport {
+    /** Ends the input, waits for FFmpeg to stop, and gives its result and its error text. */
+    fn close(&mut self) -> Result<(ExitStatus, String), String> {
+        drop(self.stdin.take());
+        let status = self.child.wait().map_err(|error| format!("Could not finish the video: {error}"))?;
+        let errors = self.errors.take().and_then(|errors| errors.join().ok()).unwrap_or_default();
+        Ok((status, String::from_utf8_lossy(&errors).trim().to_string()))
+    }
+}
+
+/**
+ * The video exports that are being made, by id. Each one is a separate
+ * FFmpeg program: the webview sends each frame as plain pixels, and FFmpeg
+ * encodes them and writes the MP4 to "<file>.part". The part file takes the
+ * file's name only when the export is complete, so a stopped or failed
+ * export leaves no broken video behind. A 360 video gets the mark that makes
+ * headset players show it all around the viewer (see tag_spherical).
+ */
 #[derive(Default)]
 pub struct Exports {
     next: AtomicU32,
@@ -42,67 +76,142 @@ fn part_path(target: &Path) -> PathBuf {
     PathBuf::from(name)
 }
 
+/**
+ * The FFmpeg options after the input, for a quality. Standard and High are
+ * H.264 with halved color, which every player opens. Best is H.265 with
+ * full color in 10 bits; a 360 video keeps halved color, because headsets
+ * cannot decode full color. All are converted with the BT.709 colors that
+ * players expect from a video of this size.
+ */
+fn encoder_args(quality: &str, fps: u32, spherical: bool) -> Result<Vec<String>, String> {
+    let (codec, preset, crf, format) = match (quality, spherical) {
+        ("standard", _) => ("libx264", "medium", "20", "yuv420p"),
+        ("high", _) => ("libx264", "slow", "14", "yuv420p"),
+        ("best", false) => ("libx265", "medium", "12", "yuv444p10le"),
+        ("best", true) => ("libx265", "medium", "12", "yuv420p10le"),
+        _ => return Err(format!("Unknown video quality: {quality}")),
+    };
+    let filter = format!("scale=out_color_matrix=bt709:out_range=tv:flags=lanczos+accurate_rnd+full_chroma_int,format={format}");
+    let key_frames = (fps * 2).to_string();
+    let mut args: Vec<String> = ["-vf", &filter, "-c:v", codec, "-preset", preset, "-crf", crf, "-g", &key_frames, "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv"]
+        .iter()
+        .map(|arg| arg.to_string())
+        .collect();
+    if codec == "libx265" {
+        args.extend(["-tag:v", "hvc1", "-x265-params", "log-level=error"].map(String::from));
+    }
+    Ok(args)
+}
+
 impl Exports {
-    fn begin(&self, path: &str, spherical: bool) -> Result<u32, String> {
+    fn begin(&self, ffmpeg: &Path, path: &str, settings: VideoSettings) -> Result<u32, String> {
         let target = PathBuf::from(path);
         if !is_video_export(&target) {
             return Err("The export path is invalid".into());
         }
+        let VideoSettings { width, height, fps, quality, spherical } = settings;
+        if width == 0 || height == 0 || width > MAX_SIDE || height > MAX_SIDE || width % 2 != 0 || height % 2 != 0 || !matches!(fps, 30 | 60) {
+            return Err(format!("The video size is invalid: {width} x {height}, {fps} frames a second"));
+        }
+        let encoder = encoder_args(quality, fps, spherical)?;
         let part = part_path(&target);
-        /* Read too: tag_spherical reads the index back at the end. */
-        let file = OpenOptions::new().read(true).write(true).create(true).truncate(true).open(&part).map_err(|error| format!("Could not write {}: {error}", part.display()))?;
+        let (size, rate) = (format!("{width}x{height}"), fps.to_string());
+        let mut command = Command::new(ffmpeg);
+        command
+            .args(["-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo", "-pixel_format", "rgb0", "-video_size", &size, "-framerate", &rate, "-i", "pipe:0"])
+            .args(encoder)
+            .args(["-f", "mp4"])
+            .arg(&part)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(PROCESS_FLAGS);
+        }
+        let mut child = command.spawn().map_err(|error| format!("Could not start FFmpeg: {error}"))?;
+        let stdin = child.stdin.take();
+        /* A thread empties FFmpeg's error text, so FFmpeg can never wait for room to write it. */
+        let errors = child.stderr.take().map(|mut stderr| {
+            std::thread::spawn(move || {
+                let mut text = Vec::new();
+                let _ = stderr.read_to_end(&mut text);
+                text
+            })
+        });
+        let frame_bytes = width as usize * height as usize * 4;
         let id = self.next.fetch_add(1, Ordering::Relaxed);
-        self.open.lock().map_err(|_| "The export writer is unavailable")?.insert(id, OpenExport { target, part, file, spherical });
+        self.open.lock().map_err(|_| "The export writer is unavailable")?.insert(id, OpenExport { target, part, child, stdin, errors, frame_bytes, spherical });
         Ok(id)
     }
 
-    fn write(&self, id: u32, offset: u64, bytes: &[u8]) -> Result<(), String> {
+    /** Gives FFmpeg one frame. This waits while FFmpeg is busy, so frames never pile up in memory. */
+    fn write(&self, id: u32, bytes: &[u8]) -> Result<(), String> {
         let mut open = self.open.lock().map_err(|_| "The export writer is unavailable")?;
         let export = open.get_mut(&id).ok_or("This export is no longer open")?;
-        export.file.seek(SeekFrom::Start(offset)).and_then(|_| export.file.write_all(bytes)).map_err(|error| format!("Could not write the video: {error}"))
+        if bytes.len() != export.frame_bytes {
+            return Err(format!("A video frame has {} bytes, not {}", bytes.len(), export.frame_bytes));
+        }
+        let Some(stdin) = export.stdin.as_mut() else {
+            return Err("This export is no longer open".into());
+        };
+        let Err(error) = stdin.write_all(bytes) else {
+            return Ok(());
+        };
+        /* FFmpeg stopped by itself: its error text says why. */
+        let mut export = open.remove(&id).ok_or("This export is no longer open")?;
+        let message = export.close().map(|(_, message)| message).unwrap_or_default();
+        let _ = std::fs::remove_file(&export.part);
+        Err(if message.is_empty() { format!("FFmpeg stopped: {error}") } else { format!("FFmpeg stopped: {message}") })
     }
 
     /** Ends the export: the part file becomes the video (it takes the place of a file with that name), or with "discard" it is removed. */
     fn finish(&self, id: u32, discard: bool) -> Result<(), String> {
-        let export = self.open.lock().map_err(|_| "The export writer is unavailable")?.remove(&id).ok_or("This export is no longer open")?;
-        let OpenExport { target, part, mut file, spherical } = export;
+        let mut export = self.open.lock().map_err(|_| "The export writer is unavailable")?.remove(&id).ok_or("This export is no longer open")?;
         if discard {
-            drop(file);
-            let _ = std::fs::remove_file(&part);
+            let _ = export.child.kill();
+            let _ = export.close();
+            let _ = std::fs::remove_file(&export.part);
             return Ok(());
         }
+        let (status, message) = export.close()?;
+        if !status.success() {
+            let _ = std::fs::remove_file(&export.part);
+            return Err(format!("FFmpeg could not finish the video: {message}"));
+        }
         /* Without the mark the video still plays, flat, so a file the mark does not fit is kept as it is. */
-        if spherical {
-            if let Err(error) = tag_spherical(&mut file) {
-                eprintln!("Could not mark {} as a 360 video: {error}", target.display());
+        if export.spherical {
+            let tagged = OpenOptions::new().read(true).write(true).open(&export.part).and_then(|mut file| tag_spherical(&mut file).and_then(|()| file.sync_all()));
+            if let Err(error) = tagged {
+                eprintln!("Could not mark {} as a 360 video: {error}", export.target.display());
             }
         }
-        file.sync_all().map_err(|error| format!("Could not write the video: {error}"))?;
-        drop(file);
-        std::fs::rename(&part, &target).map_err(|error| format!("Could not save {}: {error}", target.display()))
+        std::fs::rename(&export.part, &export.target).map_err(|error| format!("Could not save {}: {error}", export.target.display()))
     }
 }
 
 /** Starts a video export to "path" (an .mp4): returns its id for write_export and finish_export. "spherical" marks it as a 360 video. */
 #[tauri::command]
-pub fn begin_export(exports: tauri::State<'_, Exports>, path: String, spherical: Option<bool>) -> Result<u32, String> {
-    exports.begin(&path, spherical.unwrap_or(false))
+#[allow(clippy::too_many_arguments)]
+pub fn begin_export(app: AppHandle, exports: State<'_, Exports>, path: String, width: u32, height: u32, fps: u32, quality: String, spherical: bool) -> Result<u32, String> {
+    let ffmpeg = app.path().resolve("ffmpeg/ffmpeg.exe", BaseDirectory::Resource).map_err(|error| format!("Could not find FFmpeg: {error}"))?;
+    exports.begin(&ffmpeg, &path, VideoSettings { width, height, fps, quality: &quality, spherical })
 }
 
-/** Writes one part of an export: the raw request body, at the "offset" header, to the export in the "export-id" header. */
-#[tauri::command]
-pub fn write_export(exports: tauri::State<'_, Exports>, request: Request<'_>) -> Result<(), String> {
+/** Gives FFmpeg one frame: the raw request body, for the export in the "export-id" header. It can wait for FFmpeg, so it stays off the window's thread. */
+#[tauri::command(async)]
+pub fn write_export(exports: State<'_, Exports>, request: Request<'_>) -> Result<(), String> {
     let InvokeBody::Raw(bytes) = request.body() else {
         return Err("The export data is missing".into());
     };
-    let header = |name: &str| request.headers().get(name).and_then(|value| value.to_str().ok()).ok_or_else(|| format!("The {name} header is missing"));
-    let id = header("export-id")?.parse::<u32>().map_err(|error| error.to_string())?;
-    let offset = header("offset")?.parse::<u64>().map_err(|error| error.to_string())?;
-    exports.write(id, offset, bytes)
+    let id = request.headers().get("export-id").and_then(|value| value.to_str().ok()).ok_or("The export-id header is missing")?;
+    exports.write(id.parse::<u32>().map_err(|error| error.to_string())?, bytes)
 }
 
-#[tauri::command]
-pub fn finish_export(exports: tauri::State<'_, Exports>, id: u32, discard: bool) -> Result<(), String> {
+/** Waits for FFmpeg to finish, so it stays off the window's thread. */
+#[tauri::command(async)]
+pub fn finish_export(exports: State<'_, Exports>, id: u32, discard: bool) -> Result<(), String> {
     exports.finish(id, discard)
 }
 
@@ -194,31 +303,85 @@ fn tag_spherical<F: Read + Write + Seek>(file: &mut F) -> std::io::Result<()> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn writes_parts_in_place_and_keeps_the_file_only_when_complete() {
-        let folder = tempfile::tempdir().unwrap();
-        let exports = Exports::default();
-        let path = folder.path().join("Clip.mp4");
-        let id = exports.begin(path.to_str().unwrap(), false).unwrap();
-        exports.write(id, 0, b"----body").unwrap();
-        exports.write(id, 0, b"head").unwrap();
-        assert!(!path.exists());
-        exports.finish(id, false).unwrap();
-        assert_eq!(std::fs::read(&path).unwrap(), b"headbody");
-        assert!(!part_path(&path).exists());
-
-        let stopped = folder.path().join("Stopped.mp4");
-        let id = exports.begin(stopped.to_str().unwrap(), false).unwrap();
-        exports.write(id, 0, b"half").unwrap();
-        exports.finish(id, true).unwrap();
-        assert!(!stopped.exists() && !part_path(&stopped).exists());
+    fn settings(quality: &str, spherical: bool) -> VideoSettings<'_> {
+        VideoSettings { width: 64, height: 64, fps: 30, quality, spherical }
     }
 
     #[test]
-    fn refuses_other_paths() {
+    fn refuses_other_paths_and_sizes() {
         let exports = Exports::default();
-        assert!(exports.begin("relative.mp4", false).is_err());
-        assert!(exports.begin(r"C:\Videos\clip.png", false).is_err());
+        let ffmpeg = Path::new("ffmpeg.exe");
+        assert!(exports.begin(ffmpeg, "relative.mp4", settings("high", false)).is_err());
+        assert!(exports.begin(ffmpeg, r"C:\Videos\clip.png", settings("high", false)).is_err());
+        let odd = VideoSettings { width: 63, ..settings("high", false) };
+        assert!(exports.begin(ffmpeg, r"C:\Videos\clip.mp4", odd).is_err());
+        assert!(exports.begin(ffmpeg, r"C:\Videos\clip.mp4", settings("unknown", false)).is_err());
+    }
+
+    #[test]
+    fn only_a_flat_best_video_keeps_full_color() {
+        let format = |quality, spherical| encoder_args(quality, 60, spherical).unwrap()[1].clone();
+        assert!(format("standard", false).ends_with("format=yuv420p"));
+        assert!(format("high", false).ends_with("format=yuv420p"));
+        assert!(format("best", false).ends_with("format=yuv444p10le"));
+        assert!(format("best", true).ends_with("format=yuv420p10le"));
+    }
+
+    fn real_ffmpeg() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("ffmpeg/ffmpeg.exe")
+    }
+
+    /** One 64 by 64 frame of a single color. The fourth byte of each pixel is not used. */
+    fn solid_frame(red: u8, green: u8, blue: u8) -> Vec<u8> {
+        [red, green, blue, 0].repeat(64 * 64)
+    }
+
+    #[test]
+    #[ignore = "needs src-tauri/ffmpeg/ffmpeg.exe"]
+    fn each_quality_makes_a_video_with_the_right_colors() {
+        let folder = tempfile::tempdir().unwrap();
+        for quality in ["standard", "high", "best"] {
+            let exports = Exports::default();
+            let path = folder.path().join(format!("{quality}.mp4"));
+            let id = exports.begin(&real_ffmpeg(), path.to_str().unwrap(), settings(quality, false)).unwrap();
+            for _ in 0..30 {
+                exports.write(id, &solid_frame(200, 40, 90)).unwrap();
+            }
+            assert!(!path.exists());
+            exports.finish(id, false).unwrap();
+            assert!(path.exists() && !part_path(&path).exists());
+            let decoded = Command::new(real_ffmpeg()).args(["-v", "error", "-i"]).arg(&path).args(["-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]).output().unwrap().stdout;
+            assert_eq!(decoded.len(), 64 * 64 * 3);
+            for (got, want) in decoded[..3].iter().zip([200i32, 40, 90]) {
+                assert!((i32::from(*got) - want).abs() <= 3, "{quality}: {:?}", &decoded[..3]);
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "needs src-tauri/ffmpeg/ffmpeg.exe"]
+    fn a_spherical_video_gets_its_mark() {
+        let folder = tempfile::tempdir().unwrap();
+        let exports = Exports::default();
+        let path = folder.path().join("sphere.mp4");
+        let id = exports.begin(&real_ffmpeg(), path.to_str().unwrap(), settings("high", true)).unwrap();
+        exports.write(id, &solid_frame(10, 20, 30)).unwrap();
+        exports.finish(id, false).unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        assert!(bytes.windows(SPHERICAL_UUID.len()).any(|window| window == SPHERICAL_UUID));
+    }
+
+    #[test]
+    #[ignore = "needs src-tauri/ffmpeg/ffmpeg.exe"]
+    fn a_stopped_export_leaves_no_file() {
+        let folder = tempfile::tempdir().unwrap();
+        let exports = Exports::default();
+        let path = folder.path().join("stopped.mp4");
+        let id = exports.begin(&real_ffmpeg(), path.to_str().unwrap(), settings("high", false)).unwrap();
+        exports.write(id, &solid_frame(1, 2, 3)).unwrap();
+        assert!(exports.write(id, &[0; 8]).is_err());
+        exports.finish(id, true).unwrap();
+        assert!(!path.exists() && !part_path(&path).exists());
     }
 
     /** A box with a 32-bit size. */

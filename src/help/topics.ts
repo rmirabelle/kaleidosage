@@ -195,6 +195,8 @@ export const HELP_TOPICS = {
     text: "Save PNG saves the picture as it is now. Export Video makes an MP4 of the scene, which can repeat with no jump.",
     tips: [
       "Size: 16:9 for YouTube, 9:16 for TikTok, Reels and Shorts, 1:1 or 4:5 for Instagram.",
+      "Resolution: 4K is the sharpest; 1080p is faster and makes a smaller file.",
+      "Quality: High plays everywhere. Best has full color, but many players cannot open it.",
       "Size 360° makes a video that goes all around you in a Quest or another VR headset.",
       "View, Enter VR shows the picture live on a big screen in a headset (Quest: turn on Link).",
       "A video plays the ranges; audio sensors do not move in it.",

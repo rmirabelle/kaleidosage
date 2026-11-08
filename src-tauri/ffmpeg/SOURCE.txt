@@ -1,0 +1,11 @@
+Kaleido Sage uses FFmpeg as a separate program (ffmpeg.exe) to encode video
+exports. FFmpeg is not part of Kaleido Sage. This build contains x264 and
+x265 and is licensed under the GNU General Public License, version 3 or
+later: see LICENSE.txt in this folder.
+
+Build: n9.0.2-48-gd4070a14ce-20261107, win64, gpl
+
+Corresponding source:
+- FFmpeg: https://github.com/FFmpeg/FFmpeg (commit d4070a14ce)
+- The build scripts and the versions of x264, x265 and the other libraries:
+  https://github.com/BtbN/FFmpeg-Builds

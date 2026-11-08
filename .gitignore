@@ -26,3 +26,6 @@ Thumbs.db
 
 # A side copy of src for large edits (it is copied back in one step)
 /.work/
+
+# FFmpeg for video export, too large for GitHub; tools/get-ffmpeg.ps1 downloads it
+/src-tauri/ffmpeg/ffmpeg.exe

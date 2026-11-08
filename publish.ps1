@@ -105,6 +105,10 @@ if (-not (Test-Path -LiteralPath "src-tauri/icons/icon.ico" -PathType Leaf)) {
   throw "The Windows icon is missing: src-tauri/icons/icon.ico"
 }
 
+if (-not (Test-Path -LiteralPath "src-tauri/ffmpeg/ffmpeg.exe" -PathType Leaf)) {
+  throw "FFmpeg is missing. Run .\tools\get-ffmpeg.ps1."
+}
+
 Assert-FileContains "src-tauri/src/main.rs" @(
   'windows_subsystem = "windows"'
 )
@@ -162,6 +166,7 @@ $generatedNsis = "src-tauri/target/release/nsis/x64/installer.nsi"
 Assert-FileContains $generatedNsis @(
   '!define INSTALLMODE "currentUser"',
   '/oname=icons\icon.ico',
+  '/oname=ffmpeg\ffmpeg.exe',
   'CopyFiles /SILENT "$INSTDIR\icons\icon.ico" "C:\Users\Public\${PRODUCTNAME}\icon.ico"',
   'CreateShortcut "$SMPROGRAMS\$AppStartMenuFolder\${PRODUCTNAME}.lnk"',
   'CreateShortcut "$DESKTOP\${PRODUCTNAME}.lnk"',

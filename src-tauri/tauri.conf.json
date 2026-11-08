@@ -50,7 +50,7 @@
     "active": true,
     "targets": ["nsis"],
     "icon": ["icons/icon.ico"],
-    "resources": ["icons/icon.ico"],
+    "resources": ["icons/icon.ico", "ffmpeg/ffmpeg.exe", "ffmpeg/LICENSE.txt", "ffmpeg/SOURCE.txt"],
     "windows": {
       "nsis": {
         "template": "installer.nsi"
