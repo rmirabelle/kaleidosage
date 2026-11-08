@@ -26,6 +26,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
       { keys: ["Ctrl+O"], does: "Open a project" },
       { keys: ["Ctrl+S"], does: "Save the project" },
       { keys: ["Ctrl+Shift+S"], does: "Save the project as" },
+      { keys: ["Ctrl+I"], does: "Import scenes from other projects" },
       { keys: ["Ctrl+W"], does: "Remove the scene from the project" },
       { keys: ["1 to 9"], does: "Select that tab, with a crossfade" },
       { keys: ["Ctrl+Tab", "Ctrl+Page Down"], does: "Next tab" },

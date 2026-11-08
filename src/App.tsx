@@ -2510,8 +2510,8 @@ export default function App() {
           switchByStep(tabStep);
           return;
         }
-        /* Ctrl+S saves the open project with all of its scenes, and Ctrl+Shift+S saves it with a new name. Ctrl+N adds a blank scene. */
-        const sceneAction = { s: () => saveFile(event.shiftKey), o: openFile, n: newScene, w: closeScene }[key];
+        /* Ctrl+S saves the open project with all of its scenes, and Ctrl+Shift+S saves it with a new name. Ctrl+N adds a blank scene. Ctrl+I imports scenes; Ctrl+Shift+I stays the web view's developer tools. */
+        const sceneAction = { s: () => saveFile(event.shiftKey), o: openFile, n: newScene, w: closeScene, i: event.shiftKey ? undefined : openImport }[key];
         if (sceneAction) {
           event.preventDefault();
           void sceneAction();
@@ -2562,7 +2562,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [aboutOpen, shortcutsOpen, welcome, closeScene, crossfadeToDoc, engine, exitFullscreen, newFile, newScene, openRequest, videoDialogOpen, searchSlot, openFile, randomize, redo, saveFile, startScreen, stop, switchByStep, toggleAudioPanel, toggleCast, toggleFullscreen, toggleMidiPanel, togglePause, undo]);
+  }, [aboutOpen, shortcutsOpen, welcome, closeScene, crossfadeToDoc, engine, exitFullscreen, newFile, newScene, openImport, openRequest, videoDialogOpen, searchSlot, openFile, randomize, redo, saveFile, startScreen, stop, switchByStep, toggleAudioPanel, toggleCast, toggleFullscreen, toggleMidiPanel, togglePause, undo]);
 
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
@@ -2608,7 +2608,7 @@ export default function App() {
         { label: "Close Project", icon: <X size={15} />, disabled: startScreen, run: () => void closeFile() },
         "separator",
         { label: "Add Blank Scene", icon: <Plus size={15} />, shortcut: "Ctrl+N", disabled: startScreen, run: newScene },
-        { label: "Import Scene(s)…", icon: <FolderOpen size={15} />, disabled: startScreen, run: openImport },
+        { label: "Import Scene(s)…", icon: <FolderOpen size={15} />, shortcut: "Ctrl+I", disabled: startScreen, run: openImport },
         { label: "Export Scene…", disabled: startScreen, icon: <Export size={15} />, run: () => void exportScene() },
         { label: "Remove Scene", icon: <Trash size={15} />, shortcut: "Ctrl+W", disabled: startScreen, run: () => void closeScene() },
         "separator",
