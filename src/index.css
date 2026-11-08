@@ -1678,11 +1678,13 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .confirm-dialog-list strong { color: #f1f2f4; font-size: 13px; font-weight: 600; }
 .confirm-dialog-list span { color: #9ca1af; font-size: 11px; }
 /* Export Video: the About dialog's frame, with a header like the Open dialog's. */
+/* No blur behind Export Video: the scene tabs stay readable while it is open. */
+.about-dialog-overlay.video-dialog-overlay { backdrop-filter: none; }
 .about-dialog.video-dialog { width: min(700px, 100%); }
 .video-dialog-header { display: flex; align-items: center; gap: 15px; padding: 14px 54px 14px 16px; border-bottom: 1px solid #3a3e4d; background: linear-gradient(180deg, #2c303b, #272b35); }
 .video-dialog-header h2 { margin: 0 0 4px; color: #f4f4f5; font-size: 18px; font-weight: 650; }
 .video-dialog-header p { margin: 0; color: #a2a7b5; font-size: 12px; line-height: 1.45; }
-.video-dialog-body { display: flex; flex-direction: column; gap: 14px; padding: 18px 20px 16px; background: linear-gradient(180deg, #292d37, #242832); }
+.video-dialog-body { display: flex; flex-direction: column; gap: 14px; padding: 28px 32px 26px; background: linear-gradient(180deg, #292d37, #242832); }
 .video-row { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 12px; }
 .video-label { color: #b9bdc8; font-size: 12px; font-weight: 600; }
 /* The buttons in a row touch and share their borders; the row has round outer corners. */

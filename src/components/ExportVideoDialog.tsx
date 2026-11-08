@@ -118,7 +118,7 @@ export function ExportVideoDialog({ engine, screenSize, sceneSeconds, onCancel, 
   }, [onCancel]);
 
   return (
-    <div className="about-dialog-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
+    <div className="about-dialog-overlay video-dialog-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
       <div className="about-dialog video-dialog" role="dialog" aria-modal="true" aria-labelledby="video-dialog-title" {...help("export")}>
         <header className="video-dialog-header">
           <div className="open-dialog-title-icon"><FilmStrip size={22} weight="duotone" /></div>
