@@ -1428,6 +1428,7 @@ export class KaleidoRenderer {
     const shapeSteps = v.fxOrder.filter((step): step is ShapeStep => isShapeStep(step) && active[step]);
     this.info.shapeVersions = 1 + shapeSteps.filter((step) => opacity(step) < 1 || v.layerBlend[step] !== 0).length;
     for (const step of PICTURE_STEPS) if (!active[step]) delete this.timer.times[step];
+    if (!active.solid) delete this.timer.times.screen;
 
     /**
      * Freeze background (see FrameValues.freeze): the picture made before
@@ -2500,8 +2501,18 @@ export class KaleidoRenderer {
     });
     gl.activeTexture(gl.TEXTURE0);
     if (!target) {
+      /**
+       * The copy onto the screen is timed as "screen", apart from the
+       * object's own work: the screen's first draw in a frame can wait for
+       * the display, and that wait showed as 4 to 6 ms of "3D object" now
+       * and then (2026-11-07). The caller's timer.end ends it.
+       */
+      this.timer.end();
+      this.timer.begin("screen");
       gl.viewport(0, 0, width, height);
       this.drawCopy(whole.texture);
+    } else {
+      delete this.timer.times.screen;
     }
   }
 
