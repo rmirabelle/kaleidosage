@@ -2380,6 +2380,8 @@ export class KaleidoRenderer {
     /* Rows of (turn about x by tilt) times (spin about y), given by columns for GLSL. */
     const rows = [[cs, 0, ss], [st * ss, ct, -st * cs], [-ct * ss, st, ct * cs]];
     gl.uniformMatrix3fv(s.uniforms.u_turn, false, [0, 1, 2].flatMap((column) => rows.map((row) => row[column])));
+    /* The Sphere's turn shows only on a turned copy of the picture (see SOLID_PAINT_GLSL). */
+    gl.uniform1i(s.uniforms.u_turnCopy, v.solidShape === 0 ? 1 : 0);
     gl.uniform2f(s.uniforms.u_center, v.solidX, v.solidY);
     gl.uniform1f(s.uniforms.u_bend, Math.max(0, v.solidBend));
     gl.uniform1f(s.uniforms.u_frost, Math.min(1, Math.max(0, v.solidFrost)));

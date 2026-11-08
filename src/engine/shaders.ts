@@ -4926,10 +4926,23 @@ vec3 wrapAt(vec3 q, vec3 n) {
  * has its own wrapAt, fold and readAt before it.
  */
 const SOLID_PAINT_GLSL = `
+/**
+ * A sphere looks the same at every turn, so with Project and Mirror its
+ * Spin, Tumble and Tilt turn a copy of the picture instead (u_turnCopy,
+ * the Sphere only, added 2026-11-07). Project reads the copy where this
+ * surface point was before the turn, so the picture goes around with the
+ * sphere; Mirror reflects the picture as a ball that turns with it. The
+ * Source and the picture behind stay still. With no turn, both look as
+ * before.
+ */
+uniform bool u_turnCopy;
+
 vec3 paint(vec3 q, vec3 n, vec3 rd, vec2 uv) {
   vec3 color;
   if (u_map == 1) {
-    vec2 lens = uv + n.xy * u_bend * 0.3 * vec2(1.0 / u_aspect, 1.0);
+    vec3 bent = u_turnCopy ? transpose(u_turn) * n : n;
+    vec2 lens = uv + bent.xy * u_bend * 0.3 * vec2(1.0 / u_aspect, 1.0);
+    if (u_turnCopy) lens += (q - u_turn * q).xy * 0.5 * u_size * vec2(1.0 / u_aspect, 1.0);
     if (u_frost > 0.001) {
       /**
        * Frost: frosted glass. The picture is read at 16 places in a
@@ -4953,6 +4966,7 @@ vec3 paint(vec3 q, vec3 n, vec3 rd, vec2 uv) {
     }
   } else if (u_map == 2) {
     vec3 r = reflect(rd, n);
+    if (u_turnCopy) r = transpose(u_turn) * r;
     color = straight(textureLod(u_tex, vec2(abs(atan(r.x, -r.z)) / PI, asin(clamp(r.y, -1.0, 1.0)) / PI + 0.5), 0.0));
   } else {
     color = wrapAt(q, transpose(u_turn) * n);

@@ -126,6 +126,14 @@ so a range on them changes the speed, not the angle.
 - Mirror: the reflected ray's direction gives the place in the picture
   (the picture as a ball around the shape), so the reflection moves as the
   shape turns.
+- Sphere with Project or Mirror (2026-11-07): a sphere looks the same at
+  every turn, so Spin, Tumble and Tilt turn a copy of the picture instead.
+  Project reads the copy where the surface point was before the turn (and
+  bends by the normal in the sphere's own frame), so the picture goes
+  around with the sphere. Mirror turns the reflected ray into the sphere's
+  own frame, so the ball of picture it reflects turns with it. The Source
+  and the picture behind stay still, and with no turn both look as before.
+  Other shapes keep the fixed picture (their outline shows the turn).
 - Light: as in the Camera effect: a soft shade from the angle to the light
   and a shine from the reflection. The shadow is cast (changed 2026-10-24;
   before, it was a slice through the middle of the shape, moved away from
