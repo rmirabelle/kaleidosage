@@ -12,7 +12,6 @@ import { DEFAULT_LAND_KM, loadTerrain, randomLandPlace } from "../lib/terrain";
 import type { TerrainData } from "../engine/terrain";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
-import { PATH_PRESETS, applyPathPreset } from "../engine/paths";
 import { PATH_SHAPES, BUBBLE_SHAPES, BUBBLE_SHAPE_KEYS, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_PAINTS, SOLID_WRAPS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote, uniqueTo } from "../engine/submodes";
 import type { BlurMask, BubbleShape, ColorFill, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, MaskMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidPaint, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
@@ -88,9 +87,7 @@ const PICTURE_KEYS: ParamKey[] = ["pictureAmount", "pictureSize", "pictureX", "p
 const OUTLINE_KEYS: ParamKey[] = ["outlinePoints", "outlineRadius", "outlineInner", "outlineAmount", "outlineCount", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"];
 const OUTLINE_DRAWS = [[0, "Draw and erase"], [1, "Chase"], [2, "Whole"]] as const;
 const LASER_KEYS: ParamKey[] = ["laserAmount", "laserOpacity", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"];
-const PATH_KEYS: ParamKey[] = ["pathArms", "pathSteps", "pathStep", "pathTurn", "pathRadius", "pathWidth", "pathDraw", "pathFade", "pathHue", "pathRainbow", "pathPicture", "pathBackground", "pathX", "pathY", "pathRotation", "pathAmount"];
-/** The Preset menu's choices. The first does nothing, and the menu always goes back to it: a preset sets values once, and it is not a mode of the effect. */
-const PATH_PRESET_CHOICES: readonly (readonly [number, string])[] = [[-1, "Choose…"], ...PATH_PRESETS.map((preset, index) => [index, preset.name] as const)];
+const PATH_KEYS: ParamKey[] = ["pathArms", "pathSteps", "pathStep", "pathTurn", "pathRadius", "pathWidth", "pathDraw", "pathFade", "pathYaw", "pathTilt", "pathHue", "pathRainbow", "pathPicture", "pathBackground", "pathX", "pathY", "pathRotation", "pathAmount"];
 const BLOOM_KEYS: ParamKey[] = ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"];
 const SHARPEN_KEYS: ParamKey[] = ["sharpen", "sharpenRadius"];
 const COLOR_KEYS: ParamKey[] = ["overlayOpacity"];
@@ -444,7 +441,8 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     ),
     paths: (grip) => (
       <Group engine={engine} group="paths" title="Light paths" grip={grip} {...accordion("paths")}>
-        <PathsSection engine={engine} row={row} />
+        <ModeSelect engine={engine} stateKey="pathShape" options={PATH_SHAPES} name="Path" />
+        <SplitRows keys={PATH_KEYS} row={row} blend={<ModeSelect engine={engine} stateKey="pathBlend" options={LAYER_BLENDS} name="Blend" />} />
       </Group>
     ),
     outlines: (grip) => (
@@ -1077,29 +1075,6 @@ function OutlineSection({ engine, row }: { engine: Engine; row: (key: ParamKey) 
         ? <Fragment key={key}><GradientEditor engine={engine} stateKey="outlineStops" />{row(key)}</Fragment>
         : row(key))}
     </>
-  );
-}
-
-/** Light paths: the Preset menu and the Path menu, then the sliders. A preset draws the group again, so its controls show the new values. */
-function PathsSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
-  const [revision, setRevision] = useState(0);
-  return (
-    <Fragment key={revision}>
-      <div className="panel-select-row panel-select-named">
-        <span className="panel-row-name">Preset</span>
-        <Dropdown
-          value={-1}
-          options={PATH_PRESET_CHOICES}
-          onChange={(index) => {
-            if (index < 0) return;
-            applyPathPreset(engine.params, engine.state, PATH_PRESETS[index], createParams());
-            setRevision((value) => value + 1);
-          }}
-        />
-      </div>
-      <ModeSelect engine={engine} stateKey="pathShape" options={PATH_SHAPES} name="Path" />
-      <SplitRows keys={PATH_KEYS} row={row} blend={<ModeSelect engine={engine} stateKey="pathBlend" options={LAYER_BLENDS} name="Blend" />} />
-    </Fragment>
   );
 }
 

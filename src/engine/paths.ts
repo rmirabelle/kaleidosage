@@ -8,7 +8,6 @@
  * Places are in screen heights, with y up, as in cycles.ts.
  */
 import { INSTANCE_FLOATS } from "./cycles";
-import type { ParamKey, Params, PlayState } from "./params";
 
 /** The paths of the Path menu, as numbers in scene files. */
 export type PathShape = 0 | 1 | 2 | 3 | 4 | 5;
@@ -81,8 +80,12 @@ export interface PathSettings {
   hue: number;
   /** How many times around the color wheel the color goes along the arm. */
   rainbow: number;
-  /** The turn of the whole pattern, in radians. */
+  /** The turn of the whole pattern on the screen, in radians. */
   rotation: number;
+  /** Turn: the whole pattern turns around its upright line, in radians. */
+  yaw: number;
+  /** Tilt: then the pattern leans around its level line, in radians. */
+  tilt: number;
   /** The center, in screen heights. */
   x: number;
   y: number;
@@ -99,7 +102,13 @@ export function pathSegments(arms: number, steps: number): number {
 
 const wholeIn = (value: number, max: number) => Math.min(max, Math.max(1, Math.round(value)));
 const POINT_FLOATS = 6;
-let points = new Float32Array((MAX_PATH_STEPS + 1) * POINT_FLOATS);
+const points = new Float32Array((MAX_PATH_STEPS + 1) * POINT_FLOATS);
+/** One arm's points as the screen shows them. A point too near the eye has NaN. */
+const shownX = new Float32Array(MAX_PATH_STEPS + 1);
+const shownY = new Float32Array(MAX_PATH_STEPS + 1);
+/** The eye is this many screen heights in front of the screen, as for the 3D Object. A point nearer to the eye than NEAR is not drawn. */
+const EYE = 3;
+const NEAR = 0.05;
 
 /** The red, green or blue of a full color at "hue" (0 to 1); "n" is 5 for red, 3 for green, 1 for blue. */
 function channel(hue: number, n: number): number {
@@ -162,55 +171,41 @@ export function writePathInstances(out: Float32Array, max: number, s: PathSettin
   for (let i = 0; i < POINT_FLOATS; i++) points[end + i] = points[from + i] + (points[end + i] - points[from + i]) * part;
 
   const radius = s.width / 2;
+  const cosYaw = Math.cos(s.yaw);
+  const sinYaw = Math.sin(s.yaw);
+  const cosTilt = Math.cos(s.tilt);
+  const sinTilt = Math.sin(s.tilt);
   let count = 0;
   for (let arm = 0; arm < arms; arm++) {
     const angle = s.rotation + (arm / arms) * Math.PI * 2;
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
+    for (let point = 0; point <= lines; point++) {
+      const o = point * POINT_FLOATS;
+      const flatX = points[o] * cos - points[o + 1] * sin;
+      const flatY = points[o] * sin + points[o + 1] * cos;
+      const turnedX = flatX * cosYaw;
+      const turnedZ = -flatX * sinYaw;
+      const leanedY = flatY * cosTilt - turnedZ * sinTilt;
+      const distance = EYE - (flatY * sinTilt + turnedZ * cosTilt);
+      const scale = distance < NEAR ? NaN : EYE / distance;
+      shownX[point] = s.x + turnedX * scale;
+      shownY[point] = s.y + leanedY * scale;
+    }
     for (let line = 0; line < lines; line++) {
+      if (Number.isNaN(shownX[line]) || Number.isNaN(shownX[line + 1])) continue;
       if (count >= max) return count;
       const a = line * POINT_FLOATS;
       const b = a + POINT_FLOATS;
       const o = count++ * INSTANCE_FLOATS;
-      out[o] = s.x + points[a] * cos - points[a + 1] * sin;
-      out[o + 1] = s.y + points[a] * sin + points[a + 1] * cos;
-      out[o + 2] = s.x + points[b] * cos - points[b + 1] * sin;
-      out[o + 3] = s.y + points[b] * sin + points[b + 1] * cos;
+      out[o] = shownX[line];
+      out[o + 1] = shownY[line];
+      out[o + 2] = shownX[line + 1];
+      out[o + 3] = shownY[line + 1];
       out[o + 4] = points[a + 2]; out[o + 5] = points[a + 3]; out[o + 6] = points[a + 4]; out[o + 7] = points[a + 5];
       out[o + 8] = points[b + 2]; out[o + 9] = points[b + 3]; out[o + 10] = points[b + 4]; out[o + 11] = points[b + 5];
       out[o + 12] = radius; out[o + 13] = 0; out[o + 14] = 0; out[o + 15] = 0;
     }
   }
   return count;
-}
-
-/** A preset's setting: one value, or a range [start, end] that plays. */
-type PresetValue = number | readonly [number, number];
-
-export interface PathPreset {
-  name: string;
-  shape: PathShape;
-  values: Partial<Record<ParamKey, PresetValue>>;
-}
-
-/** The settings that a preset sets. Opacity, Blend, the place and the colors from the picture stay as the user left them. */
-export const PATH_PRESET_KEYS: readonly ParamKey[] = ["pathArms", "pathSteps", "pathStep", "pathTurn", "pathRadius", "pathWidth", "pathDraw", "pathFade", "pathHue", "pathRainbow", "pathRotation"];
-
-export const PATH_PRESETS: readonly PathPreset[] = [
-  { name: "Greek sun", shape: 2, values: { pathArms: 12, pathSteps: 60, pathStep: 0.012, pathTurn: 90, pathRadius: 0.12, pathWidth: 1.5, pathDraw: [0.1, 1], pathFade: 0.2, pathRainbow: 1 } },
-  { name: "Circuit board", shape: 5, values: { pathArms: 24, pathSteps: 48, pathStep: 0.012, pathTurn: 45, pathRadius: 0.06, pathWidth: 1.5, pathDraw: [0.1, 1], pathFade: 0.3, pathHue: 150, pathRainbow: 0.15 } },
-  { name: "Spiral flower", shape: 4, values: { pathArms: 12, pathSteps: 15, pathStep: 0.03, pathTurn: 144, pathRadius: 0.28, pathWidth: 1.5, pathDraw: 1, pathFade: 0, pathRainbow: 1, pathRotation: [0, 360] } },
-  { name: "Turning web", shape: 3, values: { pathArms: 8, pathSteps: 120, pathStep: 0.014, pathTurn: [88, 92], pathRadius: 0.02, pathWidth: 1, pathDraw: 1, pathFade: 0.1, pathRainbow: 2 } },
-  { name: "Zigzag bloom", shape: 0, values: { pathArms: 36, pathSteps: 32, pathStep: 0.02, pathTurn: [40, 120], pathRadius: 0.05, pathWidth: 1.5, pathDraw: 1, pathFade: 0.4, pathRainbow: 2 } },
-  { name: "Square burst", shape: 1, values: { pathArms: 24, pathSteps: 64, pathStep: 0.012, pathTurn: 90, pathRadius: 0.08, pathWidth: 1.5, pathDraw: [0.1, 1], pathFade: 0.2, pathRainbow: 1 } }
-];
-
-/** Sets the path and the preset's settings. A setting that the preset does not name goes back to its default ("defaults"), so a preset looks the same each time. */
-export function applyPathPreset(params: Params, state: PlayState, preset: PathPreset, defaults: Params) {
-  state.pathShape = preset.shape;
-  for (const key of PATH_PRESET_KEYS) {
-    const given = preset.values[key] ?? defaults[key].value;
-    if (typeof given === "number") Object.assign(params[key], { value: given, on: false, custom: false });
-    else Object.assign(params[key], { value: given[1], low: given[0], high: given[1], on: true, custom: false });
-  }
 }

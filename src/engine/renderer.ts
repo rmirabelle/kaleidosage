@@ -801,6 +801,9 @@ export interface FrameValues {
   pathPicture: number;
   pathBackground: number;
   pathRotation: number;
+  /** Turn and Tilt in radians (see paths.ts). */
+  pathYaw: number;
+  pathTilt: number;
   pathX: number;
   pathY: number;
   /**
@@ -2991,7 +2994,7 @@ export class KaleidoRenderer {
     }
     const count = writePathInstances(this.cycleInstances, capacity, {
       shape: v.pathShape, arms: v.pathArms, steps: v.pathSteps, step: v.pathStep, turn: v.pathTurn, radius: v.pathRadius,
-      width: v.pathWidth / 1080, draw: v.pathDraw, fade: v.pathFade, hue: v.pathHue, rainbow: v.pathRainbow, rotation: v.pathRotation,
+      width: v.pathWidth / 1080, draw: v.pathDraw, fade: v.pathFade, hue: v.pathHue, rainbow: v.pathRainbow, rotation: v.pathRotation, yaw: v.pathYaw, tilt: v.pathTilt,
       x: width / height * 0.5 + v.pathX, y: 0.5 + v.pathY
     });
     this.drawLineLayer(count, capacity, width, height, (d) => gl.uniform1f(d.uniforms.u_gradient, 0));

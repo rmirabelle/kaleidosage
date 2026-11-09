@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { INSTANCE_FLOATS } from "./cycles";
-import { createParams, createPlayState } from "./params";
-import { MAX_PATH_ARMS, MAX_PATH_STEPS, PATH_PRESETS, applyPathPreset, pathSegments, writePathInstances, type PathSettings } from "./paths";
+import { MAX_PATH_ARMS, MAX_PATH_STEPS, pathSegments, writePathInstances, type PathSettings } from "./paths";
 
 const QUARTER = Math.PI / 2;
-const base: PathSettings = { shape: 1, arms: 1, steps: 4, step: 1, turn: QUARTER, radius: 0, width: 0.01, draw: 1, fade: 0, hue: 0, rainbow: 0, rotation: 0, x: 0, y: 0 };
+const base: PathSettings = { shape: 1, arms: 1, steps: 4, step: 1, turn: QUARTER, radius: 0, width: 0.01, draw: 1, fade: 0, hue: 0, rainbow: 0, rotation: 0, yaw: 0, tilt: 0, x: 0, y: 0 };
 const instances = (settings: Partial<PathSettings>, max = 20000) => {
   const out = new Float32Array(max * INSTANCE_FLOATS);
   return { out, count: writePathInstances(out, max, { ...base, ...settings }) };
@@ -84,29 +83,24 @@ describe("Light Paths", () => {
     expect(pathSegments(0, 0)).toBe(1);
   });
 
-  it("has only presets inside the sliders' limits", () => {
-    const params = createParams();
-    for (const { values } of PATH_PRESETS) {
-      for (const [key, given] of Object.entries(values)) {
-        const { min, max } = params[key as keyof typeof params];
-        for (const value of [given].flat()) {
-          expect(value).toBeGreaterThanOrEqual(min);
-          expect(value).toBeLessThanOrEqual(max);
-        }
-      }
-    }
+  it("seen edge on after a Turn of 90 degrees, the arm has no width on the screen", () => {
+    const { out } = instances({ steps: 1, yaw: QUARTER });
+    expect(end(out, 0)[0]).toBeCloseTo(0);
   });
 
-  it("applies a preset, with its ranges playing and its other settings at their defaults", () => {
-    const params = createParams();
-    const state = createPlayState();
-    params.pathRotation.value = 123;
-    params.pathAmount.value = 0.4;
-    applyPathPreset(params, state, PATH_PRESETS[4], createParams());
-    expect(state.pathShape).toBe(0);
-    expect(params.pathArms.value).toBe(36);
-    expect(params.pathTurn).toMatchObject({ low: 40, high: 120, on: true });
-    expect(params.pathRotation.value).toBe(0);
-    expect(params.pathAmount.value).toBe(0.4);
+  it("shows the far side of a Turn smaller, and the near side larger", () => {
+    const turned = (arm: number) => end(instances({ arms: 2, steps: 1, step: 1, shape: 3, radius: 0, yaw: Math.PI / 4 }).out, arm)[0];
+    expect(Math.abs(turned(0))).toBeLessThan(Math.abs(turned(1)));
+  });
+
+  it("flattens the height with a Tilt of 90 degrees, and a point that leans near looks larger", () => {
+    const { out } = instances({ arms: 1, steps: 2, tilt: QUARTER });
+    expect(end(out, 1)[0]).toBeCloseTo(1.5);
+    expect(end(out, 1)[1]).toBeCloseTo(0);
+  });
+
+  it("does not draw lines at or behind the eye", () => {
+    expect(instances({ arms: 1, steps: 1, step: 10, shape: 3, yaw: Math.PI }).count).toBe(1);
+    expect(instances({ arms: 1, steps: 1, step: 10, shape: 3, yaw: -QUARTER }).count).toBe(0);
   });
 });

@@ -13,10 +13,6 @@ for the first version).
 
 ## Menus
 
-- **Preset**: sets the Path and the shape, Draw and color sliders once. A
-  preset is not a mode: the menu goes back to Choose... after each pick.
-  Greek sun, Circuit board, Spiral flower, Turning web, Zigzag bloom, Square
-  burst.
 - **Path**: Zigzag, Square wave, Greek key, Spiral, Flower, Circuit. Each
   path is a list of moves in `paths.ts` (`PLANS`): how many Step lengths to
   go, then how many Turn angles to turn.
@@ -34,6 +30,7 @@ for the first version).
 | Width | The line width, in pixels at 1080p. |
 | Draw | How much of each arm shows, from the center. It starts as a range, so the lines grow and go back. |
 | Fade | How much dimmer the far end of each arm is. |
+| Turn, Tilt | The whole pattern turns in 3D around its upright line, then leans around its level line, seen with perspective from 3 screen heights away. A part nearer than 0.05 to the eye is not drawn. Width stays the same at any depth. |
 | Color | The color at the center. |
 | Rainbow | How many times around the color wheel the color goes along an arm. |
 | Picture color | How much the lines take the color of the picture under them. With Background 0, the picture shows only through the lines. |

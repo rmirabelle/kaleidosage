@@ -1767,6 +1767,8 @@ export class Engine {
       pathPicture: this.live("pathPicture"),
       pathBackground: this.live("pathBackground"),
       pathRotation: this.live("pathRotation") * DEGREES,
+      pathYaw: this.live("pathYaw") * DEGREES,
+      pathTilt: this.live("pathTilt") * DEGREES,
       pathX: this.live("pathX"),
       pathY: this.live("pathY"),
       outlines: on.outlines ? this.live("outlineAmount") : 0,
