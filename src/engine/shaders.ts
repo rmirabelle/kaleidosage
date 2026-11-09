@@ -4753,9 +4753,10 @@ void main() {
 }`;
 
 /**
- * Light Cycles, step 3: the lines (premultiplied, see CYCLE_SHADER) over the
- * picture, which is dimmed by u_background, with the blend mode u_blend
- * (see blendLayer), at u_opacity.
+ * Light Cycles and Light Paths, step 3: the lines (premultiplied, see
+ * CYCLE_SHADER) over the picture, which is dimmed by u_background, with the
+ * blend mode u_blend (see blendLayer), at u_opacity. u_pictureColor (Light
+ * Paths) gives the lines the color of the picture under them.
  */
 export const CYCLE_MIX_SHADER = `#version 300 es
 precision highp float;
@@ -4765,6 +4766,7 @@ uniform sampler2D u_picture;
 uniform sampler2D u_lines;
 uniform float u_background;
 uniform float u_opacity;
+uniform float u_pictureColor;
 uniform int u_blend;
 /* The same layer blends as the shape steps' (see blendLayer in KALEIDO_SHADER). */
 vec3 blendLayer(vec3 base, vec3 top, int mode) {
@@ -4784,6 +4786,7 @@ void main() {
   vec3 base = straight(picture) * u_background;
   vec4 lines = texture(u_lines, v_uv);
   vec3 top = lines.a > 0.0 ? lines.rgb / lines.a : vec3(0.0);
+  top = mix(top, straight(picture), u_pictureColor);
   float mark = lines.a * u_opacity;
   o = covered(mix(base, blendLayer(base, top, u_blend), mark), mix(picture.a, 1.0, mark));
 }`;

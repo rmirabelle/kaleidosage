@@ -1,5 +1,7 @@
 import type { BlendMode, BlurMask, BubbleShadow, BubbleShape, CameraColors, CameraHeightSource, CameraRepeat, ColorFill, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidPaint, SolidShape, SolidWrap, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, MaskMode, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
 
+import type { PathShape } from "./paths";
+
 export const PARAM_KEYS = [
   "cycle",
   "imageBlend",
@@ -33,7 +35,8 @@ export const PARAM_KEYS = [
   "outlineSpin", "outlineTumble",
   "maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY",
   "colorAngle", "colorShift", "colorRepeat", "colorSize", "colorStretch", "colorTurn", "colorX", "colorY",
-  "bubbleAmount", "bubbleSize", "bubbleBackground", "bubbleDepth", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments", "bubbleInner", "bubbleShadowStrength", "bubbleShadowWidth", "bubbleShadowSoftness", "bubbleRotation"
+  "bubbleAmount", "bubbleSize", "bubbleBackground", "bubbleDepth", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments", "bubbleInner", "bubbleShadowStrength", "bubbleShadowWidth", "bubbleShadowSoftness", "bubbleRotation",
+  "pathAmount", "pathArms", "pathSteps", "pathStep", "pathTurn", "pathRadius", "pathWidth", "pathDraw", "pathFade", "pathHue", "pathRainbow", "pathPicture", "pathBackground", "pathRotation", "pathX", "pathY"
 ] as const;
 export type ParamKey = typeof PARAM_KEYS[number];
 
@@ -263,7 +266,7 @@ export type Params = Record<ParamKey, Param>;
 export type ContourTone = "hue" | "black" | "white";
 export const CONTOUR_TONES: readonly ContourTone[] = ["hue", "black", "white"];
 
-export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble";
+export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "paths" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble";
 
 export interface PlayState {
   /** Which groups are on. A group that is off has no effect, but keeps its settings. */
@@ -363,6 +366,9 @@ export interface PlayState {
   cyclesBlend: LayerBlend;
   /** How the lasers' light goes onto the picture; Add (7) adds it as light, with no limit, so Bloom can pick it up. */
   laserBlend: LayerBlend;
+  /** Light Paths: the path every arm follows, and how the lines go onto the picture (Add, 7, at the start). */
+  pathShape: PathShape;
+  pathBlend: LayerBlend;
   cyclesPaint: CyclePaint;
   cyclesStops: GradientStop[];
   /**
@@ -944,6 +950,27 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   laserX: { label: "Source X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.3, high: 0.3, on: false },
   laserY: { label: "Source Y", min: -0.5, max: 0.5, step: 0.01, value: 0.2, drift: "wave", low: -0.5, high: -0.3, on: false },
   /**
+   * Light Paths (see paths.ts): the lines go out from one point. Opacity
+   * starts at 0, as the other effects' do; adding the effect sets it to 1.
+   * Draw starts as a range, so the lines grow out from the center at once.
+   */
+  pathAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
+  pathArms: { label: "Arms", min: 1, max: 180, step: 1, value: 12, drift: "wave", low: 6, high: 32, on: false },
+  pathSteps: { label: "Steps", min: 1, max: 512, step: 1, value: 60, drift: "wave", low: 20, high: 120, on: false },
+  pathStep: { label: "Step length", min: 0.002, max: 0.2, step: 0.0005, scale: "log", value: 0.012, drift: "wave", low: 0.008, high: 0.02, on: false },
+  pathTurn: { label: "Turn angle", min: 0, max: 180, step: 0.1, value: 90, unit: "°", drift: "wave", low: 85, high: 95, on: false },
+  pathRadius: { label: "Start radius", min: 0, max: 0.5, step: 0.005, value: 0.12, drift: "wave", low: 0.02, high: 0.2, on: false },
+  pathWidth: { label: "Width", min: 0.5, max: 12, step: 0.1, value: 1.5, unit: "px", drift: "wave", low: 1, high: 3, on: false },
+  pathDraw: { label: "Draw", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0.1, high: 1, on: true },
+  pathFade: { label: "Fade", min: 0, max: 1, step: 0.01, value: 0.2, drift: "wave", low: 0, high: 0.6, on: false },
+  pathHue: { label: "Color", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  pathRainbow: { label: "Rainbow", min: 0, max: 4, step: 0.01, value: 1, drift: "wave", low: 0, high: 2, on: false },
+  pathPicture: { label: "Picture color", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 1, on: false },
+  pathBackground: { label: "Background", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0, high: 1, on: false },
+  pathRotation: { label: "Rotation", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  pathX: { label: "Center X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
+  pathY: { label: "Center Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
+  /**
    * Light shapes (see OUTLINE_SHADER): glowing outlines that draw
    * themselves. Count copies, each smaller by Spacing and later in the draw
    * by Delay (a part of a draw). Draw time is the seconds for one draw;
@@ -1102,7 +1129,7 @@ export function createParams(): Params {
 
 /** The start-up orders: the fold, then the map bends the folded picture, then the warp; and blur, trails, time smear, contours, relief, driver, camera, 3D object, pixel sort, particles, light cycles, light rays, lasers, bloom, final effects. */
 export const defaultShapeOrder = (): ShapeStep[] => ["kaleidoscope", "map", "warp"];
-export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble"];
+export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "paths", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble"];
 export const defaultFxOrder = (): FxStep[] => [...defaultShapeOrder(), ...defaultPictureOrder()];
 
 /**
@@ -1149,6 +1176,7 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
     case "cycles": return used("cyclesAmount");
     case "rays": return used("raysAmount");
     case "lasers": return used("laserAmount");
+    case "paths": return used("pathAmount");
     case "outlines": return used("outlineAmount");
     case "mask": return used("maskAmount");
     case "bubble": return used("bubbleAmount");
@@ -1164,9 +1192,9 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
 export function createPlayState(): PlayState {
   return {
     /* No effect is in the list at start-up, so every effect group is off. */
-    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false },
-    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false },
+    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false },
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, pathShape: 2, pathBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1550,6 +1578,10 @@ const GROUP_MODES: Partial<Record<GroupKey, (state: PlayState, fresh: PlayState)
   },
   sort: (state, fresh) => { state.sortOrder = fresh.sortOrder; },
   lasers: (state, fresh) => { state.laserBlend = fresh.laserBlend; },
+  paths: (state, fresh) => {
+    state.pathShape = fresh.pathShape;
+    state.pathBlend = fresh.pathBlend;
+  },
   picture: (state, fresh) => { state.pictureBlend = fresh.pictureBlend; },
   particles: (state, fresh) => {
     state.particleBlend = fresh.particleBlend;
@@ -1656,6 +1688,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   rays: ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"],
   picture: ["pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn", "pictureKey"],
   lasers: ["laserAmount", "laserOpacity", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"],
+  paths: ["pathAmount", "pathArms", "pathSteps", "pathStep", "pathTurn", "pathRadius", "pathWidth", "pathDraw", "pathFade", "pathHue", "pathRainbow", "pathPicture", "pathBackground", "pathRotation", "pathX", "pathY"],
   outlines: ["outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineInner", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"],
   mask: ["maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY"],
   bubble: ["bubbleAmount", "bubbleBackground", "bubbleDepth", "bubbleSize", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments", "bubbleInner", "bubbleShadowStrength", "bubbleShadowWidth", "bubbleShadowSoftness", "bubbleRotation"],
@@ -1689,6 +1722,7 @@ const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   picture: ["pictureBlend"],
   cycles: ["cyclesMove", "cyclesBlend", "cyclesPaint"],
   lasers: ["laserBlend"],
+  paths: ["pathShape", "pathBlend"],
   solid: ["solidShape", "solidMap", "solidWrap", "solidBlend"],
   driver: ["driverSource", "driverMode"],
   color: ["overlayColor", "colorBlend", "colorFill", "colorStops"]
@@ -1710,11 +1744,11 @@ export function randomizeGroup(params: Params, state: PlayState, group: GroupKey
 }
 
 /** The settings named Opacity: Randomize shows every effect fully. */
-const FULL_OPACITY: readonly ParamKey[] = ["warpOpacity", "mapOpacity", "foldOpacity", "smearAmount", "contourOpacity", "cameraAmount", "viewAmount", "sortAmount", "particleAmount", "cyclesAmount", "solidAmount", "driverAmount", "laserOpacity", "bubbleAmount", "pictureAmount"];
+const FULL_OPACITY: readonly ParamKey[] = ["warpOpacity", "mapOpacity", "foldOpacity", "smearAmount", "contourOpacity", "cameraAmount", "viewAmount", "sortAmount", "particleAmount", "cyclesAmount", "solidAmount", "driverAmount", "laserOpacity", "bubbleAmount", "pictureAmount", "pathAmount"];
 
 /** The chance that Randomize puts each effect in the list. Blur looks the least good, so Randomize leaves it out. */
 const EFFECT_CHANCE: Record<FxStep, number> = {
-  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.25, relief: 0.4, driver: 0.3, terrain: 0.3, camera: 0, solid: 0.2, sort: 0.2, particles: 0.25, cycles: 0.25, rays: 0.25, lasers: 0.15, bloom: 0.3, sharpen: 0.3, color: 0.15, levels: 0.25,
+  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.25, relief: 0.4, driver: 0.3, terrain: 0.3, camera: 0, solid: 0.2, sort: 0.2, particles: 0.25, cycles: 0.25, rays: 0.25, lasers: 0.15, paths: 0.15, bloom: 0.3, sharpen: 0.3, color: 0.15, levels: 0.25,
   /* An overlay needs an image or a video that the user picks. */
   picture: 0,
   outlines: 0.15,
@@ -2094,4 +2128,22 @@ function randomizeAll(params: Params, state?: PlayState) {
   /* Hollow: 0 solid, above 0 open windows, below 0 windows turned over (see starMesh barSize). */
   const hollow = Math.random();
   set("solidHollow", hollow < 0.6 ? 0 : hollow < 0.88 ? rand(0.3, 1) : rand(-1, -0.3), rand(0, 0.2));
+  /* Light Paths, last for the same reason. The effect list above picks whether it shows. */
+  if (state && !state.locks.paths) {
+    state.pathShape = Math.floor(Math.random() * 6) as PathShape;
+    state.pathBlend = 7;
+  }
+  set("pathAmount", 1);
+  params.pathAmount.on = false;
+  set("pathArms", Math.round(rand(6, 48)), 0);
+  set("pathSteps", Math.round(rand(20, 120)), 0);
+  set("pathStep", rand(0.008, 0.03), rand(0, 0.004));
+  set("pathTurn", [45, 60, 72, 90, 90, 120, 144][Math.floor(Math.random() * 7)], rand(0, 4));
+  set("pathRadius", rand(0.02, 0.2), rand(0, 0.04));
+  set("pathWidth", rand(1, 3), rand(0, 0.5));
+  set("pathDraw", 0.55, 0.45);
+  set("pathFade", rand(0, 0.6), rand(0, 0.1));
+  setAngle("pathHue", 0.3);
+  set("pathRainbow", rand(0, 2), rand(0, 0.3));
+  set("pathRotation", 0);
 }

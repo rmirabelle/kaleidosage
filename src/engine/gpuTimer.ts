@@ -3,7 +3,7 @@
  * it shows about their average. "screen" is the mesh 3D Object's last copy
  * onto the screen, timed apart from its own work (see drawMesh).
  */
-export type PassName = "screen" | "fold" | "refold" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "outlines" | "mask" | "bubble" | "bloom" | "sharpen" | "color" | "levels" | "picture";
+export type PassName = "screen" | "fold" | "refold" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "paths" | "outlines" | "mask" | "bubble" | "bloom" | "sharpen" | "color" | "levels" | "picture";
 
 interface TimerExtension {
   TIME_ELAPSED_EXT: number;
