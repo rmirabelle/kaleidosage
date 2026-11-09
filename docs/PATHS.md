@@ -29,7 +29,7 @@ for the first version).
 | Arms | How many copies of the path go around the center. |
 | Steps | How many moves each arm has. |
 | Step length | The length of one move, in screen heights. |
-| Turn angle | The turn after each move. The paths are made for 90°, but every angle gives a shape. |
+| Turn angle | The turn after each move. The paths are made for 90°, but every angle gives a shape. The handles snap to 45°, 90° and 135°. |
 | Start radius | How far from the center each arm starts. It keeps the center from being a dense knot. |
 | Width | The line width, in pixels at 1080p. |
 | Draw | How much of each arm shows, from the center. It starts as a range, so the lines grow and go back. |

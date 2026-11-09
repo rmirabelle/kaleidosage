@@ -111,7 +111,8 @@ const WHOLE_SNAP_KEYS: ParamKey[] = ["drosteSpirals", "segments", "bubbleSegment
  * mark. The values between still work. The usual lens lengths of a 35 mm
  * camera; the Moravian star's whole shapes (between them it fades from one
  * to the next), and its Point length 0.6 (8 points make the exact Merkaba,
- * two tetrahedra); Tilt every 30°; Tiles at the whole repeats (and a half).
+ * two tetrahedra); Tilt every 30°; Tiles at the whole repeats (and a half);
+ * Light paths' Turn angle every 45°.
  */
 const VALUE_SNAPS: Partial<Record<ParamKey, number[]>> = {
   cameraLens: [14, 18, 24, 35, 50, 85, 135, 200],
@@ -120,7 +121,8 @@ const VALUE_SNAPS: Partial<Record<ParamKey, number[]>> = {
   cameraTilt: [-90, -60, -30, 30, 60],
   solidTilt: [-90, -60, -30, 30, 60, 90],
   solidTiles: [0.5, 1, 2, 3, 4, 6, 8],
-  solidRepeats: [0.5, 1, 2, 3, 4, 6, 8, 12, 16]
+  solidRepeats: [0.5, 1, 2, 3, 4, 6, 8, 12, 16],
+  pathTurn: [45, 90, 135]
 };
 
 /** An angle setting that spans a whole turn (0 to 360°, or -180 to 180°). */
