@@ -652,6 +652,8 @@ export interface FrameValues {
   solidLight: number;
   solidShading: number;
   solidShine: number;
+  /** Bump: the picture's gray level as the surface's height for the light, -1 to 1 (see bumped in SOLID_PAINT_GLSL). */
+  solidRelief: number;
   solidShadow: number;
   solidX: number;
   solidY: number;
@@ -2431,6 +2433,7 @@ export class KaleidoRenderer {
     gl.uniform3f(s.uniforms.u_light, light[0] / length, light[1] / length, light[2] / length);
     gl.uniform1f(s.uniforms.u_shading, Math.min(1, Math.max(0, v.solidShading)));
     gl.uniform1f(s.uniforms.u_shine, Math.min(1, Math.max(0, v.solidShine)));
+    gl.uniform1f(s.uniforms.u_bump, Math.min(1, Math.max(-1, v.solidRelief)));
     gl.uniform1f(s.uniforms.u_shadow, Math.min(1, Math.max(0, v.solidShadow)));
   }
 

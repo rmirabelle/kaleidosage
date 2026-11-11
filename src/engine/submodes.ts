@@ -145,7 +145,7 @@ export const CYCLE_PAINT_KEYS: Record<CyclePaint, ParamKey[]> = {
 export const CYCLE_PAINTS = [[0, "Cycle"], [1, "Trail"], [2, "Position, linear"], [3, "Position, radial"]] as const;
 
 /** The 3D Object's sliders, in panel order. Roundness and the map's own sliders show only where they do something (see SOLID_SHAPE_KEYS and SOLID_MAP_KEYS). */
-export const SOLID_KEYS: readonly ParamKey[] = ["solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidPoints", "solidPointLength", "solidHollow", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidTiles", "solidRepeats", "solidBend", "solidFrost", "solidLight", "solidShading", "solidShine", "solidShadow", "solidBackground", "solidX", "solidY", "solidAmount"];
+export const SOLID_KEYS: readonly ParamKey[] = ["solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidPoints", "solidPointLength", "solidHollow", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidTiles", "solidRepeats", "solidBend", "solidFrost", "solidLight", "solidShading", "solidShine", "solidRelief", "solidShadow", "solidBackground", "solidX", "solidY", "solidAmount"];
 /**
  * Each shape's own sliders. The sphere and Morph have no edges to round;
  * for the blobs Roundness is how softly they merge, for the spike ball how

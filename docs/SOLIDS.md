@@ -82,6 +82,7 @@ picture.
 | Light angle | The direction the light comes from, around the shape. |
 | Shading | How dark the side away from the light is. 0 is flat, with no light and shade. |
 | Shine | A bright highlight where the light reflects toward the viewer. |
+| Bump | The picture's gray level as the height of the surface, for the light only (added 2026-11-11): above 0 the bright parts stand out, below 0 they go in. The shape and its outline do not change. Shading and Shine show it; with Project it makes the glass uneven, and with Mirror it dents the chrome. The height is the picture as Wrap lays it on the surface (with Tiles), for every Map, so the bumps turn with the shape. |
 | Frost | Project only: frosted glass. The picture through the shape gets soft, grainy and a little milky (0 = clear glass). |
 | Shadow | A soft shadow of the shape on the picture behind it. |
 | Background | The picture behind the shape: 1 shows it whole, 0 shows black. |

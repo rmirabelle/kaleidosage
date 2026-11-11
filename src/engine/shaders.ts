@@ -4924,7 +4924,7 @@ vec3 wrapAt(vec3 q, vec3 n) {
 /**
  * The 3D Object's color at a point of its surface (q in the shape's own
  * frame, n the normal and rd the ray in the view, uv the pixel's place):
- * the picture by Map, then the light and the shine. The ray shader
+ * the picture by Map, then the light and the shine, both with Bump. The ray shader
  * (SOLID_SHADER) and the mesh shader (SOLID_MESH_SHADER) share it; each
  * has its own wrapAt, fold and readAt before it.
  */
@@ -4949,8 +4949,36 @@ uniform bool u_turnCopy;
  * past its edges.
  */
 uniform float u_repeats;
+/**
+ * Bump (added 2026-11-11): the picture's gray level is the height of the
+ * surface, for the light only: the shape and its outline do not change.
+ * Above 0 the bright parts stand out, below 0 they go in. The height is the
+ * picture as Wrap lays it on the surface (with Tiles), for every Map, so
+ * the bumps turn with the shape.
+ */
+uniform float u_bump;
 
-vec3 paint(vec3 q, vec3 n, vec3 rd, vec2 uv) {
+/**
+ * The surface direction with Bump (q in the shape's frame, n in the view).
+ * The gray level is read a small step (about 4 pixels of a shape of the
+ * usual size) to each side along two directions that lie in the surface;
+ * the direction leans away from the side where the picture gets brighter.
+ */
+vec3 bumped(vec3 q, vec3 n) {
+  if (abs(u_bump) < 0.001) return n;
+  const vec3 GRAY = vec3(0.2126, 0.7152, 0.0722);
+  const float REACH = 0.012;
+  vec3 own = transpose(u_turn) * n;
+  vec3 t1 = normalize(cross(abs(own.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), own));
+  vec3 t2 = cross(own, t1);
+  float slope1 = dot(wrapAt(q + t1 * REACH, own) - wrapAt(q - t1 * REACH, own), GRAY);
+  float slope2 = dot(wrapAt(q + t2 * REACH, own) - wrapAt(q - t2 * REACH, own), GRAY);
+  return u_turn * normalize(own - (t1 * slope1 + t2 * slope2) * (u_bump * 0.15 / (2.0 * REACH)));
+}
+
+vec3 paint(vec3 q, vec3 surface, vec3 rd, vec2 uv) {
+  /* Wrap lays the picture by the surface's own direction; the lens, the reflection and the light take the direction with Bump. */
+  vec3 n = bumped(q, surface);
   vec3 color;
   if (u_map == 1) {
     vec3 bent = u_turnCopy ? transpose(u_turn) * n : n;
@@ -4985,7 +5013,7 @@ vec3 paint(vec3 q, vec3 n, vec3 rd, vec2 uv) {
     vec2 ball = vec2(abs(atan(r.x, -r.z)) / PI - 1.0, asin(clamp(r.y, -1.0, 1.0)) / PI);
     color = straight(textureLod(u_tex, fold(vec2(1.0, 0.5) + ball * u_repeats), 0.0));
   } else {
-    color = wrapAt(q, transpose(u_turn) * n);
+    color = wrapAt(q, transpose(u_turn) * surface);
   }
   float lit = mix(1.0, 0.18 + 0.82 * max(dot(n, u_light), 0.0), u_shading);
   float shine = pow(max(dot(reflect(-u_light, n), -rd), 0.0), 40.0) * u_shine;
