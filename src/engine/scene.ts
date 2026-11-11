@@ -1,4 +1,4 @@
-import { CONTOUR_TONES, EASES, MAX_CUSTOM_SECONDS, MAX_GRADIENT_STOPS, PARAM_KEYS, REFERENCE_CYCLE, defaultColorStops, defaultCycleStops, defaultTerrainStops, defaultFxOrder, defaultOutlineStops, defaultMaskStops, defaultGradientStops, defaultPictureOrder, defaultShapeOrder, effectShows, lensFocal, type ContourTone, type Ease, type GradientStop, type GroupKey, type Param, type Params, type PlayState } from "./params";
+import { CONTOUR_TONES, EASES, MAX_CUSTOM_SECONDS, MAX_GRADIENT_STOPS, PARAM_KEYS, REFERENCE_CYCLE, SPIRO_HOLE_KEYS, defaultColorStops, defaultCycleStops, defaultTerrainStops, defaultFxOrder, defaultOutlineStops, defaultMaskStops, defaultGradientStops, defaultPictureOrder, defaultShapeOrder, effectShows, lensFocal, type ContourTone, type Ease, type GradientStop, type GroupKey, type Param, type Params, type PlayState } from "./params";
 import { isShapeStep, type FxStep } from "./renderer";
 import { readSound, soundList } from "./audio";
 import { defaultSpiroWheels, readSpiroWheels } from "./spiro";
@@ -404,6 +404,16 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   state.pathShape = mode(saved.pathShape, [0, 1, 2, 3, 4, 5] as const) ?? state.pathShape;
   state.pathBlend = mode(saved.pathBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? state.pathBlend;
   state.spiroWheels = readSpiroWheels(saved.spiroWheels) ?? defaultSpiroWheels();
+  /* Scenes from the first Spirograph (2026-11-11) kept each hole in its wheel, with no sliders. */
+  if (Array.isArray(saved.spiroWheels)) {
+    saved.spiroWheels.slice(0, SPIRO_HOLE_KEYS.length).forEach((wheel: unknown, index: number) => {
+      if (!isRecord(wheel)) return;
+      SPIRO_HOLE_KEYS[index].forEach((key, axis) => {
+        const place = wheel[axis === 0 ? "x" : "y"];
+        if (!isRecord(savedParams[key]) && isNumber(place)) params[key].value = clamp(place, -1, 1);
+      });
+    });
+  }
   state.spiroBlend = mode(saved.spiroBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? state.spiroBlend;
   state.cyclesPaint = mode(saved.cyclesPaint, [0, 1, 2, 3] as const) ?? state.cyclesPaint;
   state.cyclesStops = readGradientStops(saved.cyclesStops) ?? defaultCycleStops();

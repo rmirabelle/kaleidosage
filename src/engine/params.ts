@@ -1,7 +1,7 @@
 import type { BlendMode, BlurMask, BubbleShadow, BubbleShape, CameraColors, CameraHeightSource, CameraRepeat, ColorFill, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidPaint, SolidShape, SolidWrap, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, MaskMode, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
 
 import type { PathShape } from "./paths";
-import { defaultSpiroWheels, randomSpiroWheels, type SpiroWheel } from "./spiro";
+import { MAX_SPIRO_WHEELS, defaultSpiroWheels, randomSpiroWheels, type SpiroWheelSpec } from "./spiro";
 
 export const PARAM_KEYS = [
   "cycle",
@@ -38,9 +38,20 @@ export const PARAM_KEYS = [
   "colorAngle", "colorShift", "colorRepeat", "colorSize", "colorStretch", "colorTurn", "colorX", "colorY",
   "bubbleAmount", "bubbleSize", "bubbleBackground", "bubbleDepth", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments", "bubbleInner", "bubbleShadowStrength", "bubbleShadowWidth", "bubbleShadowSoftness", "bubbleRotation",
   "pathAmount", "pathArms", "pathSteps", "pathStep", "pathTurn", "pathRadius", "pathWidth", "pathDraw", "pathFade", "pathHue", "pathRainbow", "pathPicture", "pathBackground", "pathRotation", "pathX", "pathY", "pathYaw", "pathTilt",
-  "spiroAmount", "spiroRing", "spiroSize", "spiroWidth", "spiroDraw", "spiroPicture", "spiroBackground", "spiroRotation", "spiroYaw", "spiroTilt", "spiroX", "spiroY"
+  "spiroAmount", "spiroRing", "spiroSize", "spiroWidth", "spiroDraw", "spiroPicture", "spiroBackground", "spiroRotation", "spiroYaw", "spiroTilt", "spiroX", "spiroY",
+  "spiroHoleX1", "spiroHoleX2", "spiroHoleX3", "spiroHoleX4", "spiroHoleX5", "spiroHoleX6", "spiroHoleY1", "spiroHoleY2", "spiroHoleY3", "spiroHoleY4", "spiroHoleY5", "spiroHoleY6"
 ] as const;
 export type ParamKey = typeof PARAM_KEYS[number];
+
+/** The two sliders of each Spirograph wheel's pen hole, X then Y, in the order of the wheels. */
+export const SPIRO_HOLE_KEYS: readonly (readonly [ParamKey, ParamKey])[] = [
+  ["spiroHoleX1", "spiroHoleY1"],
+  ["spiroHoleX2", "spiroHoleY2"],
+  ["spiroHoleX3", "spiroHoleY3"],
+  ["spiroHoleX4", "spiroHoleY4"],
+  ["spiroHoleX5", "spiroHoleY5"],
+  ["spiroHoleX6", "spiroHoleY6"]
+];
 
 /**
  * One adjustable value. "value" is the slider value when drift is off.
@@ -371,8 +382,8 @@ export interface PlayState {
   /** Light Paths: the path every arm follows, and how the lines go onto the picture (Add, 7, at the start). */
   pathShape: PathShape;
   pathBlend: LayerBlend;
-  /** Spirograph (see spiro.ts): the wheels, each with its shape, teeth, hole and color, and how the lines go onto the picture (Add, 7, at the start). */
-  spiroWheels: SpiroWheel[];
+  /** Spirograph (see spiro.ts): the wheels, each with its shape, teeth and color (its hole is two sliders, see SPIRO_HOLE_KEYS), and how the lines go onto the picture (Add, 7, at the start). */
+  spiroWheels: SpiroWheelSpec[];
   spiroBlend: LayerBlend;
   cyclesPaint: CyclePaint;
   cyclesStops: GradientStop[];
@@ -996,6 +1007,23 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   spiroTilt: { label: "Tilt", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "spin", low: -180, high: 180, on: false },
   spiroX: { label: "Center X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   spiroY: { label: "Center Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
+  /**
+   * The pen hole of each Spirograph wheel, from the wheel's center: 1 is
+   * the distance to the farthest point of the wheel's edge, X to the right
+   * and Y up. A wheel that is not in the list does not use its two sliders.
+   */
+  spiroHoleX1: { label: "Wheel 1 hole X", min: -1, max: 1, step: 0.01, value: 0.7, drift: "wave", low: 0.2, high: 0.9, on: false },
+  spiroHoleX2: { label: "Wheel 2 hole X", min: -1, max: 1, step: 0.01, value: 0.55, drift: "wave", low: 0.2, high: 0.9, on: false },
+  spiroHoleX3: { label: "Wheel 3 hole X", min: -1, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.2, high: 0.9, on: false },
+  spiroHoleX4: { label: "Wheel 4 hole X", min: -1, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.2, high: 0.9, on: false },
+  spiroHoleX5: { label: "Wheel 5 hole X", min: -1, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.2, high: 0.9, on: false },
+  spiroHoleX6: { label: "Wheel 6 hole X", min: -1, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.2, high: 0.9, on: false },
+  spiroHoleY1: { label: "Wheel 1 hole Y", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.5, high: 0.5, on: false },
+  spiroHoleY2: { label: "Wheel 2 hole Y", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.5, high: 0.5, on: false },
+  spiroHoleY3: { label: "Wheel 3 hole Y", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.5, high: 0.5, on: false },
+  spiroHoleY4: { label: "Wheel 4 hole Y", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.5, high: 0.5, on: false },
+  spiroHoleY5: { label: "Wheel 5 hole Y", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.5, high: 0.5, on: false },
+  spiroHoleY6: { label: "Wheel 6 hole Y", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.5, high: 0.5, on: false },
   /**
    * Light shapes (see OUTLINE_SHADER): glowing outlines that draw
    * themselves. Count copies, each smaller by Spacing and later in the draw
@@ -1720,7 +1748,8 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   picture: ["pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn", "pictureKey"],
   lasers: ["laserAmount", "laserOpacity", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"],
   paths: ["pathAmount", "pathArms", "pathSteps", "pathStep", "pathTurn", "pathRadius", "pathWidth", "pathDraw", "pathFade", "pathHue", "pathRainbow", "pathPicture", "pathBackground", "pathRotation", "pathX", "pathY", "pathYaw", "pathTilt"],
-  spiro: ["spiroAmount", "spiroRing", "spiroSize", "spiroWidth", "spiroDraw", "spiroPicture", "spiroBackground", "spiroRotation", "spiroYaw", "spiroTilt", "spiroX", "spiroY"],
+  spiro: ["spiroAmount", "spiroRing", "spiroSize", "spiroWidth", "spiroDraw", "spiroPicture", "spiroBackground", "spiroRotation", "spiroYaw", "spiroTilt", "spiroX", "spiroY",
+  "spiroHoleX1", "spiroHoleX2", "spiroHoleX3", "spiroHoleX4", "spiroHoleX5", "spiroHoleX6", "spiroHoleY1", "spiroHoleY2", "spiroHoleY3", "spiroHoleY4", "spiroHoleY5", "spiroHoleY6"],
   outlines: ["outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineInner", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"],
   mask: ["maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY"],
   bubble: ["bubbleAmount", "bubbleBackground", "bubbleDepth", "bubbleSize", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments", "bubbleInner", "bubbleShadowStrength", "bubbleShadowWidth", "bubbleShadowSoftness", "bubbleRotation"],
@@ -1774,6 +1803,38 @@ export function randomizeGroup(params: Params, state: PlayState, group: GroupKey
   for (const key of GROUP_PARAMS[group]) Object.assign(params[key], scratchParams[key]);
   for (const key of GROUP_STATE[group] ?? []) Object.assign(state, { [key]: scratchState[key] });
   if (group === "warp" || group === "map" || group === "kaleidoscope") state.layerBlend[group] = scratchState.layerBlend[group];
+}
+
+/** The parts of a setting that go with it when it moves to another slider. */
+const MOVED_PARTS = ["value", "low", "high", "on", "ease", "custom", "seconds", "startTime"] as const;
+
+/** Adds a Spirograph wheel at the end of the list, with its hole at the start place. Returns false when the list is full. */
+export function addSpiroWheel(params: Params, state: PlayState, wheel: SpiroWheelSpec): boolean {
+  const index = state.spiroWheels.length;
+  if (index >= MAX_SPIRO_WHEELS) return false;
+  const fresh = createParams();
+  for (const key of SPIRO_HOLE_KEYS[index]) for (const part of MOVED_PARTS) Object.assign(params[key], { [part]: fresh[key][part] });
+  state.spiroWheels = [...state.spiroWheels, { ...wheel }];
+  return true;
+}
+
+/**
+ * Removes the Spirograph wheel at "index". The wheels after it move up, and
+ * each takes its hole sliders with it (values and ranges; MIDI controls and
+ * sound links stay with the slider). The last wheel stays.
+ */
+export function removeSpiroWheel(params: Params, state: PlayState, index: number) {
+  const count = state.spiroWheels.length;
+  if (count <= 1 || index < 0 || index >= count) return;
+  const fresh = createParams();
+  for (let at = index; at < SPIRO_HOLE_KEYS.length; at++) {
+    for (const axis of [0, 1] as const) {
+      const key = SPIRO_HOLE_KEYS[at][axis];
+      const from = at + 1 < SPIRO_HOLE_KEYS.length ? params[SPIRO_HOLE_KEYS[at + 1][axis]] : fresh[key];
+      for (const part of MOVED_PARTS) Object.assign(params[key], { [part]: from[part] });
+    }
+  }
+  state.spiroWheels = state.spiroWheels.filter((_, other) => other !== index);
 }
 
 /** The settings named Opacity: Randomize shows every effect fully. */
@@ -2196,4 +2257,8 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("spiroRotation", 0);
   set("spiroYaw", Math.random() < 0.7 ? 0 : rand(-45, 45), rand(0, 15));
   set("spiroTilt", Math.random() < 0.7 ? 0 : rand(-45, 45), rand(0, 15));
+  for (const [holeX, holeY] of SPIRO_HOLE_KEYS) {
+    set(holeX, rand(0.3, 0.85), rand(0, 0.25));
+    set(holeY, Math.random() < 0.6 ? 0 : rand(-0.5, 0.5), rand(0, 0.25));
+  }
 }

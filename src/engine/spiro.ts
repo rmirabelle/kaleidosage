@@ -8,8 +8,8 @@
  * inner edge, and a wheel has "teeth" around its outer edge. A line closes
  * when the wheel has gone around ring / gcd(ring, teeth) times.
  *
- * Nothing is kept from frame to frame but a cache of the lines, which the
- * settings alone give. Places are in screen heights, with y up, as in
+ * Nothing is kept from frame to frame but a record of how each wheel rolls,
+ * which the settings alone give. Places are in screen heights, with y up, as in
  * cycles.ts.
  */
 import { INSTANCE_FLOATS } from "./cycles";
@@ -18,15 +18,19 @@ import { INSTANCE_FLOATS } from "./cycles";
 export type SpiroShape = 0 | 1 | 2 | 3 | 4 | 5;
 export const SPIRO_SHAPE_VALUES = [0, 1, 2, 3, 4, 5] as const;
 
-/** One wheel: its shape, its size in teeth, the hole's place and the line's color. */
-export interface SpiroWheel {
+/** One wheel as the play state keeps it: its shape, its size in teeth and the line's color. Its hole is two sliders (see SPIRO_HOLE_KEYS in params.ts). */
+export interface SpiroWheelSpec {
   shape: SpiroShape;
   teeth: number;
+  /** "#rrggbb". */
+  color: string;
+}
+
+/** One wheel for one frame: with the hole's place now. */
+export interface SpiroWheel extends SpiroWheelSpec {
   /** The hole, from the wheel's center; 1 is the distance to the farthest point of the wheel's edge. */
   x: number;
   y: number;
-  /** "#rrggbb". */
-  color: string;
 }
 
 export const MAX_SPIRO_WHEELS = 6;
@@ -36,10 +40,10 @@ export const MIN_SPIRO_RING = 48;
 export const MAX_SPIRO_RING = 150;
 
 /** The wheels of a new scene: two wheels of the toy (52 and 63 teeth) in its 96 ring. */
-export function defaultSpiroWheels(): SpiroWheel[] {
+export function defaultSpiroWheels(): SpiroWheelSpec[] {
   return [
-    { shape: 0, teeth: 52, x: 0.7, y: 0, color: "#ff3d7f" },
-    { shape: 0, teeth: 63, x: 0.55, y: 0, color: "#2fb8ff" }
+    { shape: 0, teeth: 52, color: "#ff3d7f" },
+    { shape: 0, teeth: 63, color: "#2fb8ff" }
   ];
 }
 
@@ -47,8 +51,8 @@ export function defaultSpiroWheels(): SpiroWheel[] {
 const TOY_TEETH = [24, 30, 32, 36, 40, 42, 45, 48, 52, 56, 60, 63, 64, 72, 75, 80, 84];
 
 /** One to three random wheels, for Randomize: toy sizes, mostly round, in bright colors. */
-export function randomSpiroWheels(): SpiroWheel[] {
-  const wheels: SpiroWheel[] = [];
+export function randomSpiroWheels(): SpiroWheelSpec[] {
+  const wheels: SpiroWheelSpec[] = [];
   const count = 1 + Math.floor(Math.random() * 3);
   const firstHue = Math.random();
   for (let i = 0; i < count; i++) {
@@ -61,8 +65,6 @@ export function randomSpiroWheels(): SpiroWheel[] {
     wheels.push({
       shape: Math.random() < 0.5 ? 0 : (1 + Math.floor(Math.random() * 5)) as SpiroShape,
       teeth: TOY_TEETH[Math.floor(Math.random() * TOY_TEETH.length)],
-      x: Math.round((0.2 + Math.random() * 0.7) * 100) / 100,
-      y: Math.random() < 0.6 ? 0 : Math.round((Math.random() - 0.5) * 100) / 100,
       color: `#${part(0)}${part(8)}${part(4)}`
     });
   }
@@ -70,15 +72,15 @@ export function randomSpiroWheels(): SpiroWheel[] {
 }
 
 /** The wheels of a scene file, or undefined when "saved" is not a list with a wheel that reads well. */
-export function readSpiroWheels(saved: unknown): SpiroWheel[] | undefined {
+export function readSpiroWheels(saved: unknown): SpiroWheelSpec[] | undefined {
   if (!Array.isArray(saved)) return undefined;
-  const wheels: SpiroWheel[] = [];
+  const wheels: SpiroWheelSpec[] = [];
   for (const item of saved) {
     if (typeof item !== "object" || item === null) continue;
-    const { shape, teeth, x, y, color } = item as Record<string, unknown>;
-    if (!SPIRO_SHAPE_VALUES.includes(shape as SpiroShape) || typeof teeth !== "number" || typeof x !== "number" || typeof y !== "number" || !Number.isFinite(teeth + x + y)) continue;
+    const { shape, teeth, color } = item as Record<string, unknown>;
+    if (!SPIRO_SHAPE_VALUES.includes(shape as SpiroShape) || typeof teeth !== "number" || !Number.isFinite(teeth)) continue;
     if (typeof color !== "string" || !/^#[0-9a-f]{6}$/i.test(color)) continue;
-    wheels.push({ shape: shape as SpiroShape, teeth: whole(teeth, MIN_SPIRO_TEETH, MAX_SPIRO_TEETH), x: Math.min(1, Math.max(-1, x)), y: Math.min(1, Math.max(-1, y)), color: color.toLowerCase() });
+    wheels.push({ shape: shape as SpiroShape, teeth: whole(teeth, MIN_SPIRO_TEETH, MAX_SPIRO_TEETH), color: color.toLowerCase() });
   }
   return wheels.length > 0 ? wheels.slice(0, MAX_SPIRO_WHEELS) : undefined;
 }
@@ -212,19 +214,25 @@ const MAX_TURN = 3 * Math.PI / 180;
 /** The most points one line can have. */
 const MAX_POINTS = 90000;
 
+/** How many numbers each point of a rolling record has. */
+const ROLL_FLOATS = 4;
+
 /**
- * The line of one wheel in a ring with "ring" teeth, as x, y pairs. The
- * ring's center is at 0, 0 and its radius is 1. The last point is the first
- * point again.
+ * How a wheel rolls in a ring with "ring" teeth, with no hole yet: for each
+ * point of the line, the place the wheel's center has (2 numbers), then the
+ * wheel's turn there as a cosine and a sine, times the wheel's size (2
+ * numbers). The ring's center is at 0, 0 and its radius is 1. A hole at
+ * x, y in the wheel is at center + (x cos - y sin, x sin + y cos). The last
+ * point is the first point again.
  *
  * The contact point goes the same distance along the wheel's edge and along
  * the ring, and the two edges have the same direction there. At a corner of
  * the wheel the wheel turns around the contact point.
  */
-export function spiroLine(wheel: SpiroWheel, ring: number): Float32Array {
+function makeRolling(shape: SpiroShape, wheelTeeth: number, ring: number): Float32Array {
   const ringTeeth = whole(ring, MIN_SPIRO_RING, MAX_SPIRO_RING);
-  const teeth = whole(wheel.teeth, MIN_SPIRO_TEETH, MAX_SPIRO_TEETH);
-  const edge = rollingEdge(wheel.shape);
+  const teeth = whole(wheelTeeth, MIN_SPIRO_TEETH, MAX_SPIRO_TEETH);
+  const edge = rollingEdge(shape);
   const corners = edge.length / 2;
   let around = 0;
   for (let i = 0; i < corners; i++) {
@@ -233,23 +241,19 @@ export function spiroLine(wheel: SpiroWheel, ring: number): Float32Array {
   }
   /* Lengths are in ring radiuses from here: the ring is 2 pi around, and the wheel is teeth / ringTeeth of that. */
   const scale = (teeth / ringTeeth) * Math.PI * 2 / around;
-  const holeX = (Number.isFinite(wheel.x) ? wheel.x : 0) * scale;
-  const holeY = (Number.isFinite(wheel.y) ? wheel.y : 0) * scale;
   const turns = ringTeeth / gcd(ringTeeth, teeth);
   const out: number[] = [];
-  /** The pen's place when the wheel's point (cx, cy) touches the ring at "distance" along it, and the wheel's edge has the direction "heading" there. */
-  const pen = (distance: number, cx: number, cy: number, heading: number) => {
+  /** A point of the record: the wheel's point (cx, cy) touches the ring at "distance" along it, and the wheel's edge has the direction "heading" there. */
+  const add = (distance: number, cx: number, cy: number, heading: number) => {
     const turn = distance + Math.PI / 2 - heading;
     const cos = Math.cos(turn);
     const sin = Math.sin(turn);
-    const dx = holeX - cx;
-    const dy = holeY - cy;
-    out.push(Math.cos(distance) + dx * cos - dy * sin, Math.sin(distance) + dx * sin + dy * cos);
+    out.push(Math.cos(distance) - (cx * cos - cy * sin), Math.sin(distance) - (cx * sin + cy * cos), cos * scale, sin * scale);
   };
   const last = corners - 1;
   let before = Math.atan2(edge[1] - edge[last * 2 + 1], edge[0] - edge[last * 2]);
   let distance = 0;
-  for (let turn = 0; turn < turns && out.length < MAX_POINTS * 2; turn++) {
+  for (let turn = 0; turn < turns && out.length < MAX_POINTS * ROLL_FLOATS; turn++) {
     for (let i = 0; i < corners; i++) {
       const j = (i + 1) % corners;
       const ax = edge[i * 2] * scale;
@@ -260,29 +264,45 @@ export function spiroLine(wheel: SpiroWheel, ring: number): Float32Array {
       let bend = heading - before;
       bend -= Math.round(bend / (Math.PI * 2)) * Math.PI * 2;
       const pivots = Math.floor(Math.abs(bend) / MAX_TURN);
-      for (let k = 1; k <= pivots; k++) pen(distance, ax, ay, before + bend * (k / (pivots + 1)));
+      for (let k = 1; k <= pivots; k++) add(distance, ax, ay, before + bend * (k / (pivots + 1)));
       const length = Math.hypot(bx - ax, by - ay);
       const parts = Math.max(1, Math.ceil(length / MAX_TURN));
-      for (let k = 0; k < parts; k++) pen(distance + length * (k / parts), ax + (bx - ax) * (k / parts), ay + (by - ay) * (k / parts), heading);
+      for (let k = 0; k < parts; k++) add(distance + length * (k / parts), ax + (bx - ax) * (k / parts), ay + (by - ay) * (k / parts), heading);
       distance += length;
       before = heading;
     }
   }
-  out.push(out[0], out[1]);
+  out.push(out[0], out[1], out[2], out[3]);
   return new Float32Array(out);
 }
 
-const lines = new Map<string, Float32Array>();
-const MAX_KEPT_LINES = 24;
+const rollings = new Map<string, Float32Array>();
+const MAX_KEPT = 24;
 
-/** spiroLine, kept from frame to frame while the wheel and the ring stay the same. */
-function keptLine(wheel: SpiroWheel, ring: number): Float32Array {
-  const key = `${wheel.shape}|${wheel.teeth}|${wheel.x}|${wheel.y}|${ring}`;
-  let line = lines.get(key);
-  if (!line) {
-    if (lines.size >= MAX_KEPT_LINES) lines.clear();
-    line = spiroLine(wheel, ring);
-    lines.set(key, line);
+/**
+ * makeRolling, kept from frame to frame while the wheel's shape and teeth
+ * and the ring stay the same. The hole is not a part of it, so a hole that
+ * moves costs no new record.
+ */
+function rolling(wheel: SpiroWheelSpec, ring: number): Float32Array {
+  const key = [wheel.shape, wheel.teeth, ring].join("|");
+  let kept = rollings.get(key);
+  if (!kept) {
+    if (rollings.size >= MAX_KEPT) rollings.clear();
+    kept = makeRolling(wheel.shape, wheel.teeth, ring);
+    rollings.set(key, kept);
+  }
+  return kept;
+}
+
+/** The line of one wheel in a ring with "ring" teeth, as x, y pairs. The ring's center is at 0, 0 and its radius is 1. The last point is the first point again. */
+export function spiroLine(wheel: SpiroWheel, ring: number): Float32Array {
+  const roll = rolling(wheel, Math.round(ring));
+  const line = new Float32Array(roll.length / ROLL_FLOATS * 2);
+  for (let point = 0; point < line.length / 2; point++) {
+    const o = point * ROLL_FLOATS;
+    line[point * 2] = roll[o] + wheel.x * roll[o + 2] - wheel.y * roll[o + 3];
+    line[point * 2 + 1] = roll[o + 1] + wheel.x * roll[o + 3] + wheel.y * roll[o + 2];
   }
   return line;
 }
@@ -310,9 +330,9 @@ export interface SpiroSettings {
 }
 
 /** The most lines the settings can ask for. */
-export function spiroSegments(wheels: readonly SpiroWheel[], ring: number): number {
+export function spiroSegments(wheels: readonly SpiroWheelSpec[], ring: number): number {
   let count = 0;
-  for (const wheel of wheels.slice(0, MAX_SPIRO_WHEELS)) count += keptLine(wheel, Math.round(ring)).length / 2 - 1;
+  for (const wheel of wheels.slice(0, MAX_SPIRO_WHEELS)) count += rolling(wheel, Math.round(ring)).length / ROLL_FLOATS - 1;
   return count;
 }
 
@@ -343,8 +363,10 @@ export function writeSpiroInstances(out: Float32Array, max: number, s: SpiroSett
   const draw = Math.min(1, Math.max(0, s.draw));
   let count = 0;
   for (const wheel of s.wheels.slice(0, MAX_SPIRO_WHEELS)) {
-    const line = keptLine(wheel, Math.round(s.ring));
-    const visible = (line.length / 2 - 1) * draw;
+    const roll = rolling(wheel, Math.round(s.ring));
+    const holeX = Number.isFinite(wheel.x) ? wheel.x : 0;
+    const holeY = Number.isFinite(wheel.y) ? wheel.y : 0;
+    const visible = (roll.length / ROLL_FLOATS - 1) * draw;
     const shown = Math.ceil(visible);
     if (shown === 0) continue;
     /* Draw stops part of the way along the last line that shows. */
@@ -352,13 +374,20 @@ export function writeSpiroInstances(out: Float32Array, max: number, s: SpiroSett
     const [red, green, blue] = colorOf(wheel.color);
     let fromX = NaN;
     let fromY = NaN;
+    let beforeX = 0;
+    let beforeY = 0;
     for (let point = 0; point <= shown; point++) {
-      let x = line[point * 2];
-      let y = line[point * 2 + 1];
+      const at = point * ROLL_FLOATS;
+      const wholeX = roll[at] + holeX * roll[at + 2] - holeY * roll[at + 3];
+      const wholeY = roll[at + 1] + holeX * roll[at + 3] + holeY * roll[at + 2];
+      let x = wholeX;
+      let y = wholeY;
       if (point === shown && part < 1) {
-        x = line[point * 2 - 2] + (x - line[point * 2 - 2]) * part;
-        y = line[point * 2 - 1] + (y - line[point * 2 - 1]) * part;
+        x = beforeX + (x - beforeX) * part;
+        y = beforeY + (y - beforeY) * part;
       }
+      beforeX = wholeX;
+      beforeY = wholeY;
       const flatX = (x * cosTurn - y * sinTurn) * size;
       const flatY = (x * sinTurn + y * cosTurn) * size;
       const turnedX = flatX * cosYaw;

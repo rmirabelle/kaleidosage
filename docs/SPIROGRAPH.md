@@ -13,14 +13,15 @@ wheels draw in the same ring, each in its own color.
 
 ## Wheels
 
-The wheels are a list in the play state (`spiroWheels`), 1 to 6 of them. They
-are not sliders, so they have no ranges and no MIDI. Each wheel has:
+The wheels are a list in the play state (`spiroWheels`), 1 to 6 of them. Shape,
+Teeth and Color are not sliders, so they have no ranges and no MIDI. The
+hole is two sliders. Each wheel has:
 
 | Setting | What it does |
 |---|---|
 | Shape | Circle, Football, Egg, Triangle, Square or Cross. |
 | Teeth | The wheel's size: the length of its edge, in teeth (8 to 150). |
-| Hole | A click or a drag in the wheel's picture puts the pen hole there. |
+| Hole X, Hole Y | Two sliders for each wheel (`SPIRO_HOLE_KEYS`), with ranges, MIDI and sound links as any slider. The hole is from the wheel's center: 1 is the distance to the farthest point of the edge, X to the right, Y up. A click or a drag in the wheel's picture sets both; a slider that has a range keeps its range. The picture shows the live hole. |
 | Color | The color of the wheel's line. |
 
 ## Settings
@@ -49,12 +50,15 @@ are not sliders, so they have no ranges and no MIDI. Each wheel has:
 - A straight side of a wheel follows the ring as if it could bend to it. A
   real straight side would touch only at its two ends. This keeps the tooth
   count exact, so every line closes.
-- The lines are kept between frames while a wheel and the ring teeth stay
-  the same (at most 24 lines). A line has at most 90,000 points; all wheels
+- How a wheel rolls is kept between frames while its shape, its teeth and
+  the ring teeth stay the same (at most 24 records). The hole is not a part
+  of the record, so a hole that moves costs no new record. When a wheel is
+  removed, the later wheels take their hole sliders' values and ranges with
+  them; MIDI controls and sound links stay with the slider. A line has at most 90,000 points; all wheels
   together draw at most 262,144 lines.
 
 ## Open points
 
 - The pen draws over time, and the line stays (now: a range on Draw).
 - A wheel that rolls on the outside of the ring, and the toy's bars.
-- Sliders with ranges for a wheel's teeth and hole.
+- A slider with a range for a wheel's teeth.

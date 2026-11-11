@@ -1,4 +1,4 @@
-import { GROUP_PARAMS, NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, createParams, createPlayState, defaultValue, hexToRgb, lensAngle, liveValue, rangeAt, rangeClock, startRangeAt, type GroupKey, type ParamKey, type Params, type PlayState } from "./params";
+import { GROUP_PARAMS, NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, SPIRO_HOLE_KEYS, createParams, createPlayState, defaultValue, hexToRgb, lensAngle, liveValue, rangeAt, rangeClock, startRangeAt, type GroupKey, type ParamKey, type Params, type PlayState } from "./params";
 import { KaleidoRenderer, LASER_BEAMS, type FrameValues, type ImageSource } from "./renderer";
 import type { TerrainData } from "./terrain";
 import { MANDEL_CENTERS } from "./submodes";
@@ -1773,7 +1773,7 @@ export class Engine {
       pathX: this.live("pathX"),
       pathY: this.live("pathY"),
       spiro: on.spiro ? this.live("spiroAmount") : 0,
-      spiroWheels: this.state.spiroWheels,
+      spiroWheels: this.state.spiroWheels.slice(0, SPIRO_HOLE_KEYS.length).map((wheel, index) => ({ ...wheel, x: this.live(SPIRO_HOLE_KEYS[index][0]), y: this.live(SPIRO_HOLE_KEYS[index][1]) })),
       spiroBlend: this.state.spiroBlend,
       spiroRing: this.live("spiroRing"),
       spiroSize: this.live("spiroSize"),

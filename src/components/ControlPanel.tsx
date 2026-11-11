@@ -450,7 +450,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     ),
     spiro: (grip) => (
       <Group engine={engine} group="spiro" title="Spirograph" grip={grip} {...accordion("spiro")}>
-        <SpiroWheels engine={engine} />
+        <SpiroWheels engine={engine} row={row} />
         <SplitRows keys={SPIRO_KEYS} row={row} blend={<ModeSelect engine={engine} stateKey="spiroBlend" options={LAYER_BLENDS} name="Blend" />} />
       </Group>
     ),
