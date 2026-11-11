@@ -7,7 +7,7 @@ const LIMIT = 200;
 
 type SavedParam = Pick<Param, "value" | "low" | "high" | "on" | "ease" | "custom" | "seconds" | "startTime">;
 type SavedState = Pick<PlayState, "groups" | "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode"
-  | "overlayColor" | "colorBlend" | "trailColor" | "smearShape" | "contourTone" | "contourBlend" | "cameraBlend" | "viewBlend" | "skyColor" | "cameraRepeat" | "cameraHeightSource" | "cameraColors" | "cameraStops" | "videoCrossfade" | "fxOrder" | "layerBlend" | "sound" | "particleStops" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "pathShape" | "pathBlend" | "cyclesPaint" | "cyclesStops" | "solidShape" | "solidMap" | "solidWrap" | "solidPaint" | "solidBlend" | "solidKeep" | "mandelPlace" | "particleShape" | "bubbleShape" | "bubbleBlend" | "bubbleShadow" | "outlineShape" | "outlineDraw" | "outlineStops" | "maskMode" | "maskStops" | "colorFill" | "colorStops">;
+  | "overlayColor" | "colorBlend" | "trailColor" | "smearShape" | "contourTone" | "contourBlend" | "cameraBlend" | "viewBlend" | "skyColor" | "cameraRepeat" | "cameraHeightSource" | "cameraColors" | "cameraStops" | "videoCrossfade" | "fxOrder" | "layerBlend" | "sound" | "particleStops" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "pathShape" | "pathBlend" | "spiroWheels" | "spiroBlend" | "cyclesPaint" | "cyclesStops" | "solidShape" | "solidMap" | "solidWrap" | "solidPaint" | "solidBlend" | "solidKeep" | "mandelPlace" | "particleShape" | "bubbleShape" | "bubbleBlend" | "bubbleShadow" | "outlineShape" | "outlineDraw" | "outlineStops" | "maskMode" | "maskStops" | "colorFill" | "colorStops">;
 
 /** The settings at one step, and their fingerprint, to tell whether two steps differ. */
 interface Snapshot {
@@ -67,6 +67,8 @@ function take(params: Params, state: PlayState): Snapshot {
       laserBlend: state.laserBlend,
       pathShape: state.pathShape,
       pathBlend: state.pathBlend,
+      spiroWheels: state.spiroWheels.map((wheel) => ({ ...wheel })),
+      spiroBlend: state.spiroBlend,
       cyclesPaint: state.cyclesPaint,
       cyclesStops: state.cyclesStops.map((stop) => ({ ...stop })),
       solidShape: state.solidShape,
@@ -146,10 +148,10 @@ export class SettingsHistory {
 
   private restore(step: Snapshot) {
     for (const key of PARAM_KEYS) Object.assign(this.params[key], step.params[key]);
-    const { groups, layerBlend, fxOrder, sound, particleStops, cyclesStops, outlineStops, maskStops, cameraStops, colorStops, ...modes } = step.state;
+    const { groups, layerBlend, fxOrder, sound, particleStops, cyclesStops, outlineStops, maskStops, cameraStops, colorStops, spiroWheels, ...modes } = step.state;
     Object.assign(this.state, modes, {
       fxOrder: [...fxOrder], sound: { ...sound },
-      particleStops: particleStops.map((stop) => ({ ...stop })), cyclesStops: cyclesStops.map((stop) => ({ ...stop })), outlineStops: outlineStops.map((stop) => ({ ...stop })), maskStops: maskStops.map((stop) => ({ ...stop })), cameraStops: cameraStops.map((stop) => ({ ...stop })), colorStops: colorStops.map((stop) => ({ ...stop }))
+      particleStops: particleStops.map((stop) => ({ ...stop })), cyclesStops: cyclesStops.map((stop) => ({ ...stop })), outlineStops: outlineStops.map((stop) => ({ ...stop })), maskStops: maskStops.map((stop) => ({ ...stop })), cameraStops: cameraStops.map((stop) => ({ ...stop })), colorStops: colorStops.map((stop) => ({ ...stop })), spiroWheels: spiroWheels.map((wheel) => ({ ...wheel }))
     });
     Object.assign(this.state.groups, groups);
     Object.assign(this.state.layerBlend, layerBlend);

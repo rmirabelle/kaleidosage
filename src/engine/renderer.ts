@@ -1,6 +1,7 @@
 import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { pathSegments, writePathInstances, type PathShape } from "./paths";
+import { spiroSegments, writeSpiroInstances, type SpiroWheel } from "./spiro";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
 import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, BUBBLE_SHADER, MASK_SHADER, OUTLINE_SHADER, OUTLINE_GLOW_SHADER, OUTLINE_LINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, SOLID_MESH_VERTEX, SOLID_MESH_SHADER, SOLID_BACK_SHADER, SOLID_SHADE_BLUR_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 import { MESH_SHAPES, flatMesh } from "./flatMesh";
@@ -26,7 +27,7 @@ export type ShapeStep = "warp" | "map" | "kaleidoscope";
 /** The kind of warp: noise, ripple, waves, swirl, bulge and pinch, cells. */
 export type WarpType = 0 | 1 | 2 | 3 | 4 | 5;
 /** The steps that change the drawn picture. The user sets their order. */
-export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "paths" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble";
+export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "paths" | "spiro" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble";
 /**
  * Any effect step. The user sets one order for all of them. Shape steps
  * that are next to each other run in one pass; a shape step after a
@@ -34,7 +35,7 @@ export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | 
  */
 export type FxStep = ShapeStep | PictureStep;
 export const SHAPE_STEPS: readonly ShapeStep[] = ["warp", "map", "kaleidoscope"];
-export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "paths", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble"];
+export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble"];
 
 /** Sharpen, Color and Levels, in the order FINISH_SHADER applies them (see drawFinish). */
 type FinishPart = "sharpen" | "color" | "levels";
@@ -809,6 +810,26 @@ export interface FrameValues {
   pathX: number;
   pathY: number;
   /**
+   * Spirograph (see spiro.ts): opacity (0 = off), the wheels, how the lines
+   * go onto the picture, then its settings: the ring's teeth, Size (the
+   * ring's radius) and the center (from the screen's middle) in screen
+   * heights, Width in pixels at 1080p, Rotation, Turn and Tilt in radians.
+   */
+  spiro: number;
+  spiroWheels: readonly SpiroWheel[];
+  spiroBlend: LayerBlend;
+  spiroRing: number;
+  spiroSize: number;
+  spiroWidth: number;
+  spiroDraw: number;
+  spiroPicture: number;
+  spiroBackground: number;
+  spiroRotation: number;
+  spiroYaw: number;
+  spiroTilt: number;
+  spiroX: number;
+  spiroY: number;
+  /**
    * Light shapes (see OUTLINE_SHADER): strength (0 = off), the outline and
    * how it draws, the copies (count, radius in screen heights, spacing,
    * delay), the place in the draw cycle (0 to 1), the chase length, the
@@ -1520,6 +1541,7 @@ export class KaleidoRenderer {
       rays: v.rays > 0,
       lasers: v.lasers > 0,
       paths: v.paths > 0,
+      spiro: v.spiro > 0,
       outlines: v.outlines > 0,
       mask: v.mask > 0,
       bubble: v.bubble > 0,
@@ -1665,6 +1687,7 @@ export class KaleidoRenderer {
         else if (step === "rays") this.drawRays(v, source, target, width, height);
         else if (step === "lasers") this.drawLasers(v, source, target, width, height);
         else if (step === "paths") this.drawPaths(v, source, target, width, height);
+        else if (step === "spiro") this.drawSpiro(v, source, target, width, height);
         else if (step === "outlines") this.drawOutlines(v, source, target, width, height);
         else if (step === "mask") this.drawMask(v, source, target, width, height);
         else if (step === "bubble") this.drawBubble(v, source, target, width, height);
@@ -3002,6 +3025,27 @@ export class KaleidoRenderer {
     });
     this.drawLineLayer(count, capacity, width, height, (d) => gl.uniform1f(d.uniforms.u_gradient, 0));
     this.mixLineLayer(source, target, width, height, v.pathBackground, v.paths, v.pathBlend, v.pathPicture);
+  }
+
+  /**
+   * The Spirograph (see spiro.ts): each wheel's line comes from the settings
+   * alone, and is drawn as the light cycles' lines are. The gradient of
+   * CYCLE_SHADER is off, so each line keeps the color of its wheel.
+   */
+  private drawSpiro(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+    const gl = this.gl;
+    const needed = Math.min(MAX_CYCLE_INSTANCES, spiroSegments(v.spiroWheels, v.spiroRing));
+    let capacity = this.cycleInstances.length / INSTANCE_FLOATS;
+    if (needed > capacity) {
+      capacity = Math.min(MAX_CYCLE_INSTANCES, Math.max(needed, capacity * 4));
+      this.cycleInstances = new Float32Array(capacity * INSTANCE_FLOATS);
+    }
+    const count = writeSpiroInstances(this.cycleInstances, capacity, {
+      wheels: v.spiroWheels, ring: v.spiroRing, size: v.spiroSize, width: v.spiroWidth / 1080, draw: v.spiroDraw,
+      rotation: v.spiroRotation, yaw: v.spiroYaw, tilt: v.spiroTilt, x: width / height * 0.5 + v.spiroX, y: 0.5 + v.spiroY
+    });
+    this.drawLineLayer(count, capacity, width, height, (d) => gl.uniform1f(d.uniforms.u_gradient, 0));
+    this.mixLineLayer(source, target, width, height, v.spiroBackground, v.spiro, v.spiroBlend, v.spiroPicture);
   }
 
   /**

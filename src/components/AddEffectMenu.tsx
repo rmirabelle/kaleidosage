@@ -24,6 +24,7 @@ const EFFECT_NOTES: Record<FxStep, string> = {
   rays: "Light rays stream out from bright areas.",
   lasers: "A fan of laser beams sweeps from one point.",
   paths: "Lines go out in all directions from one point, along zigzags, Greek keys, spirals and other paths.",
+  spiro: "Wheels roll inside a ring, and a pen in each wheel draws a line, as the Spirograph toy does.",
   outlines: "Glowing rings, squares, triangles or stars draw themselves, or a snake crawls.",
   picture: "Lays an image or a video over the picture.",
   bloom: "Bright areas glow.",

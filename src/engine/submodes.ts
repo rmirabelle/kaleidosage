@@ -4,7 +4,7 @@ import type { BubbleShape, ColorFill, MaskMode, BlurMask, CycleMove, CyclePaint,
 /** The effects in the Add effect menu, in menu order, with the names their groups show. */
 export const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
   ["kaleidoscope", "Kaleidoscope"], ["map", "Algorithm"], ["warp", "Warp"], ["blur", "Blur"], ["trails", "Trails"],
-  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["driver", "Driver"], ["terrain", "Terrain"], ["camera", "Camera"], ["solid", "3D object"], ["sort", "Pixel sort"], ["particles", "Particles"], ["cycles", "Light cycles"], ["rays", "Light rays"], ["lasers", "Lasers"], ["paths", "Light paths"], ["outlines", "Light shapes"], ["picture", "Image or Video"], ["bloom", "Bloom"], ["sharpen", "Sharpen"], ["color", "Color"], ["levels", "Levels"], ["mask", "Opacity mask"], ["bubble", "Bubble"]
+  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["driver", "Driver"], ["terrain", "Terrain"], ["camera", "Camera"], ["solid", "3D object"], ["sort", "Pixel sort"], ["particles", "Particles"], ["cycles", "Light cycles"], ["rays", "Light rays"], ["lasers", "Lasers"], ["paths", "Light paths"], ["spiro", "Spirograph"], ["outlines", "Light shapes"], ["picture", "Image or Video"], ["bloom", "Bloom"], ["sharpen", "Sharpen"], ["color", "Color"], ["levels", "Levels"], ["mask", "Opacity mask"], ["bubble", "Bubble"]
 ];
 
 /** An effect's name in the panel and the menus. */
@@ -196,6 +196,8 @@ export const BUBBLE_SHAPE_KEYS: Record<BubbleShape, ParamKey[]> = { 0: [], 3: ["
 export const OUTLINE_SHAPES = [[0, "Ring"], [1, "Square"], [2, "Triangle"], [3, "Radial"], [4, "Snake"]] as const;
 /** The Light Paths Path menu (see PathShape). */
 export const PATH_SHAPES = [[0, "Zigzag"], [1, "Square wave"], [2, "Greek key"], [3, "Spiral"], [4, "Flower"], [5, "Circuit"]] as const;
+/** The shapes of a Spirograph wheel (see SpiroShape). */
+export const SPIRO_SHAPES = [[0, "Circle"], [1, "Football"], [2, "Egg"], [3, "Triangle"], [4, "Square"], [5, "Cross"]] as const;
 export const TRAIL_MODES = [[1, "Mix (smoky)"], [2, "Lighten (glowing)"]] as const;
 export const DRIVER_SOURCES = [[0, "Caustics"], [1, "Smoke"], [2, "Ink"], [3, "Fire"], [4, "Ripples"], [5, "Video"]] as const;
 

@@ -960,6 +960,23 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 /* A named part inside an effect's own settings (Terrain's Camera): the same band, in grey. */
 .panel-sub-head { padding: 6px 14px 5px; color: #a9afbd; background: #1b1e25; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; cursor: default; }
 .gradient-editor { position: relative; flex: 1; min-width: 0; height: 30px; margin: 0 6px; }
+/* The Spirograph's wheels (see SpiroWheels): a card for each wheel, with a picture of the wheel at the left and its settings at the right. */
+.spiro-wheels { display: flex; flex-direction: column; gap: 6px; padding: 8px 14px; }
+.spiro-wheel { display: flex; align-items: center; gap: 10px; padding: 6px; border: 1px solid var(--border); border-radius: 6px; background: #1b1e25; }
+.spiro-wheel-picture { flex: 0 0 auto; width: 84px; height: 84px; border-radius: 4px; background: #101218; cursor: crosshair; touch-action: none; }
+.spiro-wheel-settings { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; }
+.spiro-wheel-row { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+.spiro-wheel-row > .panel-row-name { flex: 0 0 38px; }
+.spiro-wheel-row .dropdown-button { flex: 1; min-width: 0; }
+.spiro-wheel-row .color-swatch { margin-top: 0; }
+.spiro-wheel-row input[type=range] { flex: 1; min-width: 0; height: 4px; border-radius: 2px; background: #474c5e; appearance: none; }
+.spiro-wheel-row input[type=range]::-webkit-slider-thumb { appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); cursor: ew-resize; }
+.spiro-wheel-value { flex: 0 0 26px; text-align: right; font-variant-numeric: tabular-nums; color: #cfd4de; font-size: 12px; }
+.spiro-wheel-space { flex: 1; }
+.spiro-wheel-remove { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border-radius: 4px; color: #cfd4de; background: #30343f; cursor: pointer; }
+.spiro-wheel-remove:hover { color: #fff; background: #c83232; }
+.spiro-wheel-add { display: flex; align-items: center; justify-content: center; gap: 6px; height: 26px; border: 1px dashed #5d6378; border-radius: 5px; color: #d8dbe2; background: transparent; cursor: pointer; }
+.spiro-wheel-add:hover { border-style: solid; border-color: var(--accent); color: #fff; background: rgba(75,118,247,.12); }
 .gradient-bar { position: absolute; top: 2px; right: 0; left: 0; height: 14px; border: 1px solid #474c5e; border-radius: 4px; cursor: copy; }
 .gradient-bar.full { cursor: default; }
 .gradient-stop { position: absolute; top: 18px; width: 12px; height: 12px; margin-left: -6px; padding: 0; border: 2px solid #e4e6ec; border-radius: 3px; background: var(--stop-color); box-shadow: 0 1px 3px rgba(0,0,0,.6); cursor: ew-resize; }

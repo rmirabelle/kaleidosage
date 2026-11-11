@@ -15,6 +15,7 @@ import { commonRole, splitCommon } from "../engine/common";
 import { PATH_SHAPES, BUBBLE_SHAPES, BUBBLE_SHAPE_KEYS, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_PAINTS, SOLID_WRAPS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote, uniqueTo } from "../engine/submodes";
 import type { BlurMask, BubbleShape, ColorFill, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, MaskMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidPaint, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
+import { SpiroWheels } from "./SpiroWheels";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ContextMenu } from "./ContextMenu";
 import { Dropdown } from "./Dropdown";
@@ -88,6 +89,7 @@ const OUTLINE_KEYS: ParamKey[] = ["outlinePoints", "outlineRadius", "outlineInne
 const OUTLINE_DRAWS = [[0, "Draw and erase"], [1, "Chase"], [2, "Whole"]] as const;
 const LASER_KEYS: ParamKey[] = ["laserAmount", "laserOpacity", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"];
 const PATH_KEYS: ParamKey[] = ["pathArms", "pathSteps", "pathStep", "pathTurn", "pathRadius", "pathWidth", "pathDraw", "pathFade", "pathYaw", "pathTilt", "pathHue", "pathRainbow", "pathPicture", "pathBackground", "pathX", "pathY", "pathRotation", "pathAmount"];
+const SPIRO_KEYS: ParamKey[] = ["spiroRing", "spiroSize", "spiroWidth", "spiroDraw", "spiroYaw", "spiroTilt", "spiroPicture", "spiroBackground", "spiroX", "spiroY", "spiroRotation", "spiroAmount"];
 const BLOOM_KEYS: ParamKey[] = ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"];
 const SHARPEN_KEYS: ParamKey[] = ["sharpen", "sharpenRadius"];
 const COLOR_KEYS: ParamKey[] = ["overlayOpacity"];
@@ -311,6 +313,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
         Object.assign(sweep, { low, high, on: true });
       },
       paths: () => start("pathAmount", 1),
+      spiro: () => start("spiroAmount", 1),
       bloom: () => start("bloomAmount", 1),
       outlines: () => start("outlineAmount", 1),
       mask: () => start("maskAmount", 1),
@@ -443,6 +446,12 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       <Group engine={engine} group="paths" title="Light paths" grip={grip} {...accordion("paths")}>
         <ModeSelect engine={engine} stateKey="pathShape" options={PATH_SHAPES} name="Path" />
         <SplitRows keys={PATH_KEYS} row={row} blend={<ModeSelect engine={engine} stateKey="pathBlend" options={LAYER_BLENDS} name="Blend" />} />
+      </Group>
+    ),
+    spiro: (grip) => (
+      <Group engine={engine} group="spiro" title="Spirograph" grip={grip} {...accordion("spiro")}>
+        <SpiroWheels engine={engine} />
+        <SplitRows keys={SPIRO_KEYS} row={row} blend={<ModeSelect engine={engine} stateKey="spiroBlend" options={LAYER_BLENDS} name="Blend" />} />
       </Group>
     ),
     outlines: (grip) => (
@@ -905,7 +914,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "bubbleShape" | "bubbleBlend" | "bubbleShadow" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "pathShape" | "pathBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidWrap" | "solidPaint" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "bubbleShape" | "bubbleBlend" | "bubbleShadow" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "pathShape" | "pathBlend" | "spiroBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidWrap" | "solidPaint" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange, child }: {

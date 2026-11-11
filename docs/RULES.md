@@ -224,6 +224,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Adding the Kaleidoscope starts Pan X and Pan Y looping.
 - Adding Lasers starts Sweep looping, so the fan tilts up and down and looks flat as it passes level.
 - Light paths draws lines out from one point: every arm follows the same path, turned around the center. Turn and Tilt turn the whole pattern in 3D. Adding Light paths starts Draw looping, so the lines grow out and go back.
+- Spirograph draws the lines of the toy: each wheel rolls inside one ring without slip, and a pen in a hole of the wheel draws a line in the color of the wheel. A wheel has a shape (Circle, Football, Egg, Triangle, Square, Cross), a size in teeth, and a hole at any place in it. There are 1 to 6 wheels. A line closes after ring teeth / gcd(ring teeth, wheel teeth) turns of the wheel. The wheels are not sliders, so they have no ranges.
 - Terrain flies a camera over the picture as a lit landscape (the effect that was called Camera). Camera flies the same camera over the picture made before it, lying flat, with no land, light or shadows.
 - Terrain and Camera share one camera: Pan, Tilt, Pedestal, Dolly, Truck, Lens, Fog, Sky, the sky color and Repeat. Each has its own Opacity and Blend.
 - A lock on Terrain or Camera keeps the shared camera settings for Randomize, Nudge and Reset.
