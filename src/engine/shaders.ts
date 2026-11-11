@@ -4953,35 +4953,46 @@ uniform float u_repeats;
  * Bump (added 2026-11-11): the picture's gray level is the height of the
  * surface, for the light only: the shape and its outline do not change.
  * Above 0 the bright parts stand out, below 0 they go in. The height is the
- * picture as Wrap lays it on the surface (with Tiles), for every Map, so
- * the bumps turn with the shape.
+ * picture that shows on the shape at that place, for each Map (the user's
+ * wish, 2026-11-11: at first Project and Mirror took Wrap's picture, which
+ * does not show there). Bump changes only the light and the shine: the lens
+ * and the reflection keep the smooth surface, so the picture stays in place
+ * under its bumps.
  */
 uniform float u_bump;
+const vec3 BUMP_GRAY = vec3(0.2126, 0.7152, 0.0722);
+/* The step to each side for Bump's slope, in screen heights (about 4 pixels). */
+const float BUMP_STEP = 0.004;
+float bumpGray(vec2 uv) { return dot(straight(textureLod(u_tex, fold(uv), 0.0)), BUMP_GRAY); }
+/* Project's and Mirror's Bump: the surface direction n (in the view) leans away from "slope", the way the shown picture gets brighter (gray per screen height, in the view). */
+vec3 leaned(vec3 n, vec3 slope) {
+  return normalize(n - (slope - n * dot(slope, n)) * (u_bump * 0.075 * u_size));
+}
 
 /**
- * The surface direction with Bump (q in the shape's frame, n in the view).
+ * Wrap's surface direction with Bump (q in the shape's frame, n in the view).
  * The gray level is read a small step (about 4 pixels of a shape of the
  * usual size) to each side along two directions that lie in the surface;
  * the direction leans away from the side where the picture gets brighter.
  */
 vec3 bumped(vec3 q, vec3 n) {
   if (abs(u_bump) < 0.001) return n;
-  const vec3 GRAY = vec3(0.2126, 0.7152, 0.0722);
   const float REACH = 0.012;
   vec3 own = transpose(u_turn) * n;
   vec3 t1 = normalize(cross(abs(own.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), own));
   vec3 t2 = cross(own, t1);
-  float slope1 = dot(wrapAt(q + t1 * REACH, own) - wrapAt(q - t1 * REACH, own), GRAY);
-  float slope2 = dot(wrapAt(q + t2 * REACH, own) - wrapAt(q - t2 * REACH, own), GRAY);
+  float slope1 = dot(wrapAt(q + t1 * REACH, own) - wrapAt(q - t1 * REACH, own), BUMP_GRAY);
+  float slope2 = dot(wrapAt(q + t2 * REACH, own) - wrapAt(q - t2 * REACH, own), BUMP_GRAY);
   return u_turn * normalize(own - (t1 * slope1 + t2 * slope2) * (u_bump * 0.15 / (2.0 * REACH)));
 }
 
 vec3 paint(vec3 q, vec3 surface, vec3 rd, vec2 uv) {
-  /* Wrap lays the picture by the surface's own direction; the lens, the reflection and the light take the direction with Bump. */
-  vec3 n = bumped(q, surface);
+  /* The picture goes on by the surface's own direction; the light and the shine take the direction with Bump (n). */
+  vec3 n = surface;
+  bool bumpy = abs(u_bump) >= 0.001;
   vec3 color;
   if (u_map == 1) {
-    vec3 bent = u_turnCopy ? transpose(u_turn) * n : n;
+    vec3 bent = u_turnCopy ? transpose(u_turn) * surface : surface;
     vec2 lens = uv + bent.xy * u_bend * 0.3 * vec2(1.0 / u_aspect, 1.0);
     if (u_turnCopy) lens += (q - u_turn * q).xy * 0.5 * u_size * vec2(1.0 / u_aspect, 1.0);
     vec2 middle = 0.5 + u_center * vec2(1.0 / u_aspect, 1.0);
@@ -5007,13 +5018,34 @@ vec3 paint(vec3 q, vec3 surface, vec3 rd, vec2 uv) {
     } else {
       color = straight(textureLod(u_tex, fold(lens), 0.0));
     }
+    if (bumpy) {
+      /* The picture through the lens lies along the screen: its slope across and up, read without Frost. */
+      vec2 across = vec2(BUMP_STEP * u_repeats / u_aspect, 0.0);
+      vec2 up = vec2(0.0, BUMP_STEP * u_repeats);
+      n = leaned(surface, vec3(bumpGray(lens + across) - bumpGray(lens - across), bumpGray(lens + up) - bumpGray(lens - up), 0.0) / (2.0 * BUMP_STEP));
+    }
   } else if (u_map == 2) {
-    vec3 r = reflect(rd, n);
+    vec3 r = reflect(rd, surface);
     if (u_turnCopy) r = transpose(u_turn) * r;
     vec2 ball = vec2(abs(atan(r.x, -r.z)) / PI - 1.0, asin(clamp(r.y, -1.0, 1.0)) / PI);
-    color = straight(textureLod(u_tex, fold(vec2(1.0, 0.5) + ball * u_repeats), 0.0));
+    vec2 mirror = vec2(1.0, 0.5) + ball * u_repeats;
+    color = straight(textureLod(u_tex, fold(mirror), 0.0));
+    if (bumpy) {
+      /**
+       * The reflected picture lies around the reflection's directions: its
+       * slope around (aroundWay) and up (upWay) there. The step is what 4
+       * pixels of a ball of the shape's size turn the reflection by, so
+       * on a flat face, which enlarges the picture, the bumps are softer.
+       */
+      float reach = BUMP_STEP * 2.0 * u_repeats / (PI * 0.4 * u_size);
+      vec3 aroundWay = sign(r.x) * normalize(vec3(-r.z, 0.0, r.x) + vec3(1e-5, 0.0, 0.0));
+      vec3 upWay = normalize(vec3(0.0, 1.0, 0.0) - r * r.y + vec3(0.0, 1e-5, 0.0));
+      vec3 slope = (aroundWay * (bumpGray(mirror + vec2(reach, 0.0)) - bumpGray(mirror - vec2(reach, 0.0))) + upWay * (bumpGray(mirror + vec2(0.0, reach)) - bumpGray(mirror - vec2(0.0, reach)))) / (2.0 * BUMP_STEP);
+      n = leaned(surface, u_turnCopy ? u_turn * slope : slope);
+    }
   } else {
     color = wrapAt(q, transpose(u_turn) * surface);
+    n = bumped(q, surface);
   }
   float lit = mix(1.0, 0.18 + 0.82 * max(dot(n, u_light), 0.0), u_shading);
   float shine = pow(max(dot(reflect(-u_light, n), -rd), 0.0), 40.0) * u_shine;

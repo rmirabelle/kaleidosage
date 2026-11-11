@@ -886,7 +886,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   solidLight: { label: "Light angle", min: 0, max: 360, step: 1, value: 135, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   solidShading: { label: "Shading", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.3, high: 0.9, on: false },
   solidShine: { label: "Shine", min: 0, max: 1, step: 0.01, value: 0.4, drift: "wave", low: 0.1, high: 0.7, on: false },
-  /** Bump: the picture's gray level as the height of the surface, for the light only. Above 0 the bright parts stand out; below 0 they go in. */
+  /** Bump: the gray level of the picture that shows on the shape, as the height of the surface, for the light only. Above 0 the bright parts stand out; below 0 they go in. */
   solidRelief: { label: "Bump", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.2, high: 0.8, on: false },
   solidShadow: { label: "Shadow", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.2, high: 0.8, on: false },
   solidX: { label: "Center X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.25, high: 0.25, on: false },
