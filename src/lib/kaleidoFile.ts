@@ -39,11 +39,17 @@ export interface FileManifest {
    * whose picks are tab indexes (see songFollow.preload).
    */
   sceneIds?: string[];
+  /**
+   * When each scene last changed, in ms since 1970, in tab order (null when
+   * not known): the Scenes list sorts by it. Missing in a file from before
+   * the dates.
+   */
+  sceneModified?: (number | null)[];
 }
 
 /** kaleidosage.json, without the scene and track entries, which the Rust side adds. */
-export function writeManifest({ audio, activeScene, filesWidth, trackSeconds, songFollow, sceneIds }: FileManifest): string {
-  return JSON.stringify({ app: "KaleidoSage", kind: "file", version: FILE_VERSION, audio, activeScene, ...(filesWidth ? { layout: { filesWidth } } : {}), ...(trackSeconds ? { trackSeconds } : {}), ...(songFollow !== undefined ? { songFollow } : {}), ...(sceneIds ? { sceneIds } : {}) });
+export function writeManifest({ audio, activeScene, filesWidth, trackSeconds, songFollow, sceneIds, sceneModified }: FileManifest): string {
+  return JSON.stringify({ app: "KaleidoSage", kind: "file", version: FILE_VERSION, audio, activeScene, ...(filesWidth ? { layout: { filesWidth } } : {}), ...(trackSeconds ? { trackSeconds } : {}), ...(songFollow !== undefined ? { songFollow } : {}), ...(sceneIds ? { sceneIds } : {}), ...(sceneModified ? { sceneModified } : {}) });
 }
 
 /** A new scene ID (see FileManifest.sceneIds). */
@@ -56,7 +62,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
  * left out, so the app keeps its own; a file from a newer version still
  * opens.
  */
-export function readManifest(text: string): { audio: Partial<FileAudio>; activeScene: number; filesWidth?: number; trackSeconds?: (number | null)[]; songFollow?: boolean; sceneIds?: string[] } {
+export function readManifest(text: string): { audio: Partial<FileAudio>; activeScene: number; filesWidth?: number; trackSeconds?: (number | null)[]; songFollow?: boolean; sceneIds?: string[]; sceneModified?: (number | null)[] } {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -81,13 +87,17 @@ export function readManifest(text: string): { audio: Partial<FileAudio>; activeS
   const sceneIds = Array.isArray(parsed.sceneIds) && parsed.sceneIds.every((id) => typeof id === "string" && id !== "") && new Set(parsed.sceneIds).size === parsed.sceneIds.length
     ? parsed.sceneIds as string[]
     : undefined;
+  const sceneModified = Array.isArray(parsed.sceneModified)
+    ? parsed.sceneModified.map((time) => typeof time === "number" && Number.isFinite(time) && time > 0 ? time : null)
+    : undefined;
   return {
     audio,
     activeScene,
     ...(typeof filesWidth === "number" && filesWidth > 0 ? { filesWidth } : {}),
     ...(trackSeconds ? { trackSeconds } : {}),
     ...(typeof parsed.songFollow === "boolean" ? { songFollow: parsed.songFollow } : {}),
-    ...(sceneIds ? { sceneIds } : {})
+    ...(sceneIds ? { sceneIds } : {}),
+    ...(sceneModified ? { sceneModified } : {})
   };
 }
 

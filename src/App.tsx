@@ -125,6 +125,8 @@ interface SceneDoc {
   untitled: number;
   /** Unsaved changes. For the selected scene, the dirty state in App is the one that is up to date. */
   dirty: boolean;
+  /** When the scene last changed, in ms since 1970: the time of the save that wrote its changes, or of its import. Null when not known (a file from before the dates, or a scene not yet saved). The project file keeps it (see FileManifest.sceneModified). */
+  modified: number | null;
 }
 
 /** The Driver effect's own video: the playing element, its stream (embedded when the scene is saved), its file name, and an id for the unsaved-changes check. */
@@ -655,7 +657,7 @@ export default function App() {
     /* Above every open tab's id: a dev hot update of this file starts nextDocId at 1 again while the tabs stay, and two tabs with one id break the tab bar. */
     const id = Math.max(nextDocId, ...docsRef.current.map((doc) => doc.id + 1));
     nextDocId = id + 1;
-    writeDocs([...docsRef.current, { id, sceneId: newSceneId(), path: null, untitled, dirty: false }]);
+    writeDocs([...docsRef.current, { id, sceneId: newSceneId(), path: null, untitled, dirty: false, modified: null }]);
     selectDocId(id);
     historyRef.current = new SettingsHistory(engine.params, engine.state);
   }, [engine, selectDocId, writeDocs]);
@@ -1911,6 +1913,10 @@ export default function App() {
       const scenes: string[] = [];
       /* Each saved scene's ID, in the same order: the song maps pick scenes by them. */
       const sceneIds: string[] = [];
+      /* When each saved scene last changed, in the same order: a scene that this save writes changed now. */
+      const sceneModified: (number | null)[] = [];
+      const written = new Set<number>();
+      const now = Date.now();
       let activeScene = 0;
       const projectName = fileNameOf(path).replace(/\.ksage$/i, "");
       let unnamed = 0;
@@ -1924,6 +1930,7 @@ export default function App() {
         if (isFileCopy(scenePath) && !dirtyNow) {
           scenes.push(scenePath!);
           sceneIds.push(doc.sceneId);
+          sceneModified.push(doc.modified);
           continue;
         }
         /* A scene with no name yet takes the project's name: "Cool", then "Cool 2" and so on. */
@@ -1943,14 +1950,18 @@ export default function App() {
         }
         scenes.push(target);
         sceneIds.push(doc.sceneId);
+        sceneModified.push(now);
+        written.add(doc.id);
       }
+      if (written.size) writeDocs(docsRef.current.map((doc) => written.has(doc.id) ? { ...doc, modified: now } : doc));
       await saveKaleidoFile(path, {
         audio: fileAudio(),
         activeScene,
         filesWidth: panelLayout.filesWidth,
         trackSeconds: tracks.list.map((track) => tracks.lengthOf(track.path)),
         songFollow: songFollow.enabled,
-        sceneIds
+        sceneIds,
+        sceneModified
       }, scenes, tracks.list.map((track) => track.path), tracks.list.map((track) => songFollow.analysisText(track.path)));
     } catch (error) {
       showError(`Could not save the project. ${String(error)}`);
@@ -2040,6 +2051,8 @@ export default function App() {
       /* The scenes take the IDs the file kept, so the song maps' picks find them; with a scene that did not open, the places would not match, and they keep new ones. */
       const ids = manifest.sceneIds;
       if (ids && ids.length === docsRef.current.length) writeDocs(docsRef.current.map((doc, index) => ({ ...doc, sceneId: ids[index] })));
+      const dates = manifest.sceneModified;
+      if (dates && dates.length === docsRef.current.length) writeDocs(docsRef.current.map((doc, index) => ({ ...doc, modified: dates[index] })));
       /* The song analyses the file kept go first, so Song follow needs none for these tracks. */
       const sceneIds = docsRef.current.map((doc) => doc.sceneId);
       opened.analyses?.forEach((text, index) => { if (text && opened.tracks[index]) songFollow.preload(opened.tracks[index], text, sceneIds); });
@@ -2115,8 +2128,11 @@ export default function App() {
       for (const [index, scene] of scenes.entries()) {
         setLoading({ title, detail: `Scene ${index + 1} of ${scenes.length}: ${sceneName(scene)}`, progress: index / scenes.length });
         const old = replace ? byName.get(sceneName(scene).toLowerCase()) : undefined;
+        const countBefore = docsRef.current.length;
         await openScenePath(scene);
         const added = activeIdRef.current;
+        /* A scene that comes into the project changed now, for the sort by date. */
+        if (added !== null && docsRef.current.length > countBefore) writeDocs(docsRef.current.map((doc) => doc.id === added ? { ...doc, modified: Date.now() } : doc));
         /* Replace: the new scene takes the old one's place in the list and its ID, so the song map picks go to it, and the old one goes. Each old scene is replaced once. */
         if (old === undefined || added === null || old === added || !docsRef.current.some((doc) => doc.id === old)) continue;
         byName.delete(sceneName(scene).toLowerCase());
@@ -2231,7 +2247,7 @@ export default function App() {
         if (doc.id === activeIdRef.current) {
           const driver = driverRef.current;
           return [{
-            id: doc.id, sceneId: doc.sceneId, path: scenePathRef.current, untitled: doc.untitled, dirty: fingerprint() !== savedFingerprintRef.current,
+            id: doc.id, sceneId: doc.sceneId, modified: doc.modified, path: scenePathRef.current, untitled: doc.untitled, dirty: fingerprint() !== savedFingerprintRef.current,
             scene: serializeScene(engine.params, engine.state, { image: KEPT_IMAGE }),
             images: [keepImage(imagesRef.current[0]), keepImage(imagesRef.current[1])],
             driver: driver ? { video: driver.videoFile, name: driver.name } : null,
@@ -2249,7 +2265,7 @@ export default function App() {
           keptText.set(stored, scene);
         }
         return [{
-          id: doc.id, sceneId: doc.sceneId, path: doc.path, untitled: doc.untitled, dirty: doc.dirty, scene,
+          id: doc.id, sceneId: doc.sceneId, modified: doc.modified, path: doc.path, untitled: doc.untitled, dirty: doc.dirty, scene,
           images: [keepImage(stored.images[0]), keepImage(stored.images[1])],
           driver: stored.driver ? { video: stored.driver.videoFile, name: stored.driver.name } : null,
           picture: keepImage(stored.picture),
@@ -2356,7 +2372,7 @@ export default function App() {
         const picture = keptDoc.picture ? await loadKeptImage(keptDoc.picture) : null;
         const solidMedia = keptDoc.solidMedia ? await loadKeptImage(keptDoc.solidMedia) : null;
         const terrain = keptDoc.terrain ? await keptTerrain(keptDoc.terrain) : null;
-        loaded.push({ doc: { id: keptDoc.id, sceneId: keptIds[kept.docs.indexOf(keptDoc)], path: keptDoc.path, untitled: keptDoc.untitled, dirty: keptDoc.dirty || lostFirst }, params, state, images: [first, second], driver, picture, terrain, solidMedia, openGroup: keptDoc.openGroup });
+        loaded.push({ doc: { id: keptDoc.id, sceneId: keptIds[kept.docs.indexOf(keptDoc)], path: keptDoc.path, untitled: keptDoc.untitled, dirty: keptDoc.dirty || lostFirst, modified: keptDoc.modified ?? null }, params, state, images: [first, second], driver, picture, terrain, solidMedia, openGroup: keptDoc.openGroup });
       }
       if (loaded.length === 0 || activeIdRef.current !== null) {
         /* Nothing opened, or a scene opened first: the kept tabs wait for the next reload. */
@@ -2740,8 +2756,8 @@ export default function App() {
   const inputInPlaylist = sceneListShown && tracksActive && !filesCollapsed;
   const inputMenu = <AudioInputMenu tip={inputTip} onTipDone={() => setInputTip(false)} onPick={pickInput} />;
   const tabs: DocumentTabInfo[] = docs.map((doc) => doc.id === activeId
-    ? { id: doc.id, sceneId: doc.sceneId, fileName: docFileName(scenePath, doc.untitled), path: scenePath, dirty }
-    : { id: doc.id, sceneId: doc.sceneId, fileName: docFileName(doc.path, doc.untitled), path: doc.path, dirty: doc.dirty });
+    ? { id: doc.id, sceneId: doc.sceneId, fileName: docFileName(scenePath, doc.untitled), path: scenePath, dirty, modified: doc.modified }
+    : { id: doc.id, sceneId: doc.sceneId, fileName: docFileName(doc.path, doc.untitled), path: doc.path, dirty: doc.dirty, modified: doc.modified });
   const sceneFileName = tabs.find((tab) => tab.id === activeId)?.fileName ?? "Untitled Scene";
   /**
    * A saved file with one scene names its one tab by the file, not by the

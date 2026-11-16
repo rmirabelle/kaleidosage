@@ -29,6 +29,8 @@ export interface KeptDoc {
   id: number;
   /** The scene's ID (see SceneDoc.sceneId); missing in a snapshot from before the IDs. */
   sceneId?: string;
+  /** When the scene last changed (see SceneDoc.modified); missing in a snapshot from before the dates. */
+  modified?: number | null;
   path: string | null;
   untitled: number;
   dirty: boolean;

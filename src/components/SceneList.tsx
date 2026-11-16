@@ -1,6 +1,6 @@
 import { useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { MagnifyingGlass, PencilSimple, SortAscending, Trash, X } from "@phosphor-icons/react";
+import { CaretDown, Clock, ListNumbers, MagnifyingGlass, PencilSimple, SortAscending, Trash, X } from "@phosphor-icons/react";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ContextMenu } from "./ContextMenu";
 import { help } from "../help/topics";
@@ -9,6 +9,7 @@ import { useDragReorder } from "./useDragReorder";
 import { useCtrlHeld } from "./useCtrlHeld";
 import { songFollow } from "../lib/songFollow";
 import { tracks } from "../lib/tracks";
+import { sortedSceneIds, type SceneSort } from "../lib/sceneSort";
 
 const subscribeFollow = (listener: () => void) => songFollow.subscribe(listener);
 const followVersion = () => songFollow.version;
@@ -32,9 +33,6 @@ function sceneUse(): Map<string, SongUse[]> {
   }
   return use;
 }
-
-/** Names in A–Z order, as a person reads them: "Scene 2" before "Scene 10", and case does not count. */
-const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" }).compare;
 
 interface Props {
   tabs: DocumentTabInfo[];
@@ -104,8 +102,11 @@ function UseBadge({ use }: { use: SongUse[] }) {
  * scene, as a plain click does: as long as Ctrl
  * is held, the list shows a pick cursor, and the scene under the pointer
  * lights up in the same color as the selected slice. Its card has a title
- * bar like the Source card's, with Sort A–Z, which puts the scenes in name
- * order (that is then the order they play in). Under it, a search box shows
+ * bar like the Source card's, with a Sort menu button, which puts the
+ * scenes in order by name, by the number of songs that use them, or by
+ * the date they last changed (see sortedSceneIds); that is then the order
+ * they play in. A scene with changes that are not saved, or not yet saved
+ * at all, counts as changed now. Under it, a search box shows
  * only the scenes whose names have the text, and no drag starts while the
  * list is filtered. The rows have no numbers: the Song Map's slices show
  * the scenes' names. With Files as the
@@ -122,12 +123,24 @@ export function SceneList({ tabs, activeId, onSelect, onClose, onReorder, onRena
   const [menu, setMenu] = useState<{ id: number; left: number; top: number } | null>(null);
   const [renaming, setRenaming] = useState<{ id: number; value: string } | null>(null);
   const [filter, setFilter] = useState("");
+  const [sortMenu, setSortMenu] = useState<{ left: number; top: number } | null>(null);
   const baseName = (tab: Props["tabs"][number]) => tab.fileName.replace(/\.ksage$/i, "");
   const use = showUse ? sceneUse() : new Map<string, SongUse[]>();
   const query = filter.trim().toLowerCase();
   const shown = tabs.map((tab, index) => ({ tab, index })).filter(({ tab }) => !query || baseName(tab).toLowerCase().includes(query));
-  const nameOrder = [...tabs].sort((a, b) => byName(baseName(a), baseName(b))).map((tab) => tab.id);
-  const sorted = nameOrder.every((id, index) => id === tabs[index].id);
+  const sortScenes = (sort: SceneSort) => {
+    const now = Date.now();
+    onReorder(sortedSceneIds(tabs.map((tab) => {
+      const songs = use.get(tab.sceneId) ?? [];
+      return {
+        id: tab.id,
+        name: baseName(tab),
+        songs: songs.length,
+        slices: songs.reduce((sum, song) => sum + song.slices, 0),
+        modified: tab.dirty || tab.path === null ? now : tab.modified ?? null
+      };
+    }), sort));
+  };
   const commitRename = () => {
     if (!renaming) return;
     const tab = tabs.find((each) => each.id === renaming.id);
@@ -142,13 +155,19 @@ export function SceneList({ tabs, activeId, onSelect, onClose, onReorder, onRena
           <h2 className="side-panel-title">Scenes</h2>
           <span className="files-card-buttons">
             <button
-              className="button secondary small icon-only"
-              disabled={tabs.length < 2 || sorted}
-              onClick={() => onReorder(nameOrder)}
-              data-tip={sorted && tabs.length > 1 ? "The scenes are in A–Z order" : "Sort the scenes A–Z by name; they then play in that order"}
-              aria-label="Sort the scenes A–Z"
+              className="button secondary small scene-sort-button"
+              disabled={tabs.length < 2}
+              aria-haspopup="menu"
+              aria-expanded={sortMenu !== null}
+              onClick={(event) => {
+                const box = event.currentTarget.getBoundingClientRect();
+                setSortMenu({ left: box.left, top: box.bottom + 4 });
+              }}
+              data-tip="Sort the scenes; they then play in that order"
+              aria-label="Sort the scenes"
             >
               <SortAscending size={14} />
+              <CaretDown size={9} weight="bold" />
             </button>
             <button className="button secondary small icon-only" disabled={tabs.length === 0} onClick={() => setRemoveAsked(true)} data-tip="Remove every scene from the project" aria-label="Remove every scene from the project">
               <Trash size={14} />
@@ -242,6 +261,18 @@ export function SceneList({ tabs, activeId, onSelect, onClose, onReorder, onRena
                 { label: "Remove Scene", icon: <Trash size={14} />, run: () => onClose(menu.id) }
               ];
             })()}
+          />,
+          document.body
+        )}
+        {sortMenu && createPortal(
+          <ContextMenu
+            position={sortMenu}
+            onClose={() => setSortMenu(null)}
+            items={[
+              { label: "Name (A–Z)", icon: <SortAscending size={14} />, run: () => sortScenes("name") },
+              { label: "Usage count (most used first)", icon: <ListNumbers size={14} />, disabled: !showUse, run: () => sortScenes("use") },
+              { label: "Date modified (newest first)", icon: <Clock size={14} />, run: () => sortScenes("modified") }
+            ]}
           />,
           document.body
         )}

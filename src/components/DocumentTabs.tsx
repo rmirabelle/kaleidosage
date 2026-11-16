@@ -15,6 +15,8 @@ export interface DocumentTabInfo {
   path: string | null;
   /** True when the scene has changes that are not saved; a red asterisk shows after its name. */
   dirty?: boolean;
+  /** When the scene last changed, in ms (see SceneDoc.modified); null or missing when not known. */
+  modified?: number | null;
 }
 
 interface Props {

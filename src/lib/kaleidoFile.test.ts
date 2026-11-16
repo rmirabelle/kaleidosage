@@ -31,6 +31,11 @@ describe("Kaleido Sage files", () => {
     expect(readManifest(writeManifest({ audio: AUDIO, activeScene: 0 })).trackSeconds).toBeUndefined();
   });
 
+  it("read back the scenes' dates, with null for a date that is not known", () => {
+    expect(readManifest(writeManifest({ audio: AUDIO, activeScene: 0, sceneModified: [1700000000000, null] })).sceneModified).toEqual([1700000000000, null]);
+    expect(readManifest(writeManifest({ audio: AUDIO, activeScene: 0 })).sceneModified).toBeUndefined();
+  });
+
   it("count a new scene order, track or audio setting as a change", () => {
     const base = fileFingerprint(["a.ksage", "b.ksage"], ["song.mp3"], AUDIO);
     expect(fileFingerprint(["b.ksage", "a.ksage"], ["song.mp3"], AUDIO)).not.toBe(base);

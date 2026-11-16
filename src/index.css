@@ -727,6 +727,8 @@ button { border: 0; }
 body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-select: none; }
 /* A small button with only an icon (the Files card's trash can). */
 .button.small.icon-only { width: 28px; padding: 0; }
+/* The Scenes list's Sort menu button: its icon, then a small arrow that shows it opens a menu. */
+.button.small.scene-sort-button { display: inline-flex; align-items: center; gap: 3px; padding: 0 6px; }
 .audio-source > .stage-label { margin-bottom: 0; }
 .audio-setting { display: flex; flex-direction: column; gap: 5px; padding: 0 16px; color: #c3c7d0; font-size: 12px; }
 .audio-setting output { margin-left: 6px; color: var(--muted); }
