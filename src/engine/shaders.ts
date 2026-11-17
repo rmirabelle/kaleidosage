@@ -1383,8 +1383,7 @@ vec2 fold(vec2 p) {
    * and smaller copies without end, as in the Kaliset fractal. A step count
    * between two whole numbers crossfades the patterns of both (foldShares),
    * so a drifting count changes smoothly. foldStretch follows how much the
-   * steps enlarge the picture, for texture detail. Each axis mirror is one
-   * bounce.
+   * steps enlarge the picture, for texture detail.
    */
   if (u_foldMode == 9) {
     vec2 z = vec2(cos(a), sin(a)) * r * 2.0;
@@ -1394,32 +1393,27 @@ vec2 fold(vec2 p) {
     float s = sin(u_fractalAngle);
     vec2 shift = vec2(u_fractalShift, u_fractalShift * 0.8);
     float grown = 2.0;
-    float bounces = 0.0;
     vec2 first = z;
     float firstGrown = grown;
-    float firstBounces = 0.0;
     for (int i = 0; i < 13; i++) {
       if (float(i) == whole) {
         first = z;
         firstGrown = grown;
-        firstBounces = bounces;
         if (t <= 0.0) break;
       }
       if (float(i) > whole) break;
-      bounces += (z.x < 0.0 ? 1.0 : 0.0) + (z.y < 0.0 ? 1.0 : 0.0);
       z = abs(z);
       float d = max(dot(z, z), 0.01);
       z = z / d * u_fractalScale;
       grown *= u_fractalScale / d;
       z = vec2(c * z.x - s * z.y, s * z.x + c * z.y) - shift;
     }
-    foldBounces = firstBounces;
     foldStretch = min(firstGrown * 0.5, 64.0);
     if (t > 0.0) {
       foldAlts = 1;
       foldAltPoint[0] = z * 0.5 / u_zoom;
       foldAltStretch[0] = min(grown * 0.5, 64.0);
-      foldAltBounces[0] = bounces;
+      foldAltBounces[0] = 0.0;
       foldShares = vec4(1.0 - t, t, 0.0, 0.0);
     }
     return first * 0.5 / u_zoom;
