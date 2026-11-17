@@ -207,6 +207,8 @@ uniform vec2 u_center;
 uniform vec2 u_imgRes;
 uniform float u_segments;
 uniform int u_foldMode;
+/* The Penrose type's tiles (0 rhombs, 1 kites and darts, 2 star) or the Sphere type's solid (0, 1, 2: 4, 8, 20 faces). */
+uniform int u_foldShape;
 /**
  * The shape steps of this pass in the order they move the screen point:
  * 0 = warp, 1 = complex map, 2 = kaleidoscope fold. This is the reverse of
@@ -1125,7 +1127,7 @@ float linesTo(float v) { return abs(floor(v)); }
 float aroundBounces(float j, float m) { return min(j, m - j); }
 
 /**
- * Penrose tiles (fold modes 5 to 7). The plane is cut into Robinson
+ * Penrose tiles (fold mode 5). The plane is cut into Robinson
  * triangles (half tiles): a "sun" of ten triangles around the origin is
  * split again and again (deflation), and each step keeps only the triangle
  * that holds the point. Each step makes the triangles 1 / PHI as large, so
@@ -1319,7 +1321,7 @@ vec2 fold(vec2 p) {
     return vec2(cos(a), sin(a)) * r / u_zoom;
   }
   /**
-   * Sphere (fold modes 8 to 10): a ball, Ball size in radius, covered by
+   * Sphere (fold mode 6): a ball, Ball size in radius, covered by
    * mirrors along the lines of a solid with 4, 8 or 20 faces. Outside the
    * ball, the point is mirrored into it in the ball's edge and shows the
    * back of the ball, so the rim has no seam. The ball leans by Tilt and
@@ -1328,7 +1330,7 @@ vec2 fold(vec2 p) {
    * into one small triangle near the top of the ball, and the picture
    * shows the triangle as seen from the ball's center.
    */
-  if (u_foldMode >= 8 && u_foldMode <= 10) {
+  if (u_foldMode == 6) {
     vec2 z = vec2(cos(a), sin(a)) * r / u_sphereSize;
     float d = dot(z, z);
     vec3 v;
@@ -1343,7 +1345,7 @@ vec2 fold(vec2 p) {
     float cu = cos(u_sphereTurn);
     float su = sin(u_sphereTurn);
     v = vec3(cu * v.x + su * v.z, v.y, cu * v.z - su * v.x);
-    float corner = u_foldMode == 8 ? 3.0 : u_foldMode == 9 ? 4.0 : 5.0;
+    float corner = float(u_foldShape + 3);
     float cp = cos(PI / corner);
     vec3 mirror = vec3(-0.5, -cp, sqrt(0.75 - cp * cp));
     for (int i = 0; i < 16; i++) {
@@ -1357,22 +1359,22 @@ vec2 fold(vec2 p) {
     return v.xy / max(v.z, 0.05) * 0.5 / u_zoom;
   }
   /**
-   * Penrose tiles: a pattern of two tile shapes with five-fold symmetry
-   * that never repeats exactly. Rhombs (mode 5) and Rhombs star (mode 7)
+   * Penrose (fold mode 5): a pattern of two tile shapes with five-fold
+   * symmetry that never repeats exactly. Rhombs (shape 0) and Star (shape 2)
    * fold each rhomb into a quarter: mirrors along both of its diagonals, so
    * the picture shows four times, around the rhomb's center. Kites and darts
-   * (mode 6) mirror each tile once, along its middle line. Rhombs star puts
+   * (shape 1) mirror each tile once, along its middle line. Star puts
    * the five-fold center of the pattern at the center of the screen; the
    * other two put the middle of one tile far from it there, so no one point
    * stands out. Tile size is
    * the length of a tile's side.
    */
-  if (u_foldMode >= 5 && u_foldMode <= 7) {
+  if (u_foldMode == 5) {
     vec2 q = vec2(cos(a), sin(a)) * r / u_tileSize;
-    bool kites = u_foldMode == 6;
+    bool kites = u_foldShape == 1;
     /* Far from the five-fold center, at the middle of one tile, so a change of Tile size grows the pattern around that tile. */
-    if (u_foldMode == 5) q += vec2(23.5847, 30.6525);
-    if (u_foldMode == 6) q += vec2(23.5847, 31.1525);
+    if (u_foldShape == 0) q += vec2(23.5847, 30.6525);
+    if (u_foldShape == 1) q += vec2(23.5847, 31.1525);
     penroseTriangle(q, kites);
     vec2 local;
     if (kites) {

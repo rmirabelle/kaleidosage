@@ -1,4 +1,4 @@
-import type { BlendMode, BlurMask, BubbleShadow, BubbleShape, CameraColors, CameraHeightSource, CameraRepeat, ColorFill, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidPaint, SolidShape, SolidWrap, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, MaskMode, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
+import type { PenroseShape, SphereShape, BlendMode, BlurMask, BubbleShadow, BubbleShape, CameraColors, CameraHeightSource, CameraRepeat, ColorFill, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidPaint, SolidShape, SolidWrap, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, MaskMode, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
 
 import type { PathShape } from "./paths";
 import { MAX_SPIRO_WHEELS, defaultSpiroWheels, randomSpiroWheels, type SpiroWheelSpec } from "./spiro";
@@ -305,8 +305,11 @@ export interface PlayState {
   mapMode: MapMode;
   /** The Mandelbrot map's place to dive into (see MANDEL_PLACES in submodes.ts). */
   mandelPlace: MandelPlace;
-  /** Radial wedges, or triangle or hexagon tiles. */
+  /** The Kaleidoscope type: Radial, the tiles, Hyperbolic, Penrose or Sphere. */
   foldMode: FoldMode;
+  /** The Penrose type's tiles, and the Sphere type's solid. */
+  penroseShape: PenroseShape;
+  sphereShape: SphereShape;
   /**
    * The effects the user added, in the order the panel lists them: shape
    * steps (they move pixels) and picture steps (they change the drawn
@@ -1257,7 +1260,7 @@ export function createPlayState(): PlayState {
     /* No effect is in the list at start-up, so every effect group is off. */
     groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false },
     locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, pathShape: 2, pathBlend: 7, spiroWheels: defaultSpiroWheels(), spiroBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, penroseShape: 0, sphereShape: 2, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, pathShape: 2, pathBlend: 7, spiroWheels: defaultSpiroWheels(), spiroBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1530,6 +1533,8 @@ export function randomizeParams(params: Params, state?: PlayState) {
     warpType: state.warpType,
     mapMode: state.mapMode,
     foldMode: state.foldMode,
+    penroseShape: state.penroseShape,
+    sphereShape: state.sphereShape,
     overlayColor: state.overlayColor,
     colorBlend: state.colorBlend,
     colorFill: state.colorFill,
@@ -1545,7 +1550,11 @@ export function randomizeParams(params: Params, state?: PlayState) {
       state.warpType = keptState.warpType;
     }
     if (state.locks.map) state.mapMode = keptState.mapMode;
-    if (state.locks.kaleidoscope) state.foldMode = keptState.foldMode;
+    if (state.locks.kaleidoscope) {
+      state.foldMode = keptState.foldMode;
+      state.penroseShape = keptState.penroseShape;
+      state.sphereShape = keptState.sphereShape;
+    }
     if (state.locks.color) {
       state.overlayColor = keptState.overlayColor;
       state.colorBlend = keptState.colorBlend;
@@ -1620,6 +1629,8 @@ const GROUP_MODES: Partial<Record<GroupKey, (state: PlayState, fresh: PlayState)
   },
   kaleidoscope: (state, fresh) => {
     state.foldMode = fresh.foldMode;
+    state.penroseShape = fresh.penroseShape;
+    state.sphereShape = fresh.sphereShape;
     state.layerBlend.kaleidoscope = 0;
   },
   blur: (state, fresh) => { state.blurMask = fresh.blurMask; },
@@ -1776,7 +1787,7 @@ function lockedKeys(state: PlayState): Set<ParamKey> {
 const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   warp: ["warpType"],
   map: ["mapMode"],
-  kaleidoscope: ["foldMode"],
+  kaleidoscope: ["foldMode", "penroseShape", "sphereShape"],
   blur: ["blurMask"],
   trails: ["trailColor"],
   smear: ["smearShape"],

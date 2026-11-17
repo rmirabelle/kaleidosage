@@ -20,7 +20,11 @@ export type MandelPlace = 0 | 1 | 2 | 3 | 4 | 5;
 /** 0 = no warp, 1 = warp the screen (breaks the symmetry), 2 = warp the image (keeps it). */
 export type WarpMode = 0 | 1 | 2;
 /** 0 = radial wedges around one center, 1 = triangle tiles, 2 = hexagon tiles, 3 = square tiles, 4 = hyperbolic disk. */
-export type FoldMode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+export type FoldMode = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+/** The Penrose type's tiles: rhombs, kites and darts, or rhombs around a five-point star at the center (see PENROSE_SHAPES). */
+export type PenroseShape = 0 | 1 | 2;
+/** The Sphere type's solid: 4, 8 or 20 faces (see SPHERE_SHAPES). */
+export type SphereShape = 0 | 1 | 2;
 /** The steps that move pixels around, before anything is drawn. The user sets their order. */
 export type ShapeStep = "warp" | "map" | "kaleidoscope";
 
@@ -365,6 +369,8 @@ export interface FrameValues {
   layerBlend: Record<ShapeStep, LayerBlend>;
   segments: number;
   foldMode: FoldMode;
+  penroseShape: PenroseShape;
+  sphereShape: SphereShape;
   /** The tile size in tile modes, in screen heights between neighbor cell centers. */
   tileSize: number;
   /** The hyperbolic disk (fold mode 4): its sides and how many meet at a corner (see hyperbolicCrossfade), its radius (screen heights) and its flow (-0.9 to 0.9). */
@@ -1849,6 +1855,7 @@ export class KaleidoRenderer {
     gl.uniform1iv(k.uniforms["u_shapeBlend[0]"], new Int32Array([v.layerBlend.warp, v.layerBlend.map, v.layerBlend.kaleidoscope]));
     gl.uniform1f(k.uniforms.u_segments, v.segments);
     gl.uniform1i(k.uniforms.u_foldMode, v.foldMode);
+    gl.uniform1i(k.uniforms.u_foldShape, v.foldMode === 5 ? v.penroseShape : v.sphereShape);
     gl.uniform1f(k.uniforms.u_tileSize, Math.max(0.01, v.tileSize));
     const hyperbolic = hyperbolicCrossfade(v.hyperSides, v.hyperCorners, v.hyperFlow);
     gl.uniform4fv(k.uniforms["u_hyper[0]"], hyperbolic.mirrors);

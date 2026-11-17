@@ -1545,6 +1545,8 @@ export class Engine {
       mobiusPanY: this.live("mobiusPanY"),
       segments: on.kaleidoscope ? this.live("segments") : 0,
       foldMode: on.kaleidoscope ? this.state.foldMode : 0,
+      penroseShape: this.state.penroseShape,
+      sphereShape: this.state.sphereShape,
       tileSize: this.live("tileSize"),
       hyperSides: this.live("hyperSides"),
       hyperCorners: this.live("hyperCorners"),
