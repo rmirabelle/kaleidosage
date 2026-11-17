@@ -20,15 +20,21 @@ plays it full screen. Tauri 2 + React + WebGL 2.
 - `src-tauri/src/updater.rs` checks `rmirabelle/kaleidosage` GitHub releases.
 - `prototype.html` is the original single-file prototype. It is a reference only.
 - Help → Kaleido Sage Help (F1) opens the help window (`src-tauri/src/help.rs`,
-  `src/components/HelpWindow.tsx`). Chapters are in `src/help/chapters/`; add
-  each one, with its part, to `src/help/chapters.ts`. The pictures in
-  `public/help/` are not made by hand: add a shot to `src/help/shots.ts`, then,
-  with the dev app on the start screen, run
-  `curl http://localhost:14510/__help-shots` (`?only=<name start>` for some).
-  The dev app drives itself, opens `D:\Images\Kaleido Sage\Robert
-  Mirabelle.ksage` for the full-window pictures, and closes it with no save.
-  Keep each shot cropped to the part the text discusses. `vite.config.ts`
-  describes `__help-preview`, which checks a chapter's layout.
+  `src/components/HelpWindow.tsx`). Chapters are in `src/help/chapters/`; each
+  one, with its part, is in `src/help/chapters.ts`. The pictures in
+  `public/help/` are not made by hand: add a shot to the list of its part in
+  `src/help/shots/` (the `Shot` fields are in `src/help/shots.ts`), then, with
+  the dev app open, run `bash tools/help-capture.sh <shot name start or group>`
+  (all pictures: `curl http://localhost:14510/__help-shots`). The dev app
+  drives itself. Shots of one `group` share a fresh project: a new blank one,
+  or `D:\Images\Kaleido Sage\Robert Mirabelle.ksage` at 2560 by 1440 for the
+  playlist pictures; the run closes it with no save. A project that is open
+  with changes is first saved to `help-stash/`.
+- Help pictures show the exact control that the text discusses, in the state
+  the text describes (`cursor` draws the mouse on it), with some of the window
+  around it. A whole-window picture only introduces a major area.
+  `bash tools/help-preview.sh <chapter id> <out.png> [scroll] [zoom]` writes a
+  picture of a chapter, to check its layout.
 
 ## Release memory
 

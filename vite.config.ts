@@ -23,7 +23,8 @@ const clientLog = {
 /**
  * Dev only: `curl http://localhost:14510/__help-shots` tells the dev app
  * window to make the help pictures again (src/help/capture.ts). Add
- * `?only=files` to make only the pictures whose name starts with "files".
+ * `?only=files` to make only the pictures whose name starts with "files",
+ * or the whole group of that name (see Shot.group in src/help/shots.ts).
  * Pictures named "readme-..." are for README.md: they are made only when
  * asked for by name.
  *

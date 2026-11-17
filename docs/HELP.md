@@ -193,7 +193,10 @@ line each, with a link to each topic. It shows once per version.
    (the first scene's Slot A, a picked input, an empty Playlist, the Song
    Map's analysis and slices). Help, Disable Pointers hides them all
    (`helpSettings.pointers`); they are on at first.
-6. Help page with search (part 4).
+6. Help page (part 4). Done 2026-11-17 as a window of its own, with no
+   search yet: 16 illustrated chapters in 5 parts (`src/help/chapters/`),
+   opened with F1. The dev app makes the pictures by itself
+   (`src/help/shots/`, `src/help/capture.ts`).
 7. Tooltip form (part 6), panel by panel.
 8. Idea explainers (part 7), then What's new (part 8).
 
