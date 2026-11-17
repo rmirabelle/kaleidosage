@@ -42,7 +42,7 @@ const EFFECT_NOTES: Record<FxStep, string> = {
  * with no file shows only the name and the note.
  */
 const THUMBNAILS: Partial<Record<string, string[]>> = {};
-for (const [path, url] of Object.entries(import.meta.glob<string>("../assets/fx/*.{jpg,webp,png}", { eager: true, query: "?url", import: "default" })).sort(([a], [b]) => a.localeCompare(b))) {
+for (const [path, url] of Object.entries(import.meta.glob<string>("../assets/fx/*.{jpg,webp,png}", { eager: true, query: "?url", import: "default" })).sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))) {
   const step = path.replace(/^.*\//, "").split(/[-.]/)[0];
   (THUMBNAILS[step] ??= []).push(url);
 }

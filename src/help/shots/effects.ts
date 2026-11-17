@@ -106,6 +106,11 @@ const look = (item: Look): Shot => ({
 export const EFFECTS: Shot[] = [
   /* Effects that shape space */
   look({ effect: "Kaleidoscope", name: "kaleidoscope", pattern: "Random shapes" }),
+  look({ effect: "Kaleidoscope", name: "kaleidoscope-penrose", pattern: "Random shapes", adjust: (page) => pickMenu(page, "Kaleidoscope", "Type", "Penrose"), wide: true }),
+  look({ effect: "Kaleidoscope", name: "kaleidoscope-sphere", pattern: "Random shapes", adjust: (page) => pickMenu(page, "Kaleidoscope", "Type", "Sphere"), wide: true }),
+  look({ effect: "Kaleidoscope", name: "kaleidoscope-pinwheel", pattern: "Random shapes", adjust: (page) => pickMenu(page, "Kaleidoscope", "Type", "Pinwheel"), wide: true }),
+  look({ effect: "Kaleidoscope", name: "kaleidoscope-tunnel", pattern: "Random shapes", adjust: (page) => pickMenu(page, "Kaleidoscope", "Type", "Mirror tunnel"), wide: true }),
+  look({ effect: "Kaleidoscope", name: "kaleidoscope-fractal", pattern: "Random shapes", adjust: (page) => pickMenu(page, "Kaleidoscope", "Type", "Fractal"), wide: true }),
   look({ effect: "Algorithm", name: "algorithm", pattern: "Color grid", wait: 2500 }),
   look({ effect: "Warp", name: "warp" }),
   look({ effect: "Camera", name: "camera", wait: 2500 }),

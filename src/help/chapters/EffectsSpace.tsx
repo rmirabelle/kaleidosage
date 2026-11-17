@@ -29,17 +29,54 @@ export function EffectsSpace() {
       <h2>Kaleidoscope</h2>
       <Shot name="fx-kaleidoscope" alt="The Kaleidoscope effect with its Type menu and the mirrored picture" side="block" />
       <p>
-        Kaleidoscope mirrors the picture into wedges or tiles. The <b>Type</b> menu has five choices:
+        Kaleidoscope mirrors the picture into wedges or tiles. The <b>Type</b> menu has ten choices:
       </p>
       <ul>
         <li><b>Radial</b> makes wedges around a center, as a toy kaleidoscope does. <b>Segments</b> sets the number of wedges.</li>
         <li><b>Triangle tiles</b>, <b>Hexagon tiles</b> and <b>Square tiles</b> fill the picture with mirrored tiles of that shape. <b>Tile size</b> sets their size.</li>
         <li><b>Hyperbolic</b> puts the tiles in a disk, where they become smaller toward the edge. <b>Sides</b>, <b>Per corner</b> and <b>Disk size</b> set the pattern, and <b>Flow</b> moves the tiles through the disk.</li>
+        <li><b>Penrose</b> fills the picture with two tile shapes in a five-sided pattern that never repeats exactly. See below.</li>
+        <li><b>Sphere</b> covers a turning ball with mirrors. See below.</li>
+        <li><b>Pinwheel</b> turns the picture in each cell instead of mirroring it. See below.</li>
+        <li><b>Mirror tunnel</b> shows the view down a long tube of mirrors. See below.</li>
+        <li><b>Fractal</b> repeats the fold inside itself, with smaller and smaller copies. See below.</li>
       </ul>
+      <p>
+        Penrose, Sphere, Pinwheel and Mirror tunnel each have a <b>Shape</b> menu under <b>Type</b>.
+      </p>
+      <Shot name="fx-kaleidoscope-penrose" alt="The Penrose type with its Shape menu set to Rhombs" side="block" />
+      <p>
+        <b>Penrose</b>: the <b>Shape</b> menu selects <b>Rhombs</b> (each tile shows the picture four
+        times), <b>Kites and darts</b> (each tile shows it twice), or <b>Star</b> (rhombs, with a
+        five-point flower at the center of the screen). <b>Tile size</b> sets the size of the tiles.
+      </p>
+      <Shot name="fx-kaleidoscope-sphere" alt="The Sphere type: a ball covered with mirrors, with a black glow around it" side="block" />
+      <p>
+        <b>Sphere</b>: the <b>Shape</b> menu selects a ball with <b>4 faces</b>, <b>8 faces</b> or <b>20 faces</b>. The ball turns immediately. <b>Ball size</b> sets its size, <b>Turn</b> its
+        turn, and <b>Tilt</b> how far its axis leans. Outside the ball you see its back side. <b>Glow</b> and <b>Glow width</b> put a black glow around the ball, so that it stands out.
+      </p>
+      <Shot name="fx-kaleidoscope-pinwheel" alt="The Pinwheel type with square cells" side="block" />
+      <p>
+        <b>Pinwheel</b>: the <b>Shape</b> menu selects <b>Triangles</b> (3 turns in each cell), <b>Squares</b> (4 turns) or <b>Hexagons</b> (6 turns). The picture never shows backward, and the
+        lines where the turned copies meet make the blades of the pinwheel. <b>Tile size</b> sets the
+        size of the cells.
+      </p>
+      <Shot name="fx-kaleidoscope-tunnel" alt="The Mirror tunnel type: a triangle tube of mirrors with a dark far end" side="block" />
+      <p>
+        <b>Mirror tunnel</b>: the <b>Shape</b> menu selects a <b>Triangle</b>, <b>Square</b> or <b>Hexagon</b> tube. <b>Speed</b> flies you along the tube without end (below 0 you fly
+        backward). <b>Darkness</b> makes the far end go to black, and <b>Tile size</b> sets how much of
+        the picture each mirror cell shows.
+      </p>
+      <Shot name="fx-kaleidoscope-fractal" alt="The Fractal type: mirrored copies inside copies" side="block" />
+      <p>
+        <b>Fractal</b>: <b>Steps</b> sets how many times the fold repeats. More steps give more and
+        smaller detail. <b>Scale</b>, <b>Turn</b> and <b>Shift</b> change the shape of the pattern. Small
+        changes give large results, so try small ranges on them.
+      </p>
       <p>
         <b>Twirl</b> and <b>Inner twirl</b> twist the pattern. <b>Offset X</b> and <b>Offset Y</b> move the
         center of the mirrors. <b>Mirror fade</b> makes each reflection darker than the one before, as real
-        glass does.
+        glass does. Sphere, Pinwheel, Mirror tunnel and Fractal do not have it.
       </p>
       <p>
         A new Kaleidoscope has ranges on <b>Pan X</b> and <b>Pan Y</b>, in its <b>Common</b> section. They
