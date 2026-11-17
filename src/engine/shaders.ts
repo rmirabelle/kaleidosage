@@ -238,6 +238,10 @@ uniform vec4 u_hyper[4];
 uniform vec4 u_hyperShare;
 uniform int u_hyperCount;
 uniform float u_hyperSize;
+/* Sphere (fold modes 8 to 10): the ball radius in screen heights, its turn and its tilt in radians. */
+uniform float u_sphereSize;
+uniform float u_sphereTurn;
+uniform float u_sphereTilt;
 uniform float u_rotation;
 uniform float u_zoom;
 uniform float u_twirl;
@@ -1313,6 +1317,44 @@ vec2 fold(vec2 p) {
       a = PI / u_segments * (0.5 + s * (g - 0.5));
     }
     return vec2(cos(a), sin(a)) * r / u_zoom;
+  }
+  /**
+   * Sphere (fold modes 8 to 10): a ball, Ball size in radius, covered by
+   * mirrors along the lines of a solid with 4, 8 or 20 faces. Outside the
+   * ball, the point is mirrored into it in the ball's edge and shows the
+   * back of the ball, so the rim has no seam. The ball leans by Tilt and
+   * turns by Turn around its leaning axis. The mirrors (the planes x = 0,
+   * y = 0, and one plane at the right angles for the solid) fold the point
+   * into one small triangle near the top of the ball, and the picture
+   * shows the triangle as seen from the ball's center.
+   */
+  if (u_foldMode >= 8 && u_foldMode <= 10) {
+    vec2 z = vec2(cos(a), sin(a)) * r / u_sphereSize;
+    float d = dot(z, z);
+    vec3 v;
+    if (d <= 1.0) v = vec3(z, sqrt(1.0 - d));
+    else {
+      z /= d;
+      v = vec3(z, -sqrt(max(0.0, 1.0 - dot(z, z))));
+    }
+    float ct = cos(u_sphereTilt);
+    float st = sin(u_sphereTilt);
+    v = vec3(v.x, ct * v.y - st * v.z, st * v.y + ct * v.z);
+    float cu = cos(u_sphereTurn);
+    float su = sin(u_sphereTurn);
+    v = vec3(cu * v.x + su * v.z, v.y, cu * v.z - su * v.x);
+    float corner = u_foldMode == 8 ? 3.0 : u_foldMode == 9 ? 4.0 : 5.0;
+    float cp = cos(PI / corner);
+    vec3 mirror = vec3(-0.5, -cp, sqrt(0.75 - cp * cp));
+    for (int i = 0; i < 16; i++) {
+      bool moved = false;
+      if (v.x < 0.0) { v.x = -v.x; foldBounces += 1.0; moved = true; }
+      if (v.y < 0.0) { v.y = -v.y; foldBounces += 1.0; moved = true; }
+      float t = dot(v, mirror);
+      if (t < 0.0) { v -= 2.0 * t * mirror; foldBounces += 1.0; moved = true; }
+      if (!moved) break;
+    }
+    return v.xy / max(v.z, 0.05) * 0.5 / u_zoom;
   }
   /**
    * Penrose tiles: a pattern of two tile shapes with five-fold symmetry

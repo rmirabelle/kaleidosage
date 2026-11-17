@@ -20,7 +20,7 @@ export type MandelPlace = 0 | 1 | 2 | 3 | 4 | 5;
 /** 0 = no warp, 1 = warp the screen (breaks the symmetry), 2 = warp the image (keeps it). */
 export type WarpMode = 0 | 1 | 2;
 /** 0 = radial wedges around one center, 1 = triangle tiles, 2 = hexagon tiles, 3 = square tiles, 4 = hyperbolic disk. */
-export type FoldMode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export type FoldMode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 /** The steps that move pixels around, before anything is drawn. The user sets their order. */
 export type ShapeStep = "warp" | "map" | "kaleidoscope";
 
@@ -372,6 +372,10 @@ export interface FrameValues {
   hyperCorners: number;
   hyperSize: number;
   hyperFlow: number;
+  /** Sphere (fold modes 8 to 10): the ball radius (screen heights), its turn and its tilt (radians). */
+  sphereSize: number;
+  sphereTurn: number;
+  sphereTilt: number;
   warpMode: WarpMode;
   warpType: WarpType;
   /** Ripple, swirl and bulge: the center, in screen heights. Waves: the direction (radians). */
@@ -1851,6 +1855,9 @@ export class KaleidoRenderer {
     gl.uniform4fv(k.uniforms.u_hyperShare, hyperbolic.shares);
     gl.uniform1i(k.uniforms.u_hyperCount, hyperbolic.count);
     gl.uniform1f(k.uniforms.u_hyperSize, Math.max(0.01, v.hyperSize));
+    gl.uniform1f(k.uniforms.u_sphereSize, Math.max(0.01, v.sphereSize));
+    gl.uniform1f(k.uniforms.u_sphereTurn, v.sphereTurn);
+    gl.uniform1f(k.uniforms.u_sphereTilt, v.sphereTilt);
     gl.uniform1f(k.uniforms.u_rotation, v.rotation);
     gl.uniform1f(k.uniforms.u_zoom, v.zoom);
     gl.uniform1f(k.uniforms.u_twirl, v.twirl);
