@@ -1377,7 +1377,7 @@ vec2 fold(vec2 p) {
    * the nearer the wall. The point on the wall (across it, and along the
    * tube) is folded by mirrors into one cell, one wall wide, so the cells
    * meet with no seam, also at the tube's corners. Travel moves the cells
-   * along the tube, two cells per loop. Tile size is how much of the picture
+   * along the tube (see tunnelTravel in params.ts). Tile size is how much of the picture
    * one cell shows. Darkness fades the far end to black (see foldShade).
    */
   if (u_foldMode == 8) {

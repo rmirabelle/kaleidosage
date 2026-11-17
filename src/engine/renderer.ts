@@ -391,7 +391,7 @@ export interface FrameValues {
   /** Sphere: the black glow around the ball, its darkness (0 to 1) and width (screen heights). */
   sphereGlow: number;
   sphereGlowWidth: number;
-  /** Mirror tunnel: the travel (0 to 360, one loop) and the far end's darkness (0 to 1). */
+  /** Mirror tunnel: the travel (0 to 1, one loop of two cells) and the far end's darkness (0 to 1). */
   tunnelTravel: number;
   tunnelFog: number;
   warpMode: WarpMode;
@@ -1879,7 +1879,7 @@ export class KaleidoRenderer {
     gl.uniform1f(k.uniforms.u_sphereTilt, v.sphereTilt);
     gl.uniform1f(k.uniforms.u_sphereGlow, Math.min(1, Math.max(0, v.sphereGlow)));
     gl.uniform1f(k.uniforms.u_sphereGlowWidth, Math.max(0.001, v.sphereGlowWidth));
-    gl.uniform1f(k.uniforms.u_tunnelTravel, v.tunnelTravel / 360);
+    gl.uniform1f(k.uniforms.u_tunnelTravel, v.tunnelTravel);
     gl.uniform1f(k.uniforms.u_tunnelFog, Math.min(1, Math.max(0, v.tunnelFog)));
     gl.uniform1f(k.uniforms.u_rotation, v.rotation);
     gl.uniform1f(k.uniforms.u_zoom, v.zoom);

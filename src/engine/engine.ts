@@ -1112,6 +1112,7 @@ export class Engine {
     this.state.outlineSpinTurns = 0;
     this.state.outlineTumbleTurns = 0;
     this.state.mapTravel = 0;
+    this.state.tunnelTravel = 0;
     this.state.cameraX = 0;
     this.state.cameraY = 0;
     this.renderer.resetTrails();
@@ -1275,6 +1276,8 @@ export class Engine {
     } else {
       this.state.mapTravel += animated * (this.state.mapMode === 8 ? mapSpeed / drosteCopy(this.live("drosteSize")) : mapSpeed);
     }
+    /* The Mirror tunnel's Speed is in cells a second; one loop is two cells. */
+    this.state.tunnelTravel = ((this.state.tunnelTravel + animated * this.live("tunnelSpeed") / 2) % 1 + 1) % 1;
     /* The camera's Dolly (forward, the way it pans) and Truck (to its right) are speeds too: its place on the land moves by them. */
     const heading = this.live("cameraPan") * DEGREES;
     const dolly = animated * this.live("cameraDolly");
@@ -1559,7 +1562,7 @@ export class Engine {
       sphereTilt: this.live("sphereTilt") * DEGREES,
       sphereGlow: this.live("sphereGlow"),
       sphereGlowWidth: this.live("sphereGlowWidth"),
-      tunnelTravel: this.live("tunnelTravel"),
+      tunnelTravel: this.state.tunnelTravel,
       tunnelFog: this.live("tunnelFog"),
       centerX: kaleidoscope("centerX", 0),
       centerY: kaleidoscope("centerY", 0),
