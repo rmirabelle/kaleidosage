@@ -6,7 +6,7 @@ import { soundList } from "./audio";
 const LIMIT = 200;
 
 type SavedParam = Pick<Param, "value" | "low" | "high" | "on" | "ease" | "custom" | "seconds" | "startTime">;
-type SavedState = Pick<PlayState, "groups" | "blendMode" | "warpType" | "mapMode" | "foldMode" | "penroseShape" | "sphereShape" | "pinwheelShape" | "blurMask" | "trailMode"
+type SavedState = Pick<PlayState, "groups" | "blendMode" | "warpType" | "mapMode" | "foldMode" | "penroseShape" | "sphereShape" | "pinwheelShape" | "tunnelShape" | "blurMask" | "trailMode"
   | "overlayColor" | "colorBlend" | "trailColor" | "smearShape" | "contourTone" | "contourBlend" | "cameraBlend" | "viewBlend" | "skyColor" | "cameraRepeat" | "cameraHeightSource" | "cameraColors" | "cameraStops" | "videoCrossfade" | "fxOrder" | "layerBlend" | "sound" | "particleStops" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "pathShape" | "pathBlend" | "spiroWheels" | "spiroBlend" | "cyclesPaint" | "cyclesStops" | "solidShape" | "solidMap" | "solidWrap" | "solidPaint" | "solidBlend" | "solidKeep" | "mandelPlace" | "particleShape" | "bubbleShape" | "bubbleBlend" | "bubbleShadow" | "outlineShape" | "outlineDraw" | "outlineStops" | "maskMode" | "maskStops" | "colorFill" | "colorStops">;
 
 /** The settings at one step, and their fingerprint, to tell whether two steps differ. */
@@ -34,6 +34,7 @@ function take(params: Params, state: PlayState): Snapshot {
       penroseShape: state.penroseShape,
       sphereShape: state.sphereShape,
       pinwheelShape: state.pinwheelShape,
+      tunnelShape: state.tunnelShape,
       blurMask: state.blurMask,
       trailMode: state.trailMode,
       overlayColor: state.overlayColor,

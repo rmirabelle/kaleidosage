@@ -38,14 +38,17 @@ export const KALEIDOSCOPE_KEYS: Record<FoldMode, ParamKey[]> = {
   4: ["hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "panX", "panY", "rotation", "zoom", "twirl", "innerTwirl", "centerX", "centerY", "mirrorFade"],
   5: ["tileSize", "panX", "panY", "rotation", "zoom", "twirl", "innerTwirl", "centerX", "centerY", "mirrorFade"],
   6: ["sphereSize", "sphereTurn", "sphereTilt", "sphereGlow", "sphereGlowWidth", "panX", "panY", "rotation", "zoom", "twirl", "innerTwirl", "centerX", "centerY"],
-  7: ["tileSize", "panX", "panY", "rotation", "zoom", "twirl", "innerTwirl", "centerX", "centerY"]
+  7: ["tileSize", "panX", "panY", "rotation", "zoom", "twirl", "innerTwirl", "centerX", "centerY"],
+  8: ["tileSize", "tunnelTravel", "tunnelFog", "panX", "panY", "rotation", "zoom", "twirl", "innerTwirl", "centerX", "centerY", "mirrorFade"]
 };
-export const FOLD_MODES = [[0, "Radial"], [1, "Triangle tiles"], [2, "Hexagon tiles"], [3, "Square tiles"], [4, "Hyperbolic"], [5, "Penrose"], [6, "Sphere"], [7, "Pinwheel"]] as const;
+export const FOLD_MODES = [[0, "Radial"], [1, "Triangle tiles"], [2, "Hexagon tiles"], [3, "Square tiles"], [4, "Hyperbolic"], [5, "Penrose"], [6, "Sphere"], [7, "Pinwheel"], [8, "Mirror tunnel"]] as const;
 /** The Penrose type's Shape menu (see PenroseShape). */
 export const PENROSE_SHAPES = [[0, "Rhombs"], [1, "Kites and darts"], [2, "Star"]] as const;
 /** The Sphere type's Shape menu (see SphereShape). */
 /** The Pinwheel type's Shape menu (see PinwheelShape). */
 export const PINWHEEL_SHAPES = [[0, "Triangles"], [1, "Squares"], [2, "Hexagons"]] as const;
+/** The Mirror tunnel type's Shape menu (see TunnelShape). */
+export const TUNNEL_SHAPES = [[0, "Triangle"], [1, "Square"], [2, "Hexagon"]] as const;
 export const SPHERE_SHAPES = [[0, "4 faces"], [1, "8 faces"], [2, "20 faces"]] as const;
 
 /** The sliders each blur mask uses; the others are hidden. */

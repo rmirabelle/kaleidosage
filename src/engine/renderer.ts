@@ -20,13 +20,15 @@ export type MandelPlace = 0 | 1 | 2 | 3 | 4 | 5;
 /** 0 = no warp, 1 = warp the screen (breaks the symmetry), 2 = warp the image (keeps it). */
 export type WarpMode = 0 | 1 | 2;
 /** 0 = radial wedges around one center, 1 = triangle tiles, 2 = hexagon tiles, 3 = square tiles, 4 = hyperbolic disk. */
-export type FoldMode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export type FoldMode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 /** The Penrose type's tiles: rhombs, kites and darts, or rhombs around a five-point star at the center (see PENROSE_SHAPES). */
 export type PenroseShape = 0 | 1 | 2;
 /** The Sphere type's solid: 4, 8 or 20 faces (see SPHERE_SHAPES). */
 export type SphereShape = 0 | 1 | 2;
 /** The Pinwheel type's cells: triangles, squares or hexagons (see PINWHEEL_SHAPES). */
 export type PinwheelShape = 0 | 1 | 2;
+/** The Mirror tunnel type's cross-section: a triangle, a square or a hexagon (see TUNNEL_SHAPES). */
+export type TunnelShape = 0 | 1 | 2;
 /** The steps that move pixels around, before anything is drawn. The user sets their order. */
 export type ShapeStep = "warp" | "map" | "kaleidoscope";
 
@@ -374,6 +376,7 @@ export interface FrameValues {
   penroseShape: PenroseShape;
   sphereShape: SphereShape;
   pinwheelShape: PinwheelShape;
+  tunnelShape: TunnelShape;
   /** The tile size in tile modes, in screen heights between neighbor cell centers. */
   tileSize: number;
   /** The hyperbolic disk (fold mode 4): its sides and how many meet at a corner (see hyperbolicCrossfade), its radius (screen heights) and its flow (-0.9 to 0.9). */
@@ -388,6 +391,9 @@ export interface FrameValues {
   /** Sphere: the black glow around the ball, its darkness (0 to 1) and width (screen heights). */
   sphereGlow: number;
   sphereGlowWidth: number;
+  /** Mirror tunnel: the travel (0 to 360, one loop) and the far end's darkness (0 to 1). */
+  tunnelTravel: number;
+  tunnelFog: number;
   warpMode: WarpMode;
   warpType: WarpType;
   /** Ripple, swirl and bulge: the center, in screen heights. Waves: the direction (radians). */
@@ -1861,7 +1867,7 @@ export class KaleidoRenderer {
     gl.uniform1iv(k.uniforms["u_shapeBlend[0]"], new Int32Array([v.layerBlend.warp, v.layerBlend.map, v.layerBlend.kaleidoscope]));
     gl.uniform1f(k.uniforms.u_segments, v.segments);
     gl.uniform1i(k.uniforms.u_foldMode, v.foldMode);
-    gl.uniform1i(k.uniforms.u_foldShape, v.foldMode === 5 ? v.penroseShape : v.foldMode === 7 ? v.pinwheelShape : v.sphereShape);
+    gl.uniform1i(k.uniforms.u_foldShape, v.foldMode === 5 ? v.penroseShape : v.foldMode === 7 ? v.pinwheelShape : v.foldMode === 8 ? v.tunnelShape : v.sphereShape);
     gl.uniform1f(k.uniforms.u_tileSize, Math.max(0.01, v.tileSize));
     const hyperbolic = hyperbolicCrossfade(v.hyperSides, v.hyperCorners, v.hyperFlow);
     gl.uniform4fv(k.uniforms["u_hyper[0]"], hyperbolic.mirrors);
@@ -1873,6 +1879,8 @@ export class KaleidoRenderer {
     gl.uniform1f(k.uniforms.u_sphereTilt, v.sphereTilt);
     gl.uniform1f(k.uniforms.u_sphereGlow, Math.min(1, Math.max(0, v.sphereGlow)));
     gl.uniform1f(k.uniforms.u_sphereGlowWidth, Math.max(0.001, v.sphereGlowWidth));
+    gl.uniform1f(k.uniforms.u_tunnelTravel, v.tunnelTravel / 360);
+    gl.uniform1f(k.uniforms.u_tunnelFog, Math.min(1, Math.max(0, v.tunnelFog)));
     gl.uniform1f(k.uniforms.u_rotation, v.rotation);
     gl.uniform1f(k.uniforms.u_zoom, v.zoom);
     gl.uniform1f(k.uniforms.u_twirl, v.twirl);

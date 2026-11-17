@@ -247,6 +247,9 @@ uniform float u_sphereTilt;
 /* Sphere: the black glow around the ball, its darkness at the edge (0 to 1) and its width in screen heights. */
 uniform float u_sphereGlow;
 uniform float u_sphereGlowWidth;
+/* Mirror tunnel: the travel along it (0 to 1, one loop) and the far end's darkness (0 to 1). */
+uniform float u_tunnelTravel;
+uniform float u_tunnelFog;
 uniform float u_rotation;
 uniform float u_zoom;
 uniform float u_twirl;
@@ -1366,6 +1369,33 @@ vec2 fold(vec2 p) {
       if (!moved) break;
     }
     return v.xy / max(v.z, 0.05) * 0.5 / u_zoom;
+  }
+  /**
+   * Mirror tunnel (fold mode 8): the view down a long tube whose walls are
+   * mirrors, with a triangle, square or hexagon cross-section. Each screen
+   * point sees one wall at some depth: the farther from the screen center,
+   * the nearer the wall. The point on the wall (across it, and along the
+   * tube) is folded by mirrors into one cell, one wall wide, so the cells
+   * meet with no seam, also at the tube's corners. Travel moves the cells
+   * along the tube, two cells per loop. Tile size is how much of the picture
+   * one cell shows. Darkness fades the far end to black (see foldShade),
+   * and each mirror between a cell and the first one is one bounce.
+   */
+  if (u_foldMode == 8) {
+    float sides = u_foldShape == 0 ? 3.0 : u_foldShape == 1 ? 4.0 : 6.0;
+    float halfAngle = PI / sides;
+    float side = floor((a + halfAngle) / (2.0 * halfAngle));
+    float off = a - side * 2.0 * halfAngle;
+    float reach = 1.0 / cos(off);
+    float rr = max(r, 1e-4);
+    float depth = 0.5 * reach / rr;
+    float cell = 2.0 * tan(halfAngle);
+    vec2 wall = vec2(side * cell + tan(off), depth) / cell + vec2(0.0, 2.0 * u_tunnelTravel);
+    foldBounces = abs(floor(wall.x + 0.5)) + floor(wall.y);
+    vec2 inCell = 1.0 - abs(mod(wall, 2.0) - 1.0) - 0.5;
+    foldShade = exp(-u_tunnelFog * 0.35 * depth / cell);
+    foldStretch = min(0.5 * reach / (cell * rr * rr), 256.0);
+    return inCell * u_tileSize / u_zoom;
   }
   /**
    * Pinwheel (fold mode 7): cells that turn the picture around their
