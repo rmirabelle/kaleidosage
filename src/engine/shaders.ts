@@ -1378,8 +1378,7 @@ vec2 fold(vec2 p) {
    * tube) is folded by mirrors into one cell, one wall wide, so the cells
    * meet with no seam, also at the tube's corners. Travel moves the cells
    * along the tube, two cells per loop. Tile size is how much of the picture
-   * one cell shows. Darkness fades the far end to black (see foldShade),
-   * and each mirror between a cell and the first one is one bounce.
+   * one cell shows. Darkness fades the far end to black (see foldShade).
    */
   if (u_foldMode == 8) {
     float sides = u_foldShape == 0 ? 3.0 : u_foldShape == 1 ? 4.0 : 6.0;
@@ -1391,7 +1390,6 @@ vec2 fold(vec2 p) {
     float depth = 0.5 * reach / rr;
     float cell = 2.0 * tan(halfAngle);
     vec2 wall = vec2(side * cell + tan(off), depth) / cell + vec2(0.0, 2.0 * u_tunnelTravel);
-    foldBounces = abs(floor(wall.x + 0.5)) + floor(wall.y);
     vec2 inCell = 1.0 - abs(mod(wall, 2.0) - 1.0) - 0.5;
     foldShade = exp(-u_tunnelFog * 0.35 * depth / cell);
     foldStretch = min(0.5 * reach / (cell * rr * rr), 256.0);
