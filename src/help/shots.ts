@@ -4,6 +4,7 @@ import { SCENE } from "./shots/scene";
 import { EFFECTS } from "./shots/effects";
 import { MUSIC } from "./shots/music";
 import { SHOW } from "./shots/show";
+import { README } from "./shots/readme";
 
 /**
  * One help picture. The capture run (capture.ts) makes
@@ -27,6 +28,13 @@ export interface Shot {
    * a group's name makes that whole group. The default group is "main".
    */
   group?: string;
+  /**
+   * The page size for this shot alone, in CSS pixels, in place of the size
+   * of its part of the run (1280 by 800 for "blank", 2560 by 1440 for
+   * "file"). For a picture of the whole window that must stay readable
+   * when a page shows it small.
+   */
+  page?: { width: number; height: number };
   /** Puts the app in the state to show, for example selects a tool or opens a menu. */
   setup?: (page: Page) => void | Promise<void>;
   /**
@@ -57,4 +65,4 @@ export interface Shot {
  * All pictures, in the order the run makes them. Each part of the help has
  * its own list in src/help/shots/, and its own groups (see Shot.group).
  */
-export const SHOTS: Shot[] = [...BASICS, ...SCENE, ...EFFECTS, ...MUSIC, ...SHOW];
+export const SHOTS: Shot[] = [...BASICS, ...SCENE, ...EFFECTS, ...MUSIC, ...SHOW, ...README];

@@ -245,6 +245,12 @@ async function takeShot(shot: Shot, log: (message: string) => void) {
   try {
     /** A tip from the real mouse, or from the shot before, does not belong in this picture. */
     page.unpoint();
+    /** A picture for README.md shows the app as a user has it: no DEV badge. */
+    document.documentElement.classList.toggle("help-readme", shot.name.startsWith("readme-"));
+    if (shot.page) {
+      await invoke("help_stage", { on: true, ...shot.page });
+      await page.settle(700);
+    }
     await shot.setup?.(page);
     await page.settle();
     hideCursor = showCursor(shot);
@@ -265,6 +271,11 @@ async function takeShot(shot: Shot, log: (message: string) => void) {
   } finally {
     marked?.classList.remove("help-shot-mark");
     hideCursor();
+    document.documentElement.classList.remove("help-readme");
+    if (shot.page) {
+      await invoke("help_stage", { on: true, ...(shot.needs === "file" ? STAGE_SIZE.large : STAGE_SIZE.small) }).catch(() => {});
+      await page.settle(400);
+    }
     try {
       await shot.cleanup?.(page);
       await page.settle(80);

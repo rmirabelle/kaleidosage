@@ -2411,6 +2411,8 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .help-turn button:hover { color: #ffffff; background: rgba(255,255,255,.07); }
 
 /* The capture run that makes the help pictures (src/help/capture.ts): a ring on the part a picture points at. */
+/* A picture for README.md has no DEV badge. */
+.help-readme .brand-dev { display: none !important; }
 /* Pointer tips and status messages do not belong in a picture. */
 .help-capturing .pointer-tip, .help-capturing .status-toast { display: none !important; }
 /* The drawn mouse pointer of a shot, with its tip at the point, and the hover looks that the real mouse gives. */

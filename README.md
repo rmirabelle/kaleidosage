@@ -7,7 +7,7 @@
 <p align="center"><strong>Visual FX Playground</strong></p>
 
 <p align="center">
-  Turn any image or video into moving, music-driven visuals.<br>
+  Turn any image or video into moving visuals that follow your music.<br>
   Play them full screen, cast them to a projector, step inside them in VR, or export them as video.
 </p>
 
@@ -15,11 +15,40 @@
   <a href="https://github.com/rmirabelle/kaleidosage/releases/latest"><strong>Download for Windows</strong></a>
 </p>
 
+<p align="center">
+  <img src="docs/readme/collage.jpg" alt="Twelve scenes made with Kaleido Sage: kaleidoscopes, fractals, light paths, particles and 3D objects" width="100%">
+</p>
+
+<p align="center"><em>Each picture is one frame of a moving scene.</em></p>
+
 ---
+
+## See it move
+
+These music videos were made with Kaleido Sage. Each one is a show that follows its song, exported as one video.
+
+<table>
+  <tr>
+    <td width="33%"><a href="https://www.youtube.com/watch?v=E94S70F4jR0"><img src="https://img.youtube.com/vi/E94S70F4jR0/maxresdefault.jpg" alt="Watch Infinity Teeth on YouTube"></a></td>
+    <td width="33%"><a href="https://www.youtube.com/watch?v=u9XHnHR8ePQ"><img src="https://img.youtube.com/vi/u9XHnHR8ePQ/maxresdefault.jpg" alt="Watch Nemesis Redux on YouTube"></a></td>
+    <td width="33%"><a href="https://www.youtube.com/watch?v=XF_wUA4zrSs"><img src="https://img.youtube.com/vi/XF_wUA4zrSs/maxresdefault.jpg" alt="Watch Into the Light on YouTube"></a></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://www.youtube.com/watch?v=E94S70F4jR0"><strong>▶ Infinity Teeth</strong></a></td>
+    <td align="center"><a href="https://www.youtube.com/watch?v=u9XHnHR8ePQ"><strong>▶ Nemesis Redux</strong></a></td>
+    <td align="center"><a href="https://www.youtube.com/watch?v=XF_wUA4zrSs"><strong>▶ Into the Light</strong></a></td>
+  </tr>
+</table>
 
 ## What it does
 
-Pick a picture and add effects. Set any value to move, or link it to the sound. The picture then moves with your music, live.
+Kaleido Sage starts with one picture: a photo, a video or a pattern. You add effects, and they mirror it, bend it through fractals, fly a camera over it, or draw lines of light on it. Each setting of each effect can move by itself, or with the sound. A still photo becomes a picture that does not stop.
+
+Then you collect your scenes in a project with your songs. Kaleido Sage examines each song, and changes the scene as the song goes from one part to the next. A full set of music plays as one show.
+
+<p align="center">
+  <img src="docs/readme/window.jpg" alt="The Kaleido Sage window with a playlist, a list of scenes, the effects of a scene, the picture and the Song Map" width="100%">
+</p>
 
 Use Kaleido Sage for:
 
@@ -27,6 +56,52 @@ Use Kaleido Sage for:
 - Music videos and looping clips for social media
 - A moving picture on a second screen or a projector
 - Free play with fractals, mirrors and light
+
+## How it works
+
+### 1. Stack effects
+
+There are 27 effects, from Kaleidoscope and Mandelbrot to Lasers, Particles, Spirograph and real Terrain. Add them in any order. The picture goes through the list from top to bottom, so the order changes the result. Press `X` for new random settings, and lock the effects that you want to keep.
+
+<p align="center">
+  <img src="docs/readme/first-fx-menu.png" alt="The Add an effect menu with a preview of the Kaleidoscope effect" width="620">
+</p>
+
+### 2. Make every setting move
+
+Give a slider a range, and its value moves between two handles. Select how it moves: smooth, linear, with a bounce, at random, and more. Each range can follow the length of the scene or have its own time.
+
+<p align="center">
+  <img src="docs/readme/row-ease-menu.png" alt="A slider with a range, and the list of ways the value can move" width="460">
+</p>
+
+### 3. Let the music lead
+
+Link a setting to the sound with one click. The app can listen to the sound of your PC, a microphone, or your own audio files. With audio files, Song Follow cuts each song into sections and shows them in the Song Map. You select the scene and the mood for each section, or let Auto Fill do it.
+
+<p align="center">
+  <img src="docs/readme/song-map-slice.png" alt="The Song Map: the sections of a song, each with its scene and its mood" width="760">
+</p>
+
+### 4. Show it
+
+Play full screen, cast to a projector or a second screen while the controls stay on your own screen, or see the picture on a large virtual screen in a Quest headset. Turn any setting with the knobs and faders of a MIDI controller. Export a scene as a seamless loop, or a song as a full music video.
+
+## More than mirrors
+
+The effects go far past a kaleidoscope. **Terrain** flies a camera over real land, with heights and satellite pictures from the internet. **3D object** puts your picture on a turning shape of glass or chrome. **Light cycles**, **Lasers**, **Light paths** and **Spirograph** draw with light, and **Particles** sends moving points of light out of the bright areas.
+
+<p align="center">
+  <img src="docs/readme/fx-terrain.jpg" alt="The Terrain effect: its controls, and a camera view of real land of the Appalachians" width="760">
+</p>
+
+<p align="center">
+  <img src="docs/readme/gallery.jpg" alt="Eight more scenes made with Kaleido Sage" width="100%">
+</p>
+
+## Help in the app
+
+Press `F1` for the built-in help: 16 chapters with pictures, from your first scene to a full show. The line at the bottom of the window explains the control under your mouse, and `?` shows every key and mouse gesture.
 
 ## System requirements
 
@@ -54,7 +129,7 @@ Kaleido Sage is for Windows only at this time.
 2. Download `KaleidoSage_<version>_x64-setup.exe`.
 3. Run the file and follow the steps.
 
-The installer is about 8 MB. It installs the app for your Windows user only, so you do not need administrator rights.
+The installer is about 80 MB. It installs the app for your Windows user only, so you do not need administrator rights.
 
 Windows can show "Windows protected your PC" because the installer has no code signature. To continue, click **More info**, then **Run anyway**.
 
@@ -149,12 +224,13 @@ The first time the app analyzes a song, it downloads the song analysis files, ab
 | Video setting | Choices |
 |---|---|
 | **Size** | Screen shape, 16:9 (YouTube), 9:16 (TikTok, Reels, Shorts), 1:1 and 4:5 (Instagram), 360° (VR headsets) |
+| **Scenes** | The scene on the screen, all scenes (one file each, or one video with crossfades), or a song |
 | **Length** | One, two or three loops of the scene |
 | **Style** | Seamless loop, or a title at the start |
 | **Quality** | Standard, High or Best |
 | **Frame rate** | 30 or 60 frames per second |
 
-A video plays the ranges. Audio links do not move the picture in a video, and the video has no sound. To make a music video, add the song in a video editor.
+A video of a scene plays the ranges. Audio links do not move the picture in it, and it has no sound. A **Song** video is different: it follows the song as the show does, with its scenes and its sound, so it is a complete music video.
 
 ### Projects
 
@@ -196,6 +272,7 @@ To exit, press `Esc` or use the headset's menu.
 | `A` | Audio panel |
 | `M` | MIDI panel |
 | `P` | Show or hide performance numbers |
+| `F1` | Help |
 | `Ctrl+N` | Add a blank scene |
 | `Ctrl+O` | Open a project |
 | `Ctrl+S` | Save the project |
