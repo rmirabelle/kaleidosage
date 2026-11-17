@@ -1321,13 +1321,16 @@ vec2 fold(vec2 p) {
    * the picture shows four times, around the rhomb's center. Kites and darts
    * (mode 6) mirror each tile once, along its middle line. Rhombs star puts
    * the five-fold center of the pattern at the center of the screen; the
-   * other two move far from it, so no one point stands out. Tile size is
+   * other two put the middle of one tile far from it there, so no one point
+   * stands out. Tile size is
    * the length of a tile's side.
    */
   if (u_foldMode >= 5 && u_foldMode <= 7) {
     vec2 q = vec2(cos(a), sin(a)) * r / u_tileSize;
     bool kites = u_foldMode == 6;
-    if (u_foldMode != 7) q += vec2(23.7, 31.3);
+    /* Far from the five-fold center, at the middle of one tile, so a change of Tile size grows the pattern around that tile. */
+    if (u_foldMode == 5) q += vec2(23.5847, 30.6525);
+    if (u_foldMode == 6) q += vec2(23.5847, 31.1525);
     penroseTriangle(q, kites);
     vec2 local;
     if (kites) {
