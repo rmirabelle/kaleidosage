@@ -290,7 +290,9 @@ export async function captureHelpShots(stage: Stage, log: (message: string) => v
   let failed = 0;
   const count = (ok: boolean) => { if (ok) made += 1; else failed += 1; };
   /** Pictures for README.md ("readme-...") are made only when asked for by name; the app does not ship them. */
-  const wanted = SHOTS.filter((shot) => only ? shot.name.startsWith(only) : !shot.name.startsWith("readme-"));
+  /** `only` is the start of a shot's name, or the full name of a group: a group's shots depend on each other, so they are made together. */
+  const wanted = SHOTS.filter((shot) => only ? shot.name.startsWith(only) || shot.group === only : !shot.name.startsWith("readme-"));
+  if (only && !wanted.length) log(`help pictures: no shot's name starts with "${only}", and no group has that name`);
   try {
     /** Every run draws the page at one size, so the pictures do not depend on the screen. The window itself does not change or take the focus. */
     await invoke("help_stage", { on: true, ...STAGE_SIZE.small });
@@ -312,46 +314,42 @@ export async function captureHelpShots(stage: Stage, log: (message: string) => v
     }
     for (const shot of wanted.filter((item) => item.needs === "none")) count(await takeShot(shot, log));
 
+    /** The groups of some shots, in the order of their first shot. */
+    const groupsOf = (shots: Shot[]) => Array.from(new Set(shots.map((shot) => shot.group ?? "main")));
+
+    /** Each group of "blank" shots gets its own new project with one blank scene. */
     const withBlank = wanted.filter((shot) => shot.needs === "blank");
-    if (withBlank.length) {
-      if (!stage.isEmpty()) {
-        log(`help pictures: ${withBlank.length} need the start screen first; close the project and run again`);
-        failed += withBlank.length;
-      } else {
-        stage.newScene();
-        await page.waitFor(".control-panel");
-        await page.settle(500);
-        try {
-          for (const shot of withBlank) count(await takeShot(shot, log));
-        } finally {
-          await stage.closeBase();
-          await page.settle(300);
-        }
+    for (const group of groupsOf(withBlank)) {
+      stage.newScene();
+      await page.waitFor(".control-panel");
+      await page.settle(500);
+      try {
+        for (const shot of withBlank.filter((item) => (item.group ?? "main") === group)) count(await takeShot(shot, log));
+      } finally {
+        await stage.closeBase();
+        await page.settle(300);
       }
     }
 
+    /** Each group of "file" shots gets its own opening of the base project, at the large page size. */
     const withFile = wanted.filter((shot) => shot.needs === "file");
-    if (withFile.length) {
-      if (!stage.isEmpty()) {
-        log(`help pictures: ${withFile.length} need the start screen first; close the project and run again`);
-        failed += withFile.length;
-      } else {
-        await invoke("help_stage", { on: true, ...STAGE_SIZE.large });
-        await stage.openBase();
-        /** The base project is large, and its scenes load one by one. */
-        try {
-          await page.waitFor(".control-panel", 120000);
-        } catch (error) {
-          const status = document.querySelector(".status-toast")?.textContent?.trim();
-          log(`help pictures: the base project did not open${document.querySelector(".start-screen") ? " (the start screen shows)" : ""}${status ? `: ${status}` : ""}`);
-          throw error;
-        }
-        await page.settle(800);
-        try {
-          for (const shot of withFile) count(await takeShot(shot, log));
-        } finally {
-          await stage.closeBase();
-        }
+    if (withFile.length) await invoke("help_stage", { on: true, ...STAGE_SIZE.large });
+    for (const group of groupsOf(withFile)) {
+      await stage.openBase();
+      /** The base project is large, and its scenes load one by one. */
+      try {
+        await page.waitFor(".control-panel", 120000);
+      } catch (error) {
+        const status = document.querySelector(".status-toast")?.textContent?.trim();
+        log(`help pictures: the base project did not open${document.querySelector(".start-screen") ? " (the start screen shows)" : ""}${status ? `: ${status}` : ""}`);
+        throw error;
+      }
+      await page.settle(800);
+      try {
+        for (const shot of withFile.filter((item) => (item.group ?? "main") === group)) count(await takeShot(shot, log));
+      } finally {
+        await stage.closeBase();
+        await page.settle(300);
       }
     }
   } catch (error) {
