@@ -35,9 +35,12 @@ export const KALEIDOSCOPE_KEYS: Record<FoldMode, ParamKey[]> = {
   1: ["tileSize", "panX", "panY", "rotation", "zoom", "twirl", "innerTwirl", "centerX", "centerY", "mirrorFade"],
   2: ["tileSize", "panX", "panY", "rotation", "zoom", "twirl", "innerTwirl", "centerX", "centerY", "mirrorFade"],
   3: ["tileSize", "panX", "panY", "rotation", "zoom", "twirl", "innerTwirl", "centerX", "centerY", "mirrorFade"],
-  4: ["hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "panX", "panY", "rotation", "zoom", "twirl", "innerTwirl", "centerX", "centerY", "mirrorFade"]
+  4: ["hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "panX", "panY", "rotation", "zoom", "twirl", "innerTwirl", "centerX", "centerY", "mirrorFade"],
+  5: ["tileSize", "panX", "panY", "rotation", "zoom", "twirl", "innerTwirl", "centerX", "centerY", "mirrorFade"],
+  6: ["tileSize", "panX", "panY", "rotation", "zoom", "twirl", "innerTwirl", "centerX", "centerY", "mirrorFade"],
+  7: ["tileSize", "panX", "panY", "rotation", "zoom", "twirl", "innerTwirl", "centerX", "centerY", "mirrorFade"]
 };
-export const FOLD_MODES = [[0, "Radial"], [1, "Triangle tiles"], [2, "Hexagon tiles"], [3, "Square tiles"], [4, "Hyperbolic"]] as const;
+export const FOLD_MODES = [[0, "Radial"], [1, "Triangle tiles"], [2, "Hexagon tiles"], [3, "Square tiles"], [4, "Hyperbolic"], [5, "Penrose rhombs"], [6, "Penrose kites and darts"], [7, "Penrose star"]] as const;
 
 /** The sliders each blur mask uses; the others are hidden. */
 export const BLUR_KEYS: Record<BlurMask, ParamKey[]> = {

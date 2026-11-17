@@ -1120,6 +1120,83 @@ float linesTo(float v) { return abs(floor(v)); }
 /* How many bounces image j of m images around a center is from image 0, going the shorter way. */
 float aroundBounces(float j, float m) { return min(j, m - j); }
 
+/**
+ * Penrose tiles (fold modes 5 to 7). The plane is cut into Robinson
+ * triangles (half tiles): a "sun" of ten triangles around the origin is
+ * split again and again (deflation), and each step keeps only the triangle
+ * that holds the point. Each step makes the triangles 1 / PHI as large, so
+ * after PENROSE_STEPS steps from a sun of radius PHI^PENROSE_STEPS the
+ * triangle that holds the point is about 1 across. Kind 0 and 1 are the two
+ * triangle shapes; a whole tile is a triangle and its mirror image across
+ * edge BC.
+ */
+const float PHI = 1.61803398875;
+const int PENROSE_STEPS = 10;
+float penroseKind;
+vec2 penroseA;
+vec2 penroseB;
+vec2 penroseC;
+
+float side2(vec2 p, vec2 a, vec2 b) { return (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x); }
+bool inTriangle(vec2 p, vec2 a, vec2 b, vec2 c) {
+  float d1 = side2(p, a, b);
+  float d2 = side2(p, b, c);
+  float d3 = side2(p, c, a);
+  return !((min(d1, min(d2, d3)) < 0.0) && (max(d1, max(d2, d3)) > 0.0));
+}
+void penroseSet(float kind, vec2 a, vec2 b, vec2 c) {
+  penroseKind = kind;
+  penroseA = a;
+  penroseB = b;
+  penroseC = c;
+}
+
+/**
+ * Finds the half tile that holds q. kites false: rhombs (thin kind 0 with a
+ * 36 degree corner at A, fat kind 1 with 108 degrees at A). kites true: kite
+ * halves (kind 0, 36 degrees at B) and dart halves (kind 1, 108 degrees at B).
+ */
+void penroseTriangle(vec2 q, bool kites) {
+  float radius = pow(PHI, float(PENROSE_STEPS));
+  float wedge = PI / 5.0;
+  float i = mod(floor((atan(q.y, q.x) + wedge * 0.5) / wedge), 10.0);
+  vec2 b = radius * vec2(cos((i - 0.5) * wedge), sin((i - 0.5) * wedge));
+  vec2 c = radius * vec2(cos((i + 0.5) * wedge), sin((i + 0.5) * wedge));
+  if (mod(i, 2.0) < 0.5) { vec2 t = b; b = c; c = t; }
+  if (kites) penroseSet(0.0, b, vec2(0.0), c);
+  else penroseSet(0.0, vec2(0.0), b, c);
+  for (int n = 0; n < PENROSE_STEPS; n++) {
+    vec2 A = penroseA;
+    vec2 B = penroseB;
+    vec2 C = penroseC;
+    if (!kites) {
+      if (penroseKind < 0.5) {
+        vec2 P = A + (B - A) / PHI;
+        if (inTriangle(q, C, P, B)) penroseSet(0.0, C, P, B);
+        else penroseSet(1.0, P, C, A);
+      } else {
+        vec2 Q = B + (A - B) / PHI;
+        vec2 R = B + (C - B) / PHI;
+        if (inTriangle(q, R, C, A)) penroseSet(1.0, R, C, A);
+        else if (inTriangle(q, Q, R, B)) penroseSet(1.0, Q, R, B);
+        else penroseSet(0.0, R, Q, A);
+      }
+    } else {
+      if (penroseKind < 0.5) {
+        vec2 Q = A + (B - A) / PHI;
+        vec2 R = B + (C - B) / PHI;
+        if (inTriangle(q, R, Q, B)) penroseSet(1.0, R, Q, B);
+        else if (inTriangle(q, Q, A, R)) penroseSet(0.0, Q, A, R);
+        else penroseSet(0.0, C, A, R);
+      } else {
+        vec2 P = C + (A - C) / PHI;
+        if (inTriangle(q, B, P, A)) penroseSet(1.0, B, P, A);
+        else penroseSet(0.0, P, C, B);
+      }
+    }
+  }
+}
+
 vec2 fold(vec2 p) {
   float r = length(p);
   /* Inner twirl fades smoothly with distance: to 13% at the top of the screen (r = 0.5). */
@@ -1236,6 +1313,39 @@ vec2 fold(vec2 p) {
       a = PI / u_segments * (0.5 + s * (g - 0.5));
     }
     return vec2(cos(a), sin(a)) * r / u_zoom;
+  }
+  /**
+   * Penrose tiles: a pattern of two tile shapes with five-fold symmetry
+   * that never repeats exactly. Rhombs (mode 5) and Rhombs star (mode 7)
+   * fold each rhomb into a quarter: mirrors along both of its diagonals, so
+   * the picture shows four times, around the rhomb's center. Kites and darts
+   * (mode 6) mirror each tile once, along its middle line. Rhombs star puts
+   * the five-fold center of the pattern at the center of the screen; the
+   * other two move far from it, so no one point stands out. Tile size is
+   * the length of a tile's side.
+   */
+  if (u_foldMode >= 5 && u_foldMode <= 7) {
+    vec2 q = vec2(cos(a), sin(a)) * r / u_tileSize;
+    bool kites = u_foldMode == 6;
+    if (u_foldMode != 7) q += vec2(23.7, 31.3);
+    penroseTriangle(q, kites);
+    vec2 local;
+    if (kites) {
+      vec2 axis = normalize(penroseC - penroseB);
+      vec2 d = q - penroseB;
+      float across = axis.x * d.y - axis.y * d.x;
+      foldBounces = across < 0.0 ? 1.0 : 0.0;
+      local = vec2(dot(d, axis), abs(across));
+    } else {
+      vec2 middle = (penroseB + penroseC) * 0.5;
+      vec2 axis = normalize(penroseA - middle);
+      vec2 d = q - middle;
+      float across = axis.x * d.y - axis.y * d.x;
+      float side = side2(penroseA, penroseB, penroseC);
+      foldBounces = (across < 0.0 ? 1.0 : 0.0) + (side < 0.0 ? 1.0 : 0.0);
+      local = vec2(dot(d, axis), abs(across));
+    }
+    return local * u_tileSize / u_zoom;
   }
   /**
    * Square tiles (fold mode 3): the turned plane is cut into square cells,
