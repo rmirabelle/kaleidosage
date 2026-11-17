@@ -1370,7 +1370,9 @@ vec2 fold(vec2 p) {
    * the length of a tile's side.
    */
   if (u_foldMode == 5) {
-    vec2 q = vec2(cos(a), sin(a)) * r / u_tileSize;
+    /* A Penrose tile is 0.4 of Tile size across, so the slider reaches much smaller tiles than the other tile types. */
+    float tile = u_tileSize * 0.4;
+    vec2 q = vec2(cos(a), sin(a)) * r / tile;
     bool kites = u_foldShape == 1;
     /* Far from the five-fold center, at the middle of one tile, so a change of Tile size grows the pattern around that tile. */
     if (u_foldShape == 0) q += vec2(23.5847, 30.6525);
@@ -1392,7 +1394,7 @@ vec2 fold(vec2 p) {
       foldBounces = (across < 0.0 ? 1.0 : 0.0) + (side < 0.0 ? 1.0 : 0.0);
       local = vec2(dot(d, axis), abs(across));
     }
-    return local * u_tileSize / u_zoom;
+    return local * tile / u_zoom;
   }
   /**
    * Square tiles (fold mode 3): the turned plane is cut into square cells,
