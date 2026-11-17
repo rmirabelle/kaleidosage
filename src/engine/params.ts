@@ -12,7 +12,7 @@ export const PARAM_KEYS = [
   "mandelDepth", "mandelEnd", "mandelSpeed", "mandelFade", "mandelSpread", "mandelInvert", "mandelEdge", "mandelEdgeWidth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle",
   "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
   "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness",
-  "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "sphereSize", "sphereTurn", "sphereTilt", "sphereGlow", "sphereGlowWidth", "tunnelSpeed", "tunnelFog", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl", "mirrorFade", "innerTwirl",
+  "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "sphereSize", "sphereTurn", "sphereTilt", "sphereGlow", "sphereGlowWidth", "tunnelSpeed", "tunnelFog", "fractalSteps", "fractalScale", "fractalAngle", "fractalShift", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl", "mirrorFade", "innerTwirl",
   "blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel",
   "trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint",
   "smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade",
@@ -652,6 +652,16 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * gets.
    */
   tunnelSpeed: { label: "Speed", min: -4, max: 4, step: 0.01, value: 0.5, drift: "wave", low: 0.2, high: 1, on: false },
+  /**
+   * Fractal (fold mode 9): how many times the fold repeats (a count between
+   * two whole numbers crossfades their patterns), how much each step
+   * enlarges the picture, how far each step turns it, and how far each step
+   * moves it back.
+   */
+  fractalSteps: { label: "Steps", min: 1, max: 12, step: 1, value: 6, drift: "wave", low: 4, high: 8, on: false },
+  fractalScale: { label: "Scale", min: 0.5, max: 1.5, step: 0.01, value: 1, drift: "wave", low: 0.9, high: 1.1, on: false },
+  fractalAngle: { label: "Turn", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "wave", low: -20, high: 20, on: false },
+  fractalShift: { label: "Shift", min: 0, max: 1.5, step: 0.01, value: 0.6, drift: "wave", low: 0.45, high: 0.75, on: false },
   tunnelFog: { label: "Darkness", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.2, high: 0.8, on: false },
   sphereGlowWidth: { label: "Glow width", min: 0.01, max: 0.5, step: 0.005, value: 0.12, drift: "wave", low: 0.05, high: 0.25, on: false },
   /** The center is a fraction of the screen size: -0.5 and 0.5 are the screen edges. */
@@ -1771,7 +1781,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   warp: ["warpOpacity", "warpAmount", "warpScale", "warpCellSize", "warpCellAngle", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle"],
   map: ["mapOpacity", "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl", "mandelDepth", "mandelEnd", "mandelSpeed", "mandelFade", "mandelSpread", "mandelInvert", "mandelEdge", "mandelEdgeWidth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle", "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
     "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness"],
-  kaleidoscope: ["foldOpacity", "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "sphereSize", "sphereTurn", "sphereTilt", "sphereGlow", "sphereGlowWidth", "tunnelSpeed", "tunnelFog", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl", "innerTwirl", "mirrorFade"],
+  kaleidoscope: ["foldOpacity", "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "sphereSize", "sphereTurn", "sphereTilt", "sphereGlow", "sphereGlowWidth", "tunnelSpeed", "tunnelFog", "fractalSteps", "fractalScale", "fractalAngle", "fractalShift", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl", "innerTwirl", "mirrorFade"],
   blur: ["blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel"],
   trails: ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"],
   smear: ["smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade"],
