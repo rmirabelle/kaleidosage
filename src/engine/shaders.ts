@@ -1383,8 +1383,14 @@ vec2 fold(vec2 p) {
   if (u_foldMode == 8) {
     float sides = u_foldShape == 0 ? 3.0 : u_foldShape == 1 ? 4.0 : 6.0;
     float halfAngle = PI / sides;
-    float side = floor((a + halfAngle) / (2.0 * halfAngle));
-    float off = a - side * 2.0 * halfAngle;
+    /**
+     * The angle wraps around at a corner of the tube, where a mirror hides the
+     * wrap. A tube with an odd number of walls (the triangle) has a seam
+     * anywhere else.
+     */
+    float around = mod(a + halfAngle, TAU) - halfAngle;
+    float side = floor((around + halfAngle) / (2.0 * halfAngle));
+    float off = around - side * 2.0 * halfAngle;
     float reach = 1.0 / cos(off);
     float rr = max(r, 1e-4);
     float depth = 0.5 * reach / rr;
