@@ -1894,10 +1894,11 @@ const FULL_OPACITY: readonly ParamKey[] = ["warpOpacity", "mapOpacity", "foldOpa
 /**
  * The chance that Randomize puts each effect in the list. Blur looks the
  * least good, so Randomize leaves it out. Levels and Sharpen add little on
- * their own, so Randomize leaves them out too, and it seldom picks Pixel sort.
+ * their own, so Randomize leaves them out too. It seldom picks Pixel sort,
+ * Contours and Color.
  */
 const EFFECT_CHANCE: Record<FxStep, number> = {
-  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.25, relief: 0.4, driver: 0.3, terrain: 0.3, camera: 0, solid: 0.2, sort: 0.05, particles: 0.25, cycles: 0.25, rays: 0.25, lasers: 0.15, paths: 0.15, spiro: 0.15, bloom: 0.3, sharpen: 0, color: 0.15, levels: 0,
+  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.08, relief: 0.4, driver: 0.3, terrain: 0.3, camera: 0, solid: 0.2, sort: 0.05, particles: 0.25, cycles: 0.25, rays: 0.25, lasers: 0.15, paths: 0.15, spiro: 0.15, bloom: 0.3, sharpen: 0, color: 0.05, levels: 0,
   /* An overlay needs an image or a video that the user picks. */
   picture: 0,
   outlines: 0.15,
