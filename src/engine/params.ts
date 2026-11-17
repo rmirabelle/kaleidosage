@@ -1085,12 +1085,12 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    */
   bubbleAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
   bubbleBackground: { label: "Background", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0, high: 1, on: false },
-  bubbleDepth: { label: "Depth", min: -1, max: 1, step: 0.01, value: 0.5, drift: "wave", low: -0.5, high: 0.5, on: false },
-  bubbleSize: { label: "Size", min: 0.2, max: 1.5, step: 0.01, value: 0.5, drift: "wave", low: 0.4, high: 0.8, on: false },
+  bubbleDepth: { label: "Depth", min: -1, max: 1, step: 0.01, value: -0.2, drift: "wave", low: -0.5, high: 0.5, on: false },
+  bubbleSize: { label: "Size", min: 0.2, max: 1.5, step: 0.01, value: 0.33, drift: "wave", low: 0.4, high: 0.8, on: false },
   bubbleCenterX: { label: "Center X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.25, high: 0.25, on: false },
   bubbleCenterY: { label: "Center Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.25, high: 0.25, on: false },
-  bubblePanX: { label: "Pan X", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
-  bubblePanY: { label: "Pan Y", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
+  bubblePanX: { label: "Pan X", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: true },
+  bubblePanY: { label: "Pan Y", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: true },
   bubbleRoundness: { label: "Roundness", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.5, on: false },
   bubbleSegments: { label: "Points", min: 3, max: 24, step: 1, value: 5, drift: "wave", low: 3, high: 8, on: false },
   /** The Radial shape: 1 gives a plain shape with Points sides, and lower values give a sharper star. */
