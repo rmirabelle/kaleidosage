@@ -366,13 +366,13 @@ describe("randomizeParams", () => {
     }
   });
 
-  it("keeps Bloom at 0.2 or below, Offset X and Y centered with no range, and pan ranges around 0", () => {
+  it("keeps Bloom at 0.2 or below, Offset X and Y centered and Mirror fade at 0 with no range, and pan ranges around 0", () => {
     for (let run = 0; run < 50; run++) {
       const params = createParams();
       randomizeParams(params, createPlayState());
       const bloom = params.bloomAmount;
       expect(Math.max(bloom.value, bloom.low ?? 0, bloom.high ?? 0)).toBeLessThanOrEqual(0.2);
-      for (const key of ["centerX", "centerY"] as const) expect([params[key].value, params[key].on]).toEqual([0, false]);
+      for (const key of ["centerX", "centerY", "mirrorFade"] as const) expect([params[key].value, params[key].on]).toEqual([0, false]);
       for (const key of ["panX", "panY", "mapPanX", "mapPanY", "mobiusPanX", "mobiusPanY", "bubblePanX", "bubblePanY"] as const) {
         expect(params[key].value).toBe(0);
         expect(params[key].low).toBeCloseTo(-(params[key].high ?? 0));

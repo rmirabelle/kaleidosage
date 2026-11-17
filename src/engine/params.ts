@@ -2033,7 +2033,8 @@ function randomizeAll(params: Params, state?: PlayState) {
   setPan("panX", rand(0.1, 0.4));
   setPan("panY", rand(0.1, 0.4));
   set("twirl", Math.random() < 0.4 ? rand(-1.5, 1.5) : 0, rand(0.3, 1));
-  set("mirrorFade", Math.random() < 0.7 ? 0 : rand(0.05, 0.35), rand(0, 0.1));
+  /* No mirror fade: it darkens the pattern more than it adds. */
+  set("mirrorFade", 0, 0);
   /* Whether an effect shows is set by the list (see EFFECT_CHANCE), so its strength is never 0 here. */
   set("blurAmount", rand(5, 30), rand(3, 15));
   set("blurMaskSize", rand(0.15, 0.6), rand(0.05, 0.2));
