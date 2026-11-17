@@ -2,6 +2,7 @@ mod browse;
 mod cast;
 mod export_stream;
 mod files;
+mod help;
 mod file_archive;
 mod output_choice;
 mod sound_capture;
@@ -109,8 +110,9 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            /* The Show window (see cast.rs) closes with the main window, so the app can end. */
+            /* The Show window (see cast.rs) and the help window close with the main window, so the app can end. */
             if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                help::main_window_closed(window.app_handle());
                 if let Some(show) = window.app_handle().get_webview_window(cast::SHOW_LABEL) {
                     let _ = show.destroy();
                 }
@@ -160,7 +162,10 @@ pub fn run() {
             files::log_frontend_error,
             updater::check_for_update,
             updater::download_and_run_installer,
-            updater::get_app_version
+            updater::get_app_version,
+            help::help_open,
+            help::help_capture,
+            help::help_stage
         ])
         .run(tauri::generate_context!())
         .expect("error while running Kaleido Sage");

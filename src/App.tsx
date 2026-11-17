@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openFileDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { ArrowClockwise, ArrowCounterClockwise, ArrowsIn, ArrowsOut, Camera, Export, Screencast, FilePlus, FilmStrip, FloppyDisk, FolderOpen, Gauge, HandPointing, Info, Playlist, Keyboard, Plus, SignOut, SlidersHorizontal, SpeakerSimpleHigh, Trash, VirtualReality, X } from "@phosphor-icons/react";
+import { ArrowClockwise, ArrowCounterClockwise, ArrowsIn, ArrowsOut, Camera, Export, Screencast, FilePlus, FilmStrip, FloppyDisk, FolderOpen, Gauge, HandPointing, Info, Playlist, Keyboard, Plus, Question, SignOut, SlidersHorizontal, SpeakerSimpleHigh, Trash, VirtualReality, X } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { AboutDialog } from "./components/AboutDialog";
 import { ShortcutsDialog } from "./components/ShortcutsDialog";
@@ -1888,14 +1888,15 @@ export default function App() {
    * Save As (or a file never saved) asks for a file name first. Returns
    * true when the file was saved.
    */
-  const saveFile = useCallback(async (saveAs = false): Promise<boolean> => {
+  const saveFile = useCallback(async (saveAs = false, toPath?: string): Promise<boolean> => {
     if (!engine || !isTauri() || docsRef.current.length === 0) return false;
     const dropTracks = audioInput.settings.kind === "none" && tracks.list.length > 0;
     if (dropTracks && !await new Promise<boolean>((answer) => setDropTracksQuestion({ answer }))) return false;
     const current = filePathRef.current;
     const first = docsRef.current[0];
     const firstName = docFileName(first.id === activeIdRef.current ? scenePathRef.current : first.path, first.untitled).replace(/\.ksage$/i, "");
-    const path = !saveAs && current
+    /* `toPath` (the help capture run's stash) saves there with no dialog. */
+    const path = toPath ? toPath : !saveAs && current
       ? current
       : await saveDialog({ defaultPath: current ?? `${firstName}.${FILE_EXTENSION}`, filters: [{ name: "Kaleido Sage project", extensions: [FILE_EXTENSION] }] });
     if (!path) return false;
@@ -2084,6 +2085,68 @@ export default function App() {
     if (docsRef.current.length > 0 && !(await askToSaveAll("Opening a project closes the open project."))) return;
     await openFilePath(path);
   }, [askToSaveAll, engine, openFilePath]);
+
+  /** The newest saveFile and unsaved check, for the help capture run's stash. */
+  const saveFileRef = useRef(saveFile);
+  saveFileRef.current = saveFile;
+  const fileUnsavedRef = useRef(fileUnsaved);
+  fileUnsavedRef.current = fileUnsaved;
+
+  /** The newest openFilePath, for the help capture run: a run that adds scenes makes the one it started with out of date. */
+  const openFilePathRef = useRef(openFilePath);
+  openFilePathRef.current = openFilePath;
+
+  const openHelp = useCallback(() => {
+    void invoke("help_open", {}).catch((error) => showError(String(error)));
+  }, [showError]);
+
+  /**
+   * Dev only: makes the help pictures (src/help/capture.ts). The run starts
+   * on the start screen, opens the base project for the pictures of a full
+   * window, and closes it again with no save.
+   */
+  const captureHelp = useCallback(async (only?: string) => {
+    if (!import.meta.env.DEV || !isTauri() || !engine) return;
+    const { BASE_PROJECT, HELP_STASH, captureHelpShots } = await import("./help/capture");
+    const log = (message: string) => import.meta.hot?.send("kaleidosage:log", { message });
+    const result = await captureHelpShots({
+      isEmpty: () => docsRef.current.length === 0,
+      openBase: () => openFilePathRef.current(BASE_PROJECT),
+      closeBase: async () => {
+        tracks.pause();
+        /* No new scene generation (Close Project counts one): the run's next open uses this render's setImage, which would then drop every scene. */
+        await clearFile();
+        quietInput();
+        engine.stop();
+        setStartScreen(true);
+      },
+      newScene,
+      stashOpen: async () => {
+        if (!fileUnsavedRef.current()) return "";
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
+        const name = filePathRef.current ? fileNameOf(filePathRef.current).replace(/\.ksage$/i, "") : "Untitled Project";
+        const path = `${HELP_STASH}/${name} ${stamp}.${FILE_EXTENSION}`;
+        if (!await saveFileRef.current(true, path)) throw new Error("The open project could not be saved to the stash");
+        return path;
+      }
+    }, log, only);
+    if (result.failed) showError(`Help pictures: ${result.made} made, ${result.failed} failed. The dev log shows each one.`);
+    else showStatus(`Help pictures: ${result.made} made.`);
+  }, [clearFile, engine, newScene, showError, showStatus]);
+
+  useEffect(() => {
+    const hot = import.meta.hot;
+    if (!hot || !isTauri()) return;
+    const run = (data: { only?: string }) => void captureHelp(data?.only || undefined);
+    /** The layout check (see vite.config.ts) needs the help window open at the chapter. */
+    const preview = (data: { chapter?: string }) => void invoke("help_open", { chapter: data?.chapter || null, quiet: true }).catch(() => {});
+    hot.on("kaleidosage:help-shots", run);
+    hot.on("kaleidosage:help-preview", preview);
+    return () => {
+      hot.off("kaleidosage:help-shots", run);
+      hot.off("kaleidosage:help-preview", preview);
+    };
+  }, [captureHelp]);
 
   /**
    * Import Scene(s): the scenes of each picked project go into the open
@@ -2554,6 +2617,12 @@ export default function App() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (aboutOpen || shortcutsOpen || welcome || openRequest || videoDialogOpen || searchSlot !== null || event.altKey || event.metaKey) return;
+      /* F1 opens the help window, also on the start screen. */
+      if (event.key === "F1") {
+        event.preventDefault();
+        openHelp();
+        return;
+      }
       /* "?" opens the keyboard shortcuts sheet, also on the start screen, but not while typing in a text field. */
       if (event.key === "?" && !(event.target instanceof HTMLInputElement && event.target.type === "text")) {
         event.preventDefault();
@@ -2645,7 +2714,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [aboutOpen, shortcutsOpen, welcome, closeScene, crossfadeToDoc, engine, exitFullscreen, newFile, newScene, openImport, openRequest, videoDialogOpen, searchSlot, openFile, randomize, redo, saveFile, startScreen, stop, switchByStep, toggleAudioPanel, toggleCast, toggleFullscreen, toggleMidiPanel, togglePause, undo]);
+  }, [aboutOpen, shortcutsOpen, welcome, closeScene, crossfadeToDoc, engine, exitFullscreen, newFile, newScene, openHelp, openImport, openRequest, videoDialogOpen, searchSlot, openFile, randomize, redo, saveFile, startScreen, stop, switchByStep, toggleAudioPanel, toggleCast, toggleFullscreen, toggleMidiPanel, togglePause, undo]);
 
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
@@ -2735,10 +2804,12 @@ export default function App() {
       id: "help",
       label: "Help",
       items: [
+        { label: "Kaleido Sage Help", icon: <Question size={15} />, shortcut: "F1", run: openHelp },
         { label: "Keyboard Shortcuts", icon: <Keyboard size={15} />, shortcut: "?", run: () => setShortcutsOpen(true) },
         { label: pointersOn ? "Disable Pointers" : "Enable Pointers", icon: <HandPointing size={15} />, run: () => helpSettings.set({ pointers: !pointersOn }) },
         "separator",
-        { label: "About Kaleido Sage", icon: <Info size={15} />, run: () => setAboutOpen(true) }
+        { label: "About Kaleido Sage", icon: <Info size={15} />, run: () => setAboutOpen(true) },
+        ...(import.meta.env.DEV ? ["separator" as const, { label: "Capture Help Pictures", icon: <Camera size={15} />, disabled: !startScreen, run: () => void captureHelp() }] : [])
       ]
     }
   ];

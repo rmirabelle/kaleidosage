@@ -59,6 +59,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
       { keys: ["A"], does: "Audio panel" },
       { keys: ["M"], does: "MIDI panel" },
       { keys: ["P"], does: "Performance" },
+      { keys: ["F1"], does: "Kaleido Sage Help" },
       { keys: ["?"], does: "This sheet" }
     ]
   },

@@ -29,3 +29,9 @@ Thumbs.db
 
 # FFmpeg for video export, too large for GitHub; tools/get-ffmpeg.ps1 downloads it
 /src-tauri/ffmpeg/ffmpeg.exe
+
+# The help layout check (see vite.config.ts)
+/public/help/preview.png
+
+# Copies of projects that were open when a help capture run started (src/help/capture.ts)
+/help-stash/

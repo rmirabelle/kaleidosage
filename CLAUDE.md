@@ -19,6 +19,16 @@ plays it full screen. Tauri 2 + React + WebGL 2.
   is the open file's (see `docs/ONE-FILE.md`).
 - `src-tauri/src/updater.rs` checks `rmirabelle/kaleidosage` GitHub releases.
 - `prototype.html` is the original single-file prototype. It is a reference only.
+- Help → Kaleido Sage Help (F1) opens the help window (`src-tauri/src/help.rs`,
+  `src/components/HelpWindow.tsx`). Chapters are in `src/help/chapters/`; add
+  each one, with its part, to `src/help/chapters.ts`. The pictures in
+  `public/help/` are not made by hand: add a shot to `src/help/shots.ts`, then,
+  with the dev app on the start screen, run
+  `curl http://localhost:14510/__help-shots` (`?only=<name start>` for some).
+  The dev app drives itself, opens `D:\Images\Kaleido Sage\Robert
+  Mirabelle.ksage` for the full-window pictures, and closes it with no save.
+  Keep each shot cropped to the part the text discusses. `vite.config.ts`
+  describes `__help-preview`, which checks a chapter's layout.
 
 ## Release memory
 

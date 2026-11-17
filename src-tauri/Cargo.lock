@@ -2046,6 +2046,7 @@ name = "kaleidosage"
 version = "0.26.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "beat-this",
  "ebur128",
  "futures-util",

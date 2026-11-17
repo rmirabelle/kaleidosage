@@ -20,6 +20,35 @@ const clientLog = {
   }
 };
 
+/**
+ * Dev only: `curl http://localhost:14510/__help-shots` tells the dev app
+ * window to make the help pictures again (src/help/capture.ts). Add
+ * `?only=files` to make only the pictures whose name starts with "files".
+ * Pictures named "readme-..." are for README.md: they are made only when
+ * asked for by name.
+ *
+ * `curl "http://localhost:14510/__help-preview?chapter=scenes&scroll=600"`
+ * opens the help window at that chapter and writes a picture of the window
+ * to public/help/preview.png (not kept in Git), to check a chapter's layout.
+ * The first call only opens the window; call it again for the picture.
+ * Add `&zoom=0.4` to see a whole chapter in one picture.
+ */
+const helpShots = {
+  name: "kaleidosage-help-shots",
+  configureServer(server: import("vite").ViteDevServer) {
+    server.middlewares.use("/__help-shots", (request, response) => {
+      const query = new URL(request.url ?? "", "http://localhost").searchParams;
+      server.ws.send({ type: "custom", event: "kaleidosage:help-shots", data: { only: query.get("only") ?? "" } });
+      response.end("The dev app makes the help pictures now. The dev log shows each one.\n");
+    });
+    server.middlewares.use("/__help-preview", (request, response) => {
+      const query = new URL(request.url ?? "", "http://localhost").searchParams;
+      server.ws.send({ type: "custom", event: "kaleidosage:help-preview", data: { chapter: query.get("chapter") ?? "", scroll: Number(query.get("scroll")) || 0, zoom: Number(query.get("zoom")) || 1 } });
+      response.end("The help window writes public/help/preview.png now.\n");
+    });
+  }
+};
+
 /** Writes the app version into the splash page (splash.html), which has no script. */
 const appVersion = {
   name: "kaleidosage-app-version",
@@ -27,7 +56,7 @@ const appVersion = {
 };
 
 export default defineConfig({
-  plugins: [react(), clientLog, appVersion],
+  plugins: [react(), clientLog, appVersion, helpShots],
   build: {
     rollupOptions: {
       input: { main: path.resolve(__dirname, "index.html"), splash: path.resolve(__dirname, "splash.html") }
