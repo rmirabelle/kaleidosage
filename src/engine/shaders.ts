@@ -1368,6 +1368,21 @@ vec2 fold(vec2 p) {
     return v.xy / max(v.z, 0.05) * 0.5 / u_zoom;
   }
   /**
+   * Pinwheel (fold mode 7): cells that turn the picture around their
+   * centers instead of mirroring it. Squares turn it 4 times (a quarter turn
+   * each), and hexagon cells 3 times (Triangles) or 6 times (Hexagons). The
+   * picture is not mirrored, so it never shows backward, and the lines where
+   * the turned copies meet form the pinwheel's blades. Tile size is the
+   * distance between neighbor cell centers.
+   */
+  if (u_foldMode == 7) {
+    vec2 plane = vec2(cos(a), sin(a)) * r / u_tileSize;
+    vec2 local = u_foldShape == 1 ? plane - floor(plane + 0.5) : hexLocal(plane);
+    float seg = u_foldShape == 0 ? TAU / 3.0 : u_foldShape == 1 ? TAU / 4.0 : TAU / 6.0;
+    float b = mod(atan(local.y, local.x), seg);
+    return vec2(cos(b), sin(b)) * length(local) * u_tileSize / u_zoom;
+  }
+  /**
    * Penrose (fold mode 5): a pattern of two tile shapes with five-fold
    * symmetry that never repeats exactly. Rhombs (shape 0) and Star (shape 2)
    * fold each rhomb into a quarter: mirrors along both of its diagonals, so

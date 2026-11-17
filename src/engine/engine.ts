@@ -1547,6 +1547,7 @@ export class Engine {
       foldMode: on.kaleidoscope ? this.state.foldMode : 0,
       penroseShape: this.state.penroseShape,
       sphereShape: this.state.sphereShape,
+      pinwheelShape: this.state.pinwheelShape,
       tileSize: this.live("tileSize"),
       hyperSides: this.live("hyperSides"),
       hyperCorners: this.live("hyperCorners"),
