@@ -382,6 +382,9 @@ export interface FrameValues {
   sphereSize: number;
   sphereTurn: number;
   sphereTilt: number;
+  /** Sphere: the black glow around the ball, its darkness (0 to 1) and width (screen heights). */
+  sphereGlow: number;
+  sphereGlowWidth: number;
   warpMode: WarpMode;
   warpType: WarpType;
   /** Ripple, swirl and bulge: the center, in screen heights. Waves: the direction (radians). */
@@ -1865,6 +1868,8 @@ export class KaleidoRenderer {
     gl.uniform1f(k.uniforms.u_sphereSize, Math.max(0.01, v.sphereSize));
     gl.uniform1f(k.uniforms.u_sphereTurn, v.sphereTurn);
     gl.uniform1f(k.uniforms.u_sphereTilt, v.sphereTilt);
+    gl.uniform1f(k.uniforms.u_sphereGlow, Math.min(1, Math.max(0, v.sphereGlow)));
+    gl.uniform1f(k.uniforms.u_sphereGlowWidth, Math.max(0.001, v.sphereGlowWidth));
     gl.uniform1f(k.uniforms.u_rotation, v.rotation);
     gl.uniform1f(k.uniforms.u_zoom, v.zoom);
     gl.uniform1f(k.uniforms.u_twirl, v.twirl);

@@ -37,7 +37,7 @@ export const KALEIDOSCOPE_KEYS: Record<FoldMode, ParamKey[]> = {
   3: ["tileSize", "panX", "panY", "rotation", "zoom", "twirl", "innerTwirl", "centerX", "centerY", "mirrorFade"],
   4: ["hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "panX", "panY", "rotation", "zoom", "twirl", "innerTwirl", "centerX", "centerY", "mirrorFade"],
   5: ["tileSize", "panX", "panY", "rotation", "zoom", "twirl", "innerTwirl", "centerX", "centerY", "mirrorFade"],
-  6: ["sphereSize", "sphereTurn", "sphereTilt", "panX", "panY", "rotation", "zoom", "twirl", "innerTwirl", "centerX", "centerY", "mirrorFade"]
+  6: ["sphereSize", "sphereTurn", "sphereTilt", "sphereGlow", "sphereGlowWidth", "panX", "panY", "rotation", "zoom", "twirl", "innerTwirl", "centerX", "centerY"]
 };
 export const FOLD_MODES = [[0, "Radial"], [1, "Triangle tiles"], [2, "Hexagon tiles"], [3, "Square tiles"], [4, "Hyperbolic"], [5, "Penrose"], [6, "Sphere"]] as const;
 /** The Penrose type's Shape menu (see PenroseShape). */

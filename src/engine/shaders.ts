@@ -244,6 +244,9 @@ uniform float u_hyperSize;
 uniform float u_sphereSize;
 uniform float u_sphereTurn;
 uniform float u_sphereTilt;
+/* Sphere: the black glow around the ball, its darkness at the edge (0 to 1) and its width in screen heights. */
+uniform float u_sphereGlow;
+uniform float u_sphereGlowWidth;
 uniform float u_rotation;
 uniform float u_zoom;
 uniform float u_twirl;
@@ -1119,6 +1122,8 @@ float foldStretch;
  * crossing a mirror line is one bounce.
  */
 float foldBounces;
+/** Set by fold(): what the picture at the point is multiplied by, for the Sphere's black glow (1 for every other type). */
+float foldShade;
 
 /* How many mirror lines (at whole numbers of v) lie between v and the part from 0 to 1. */
 float linesTo(float v) { return abs(floor(v)); }
@@ -1210,6 +1215,7 @@ vec2 fold(vec2 p) {
   foldAlts = 0;
   foldStretch = 1.0;
   foldBounces = 0.0;
+  foldShade = 1.0;
   /**
    * Hyperbolic (fold mode 4): the Poincare disk, Disk size in radius. Its
    * tiles get smaller and smaller toward the edge, and never reach it.
@@ -1336,6 +1342,9 @@ vec2 fold(vec2 p) {
     vec3 v;
     if (d <= 1.0) v = vec3(z, sqrt(1.0 - d));
     else {
+      /* The glow: black at the ball's edge, fading out over Glow width. */
+      float outside = (sqrt(d) - 1.0) * u_sphereSize;
+      foldShade = 1.0 - u_sphereGlow * (1.0 - smoothstep(0.0, u_sphereGlowWidth, outside));
       z /= d;
       v = vec3(z, -sqrt(max(0.0, 1.0 - dot(z, z))));
     }
@@ -1652,6 +1661,7 @@ vec4 shapeColor(vec2 screen, int skip, float g0) {
       if (readShare[k] > 0.0) color += readShare[k] * afterBounces(sourceColor(readAt[k], readDetail[k]), readBounces[k]);
     }
   }
+  if (folded) color.rgb *= foldShade;
   /**
    * Depth fade: the far end of the tunnel or a spiral (its center), the Möbius pole, or Julia's most stretched places
    * fades to black, which makes it look deep. It works as fog: each step of

@@ -1555,6 +1555,8 @@ export class Engine {
       sphereSize: this.live("sphereSize"),
       sphereTurn: this.live("sphereTurn") * DEGREES,
       sphereTilt: this.live("sphereTilt") * DEGREES,
+      sphereGlow: this.live("sphereGlow"),
+      sphereGlowWidth: this.live("sphereGlowWidth"),
       centerX: kaleidoscope("centerX", 0),
       centerY: kaleidoscope("centerY", 0),
       rotation: kaleidoscope("rotation", 0) * DEGREES,
