@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GROUP_PARAMS, PARAM_KEYS, applyRadialStart, createParams, gradientColorAt, rgbToHex, createPlayState, defaultValue, fullRange, NUDGE, hexToRgb, hslToHex, liveValue, NO_EFFECT, nudgeParams, randomizeGroup, randomizeParams, resetEffects, setCustomTime, startRangeAt, withKindOrder, openRange, addEffect, removeEffect, freshEffect, toSlider, fromSlider, SLIDER_STEPS } from "./params";
+import { GROUP_PARAMS, PARAM_KEYS, applyRadialStart, createParams, gradientColorAt, rgbToHex, createPlayState, defaultValue, fullRange, NUDGE, hexToRgb, hslToHex, liveValue, NO_EFFECT, nudgeParams, randomizeGroup, randomizeParams, resetEffects, setCustomTime, startRangeAt, withKindOrder, openRange, addEffect, removeEffect, freshEffect, toSlider, fromSlider, SLIDER_STEPS, MAX_RANDOM_EFFECTS } from "./params";
 
 /** A play state at this many seconds, on both clocks: animation time (the shared cycle) and real time (custom ranges). */
 const at = (time: number) => ({ ...createPlayState(), time, clock: time });
@@ -341,6 +341,45 @@ describe("randomizeGroup", () => {
 });
 
 describe("randomizeParams", () => {
+  it("picks at most 5 effects, never Levels or Sharpen, and puts Contours last of its picks", () => {
+    for (let run = 0; run < 300; run++) {
+      const state = createPlayState();
+      randomizeParams(createParams(), state);
+      expect(state.fxOrder.length).toBeLessThanOrEqual(MAX_RANDOM_EFFECTS);
+      expect(state.fxOrder).not.toContain("levels");
+      expect(state.fxOrder).not.toContain("sharpen");
+      const picks = state.fxOrder.filter((step) => step !== "outlines");
+      if (picks.includes("contours")) expect(picks[picks.length - 1]).toBe("contours");
+    }
+  });
+
+  it("counts locked effects toward the limit of 5", () => {
+    const state = createPlayState();
+    state.fxOrder = ["warp", "map", "trails", "relief"];
+    for (const step of state.fxOrder) {
+      state.locks[step] = true;
+      state.groups[step] = true;
+    }
+    for (let run = 0; run < 50; run++) {
+      randomizeParams(createParams(), state);
+      expect(state.fxOrder.length).toBeLessThanOrEqual(MAX_RANDOM_EFFECTS);
+    }
+  });
+
+  it("keeps Bloom at 0.2 or below, Offset X and Y centered with no range, and pan ranges around 0", () => {
+    for (let run = 0; run < 50; run++) {
+      const params = createParams();
+      randomizeParams(params, createPlayState());
+      const bloom = params.bloomAmount;
+      expect(Math.max(bloom.value, bloom.low ?? 0, bloom.high ?? 0)).toBeLessThanOrEqual(0.2);
+      for (const key of ["centerX", "centerY"] as const) expect([params[key].value, params[key].on]).toEqual([0, false]);
+      for (const key of ["panX", "panY", "mapPanX", "mapPanY", "mobiusPanX", "mobiusPanY", "bubblePanX", "bubblePanY"] as const) {
+        expect(params[key].value).toBe(0);
+        expect(params[key].low).toBeCloseTo(-(params[key].high ?? 0));
+      }
+    }
+  });
+
   it("gives every effect Blend Normal and Opacity 1", () => {
     const params = createParams();
     const state = createPlayState();

@@ -1891,9 +1891,13 @@ export function removeSpiroWheel(params: Params, state: PlayState, index: number
 /** The settings named Opacity: Randomize shows every effect fully. */
 const FULL_OPACITY: readonly ParamKey[] = ["warpOpacity", "mapOpacity", "foldOpacity", "smearAmount", "contourOpacity", "cameraAmount", "viewAmount", "sortAmount", "particleAmount", "cyclesAmount", "solidAmount", "driverAmount", "laserOpacity", "bubbleAmount", "pictureAmount", "pathAmount", "spiroAmount"];
 
-/** The chance that Randomize puts each effect in the list. Blur looks the least good, so Randomize leaves it out. */
+/**
+ * The chance that Randomize puts each effect in the list. Blur looks the
+ * least good, so Randomize leaves it out. Levels and Sharpen add little on
+ * their own, so Randomize leaves them out too, and it seldom picks Pixel sort.
+ */
 const EFFECT_CHANCE: Record<FxStep, number> = {
-  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.25, relief: 0.4, driver: 0.3, terrain: 0.3, camera: 0, solid: 0.2, sort: 0.2, particles: 0.25, cycles: 0.25, rays: 0.25, lasers: 0.15, paths: 0.15, spiro: 0.15, bloom: 0.3, sharpen: 0.3, color: 0.15, levels: 0.25,
+  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.25, relief: 0.4, driver: 0.3, terrain: 0.3, camera: 0, solid: 0.2, sort: 0.05, particles: 0.25, cycles: 0.25, rays: 0.25, lasers: 0.15, paths: 0.15, spiro: 0.15, bloom: 0.3, sharpen: 0, color: 0.15, levels: 0,
   /* An overlay needs an image or a video that the user picks. */
   picture: 0,
   outlines: 0.15,
@@ -1902,6 +1906,9 @@ const EFFECT_CHANCE: Record<FxStep, number> = {
   /* A bubble leaves black around its rim, which Randomize should not do on its own. */
   bubble: 0
 };
+
+/** The most effects that Randomize puts in the list, locked ones and Light shapes too, so a random scene does not overload the graphics card. */
+export const MAX_RANDOM_EFFECTS = 5;
 
 function randomizeAll(params: Params, state?: PlayState) {
   if (state) {
@@ -1921,6 +1928,12 @@ function randomizeAll(params: Params, state?: PlayState) {
       const other = Math.floor(Math.random() * (index + 1));
       [chosen[index], chosen[other]] = [chosen[other], chosen[index]];
     }
+    /* Locked effects in the list count toward the limit; the first picks in the random order stay. */
+    const lockedInList = state.fxOrder.filter((step) => state.locks[step]).length;
+    chosen.splice(Math.max(0, MAX_RANDOM_EFFECTS - lockedInList));
+    /* Contours draws its lines over the picture made so far, so it goes last. */
+    const contours = chosen.indexOf("contours");
+    if (contours >= 0) chosen.push(...chosen.splice(contours, 1));
     for (const step of defaultFxOrder()) if (!state.locks[step]) state.groups[step] = chosen.includes(step);
     const next = [...chosen];
     state.fxOrder.forEach((step, index) => { if (state.locks[step]) next.splice(Math.min(index, next.length), 0, step); });
@@ -1946,6 +1959,13 @@ function randomizeAll(params: Params, state?: PlayState) {
     }
     param.low = clamp(param.value - spread, param.min, param.max);
     param.high = clamp(param.value + spread, param.min, param.max);
+  };
+  /** A pan: the value is 0, and its range goes from -spread to spread, so the picture moves around the center. */
+  const setPan = (key: ParamKey, spread: number) => {
+    const param = params[key];
+    param.value = 0;
+    param.low = clamp(-spread, param.min, param.max);
+    param.high = clamp(spread, param.min, param.max);
   };
   /**
    * An angle that turns all the way around, or sometimes swings over a
@@ -1993,8 +2013,8 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("juliaFogSoftness", rand(0.3, 0.7), rand(0, 0.1));
   set("mobiusFogSoftness", rand(0.3, 0.7), rand(0, 0.1));
   set("tunnelTwist", Math.random() < 0.4 ? 0 : rand(-1.5, 1.5), rand(0.1, 0.5));
-  set("mapPanX", Math.random() < 0.5 ? 0 : rand(-0.4, 0.4), rand(0.05, 0.25));
-  set("mapPanY", Math.random() < 0.5 ? 0 : rand(-0.4, 0.4), rand(0.05, 0.25));
+  setPan("mapPanX", rand(0.05, 0.25));
+  setPan("mapPanY", rand(0.05, 0.25));
   setAngle("mapRoll", 0.5);
   set("mapCurl", Math.random() < 0.5 ? 0 : rand(0.02, 0.3), rand(0.01, 0.05));
   set("mobiusPoint", rand(0.7, 0.95), rand(0.03, 0.1));
@@ -2002,14 +2022,15 @@ function randomizeAll(params: Params, state?: PlayState) {
   setAngle("mobiusRotation", 0.5);
   set("mobiusTwist", Math.random() < 0.5 ? 0 : rand(0.01, 0.08), rand(0.005, 0.03));
   set("mobiusZoom", rand(1, 3), rand(0.2, 0.8));
-  set("mobiusPanX", Math.random() < 0.5 ? 0 : rand(-0.4, 0.4), rand(0.05, 0.25));
-  set("mobiusPanY", Math.random() < 0.5 ? 0 : rand(-0.4, 0.4), rand(0.05, 0.25));
-  set("centerX", rand(-0.2, 0.2), rand(0.1, 0.35));
-  set("centerY", rand(-0.15, 0.15), rand(0.08, 0.3));
+  setPan("mobiusPanX", rand(0.05, 0.25));
+  setPan("mobiusPanY", rand(0.05, 0.25));
+  /* Offset X and Y stay at the center, with no range. */
+  set("centerX", 0, 0);
+  set("centerY", 0, 0);
   setAngle("rotation", 0.7);
   set("zoom", rand(0.4, 1.3), rand(0.05, 0.25));
-  set("panX", rand(-0.5, 0.5), rand(0.1, 0.4));
-  set("panY", rand(-0.5, 0.5), rand(0.1, 0.4));
+  setPan("panX", rand(0.1, 0.4));
+  setPan("panY", rand(0.1, 0.4));
   set("twirl", Math.random() < 0.4 ? rand(-1.5, 1.5) : 0, rand(0.3, 1));
   set("mirrorFade", Math.random() < 0.7 ? 0 : rand(0.05, 0.35), rand(0, 0.1));
   /* Whether an effect shows is set by the list (see EFFECT_CHANCE), so its strength is never 0 here. */
@@ -2144,8 +2165,8 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("laserRainbow", Math.random() < 0.5 ? 0 : rand(0.1, 1), rand(0, 0.2));
   set("laserX", Math.random() < 0.6 ? 0 : rand(-0.4, 0.4), rand(0, 0.15));
   set("laserY", Math.random() < 0.6 ? -0.5 : rand(-0.5, 0.5), rand(0, 0.1));
-  /* A gentle bloom, for the same reason. */
-  set("bloomAmount", rand(0.3, 0.8), rand(0.05, 0.15));
+  /* A gentle bloom, for the same reason: its strength stays at 0.2 or below. */
+  set("bloomAmount", rand(0.1, 0.17), rand(0, 0.03));
   set("bloomThreshold", rand(0.6, 0.85), rand(0, 0.05));
   set("bloomSoftness", rand(0.1, 0.5), rand(0, 0.1));
   set("bloomSize", rand(1.5, 3.5), rand(0.2, 0.6));
@@ -2156,7 +2177,7 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("blackLevel", Math.random() < 0.6 ? 0 : rand(0.02, 0.25), rand(0, 0.1));
   /** Every range starts off; Randomize turns on the ones that move the picture most. */
   const moving: ParamKey[] = ["warpAmount", "warpMarble", "mapPower", "juliaShape", "mobiusPoint", "mapTwist", "mapSpeed", "lightAngle", "cameraPan",
-    "centerX", "centerY", "rotation", "zoom", "panX", "panY"];
+    "rotation", "zoom", "panX", "panY"];
   for (const key of PARAM_KEYS) {
     const userOwned = GROUP_PARAMS.source.includes(key) || GROUP_PARAMS.animation.includes(key) || OPACITY_KEYS.includes(key);
     if (params[key].drift && !userOwned) params[key].on = moving.includes(key);
@@ -2177,8 +2198,8 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("bubbleDepth", rand(-0.7, 0.7), rand(0, 0.3));
   set("bubbleCenterX", Math.random() < 0.6 ? 0 : rand(-0.25, 0.25), rand(0, 0.1));
   set("bubbleCenterY", Math.random() < 0.6 ? 0 : rand(-0.25, 0.25), rand(0, 0.1));
-  set("bubblePanX", Math.random() < 0.8 ? 0 : rand(-0.2, 0.2), rand(0, 0.1));
-  set("bubblePanY", Math.random() < 0.8 ? 0 : rand(-0.2, 0.2), rand(0, 0.1));
+  setPan("bubblePanX", rand(0, 0.1));
+  setPan("bubblePanY", rand(0, 0.1));
   set("bubbleRoundness", Math.random() < 0.5 ? 0 : rand(0.1, 1), rand(0, 0.2));
   set("bubbleSegments", Math.round(rand(3, 12)), rand(0, 2));
   set("bubbleInner", rand(0.3, 1), rand(0, 0.1));
@@ -2220,7 +2241,7 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("outlineEmitter", Math.random() < 0.2 ? 0 : rand(0.4, 1.6), rand(0, 0.3));
   set("outlineFlow", Math.random() < 0.5 ? 0 : rand(-0.3, 0.3), rand(0, 0.1));
   if (state && !state.locks.outlines) {
-    const on = Math.random() < EFFECT_CHANCE.outlines;
+    const on = Math.random() < EFFECT_CHANCE.outlines && state.fxOrder.length < MAX_RANDOM_EFFECTS;
     state.groups.outlines = on;
     if (on) state.fxOrder = [...state.fxOrder, "outlines"];
     state.outlineShape = Math.floor(Math.random() * 5) as OutlineShape;
