@@ -449,3 +449,81 @@ export function parseModel(file: Uint8Array): ModelShape {
   }
   return { parts, materials, textures, images, triangles };
 }
+
+/**
+ * One .glb file from a model that comes as a description (a .gltf file's
+ * JSON) with loose files beside it: its data blocks and its pictures, each
+ * by the name the description gives it. The scene file keeps one file per
+ * model, so a model from the internet is packed this way first (see
+ * lib/polyHaven.ts). A file that the description names and "files" does
+ * not have throws.
+ */
+export function packGlb(description: unknown, files: ReadonlyMap<string, Uint8Array>): Uint8Array {
+  if (!isRecord(description)) throw new Error("The model's description is broken.");
+  const json = structuredClone(description);
+  const named = (uri: string): Uint8Array => {
+    const inside = dataUri(uri);
+    if (inside) return inside.bytes;
+    let name = uri;
+    try {
+      name = decodeURIComponent(uri);
+    } catch { /* The name as it is written. */ }
+    const bytes = files.get(name) ?? files.get(uri);
+    if (!bytes) throw new Error(`The model's file "${name}" is missing.`);
+    return bytes;
+  };
+  const blocks: Uint8Array[] = [];
+  let length = 0;
+  /* Adds a block at the next place that 4 divides, and returns that place. */
+  const add = (bytes: Uint8Array) => {
+    const at = length;
+    blocks.push(bytes);
+    length += bytes.byteLength;
+    const gap = (4 - (length % 4)) % 4;
+    if (gap) {
+      blocks.push(new Uint8Array(gap));
+      length += gap;
+    }
+    return at;
+  };
+  const starts = list(json.buffers).map((buffer) => typeof buffer.uri === "string" ? add(named(buffer.uri)) : null);
+  const views = Array.isArray(json.bufferViews) ? json.bufferViews as unknown[] : [];
+  for (const view of views) {
+    if (!isRecord(view)) continue;
+    const start = starts[whole(view.buffer) ?? -1];
+    if (start === null || start === undefined) throw new Error("The model's description names data that it does not have.");
+    view.buffer = 0;
+    view.byteOffset = (whole(view.byteOffset ?? 0) ?? 0) + start;
+  }
+  for (const image of list(json.images)) {
+    if (typeof image.uri !== "string") continue;
+    const bytes = named(image.uri);
+    views.push({ buffer: 0, byteOffset: add(bytes), byteLength: bytes.byteLength });
+    image.bufferView = views.length - 1;
+    if (typeof image.mimeType !== "string") image.mimeType = imageType(bytes);
+    delete image.uri;
+  }
+  json.bufferViews = views;
+  json.buffers = [{ byteLength: length }];
+
+  const text = new TextEncoder().encode(JSON.stringify(json));
+  const textLength = text.byteLength + ((4 - (text.byteLength % 4)) % 4);
+  const file = new Uint8Array(12 + 8 + textLength + 8 + length);
+  const view = new DataView(file.buffer);
+  view.setUint32(0, GLB_MAGIC, true);
+  view.setUint32(4, 2, true);
+  view.setUint32(8, file.byteLength, true);
+  view.setUint32(12, textLength, true);
+  view.setUint32(16, CHUNK_JSON, true);
+  /* The description ends with spaces up to a place that 4 divides, as the format asks. */
+  file.fill(0x20, 20, 20 + textLength);
+  file.set(text, 20);
+  view.setUint32(20 + textLength, length, true);
+  view.setUint32(24 + textLength, CHUNK_BIN, true);
+  let at = 28 + textLength;
+  for (const block of blocks) {
+    file.set(block, at);
+    at += block.byteLength;
+  }
+  return file;
+}

@@ -60,6 +60,8 @@ interface Props {
   onRemoveSolidMedia: () => void;
   /** Asks for a 3D model file for the 3D Object's Model shape. */
   onPickModel: () => void;
+  /** Opens the browser of free 3D models for the Model shape (see ModelBrowserDialog). */
+  onBrowseModels: () => void;
   /** The FX audio button was turned on while the app listens to nothing: the play toolbar shows a tip at its Input menu. */
   onNeedAudioInput: () => void;
   /** An input with sound was picked and turned the audio buttons on: a tip at the FX audio button tells what it does, and a tip shows the next step. */
@@ -118,7 +120,7 @@ const CAMERA_REPEATS = [[0, "Mirror"], [1, "Tile"], [2, "None"]] as const;
 /** The controls of the left panel whose press is work on the scene (see onWork): buttons, fields, the sliders' parts, the gradient and the effect grips. */
 const WORK_CONTROLS = "button, input, select, textarea, a, label, [role=slider], [role=button], [role=option], [role=menuitem], [contenteditable=true], .range-grab, .range-low, .range-high, .gradient-bar, .gradient-stop, .panel-group-grip";
 
-export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, transport, onWork, driverVideoName, onPickDriverVideo, pictureName, onPickPicture, onRemovePicture, solidMediaName, onPickSolidMedia, onRemoveSolidMedia, onPickModel, onNeedAudioInput, linksTip, onLinksTipDone, nextTip, onNextTipDone, onFirstEffect }: Props) {
+export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, transport, onWork, driverVideoName, onPickDriverVideo, pictureName, onPickPicture, onRemovePicture, solidMediaName, onPickSolidMedia, onRemoveSolidMedia, onPickModel, onBrowseModels, onNeedAudioInput, linksTip, onLinksTipDone, nextTip, onNextTipDone, onFirstEffect }: Props) {
   const holdOnly = useSceneHoldOnly();
   const row = useParamRows(engine);
   /** True while MIDI holds any range: the Effects header then shows a play button that plays them all again. */
@@ -411,7 +413,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     ),
     solid: (grip) => (
       <Group engine={engine} group="solid" title="3D object" grip={grip} {...accordion("solid")}>
-        <SolidSection engine={engine} row={row} mediaName={solidMediaName} onPickMedia={onPickSolidMedia} onRemoveMedia={onRemoveSolidMedia} onPickModel={onPickModel} />
+        <SolidSection engine={engine} row={row} mediaName={solidMediaName} onPickMedia={onPickSolidMedia} onRemoveMedia={onRemoveSolidMedia} onPickModel={onPickModel} onBrowseModels={onBrowseModels} />
       </Group>
     ),
     sort: (grip) => (
@@ -1213,7 +1215,7 @@ function CyclesSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =
 }
 
 /** The 3D Object: its shape and map menus, then the sliders that the shape and the map use, then Blend and Opacity. */
-function SolidSection({ engine, row, mediaName, onPickMedia, onRemoveMedia, onPickModel }: { engine: Engine; row: (key: ParamKey) => ReactNode; mediaName: string | null; onPickMedia: () => void; onRemoveMedia: () => void; onPickModel: () => void }) {
+function SolidSection({ engine, row, mediaName, onPickMedia, onRemoveMedia, onPickModel, onBrowseModels }: { engine: Engine; row: (key: ParamKey) => ReactNode; mediaName: string | null; onPickMedia: () => void; onRemoveMedia: () => void; onPickModel: () => void; onBrowseModels: () => void }) {
   const [shape, setShape] = useState<SolidShape>(engine.state.solidShape);
   const [map, setMap] = useState<SolidMap>(engine.state.solidMap);
   const [paint, setPaint] = useState<SolidPaint>(engine.state.solidPaint);
@@ -1240,7 +1242,7 @@ function SolidSection({ engine, row, mediaName, onPickMedia, onRemoveMedia, onPi
         if (next === 10) standStarUp(engine);
         if (next === 11) {
           pickPaint(3);
-          if (!engine.model) onPickModel();
+          if (!engine.model) onBrowseModels();
         } else if (engine.state.solidPaint === 3) {
           pickPaint(0);
         }
@@ -1249,7 +1251,8 @@ function SolidSection({ engine, row, mediaName, onPickMedia, onRemoveMedia, onPi
         <div className="panel-select-row panel-select-named driver-video-row panel-child-row">
           <span className="panel-row-name">File</span>
           <span className="driver-video-name" data-tip={modelName ? `The 3D Object's model: ${modelName}` : "No model yet: only the picture behind shows"}>{modelName ?? "None"}</span>
-          <button className="button secondary small" onClick={onPickModel} data-tip="Pick a 3D model file (.glb). The scene file keeps a copy.">Choose…</button>
+          <button className="button secondary small" onClick={onBrowseModels} data-tip="Pick one of the free 3D models of Poly Haven. The scene file keeps a copy.">Browse…</button>
+          <button className="button secondary small" onClick={onPickModel} data-tip="Pick a 3D model file (.glb) on this PC. The scene file keeps a copy.">File…</button>
           {modelName && (
             <button className="button secondary small" onClick={() => engine.setModel(null)} data-tip="Take the model off the 3D Object" aria-label="Remove the 3D Object's model">
               <X size={12} weight="bold" />

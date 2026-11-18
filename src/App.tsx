@@ -10,6 +10,7 @@ import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ControlPanel } from "./components/ControlPanel";
 import { ExportVideoDialog } from "./components/ExportVideoDialog";
 import { ImageSearchDialog } from "./components/ImageSearchDialog";
+import { ModelBrowserDialog } from "./components/ModelBrowserDialog";
 import { MidiIcon } from "./components/MidiIcon";
 import { MidiPanel } from "./components/MidiPanel";
 import { AudioPanel } from "./components/AudioPanel";
@@ -504,6 +505,8 @@ export default function App() {
   const [videoDialogOpen, setVideoDialogOpen] = useState(false);
   /** The slot that the photo search dialog loads into, while it is open. */
   const [searchSlot, setSearchSlot] = useState<ImageSlot | null>(null);
+  /** The browser of free 3D models for the 3D Object's Model shape is open. */
+  const [modelBrowserOpen, setModelBrowserOpen] = useState(false);
   /** The video being made in the background: its file, progress from 0 to 1, and the controller that stops it. */
   const [videoJob, setVideoJob] = useState<{ path: string; progress: number; controller: AbortController; step: string | null } | null>(null);
   const videoJobRef = useRef(videoJob);
@@ -2935,6 +2938,7 @@ export default function App() {
                   onPickSolidMedia={() => setOpenRequest({ kind: "image", slot: 0, target: "solid" })}
                   onRemoveSolidMedia={() => setSolidMedia(null)}
                   onPickModel={() => void pickModel()}
+                  onBrowseModels={() => setModelBrowserOpen(true)}
                   onNeedAudioInput={askForAudioInput}
                   onFirstEffect={firstEffect}
                   linksTip={linksTip}
@@ -3130,6 +3134,16 @@ export default function App() {
           onPick={(photo) => {
             setSearchSlot(null);
             void loadSearchedPhoto(photo, searchSlot);
+          }}
+        />
+      )}
+      {modelBrowserOpen && engine && (
+        <ModelBrowserDialog
+          onCancel={() => setModelBrowserOpen(false)}
+          onPick={(model) => {
+            setModelBrowserOpen(false);
+            engine.setModel(model);
+            showStatus(`3D Object: ${model.name} (${model.shape.triangles.toLocaleString()} triangles)`);
           }}
         />
       )}

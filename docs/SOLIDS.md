@@ -249,8 +249,21 @@ glTF 2.0 in its one-file binary form (.glb).
   base64 data), while the 3D Object is in the list with the Model shape.
   The scene owns the model, as it owns Terrain's land (engine.model).
   Undo does not bring back a model that was taken off.
-- The file is picked with the system's Open dialog (the app's own Open
-  dialog does not list .glb files yet).
+- The File row has two buttons. File… picks a .glb on the PC with the
+  system's Open dialog (the app's own Open dialog does not list .glb files
+  yet). Browse… opens the model browser; picking the Model shape with no
+  model opens it too.
+- The model browser (step 2, 2026-11-18; `ModelBrowserDialog.tsx`,
+  `lib/polyHaven.ts`): the free (CC0) models of Poly Haven, about 520.
+  Its API needs no key and is open to the app. One request gets the whole
+  list (name, categories, tags, triangle count, downloads, date), so the
+  search box, the Category menu and the Order menu (Most used, Newest,
+  Name) work with no more requests. A click on a model asks for its files
+  at the picked Textures size (1K, 2K or 4K; the nearest size when the
+  model has no such one), downloads the description, the data block and
+  the pictures, and packs them into one .glb (packGlb in `model.ts`), so
+  the scene file keeps it as it keeps a picked file. Only files on Poly
+  Haven's own servers are read.
 - Random all keeps the Model shape, and does not pick it.
 - Freeze background: with Source Model, the effects after the 3D Object do
   not change the model's colors (there is no Source picture to change).

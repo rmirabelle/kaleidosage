@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MODEL_STRIDE, parseModel } from "./model";
+import { MODEL_STRIDE, packGlb, parseModel } from "./model";
 
 /** A .glb file from a description and a binary block. */
 function glb(json: object, bin: Uint8Array = new Uint8Array(0)): Uint8Array {
@@ -113,5 +113,44 @@ describe("parseModel", () => {
     expect(() => parseModel(triangle({ extensionsRequired: ["KHR_draco_mesh_compression"] }))).toThrow(/Draco/);
     expect(() => parseModel(new Uint8Array(40))).toThrow(/not a \.glb/);
     expect(() => parseModel(glb({ asset: { version: "2.0" } }))).toThrow(/no triangles/);
+  });
+});
+
+describe("packGlb", () => {
+  it("packs a description and its loose files into one file that reads the same", () => {
+    const data = new Uint8Array(42);
+    const view = new DataView(data.buffer);
+    [0, 0, 0, 2, 0, 0, 0, 2, 0].forEach((value, i) => view.setFloat32(i * 4, value, true));
+    [0, 1, 2].forEach((value, i) => view.setUint16(36 + i * 2, value, true));
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+    const description = {
+      asset: { version: "2.0" },
+      scenes: [{ nodes: [0] }],
+      nodes: [{ mesh: 0 }],
+      meshes: [{ primitives: [{ attributes: { POSITION: 0 }, indices: 1, material: 0 }] }],
+      materials: [{ pbrMetallicRoughness: { baseColorTexture: { index: 0 } } }],
+      textures: [{ source: 0 }],
+      images: [{ uri: "textures/my%20color.png" }],
+      accessors: [
+        { bufferView: 0, componentType: 5126, count: 3, type: "VEC3" },
+        { bufferView: 1, componentType: 5123, count: 3, type: "SCALAR" }
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 36 }, { buffer: 0, byteOffset: 36, byteLength: 6 }],
+      buffers: [{ byteLength: 42, uri: "shape.bin" }]
+    };
+    const files = new Map([["shape.bin", data], ["textures/my color.png", png]]);
+    const model = parseModel(packGlb(description, files));
+    expect(model.triangles).toBe(1);
+    expect([...model.parts[0].indices]).toEqual([0, 1, 2]);
+    expect(model.images).toHaveLength(1);
+    expect([...model.images[0].bytes]).toEqual([...png]);
+    expect(model.images[0].type).toBe("image/png");
+    expect(model.materials[0].colorTexture).toBe(0);
+    /* The description itself is not changed. */
+    expect(description.images[0].uri).toBe("textures/my%20color.png");
+  });
+
+  it("names a loose file that is missing", () => {
+    expect(() => packGlb({ buffers: [{ uri: "gone.bin" }] }, new Map())).toThrow(/gone\.bin/);
   });
 });
