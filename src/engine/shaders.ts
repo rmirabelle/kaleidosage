@@ -3847,6 +3847,57 @@ vec3 cornerLine(int i) {
   float a = u_turn + 2.0 * PI * float(i) / float(u_sides);
   return normalize(u_axis + u_tan * (cos(a) * u_e1 + sin(a) * u_e2));
 }
+/* The inward normal of a pyramid's face number i, between corner lines i and i + 1. */
+vec3 faceNormal(int i) {
+  vec3 n = normalize(cross(cornerLine(i), cornerLine(i + 1 == u_sides ? 0 : i + 1)));
+  return dot(n, u_axis) < 0.0 ? -n : n;
+}
+/**
+ * How far p is inside the beam's surface, in world units (less than zero
+ * outside). For a pyramid it is the distance to the nearest face, so past a
+ * corner it grows as fast as on a side, and the floor outline does not run
+ * on past the corner.
+ */
+float insideBy(vec3 p) {
+  vec3 v = p - u_apex;
+  if (u_sides >= 3) {
+    float least = 1e6;
+    for (int i = 0; i < 8; i++) {
+      if (i >= u_sides) break;
+      least = min(least, dot(v, faceNormal(i)));
+    }
+    return least;
+  }
+  float h = dot(v, u_axis);
+  return (h * u_tan - length(v - u_axis * h)) / sqrt(1.0 + u_tan * u_tan);
+}
+/**
+ * How far the floor point p is from the beam's outline on the floor, in
+ * world units, less than zero outside. For a pyramid it is the distance to
+ * the nearest side of the floor's polygon (its corners are where the corner
+ * lines meet the floor), so the outline ends at the corners. A pyramid with
+ * a corner line that does not reach the floor uses insideBy.
+ */
+float floorEdge(vec3 p) {
+  float inside = insideBy(p);
+  if (u_sides < 3) return inside;
+  float least = 1e6;
+  vec2 q = p.xz;
+  vec3 first = cornerLine(0);
+  if (first.y >= -1e-4) return inside;
+  vec2 a = (u_apex + first * ((FLOOR_Y - u_apex.y) / first.y)).xz;
+  for (int i = 1; i <= 8; i++) {
+    if (i > u_sides) break;
+    vec3 line = cornerLine(i == u_sides ? 0 : i);
+    if (line.y >= -1e-4) return inside;
+    vec2 b = (u_apex + line * ((FLOOR_Y - u_apex.y) / line.y)).xz;
+    vec2 ab = b - a;
+    float along = clamp(dot(q - a, ab) / max(dot(ab, ab), 1e-9), 0.0, 1.0);
+    least = min(least, length(q - a - ab * along));
+    a = b;
+  }
+  return inside >= 0.0 ? least : -least;
+}
 /* True when p is inside the round cone (on the source's side that the axis points to). */
 bool inCone(vec3 p, float c2) {
   vec3 v = p - u_apex;
@@ -3869,8 +3920,7 @@ bool segment(vec3 d, float tEnd, out float t0, out float t1, out vec3 n0, out ve
     /* A pyramid is the space on the inner side of all its faces; each face cuts the ray (Cyrus-Beck). */
     for (int i = 0; i < 8; i++) {
       if (i >= u_sides) break;
-      vec3 n = normalize(cross(cornerLine(i), cornerLine(i + 1 == u_sides ? 0 : i + 1)));
-      if (dot(n, u_axis) < 0.0) n = -n;
+      vec3 n = faceNormal(i);
       float num = dot(co, n);
       float den = dot(d, n);
       if (abs(den) < 1e-6) {
@@ -3955,9 +4005,9 @@ void main() {
    * every pixel, as the change needs the neighbor pixels.
    */
   vec2 floorAt = place(d * tFloor);
-  float inner = u_sides >= 3 ? cos(PI / float(u_sides)) : 1.0;
-  float floorIn = (1.0 - floorAt.x) * max(floorAt.y, 0.0) * u_tan * inner;
-  float floorStep = max(fwidth(floorIn), 1e-6);
+  float floorIn = floorAt.y > 0.0 ? floorEdge(d * tFloor) : -1e3;
+  /* The change per pixel in the steepest direction on the screen, so the distance in pixels is the same in every direction. */
+  float floorStep = max(length(vec2(dFdx(floorIn), dFdy(floorIn))), 1e-6);
   vec3 light = vec3(0.0);
   float t0;
   float t1;

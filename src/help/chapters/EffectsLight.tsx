@@ -75,8 +75,8 @@ export function EffectsLight() {
       <Shot name="fx-cone-shell" alt="The Light cone effect as a Laser shell pyramid with bright corner lines" side="block" />
       <p>
         <b>Laser shell</b> lights only a thin surface, as a laser show in fog does: the surface is
-        brightest where you see it from the side. <b>Edge width</b> sets how thick the surface
-        is, and <b>Corner lines</b> how bright the corners of a pyramid are. The <b>Shape</b> menu makes
+        brightest where you see it from the side. <b>Edge width</b> sets how thick the surface, the corner
+        lines and the outline on the floor are. <b>Corner lines</b> sets how bright the corners of a pyramid are. The <b>Shape</b> menu makes
         the beam a round <b>Cone</b> or a <b>Pyramid</b>, with 3 to 8 <b>Sides</b> and a <b>Turn</b>.
       </p>
       <p>
