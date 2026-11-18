@@ -132,6 +132,38 @@ export function EffectsTexture() {
         unchanged, make this effect the last one in the list.
       </Tip>
 
+      <h2>Text</h2>
+      <Shot name="fx-text" alt="The Text effect with glowing words over the picture" side="block" />
+      <p>
+        Text writes words over the picture. Type the words in the <b>Text</b> box; Enter starts a new
+        line. <b>Style</b> makes the letters <b>B</b> (bold) or <b>I</b> (italic), and
+        puts the lines at the <b>Left</b>, the <b>Center</b> or the <b>Right</b>.
+      </p>
+      <Shot name="fx-text-font" alt="The Font box with its list of fonts open" side="left" />
+      <p>
+        The <b>Font</b> box shows the fonts on your computer. Click it, then type a part of a name to
+        find a font. The Up and Down keys go to the next font and use it at once, so you can see each
+        font on the picture. Enter or a click on a name keeps the font. Esc goes back to the font
+        from before.
+      </p>
+      <p>
+        <b>Fill</b> makes the letters one color (<b>Solid</b>) or a <b>Gradient</b>, which goes across
+        the text at <b>Gradient angle</b>. <b>Outline</b>, <b>Glow</b> and <b>Shadow</b> each have a
+        color square at the right of the slider: click it to change the color. A strong Glow with a
+        bright color looks like a neon sign.
+      </p>
+      <p>
+        The <b>Move</b> menu moves the text on its own. <b>Scroll left</b>, <b>right</b>, <b>up</b> and
+        <b> down</b> move it across the screen, and it comes back in at the other edge. <b>Type
+        on</b> shows the letters one at a time; all the letters stay for <b>Hold</b> seconds, then it
+        starts again. <b>Speed</b> sets how fast. <b>Size</b>, <b>X</b>, <b>Y</b> and <b>Angle</b> place
+        the text, and each can have a range.
+      </p>
+      <Tip>
+        The effects below Text in the list also change the words. Put a Kaleidoscope below Text to
+        make a pattern of the letters, or make Text the last effect to keep the words easy to read.
+      </Tip>
+
       <h2>Color</h2>
       <Shot name="fx-color" alt="The Color effect with a Linear fill and its gradient" side="block" />
       <p>

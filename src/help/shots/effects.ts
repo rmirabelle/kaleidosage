@@ -209,6 +209,26 @@ export const EFFECTS: Shot[] = [
       await page.settle(600);
     }
   },
+  look({ effect: "Text", name: "text", pattern: "Random shapes", adjust: (page) => setSlider(page, "Glow", 0.5), wide: true }),
+  {
+    /** The Text effect's Font box with the focus in it and its list open. */
+    name: "fx-text-font",
+    needs: "blank",
+    group: "fx-text",
+    setup: async (page) => {
+      /* A click opens the list also when the window does not have the focus, where focus() alone may not fire. */
+      const input = page.findAll(".fx-card .font-picker-box input")[0];
+      input?.focus();
+      input?.click();
+      await page.waitFor(".font-picker-list");
+      await page.settle(300);
+    },
+    cursor: ".fx-card .font-picker-box",
+    cursorAt: [0.4, 0.5],
+    target: [".fx-card .font-picker-box", ".font-picker-list"],
+    margin: 14,
+    cleanup: () => (document.activeElement as HTMLElement | null)?.blur()
+  },
   look({
     effect: "Color",
     name: "color",

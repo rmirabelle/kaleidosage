@@ -11,7 +11,7 @@ export function EffectsSpace() {
 
       <h2>How to read the effect chapters</h2>
       <p>
-        This chapter and the two after it describe all 27 effects. For each effect you find its function,
+        This chapter and the two after it describe all 28 effects. For each effect you find its function,
         the choices of its menus, and the settings that change the result most. Each picture shows the
         effect in a new scene, with its controls open in the <b>FX</b> card and the result beside them.
       </p>

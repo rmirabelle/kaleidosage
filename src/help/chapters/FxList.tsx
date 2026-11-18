@@ -18,7 +18,7 @@ export function FxList() {
       </p>
       <Shot name="fx-add-menu" alt="The Add an effect menu with the mouse on Bloom" side="block" />
       <p>
-        The menu lists the 27 effects in alphabetical order. Point at a name to see a small picture of the
+        The menu lists the 28 effects in alphabetical order. Point at a name to see a small picture of the
         effect and one line about its function. When an effect has more than one type, the small picture
         shows each type in turn, and a tag gives the number of types.
       </p>
