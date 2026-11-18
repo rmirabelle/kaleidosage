@@ -1,6 +1,7 @@
 import { GROUP_PARAMS, NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, SPIRO_HOLE_KEYS, createParams, createPlayState, defaultValue, hexToRgb, lensAngle, liveValue, rangeAt, rangeClock, startRangeAt, type GroupKey, type ParamKey, type Params, type PlayState } from "./params";
 import { KaleidoRenderer, LASER_BEAMS, type FrameValues, type ImageSource } from "./renderer";
 import type { TerrainData } from "./terrain";
+import type { ModelData } from "./model";
 import { MANDEL_CENTERS } from "./submodes";
 import { TYPE_RATE, letterCount } from "./textLayer";
 import { audioLinkable, pushRange, pushedValue, type AudioSignal } from "./audio";
@@ -146,6 +147,7 @@ export interface SceneSource {
   picture: ImageSource | null;
   solidMedia: ImageSource | null;
   terrain: TerrainData | null;
+  model: ModelData | null;
 }
 
 export class Engine {
@@ -195,7 +197,8 @@ export class Engine {
       driver: this.driverVideo,
       picture: this.pictureSource,
       solidMedia: this.solidMedia,
-      terrain: this.terrain
+      terrain: this.terrain,
+      model: this.model
     };
   }
 
@@ -248,6 +251,7 @@ export class Engine {
         copy.setSolidMedia(scene.solidMedia);
       }
       if (scene.terrain) copy.setTerrain(scene.terrain);
+      if (scene.model) copy.setModel(scene.model);
     } catch (error) {
       copy.dispose();
       throw error;
@@ -556,6 +560,27 @@ export class Engine {
     this.terrainVersion++;
     this.renderer.setTerrain(terrain);
     for (const watcher of this.terrainWatchers) watcher();
+  }
+
+  /** The 3D Object's model (the Model shape, see model.ts), or null. The scene owns it; the engine draws with it. */
+  model: ModelData | null = null;
+  private readonly modelWatchers = new Set<() => void>();
+
+  setModel(model: ModelData | null) {
+    /* The same model again (a change of tab between two scenes that share it) keeps what the graphics card has. */
+    if (model === this.model) return;
+    this.wake();
+    this.model = model;
+    this.renderer.setModel(model);
+    for (const watcher of this.modelWatchers) watcher();
+  }
+
+  /** Calls "watcher" each time the model changes, until the returned function runs. */
+  watchModel(watcher: () => void) {
+    this.modelWatchers.add(watcher);
+    return () => {
+      this.modelWatchers.delete(watcher);
+    };
   }
 
   /** Calls "watcher" each time the land changes, until the returned function runs. */
@@ -1689,7 +1714,8 @@ export class Engine {
       solidMap: this.state.solidMap,
       solidWrap: this.state.solidWrap,
       /* Source B with no second image paints with the picture. */
-      solidPaint: this.state.solidPaint === 2 && !this.hasSecondImage ? 0 : this.state.solidPaint,
+      /* Slot B with no second image, and Model on a shape that is not one, paint with Slot A. */
+      solidPaint: (this.state.solidPaint === 2 && !this.hasSecondImage) || (this.state.solidPaint === 3 && this.state.solidShape !== 11) ? 0 : this.state.solidPaint,
       solidBlend: this.state.solidBlend,
       solidBackground: this.live("solidBackground"),
       solidSize: this.live("solidSize"),

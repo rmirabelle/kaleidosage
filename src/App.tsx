@@ -27,6 +27,7 @@ import { OpenDialog, type OpenKind } from "./components/OpenDialog";
 import { StatsOverlay } from "./components/StatsOverlay";
 import { TitleBar } from "./components/TitleBar";
 import type { TerrainData } from "./engine/terrain";
+import type { ModelData } from "./engine/model";
 import { DocumentTabs, type DocumentTabInfo } from "./components/DocumentTabs";
 import { StageControls } from "./components/StageControls";
 import { VrScreenCard } from "./components/VrScreenCard";
@@ -41,7 +42,8 @@ import { baseLoopSeconds, scenePosition } from "./engine/loop";
 import { SCENE_EXTENSION, applyScene, blobToSceneImage, sceneFingerprint, serializeScene, type SceneImage } from "./engine/scene";
 import { loadSceneMedia, loadSceneSource, readScene, writeScene } from "./lib/scenes";
 import { DEFAULT_LAND_KM, loadTerrain, randomLandPlace, terrainFromScene, terrainToScene } from "./lib/terrain";
-import { adoptImage, keepAnalyses, keepImage, keepScenes, keepTerrain, keptAnalysisText, keptImageBytes, keptTerrain, readKept, readUnopened, keepUnopened, type Kept, type KeptDoc, type KeptImage } from "./lib/reloadKeeper";
+import { loadModelFile, modelFromScene, modelToScene } from "./lib/model";
+import { adoptImage, keepAnalyses, keepImage, keepModel, keepScenes, keepTerrain, keptAnalysisText, keptImageBytes, keptModel, keptTerrain, readKept, readUnopened, keepUnopened, type Kept, type KeptDoc, type KeptImage } from "./lib/reloadKeeper";
 import type { ImageSource } from "./engine/renderer";
 import {
   makeThumbnail,
@@ -149,6 +151,8 @@ interface StoredScene {
   terrain?: TerrainData | null;
   /** The 3D Object's own image or video (Paint: Image or Video; its label is the file name), or null. */
   solidMedia?: SlotImage | null;
+  /** The 3D Object's model (the Model shape, see engine/model.ts), or null. */
+  model?: ModelData | null;
   savedFingerprint: string;
   history: SettingsHistory;
   openGroup: string | null;
@@ -217,7 +221,7 @@ async function sceneMedia(image: Pick<SlotImage, "source" | "blob" | "videoFile"
  * copy). The settings are taken before the media is copied, so a change
  * made while it writes still counts as unsaved.
  */
-async function writeSceneFile(path: string, params: Params, state: PlayState, [first, second]: [SlotImage | null, SlotImage | null], driver: DriverVideo | null, picture: SlotImage | null, terrain: TerrainData | null, solidMedia: SlotImage | null) {
+async function writeSceneFile(path: string, params: Params, state: PlayState, [first, second]: [SlotImage | null, SlotImage | null], driver: DriverVideo | null, picture: SlotImage | null, terrain: TerrainData | null, solidMedia: SlotImage | null, model: ModelData | null) {
   if (!first) throw new Error("There is no source image or video to save in the scene.");
   const scene = JSON.parse(serializeScene(params, state, { image: { type: "image/png", data: "pending" } }));
   scene.image = await sceneMedia(first);
@@ -236,6 +240,8 @@ async function writeSceneFile(path: string, params: Params, state: PlayState, [f
   if (solidMedia && state.fxOrder.includes("solid") && state.solidPaint === 1) scene.solidMedia = { ...(await sceneMedia(solidMedia)), name: solidMedia.label };
   /* Real terrain's land and picture go in while Terrain is in the list and uses them (Real terrain heights or Terrain picture colors). */
   if (terrain && state.fxOrder.includes("terrain") && (state.cameraHeightSource === 2 || state.cameraColors === 2)) scene.terrain = await terrainToScene(terrain);
+  /* The 3D Object's model goes in while the 3D Object is in the list with the Model shape. */
+  if (model && state.fxOrder.includes("solid") && state.solidShape === 11) scene.model = await modelToScene(model);
   await writeScene(path, JSON.stringify(scene));
 }
 
@@ -857,7 +863,8 @@ export default function App() {
           driver: stored.driver?.video ?? null,
           picture: stored.picture?.source ?? null,
           solidMedia: stored.solidMedia?.source ?? null,
-          terrain: stored.terrain ?? null
+          terrain: stored.terrain ?? null,
+          model: stored.model ?? null
         }
       }];
     });
@@ -966,7 +973,7 @@ export default function App() {
   const fingerprint = useCallback(() => {
     if (!engine) return "";
     const [first, second] = imagesRef.current;
-    return sceneFingerprint(engine.params, engine.state, [first?.id ?? null, second?.id ?? null, driverRef.current?.id ?? null, pictureRef.current?.id ?? null, engine.terrain?.id ?? null, solidMediaRef.current?.id ?? null]);
+    return sceneFingerprint(engine.params, engine.state, [first?.id ?? null, second?.id ?? null, driverRef.current?.id ?? null, pictureRef.current?.id ?? null, engine.terrain?.id ?? null, solidMediaRef.current?.id ?? null, engine.model?.id ?? null]);
   }, [engine]);
 
   /**
@@ -1031,6 +1038,7 @@ export default function App() {
       picture: pictureRef.current,
       terrain: engine.terrain,
       solidMedia: solidMediaRef.current,
+      model: engine.model,
       savedFingerprint: savedFingerprintRef.current,
       history,
       openGroup: openGroupRef.current
@@ -1062,6 +1070,7 @@ export default function App() {
     setPicture(stored.picture);
     setSolidMedia(stored.solidMedia ?? null);
     engine?.setTerrain(stored.terrain ?? null);
+    engine.setModel(stored.model ?? null);
     engine.settle();
     engine.resetTrails();
     setSlotImage(0, first);
@@ -1204,7 +1213,7 @@ export default function App() {
     try {
       showStatus("Exporting the scene and embedding media…", 0, undefined, true);
       const copy = await invoke<string>("scene_copy_path", { name: fileNameOf(path) });
-      await writeSceneFile(copy, engine.params, engine.state, imagesRef.current, driverRef.current, pictureRef.current, engine.terrain, solidMediaRef.current);
+      await writeSceneFile(copy, engine.params, engine.state, imagesRef.current, driverRef.current, pictureRef.current, engine.terrain, solidMediaRef.current, engine.model);
       /* A scene alone has no tracks, so Files as the input would open with an empty list: it keeps no input then. */
       const audio = fileAudio();
       await saveKaleidoFile(path, { audio: audio.kind === "tracks" ? { ...audio, kind: "none" } : audio, activeScene: 0 }, [copy], []);
@@ -1258,6 +1267,8 @@ export default function App() {
       const solidMedia = images.solidMedia ? await loadSceneMedia(images.solidMedia.media) : null;
       /* Broken terrain data leaves the scene with no land loaded; the rest still opens. */
       const terrain = images.terrain ? await terrainFromScene(images.terrain).catch(() => null) : null;
+      /* A broken model leaves the 3D Object with none; the rest still opens. */
+      const model = images.model ? await modelFromScene(images.model).catch(() => null) : null;
       if (generation !== sceneGenerationRef.current) return;
       const reuse = scenePathRef.current === null && fingerprint() === savedFingerprintRef.current;
       if (activeIdRef.current !== null && !reuse) {
@@ -1280,6 +1291,7 @@ export default function App() {
       setDriver(driverMedia?.source instanceof HTMLVideoElement && driverMedia.videoFile && images.driverVideo
         ? { video: driverMedia.source, videoFile: driverMedia.videoFile, name: images.driverVideo.name, id: nextImageId++ } : null);
       engine.setTerrain(terrain);
+      engine.setModel(model);
       setPicture(pictureMedia && images.picture ? { ...pictureMedia, label: images.picture.name, thumbnail: makeThumbnail(pictureMedia.source), id: nextImageId++ } : null);
       setSolidMedia(solidMedia && images.solidMedia ? { ...solidMedia, label: images.solidMedia.name, thumbnail: makeThumbnail(solidMedia.source), id: nextImageId++ } : null);
       setRevision((value) => value + 1);
@@ -1322,6 +1334,22 @@ export default function App() {
       showError(`Could not open the image or video. ${error instanceof Error ? error.message : String(error)}`);
     }
   }, [setSolidMedia, showError, showStatus]);
+
+  /** Asks for a .glb file with the system's Open dialog, and makes it the 3D Object's model (the Model shape). */
+  const pickModel = useCallback(async () => {
+    if (!engine) return;
+    const generation = sceneGenerationRef.current;
+    try {
+      const path = await openFileDialog({ title: "Open a 3D model", multiple: false, filters: [{ name: "3D models (glTF binary)", extensions: ["glb"] }] });
+      if (typeof path !== "string") return;
+      const model = await loadModelFile(path);
+      if (generation !== sceneGenerationRef.current) return;
+      engine.setModel(model);
+      showStatus(`3D Object: ${model.name} (${model.shape.triangles.toLocaleString()} triangles)`);
+    } catch (error) {
+      showError(`Could not open the model. ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }, [engine, showError, showStatus]);
 
   /** Makes a picked video file the Driver effect's own video. */
   const openDriverVideo = useCallback(async (path: string) => {
@@ -1789,6 +1817,7 @@ export default function App() {
     setPicture(null);
     setSolidMedia(null);
     engine?.setTerrain(null);
+    engine.setModel(null);
     engine.settle();
     engine.resetTrails();
     setSlotImage(0, { source, label: pattern.label, thumbnail: makeThumbnail(source), patternId: pattern.id, id: nextImageId++ });
@@ -1940,13 +1969,13 @@ export default function App() {
         const target = isFileCopy(scenePath) ? scenePath! : await invoke<string>("scene_copy_path", { name });
         if (active) {
           const saved = fingerprint();
-          await writeSceneFile(target, engine.params, engine.state, imagesRef.current, driverRef.current, pictureRef.current, engine.terrain, solidMediaRef.current);
+          await writeSceneFile(target, engine.params, engine.state, imagesRef.current, driverRef.current, pictureRef.current, engine.terrain, solidMediaRef.current, engine.model);
           savedFingerprintRef.current = saved;
           setDirty(fingerprint() !== saved);
           setActivePath(target);
         } else if (stored) {
-          await writeSceneFile(target, stored.params, stored.state, stored.images, stored.driver, stored.picture, stored.terrain ?? null, stored.solidMedia ?? null);
-          stored.savedFingerprint = sceneFingerprint(stored.params, stored.state, [stored.images[0]?.id ?? null, stored.images[1]?.id ?? null, stored.driver?.id ?? null, stored.picture?.id ?? null, stored.terrain?.id ?? null, stored.solidMedia?.id ?? null]);
+          await writeSceneFile(target, stored.params, stored.state, stored.images, stored.driver, stored.picture, stored.terrain ?? null, stored.solidMedia ?? null, stored.model ?? null);
+          stored.savedFingerprint = sceneFingerprint(stored.params, stored.state, [stored.images[0]?.id ?? null, stored.images[1]?.id ?? null, stored.driver?.id ?? null, stored.picture?.id ?? null, stored.terrain?.id ?? null, stored.solidMedia?.id ?? null, stored.model?.id ?? null]);
           writeDocs(docsRef.current.map((candidate) => candidate.id === doc.id ? { ...candidate, path: target, dirty: false } : candidate));
         }
         scenes.push(target);
@@ -2317,6 +2346,7 @@ export default function App() {
             picture: keepImage(pictureRef.current),
             solidMedia: keepImage(solidMediaRef.current),
             terrain: keepTerrain(engine.terrain),
+            model: keepModel(engine.model),
             openGroup: openGroupRef.current
           }];
         }
@@ -2334,6 +2364,7 @@ export default function App() {
           picture: keepImage(stored.picture),
           solidMedia: keepImage(stored.solidMedia ?? null),
           terrain: keepTerrain(stored.terrain),
+          model: keepModel(stored.model),
           openGroup: stored.openGroup
         }];
       })
@@ -2407,7 +2438,7 @@ export default function App() {
     const restore = async () => {
       /* Each kept tab's scene ID; a snapshot from before the IDs gets new ones, and its song map picks (tab indexes) go to them (see songFollow.preload). */
       const keptIds = kept.docs.map((keptDoc) => keptDoc.sceneId ?? newSceneId());
-      const loaded: { doc: SceneDoc; params: Params; state: PlayState; images: [SlotImage, SlotImage | null]; driver: DriverVideo | null; picture: SlotImage | null; terrain: TerrainData | null; solidMedia: SlotImage | null; openGroup: string | null }[] = [];
+      const loaded: { doc: SceneDoc; params: Params; state: PlayState; images: [SlotImage, SlotImage | null]; driver: DriverVideo | null; picture: SlotImage | null; terrain: TerrainData | null; solidMedia: SlotImage | null; model: ModelData | null; openGroup: string | null }[] = [];
       for (const keptDoc of kept.docs) {
         const params = createParams();
         const state = createPlayState();
@@ -2435,7 +2466,8 @@ export default function App() {
         const picture = keptDoc.picture ? await loadKeptImage(keptDoc.picture) : null;
         const solidMedia = keptDoc.solidMedia ? await loadKeptImage(keptDoc.solidMedia) : null;
         const terrain = keptDoc.terrain ? await keptTerrain(keptDoc.terrain) : null;
-        loaded.push({ doc: { id: keptDoc.id, sceneId: keptIds[kept.docs.indexOf(keptDoc)], path: keptDoc.path, untitled: keptDoc.untitled, dirty: keptDoc.dirty || lostFirst, modified: keptDoc.modified ?? null }, params, state, images: [first, second], driver, picture, terrain, solidMedia, openGroup: keptDoc.openGroup });
+        const model = keptDoc.model ? await keptModel(keptDoc.model) : null;
+        loaded.push({ doc: { id: keptDoc.id, sceneId: keptIds[kept.docs.indexOf(keptDoc)], path: keptDoc.path, untitled: keptDoc.untitled, dirty: keptDoc.dirty || lostFirst, modified: keptDoc.modified ?? null }, params, state, images: [first, second], driver, picture, terrain, solidMedia, model, openGroup: keptDoc.openGroup });
       }
       if (loaded.length === 0 || activeIdRef.current !== null) {
         /* Nothing opened, or a scene opened first: the kept tabs wait for the next reload. */
@@ -2445,12 +2477,12 @@ export default function App() {
       }
       keepUnopened(unopened);
       /* Each tab's Undo history is made on the engine's settings, as addDoc makes it, starting from that scene. */
-      for (const { doc, params, state, images, driver, picture, terrain, solidMedia, openGroup } of loaded) {
+      for (const { doc, params, state, images, driver, picture, terrain, solidMedia, model, openGroup } of loaded) {
         Object.assign(engine.params, structuredClone(params));
         Object.assign(engine.state, structuredClone(state));
         const history = new SettingsHistory(engine.params, engine.state);
-        const savedFingerprint = doc.dirty ? "" : sceneFingerprint(params, state, [images[0].id, images[1]?.id ?? null, driver?.id ?? null, picture?.id ?? null, terrain?.id ?? null, solidMedia?.id ?? null]);
-        storedRef.current.set(doc.id, { params, state, images, driver, picture, terrain, solidMedia, savedFingerprint, history, openGroup });
+        const savedFingerprint = doc.dirty ? "" : sceneFingerprint(params, state, [images[0].id, images[1]?.id ?? null, driver?.id ?? null, picture?.id ?? null, terrain?.id ?? null, solidMedia?.id ?? null, model?.id ?? null]);
+        storedRef.current.set(doc.id, { params, state, images, driver, picture, terrain, solidMedia, model, savedFingerprint, history, openGroup });
       }
       writeDocs(loaded.map((entry) => entry.doc));
       nextDocId = Math.max(nextDocId, ...loaded.map((entry) => entry.doc.id + 1));
@@ -2902,6 +2934,7 @@ export default function App() {
                   solidMediaName={solidMediaName}
                   onPickSolidMedia={() => setOpenRequest({ kind: "image", slot: 0, target: "solid" })}
                   onRemoveSolidMedia={() => setSolidMedia(null)}
+                  onPickModel={() => void pickModel()}
                   onNeedAudioInput={askForAudioInput}
                   onFirstEffect={firstEffect}
                   linksTip={linksTip}

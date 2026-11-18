@@ -174,6 +174,17 @@ describe("scene files", () => {
     expect(media.solidMedia).toEqual({ media: IMAGE, name: "logo.png" });
   });
 
+  it("keep the 3D object's Model shape, its Model source and its model file", () => {
+    const state = createPlayState();
+    Object.assign(state, { solidShape: 11, solidPaint: 3 });
+    const scene = JSON.parse(serializeScene(createParams(), state, { image: IMAGE }));
+    scene.model = { name: "duck.glb", data: "Z2xURg==" };
+    const loaded = createPlayState();
+    const media = applyScene(JSON.stringify(scene), createParams(), loaded);
+    expect([loaded.solidShape, loaded.solidPaint]).toEqual([11, 3]);
+    expect(media.model).toEqual({ name: "duck.glb", data: "Z2xURg==" });
+  });
+
   it("keep the 3D object's Freeze background, which is off in a scene from before it", () => {
     const state = createPlayState();
     state.solidKeep = true;

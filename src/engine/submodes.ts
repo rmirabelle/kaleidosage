@@ -169,11 +169,11 @@ export const SOLID_KEYS: readonly ParamKey[] = ["solidSize", "solidRound", "soli
  */
 export const SOLID_SHAPE_KEYS: Record<SolidShape, ParamKey[]> = {
   0: [], 1: ["solidRound"], 2: ["solidMorph"], 3: ["solidBlobs", "solidRound"], 4: ["solidBumps", "solidWaves"], 5: ["solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidRound"],
-  6: ["solidRound"], 7: ["solidRound"], 8: ["solidRound"], 9: ["solidLevels", "solidRound"], 10: ["solidPoints", "solidPointLength", "solidHollow"]
+  6: ["solidRound"], 7: ["solidRound"], 8: ["solidRound"], 9: ["solidLevels", "solidRound"], 10: ["solidPoints", "solidPointLength", "solidHollow"], 11: []
 };
 /** The sliders that only some shapes show (see SOLID_SHAPE_KEYS). */
 export const SOLID_SHAPE_ONLY: readonly ParamKey[] = ["solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidPoints", "solidPointLength", "solidHollow", "solidLevels"];
-export const SOLID_SHAPES = [[0, "Sphere"], [1, "Cube"], [2, "Morph"], [3, "Blobs"], [4, "Wobbly ball"], [5, "Spike ball"], [6, "Octahedron"], [7, "Icosahedron"], [8, "Pyramid"], [9, "Menger sponge"], [10, "Moravian star"]] as const;
+export const SOLID_SHAPES = [[0, "Sphere"], [1, "Cube"], [2, "Morph"], [3, "Blobs"], [4, "Wobbly ball"], [5, "Spike ball"], [6, "Octahedron"], [7, "Icosahedron"], [8, "Pyramid"], [9, "Menger sponge"], [10, "Moravian star"], [11, "Model"]] as const;
 /** Tiles is for Wrap; Bend and Frost for Project; Repeats for Project and Mirror. */
 export const SOLID_MAP_KEYS: Record<SolidMap, ParamKey[]> = { 0: ["solidTiles"], 1: ["solidBend", "solidFrost", "solidRepeats"], 2: ["solidRepeats"] };
 export const SOLID_MAPS = [[0, "Wrap"], [1, "Project"], [2, "Mirror"]] as const;
@@ -181,6 +181,8 @@ export const SOLID_MAPS = [[0, "Wrap"], [1, "Project"], [2, "Mirror"]] as const;
 export const SOLID_WRAPS = [[0, "Globe"], [1, "Faces"], [2, "Six sides"], [3, "Points"]] as const;
 /** What paints the 3D Object, the Source menu (see SolidPaint): Slot A is the picture made so far (Source A after the effects above the 3D Object). */
 export const SOLID_PAINTS = [[0, "Slot A"], [2, "Slot B"], [1, "Image or Video"]] as const;
+/** The Source menu of the Model shape: first the model's own colors and pictures, then the others. */
+export const SOLID_MODEL_PAINTS = [[3, "Model"], ...SOLID_PAINTS] as const;
 
 /** The Opacity mask's types, and the sliders each shows under the gradient (Strength always shows, above it). */
 export const MASK_MODES = [[0, "Brightness"], [1, "Radial"]] as const;

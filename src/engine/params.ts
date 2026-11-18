@@ -2182,7 +2182,8 @@ function randomizeAll(params: Params, state?: PlayState) {
     state.cameraRepeat = (Math.random() < 0.7 ? 0 : Math.random() < 0.7 ? 1 : 2) as CameraRepeat;
     state.cyclesMove = (Math.random() < 0.6 ? 0 : 1) as CycleMove;
     state.cyclesPaint = Math.floor(Math.random() * 4) as CyclePaint;
-    state.solidShape = Math.floor(Math.random() * 11) as SolidShape;
+    /* A model from a file stays: a random shape would put the user's model away. */
+    if (state.solidShape !== 11) state.solidShape = Math.floor(Math.random() * 11) as SolidShape;
     state.solidMap = Math.floor(Math.random() * 3) as SolidMap;
     state.driverSource = Math.floor(Math.random() * 5) as DriverSource;
     state.driverMode = Math.floor(Math.random() * 3) as DriverMode;

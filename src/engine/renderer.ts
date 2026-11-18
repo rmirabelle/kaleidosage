@@ -4,9 +4,10 @@ import { pathSegments, writePathInstances, type PathShape } from "./paths";
 import { spiroSegments, writeSpiroInstances, type SpiroWheel } from "./spiro";
 import { SCROLL_RATE, TextPicture, letterCount, type TextLook, type TextMove } from "./textLayer";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, CONE_SHADER, BUBBLE_SHADER, MASK_SHADER, OUTLINE_SHADER, OUTLINE_GLOW_SHADER, OUTLINE_LINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, SOLID_MESH_VERTEX, SOLID_MESH_SHADER, SOLID_BACK_SHADER, SOLID_SHADE_BLUR_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, CONE_SHADER, BUBBLE_SHADER, MASK_SHADER, OUTLINE_SHADER, OUTLINE_GLOW_SHADER, OUTLINE_LINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, SOLID_MESH_VERTEX, SOLID_MESH_SHADER, SOLID_MODEL_VERTEX, SOLID_MODEL_SHADER, SOLID_BACK_SHADER, SOLID_SHADE_BLUR_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 import { MESH_SHAPES, flatMesh } from "./flatMesh";
 import { MESH_STRIDE, starKinds, starMesh } from "./starMesh";
+import { MODEL_STRIDE, type ModelData, type ModelMaterial } from "./model";
 import { halveGrid, type TerrainData } from "./terrain";
 import type { VrEye, VrScreen, XrLayer, XrSession } from "./vr";
 
@@ -343,13 +344,13 @@ export type CycleMove = 0 | 1;
  */
 export type CyclePaint = 0 | 1 | 2 | 3;
 /** The 3D Object's shape (see SOLID_SHAPES and SOLID_SHADER). */
-export type SolidShape = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+export type SolidShape = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 /** How the picture goes onto the 3D Object: 0 wrapped on its surface, 1 bent through it like a lens, 2 reflected in it like chrome. */
 export type SolidMap = 0 | 1 | 2;
 /** How Wrap lays the picture on the Moravian star: 0 Globe (around the upright), 1 Faces (flat on each triangle), 2 Six sides (cast from six directions, blended), 3 Points (around each point). */
 export type SolidWrap = 0 | 1 | 2 | 3;
-/** What paints the 3D Object: 0 the picture made so far, 1 its own image or video (see setSolidMedia), 2 Source B (the scene's second image or video). */
-export type SolidPaint = 0 | 1 | 2;
+/** What paints the 3D Object: 0 the picture made so far, 1 its own image or video (see setSolidMedia), 2 Source B (the scene's second image or video), 3 the model's own materials (the Model shape only, see setModel). */
+export type SolidPaint = 0 | 1 | 2 | 3;
 /** How the two images fade: 0 = crossfade, 1 = dissolve by brightness (light areas change first). */
 export type BlendMode = 0 | 1;
 /**
@@ -1151,6 +1152,12 @@ export class KaleidoRenderer {
   private readonly starProgram: Program;
   private readonly starBackProgram: Program;
   private readonly shadeBlurProgram: Program;
+  /** The Model shape's triangles (see drawModel). */
+  private readonly modelProgram: Program;
+  /** The loaded model on the graphics card: each material's triangles, and each texture (null for a picture that could not be read). */
+  private model: { parts: { vertices: WebGLVertexArrayObject; buffers: WebGLBuffer[]; count: number; material: ModelMaterial }[]; textures: (WebGLTexture | null)[] } | null = null;
+  /** The 1 by 1 pictures that stand in for a material's missing ones (see modelBlanks). */
+  private modelBlank: { white: WebGLTexture; flat: WebGLTexture } | null = null;
   /** The star's triangles, one buffer per core drawn (two while Points fades between two counts), rebuilt when their settings change. */
   private readonly starBuffers: { vertices: WebGLVertexArrayObject; buffer: WebGLBuffer; key: string; count: number }[] = [];
   /** The picture the star is drawn into, with 4 samples per pixel for smooth edges, and its depth. */
@@ -1323,6 +1330,7 @@ export class KaleidoRenderer {
     this.starProgram = this.createProgram(SOLID_MESH_SHADER, SOLID_MESH_VERTEX);
     this.starBackProgram = this.createProgram(SOLID_BACK_SHADER);
     this.shadeBlurProgram = this.createProgram(SOLID_SHADE_BLUR_SHADER);
+    this.modelProgram = this.createProgram(SOLID_MODEL_SHADER, SOLID_MODEL_VERTEX);
     this.maxPass = this.createProgram(MAX_SHADER);
     this.contours = this.createProgram(CONTOUR_SHADER);
     this.contourField = this.createProgram(CONTOUR_FIELD_SHADER);
@@ -2523,6 +2531,10 @@ export class KaleidoRenderer {
   /** "painted": the picture is already the Source, changed by the object steps (Freeze background); else the Source is picked here. */
   private drawSolid(v: FrameValues, picture: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture, painted = false) {
     const source = painted ? picture : this.solidSource(v, picture);
+    if (v.solidShape === 11) {
+      this.drawModel(v, source, target, width, height, back);
+      return;
+    }
     if (MESH_SHAPES.has(v.solidShape)) {
       this.drawMesh(v, source, target, width, height, back);
       return;
@@ -2615,21 +2627,7 @@ export class KaleidoRenderer {
       });
       gl.colorMask(true, true, true, true);
       gl.bindVertexArray(null);
-      /* Softened across into a second picture, then up and down back into the first; the edge is about 0.06 shape sizes wide either way. */
-      const across = this.layerTarget("solid star shade across", shadeSize[0], shadeSize[1]);
-      const reach = 0.06 * Math.max(0.01, v.solidSize) / 12;
-      const f = this.shadeBlurProgram;
-      gl.useProgram(f.program);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.uniform1i(f.uniforms.u_tex, 0);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, across.framebuffer);
-      gl.bindTexture(gl.TEXTURE_2D, shade.texture);
-      gl.uniform2f(f.uniforms.u_step, reach * height / width, 0);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, shade.framebuffer);
-      gl.bindTexture(gl.TEXTURE_2D, across.texture);
-      gl.uniform2f(f.uniforms.u_step, 0, reach);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      this.softenShade(shade.framebuffer, shade.texture, shadeSize, v.solidSize, width, height);
     }
     const samples = this.starSampleTarget(width, height);
     const under = cores.length > 1 ? this.layerTarget("solid star under", width, height) : null;
@@ -2656,6 +2654,31 @@ export class KaleidoRenderer {
       gl.blitFramebuffer(0, 0, width, height, 0, 0, width, height, gl.COLOR_BUFFER_BIT, gl.NEAREST);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     });
+    this.showMesh(whole.texture, target, width, height);
+  }
+
+  /** Softens the mesh shapes' shadow outline in the shade picture: across into a second picture, then up and down back into the first; the edge is about 0.06 shape sizes wide either way. */
+  private softenShade(framebuffer: WebGLFramebuffer, texture: WebGLTexture, shadeSize: [number, number], size: number, width: number, height: number) {
+    const gl = this.gl;
+    const across = this.layerTarget("solid star shade across", shadeSize[0], shadeSize[1]);
+    const reach = 0.06 * Math.max(0.01, size) / 12;
+    const f = this.shadeBlurProgram;
+    gl.useProgram(f.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.uniform1i(f.uniforms.u_tex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, across.framebuffer);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.uniform2f(f.uniforms.u_step, reach * height / width, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+    gl.bindTexture(gl.TEXTURE_2D, across.texture);
+    gl.uniform2f(f.uniforms.u_step, 0, reach);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /** The end of a mesh shape's draw: with no target, its finished picture goes onto the screen. */
+  private showMesh(whole: WebGLTexture, target: Target | null, width: number, height: number) {
+    const gl = this.gl;
     gl.activeTexture(gl.TEXTURE0);
     if (!target) {
       /**
@@ -2667,10 +2690,187 @@ export class KaleidoRenderer {
       this.timer.end();
       this.timer.begin("screen");
       gl.viewport(0, 0, width, height);
-      this.drawCopy(whole.texture);
+      this.drawCopy(whole);
     } else {
       delete this.timer.times.screen;
     }
+  }
+
+  /**
+   * The 3D Object's Model shape: a model from a file (see model.ts and
+   * setModel), drawn as the mesh shapes are (see drawMesh): the shadow's
+   * outline into a small picture, the picture behind on the whole screen,
+   * then the triangles over it with 4 samples per pixel, one material at
+   * a time. With no model loaded, only the picture behind shows.
+   */
+  private drawModel(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture) {
+    const gl = this.gl;
+    const parts = this.model?.parts ?? [];
+    const shadow = Math.min(1, Math.max(0, v.solidShadow));
+    const shadeSize: [number, number] = [Math.max(1, Math.ceil(width / 4)), Math.max(1, Math.ceil(height / 4))];
+    const shade = this.layerTarget("solid star shade", shadeSize[0], shadeSize[1]);
+    const p = this.modelProgram;
+    const b = this.starBackProgram;
+    const common = (s: Program, shadeTexture: WebGLTexture) => {
+      gl.useProgram(s.program);
+      this.solidLook(s, v);
+      gl.uniform1i(s.uniforms.u_turnCopy, 0);
+      gl.uniform1f(s.uniforms.u_aspect, width / height);
+      gl.uniform1f(s.uniforms.u_size, Math.max(0.01, v.solidSize));
+      gl.uniform2f(s.uniforms.u_view, width, height);
+      gl.uniform1i(s.uniforms.u_map, v.solidMap);
+      gl.uniform1i(s.uniforms.u_blend, v.solidBlend);
+      gl.uniform1f(s.uniforms.u_opacity, Math.min(1, Math.max(0, v.solid)));
+      gl.uniform1f(s.uniforms.u_background, Math.min(1, Math.max(0, v.solidBackground)));
+      gl.uniform2f(s.uniforms.u_shadeMix, 1, 0);
+      gl.uniform1f(s.uniforms.u_fade, 1);
+      gl.uniform1i(s.uniforms.u_own, v.solidPaint === 3 ? 1 : 0);
+      const textures: [WebGLTexture, string][] = [[source, "u_tex"], [back, "u_back"], [back, "u_under"], [shadeTexture, "u_shade"]];
+      textures.forEach(([texture, name], unit) => {
+        gl.activeTexture(gl.TEXTURE0 + unit);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.uniform1i(s.uniforms[name], unit);
+      });
+    };
+    const drawParts = () => {
+      const { white, flat } = this.modelBlanks();
+      const textures = this.model?.textures ?? [];
+      const picture = (index: number | null, blank: WebGLTexture) => (index === null ? null : textures[index]) ?? blank;
+      for (const { vertices, count, material } of parts) {
+        const slots: [WebGLTexture, string][] = [
+          [picture(material.colorTexture, white), "u_colorTex"],
+          [picture(material.normalTexture, flat), "u_normalTex"],
+          [picture(material.roughTexture, white), "u_roughTex"],
+          [picture(material.emissiveTexture, white), "u_emissiveTex"]
+        ];
+        slots.forEach(([texture, name], slot) => {
+          gl.activeTexture(gl.TEXTURE4 + slot);
+          gl.bindTexture(gl.TEXTURE_2D, texture);
+          gl.uniform1i(p.uniforms[name], 4 + slot);
+        });
+        gl.uniform4f(p.uniforms.u_color, ...material.color);
+        gl.uniform1i(p.uniforms.u_hasNormal, material.normalTexture !== null && textures[material.normalTexture] ? 1 : 0);
+        gl.uniform1f(p.uniforms.u_normalScale, material.normalScale);
+        gl.uniform1f(p.uniforms.u_rough, material.roughness);
+        gl.uniform1f(p.uniforms.u_metal, material.metallic);
+        gl.uniform3f(p.uniforms.u_emissive, ...material.emissive);
+        gl.uniform1f(p.uniforms.u_cutoff, material.cutoff);
+        gl.bindVertexArray(vertices);
+        gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_INT, 0);
+      }
+      gl.bindVertexArray(null);
+      for (let slot = 0; slot < 4; slot++) {
+        gl.activeTexture(gl.TEXTURE4 + slot);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+      }
+    };
+    if (shadow > 0) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, shade.framebuffer);
+      gl.viewport(0, 0, shadeSize[0], shadeSize[1]);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      /* The shadow pass draws into the shade picture, so it must not also read it. */
+      common(p, back);
+      gl.uniform1i(p.uniforms.u_pass, 1);
+      gl.colorMask(true, false, false, false);
+      drawParts();
+      gl.colorMask(true, true, true, true);
+      this.softenShade(shade.framebuffer, shade.texture, shadeSize, v.solidSize, width, height);
+    }
+    const samples = this.starSampleTarget(width, height);
+    const whole = target ?? this.layerTarget("solid star", width, height);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, samples.framebuffer);
+    gl.viewport(0, 0, width, height);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    common(b, shade.texture);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    common(p, shade.texture);
+    gl.uniform1i(p.uniforms.u_pass, 0);
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LESS);
+    drawParts();
+    gl.disable(gl.DEPTH_TEST);
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, samples.framebuffer);
+    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, whole.framebuffer);
+    gl.blitFramebuffer(0, 0, width, height, 0, 0, width, height, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    this.showMesh(whole.texture, target, width, height);
+  }
+
+  /** The 1 by 1 pictures that stand in for a material's missing ones: white, and a flat bump. */
+  private modelBlanks() {
+    if (this.modelBlank) return this.modelBlank;
+    const gl = this.gl;
+    const bound = gl.getParameter(gl.TEXTURE_BINDING_2D) as WebGLTexture | null;
+    const make = (color: number[]) => {
+      const texture = gl.createTexture()!;
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(color));
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      return texture;
+    };
+    this.modelBlank = { white: make([255, 255, 255, 255]), flat: make([128, 128, 255, 255]) };
+    gl.bindTexture(gl.TEXTURE_2D, bound);
+    return this.modelBlank;
+  }
+
+  /**
+   * The 3D Object's model, or none (see model.ts). Each material's
+   * triangles go to the graphics card once, and each picture with its
+   * smaller copies, so a far or slanted surface stays smooth.
+   */
+  setModel(model: ModelData | null) {
+    const gl = this.gl;
+    if (this.model) {
+      for (const part of this.model.parts) {
+        gl.deleteVertexArray(part.vertices);
+        for (const buffer of part.buffers) gl.deleteBuffer(buffer);
+      }
+      for (const texture of this.model.textures) if (texture) gl.deleteTexture(texture);
+      this.model = null;
+    }
+    if (!model) return;
+    const parts = model.shape.parts.map((part) => {
+      const vertices = gl.createVertexArray()!;
+      const corners = gl.createBuffer()!;
+      const order = gl.createBuffer()!;
+      gl.bindVertexArray(vertices);
+      gl.bindBuffer(gl.ARRAY_BUFFER, corners);
+      gl.bufferData(gl.ARRAY_BUFFER, part.vertices, gl.STATIC_DRAW);
+      const stride = MODEL_STRIDE * 4;
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride, 0);
+      gl.enableVertexAttribArray(1);
+      gl.vertexAttribPointer(1, 3, gl.FLOAT, false, stride, 12);
+      gl.enableVertexAttribArray(2);
+      gl.vertexAttribPointer(2, 2, gl.FLOAT, false, stride, 24);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, order);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, part.indices, gl.STATIC_DRAW);
+      gl.bindVertexArray(null);
+      return { vertices, buffers: [corners, order], count: part.indices.length, material: model.shape.materials[part.material] };
+    });
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    const bound = gl.getParameter(gl.TEXTURE_BINDING_2D) as WebGLTexture | null;
+    const sharp = gl.getExtension("EXT_texture_filter_anisotropic");
+    const wraps: number[] = [gl.REPEAT, gl.CLAMP_TO_EDGE, gl.MIRRORED_REPEAT];
+    const textures = model.shape.textures.map(({ image, wrapS, wrapT }) => {
+      const picture = model.pictures[image];
+      if (!picture) return null;
+      const texture = gl.createTexture()!;
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      /* A model file's pictures count rows from the top, as its picture places do: no turn-over, and the colors as they are. */
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, picture);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wraps.includes(wrapS) ? wrapS : gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wraps.includes(wrapT) ? wrapT : gl.REPEAT);
+      if (sharp) gl.texParameterf(gl.TEXTURE_2D, sharp.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, gl.getParameter(sharp.MAX_TEXTURE_MAX_ANISOTROPY_EXT) as number));
+      return texture;
+    });
+    gl.bindTexture(gl.TEXTURE_2D, bound);
+    this.model = { parts, textures };
   }
 
   /** The vertex buffer in one slot (two for the star while it fades between two cores), rebuilt only when its key changes (the shape, and the star's core, Point length and Hollow). */

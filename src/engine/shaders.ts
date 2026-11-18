@@ -6326,3 +6326,173 @@ void main() {
   o = faded(uv, covered(mix(base, blendLayer(base, color, u_blend), u_opacity), mix(cover, 1.0, u_opacity)));
 }`;
 
+/**
+ * The 3D Object's Model shape (a model from a file, see model.ts): the
+ * corners of its triangles, placed as SOLID_MESH_VERTEX places the mesh
+ * shapes. a_place is the corner's place in the material's pictures.
+ * u_pass 1 draws the shadow's outline, as there.
+ */
+export const SOLID_MODEL_VERTEX = `#version 300 es
+layout(location = 0) in vec3 a_pos;
+layout(location = 1) in vec3 a_normal;
+layout(location = 2) in vec2 a_place;
+uniform mat3 u_turn;
+uniform vec2 u_center;
+uniform float u_size;
+uniform float u_aspect;
+uniform vec3 u_light;
+uniform int u_pass;
+out vec3 v_world;
+out vec3 v_normal;
+out vec3 v_shape;
+out vec2 v_place;
+const float EYE = 3.0;
+const float WALL = 0.9;
+const float NEAR = 0.1;
+const float FAR = 20.0;
+void main() {
+  float scale = 0.5 * u_size;
+  vec3 world = u_turn * (a_pos * scale) + vec3(u_center, 0.0);
+  v_world = world;
+  v_normal = u_turn * a_normal;
+  v_shape = a_pos;
+  v_place = a_place;
+  if (u_pass == 1) {
+    vec3 wall = world - u_light * ((world.z + WALL * scale) / u_light.z);
+    gl_Position = vec4(wall.x / (0.5 * u_aspect), wall.y / 0.5, 0.0, 1.0);
+    return;
+  }
+  float w = EYE - world.z;
+  gl_Position = vec4(world.x * EYE / (0.5 * u_aspect), world.y * EYE / 0.5, (FAR + NEAR) / (FAR - NEAR) * w - 2.0 * FAR * NEAR / (FAR - NEAR), w);
+}`;
+
+/**
+ * The Model shape's triangles, one material at a time. With u_own (Source:
+ * Model) the surface shows the material: its color and color picture, its
+ * bump picture (the normal map, laid out by the picture places' change
+ * across the screen, so the file needs no tangents), a highlight that is
+ * sharp on a smooth material and wide and weak on a rough one, tinted by
+ * the color on metal, and the material's own light. With another Source,
+ * the picture goes on by Map, as on the other shapes (SOLID_PAINT_GLSL);
+ * Wrap casts it from the six directions of a box and blends by the way the
+ * surface looks, because a model's own picture layout is made for its own
+ * pictures only. Parts of a material under its cut-out level are not
+ * drawn (leaves, fences), with any Source.
+ */
+export const SOLID_MODEL_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+in vec3 v_world;
+in vec3 v_normal;
+in vec3 v_shape;
+in vec2 v_place;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform vec2 u_view;
+uniform int u_pass;
+uniform int u_map;
+uniform int u_blend;
+uniform float u_opacity;
+uniform mat3 u_turn;
+uniform vec2 u_center;
+uniform float u_bend;
+uniform float u_frost;
+uniform float u_tiles;
+uniform vec3 u_light;
+uniform float u_shading;
+uniform float u_shine;
+uniform bool u_own;
+uniform vec4 u_color;
+uniform sampler2D u_colorTex;
+uniform bool u_hasNormal;
+uniform float u_normalScale;
+uniform sampler2D u_normalTex;
+uniform float u_rough;
+uniform float u_metal;
+uniform sampler2D u_roughTex;
+uniform vec3 u_emissive;
+uniform sampler2D u_emissiveTex;
+uniform float u_cutoff;
+${SOLID_BEHIND_GLSL}
+const float PI = 3.14159265359;
+const float EYE = 3.0;
+vec3 blendLayer(vec3 base, vec3 top, int mode) {
+  if (mode == 1) return 1.0 - (1.0 - base) * (1.0 - top);
+  if (mode == 2) return base * top;
+  if (mode == 3) return mix(2.0 * base * top, 1.0 - 2.0 * (1.0 - base) * (1.0 - top), step(0.5, base));
+  if (mode == 4) return abs(base - top);
+  if (mode == 5) return max(base, top);
+  if (mode == 6) return min(base, top);
+  if (mode == 7) return min(base + top, 1.0);
+  return top;
+}
+vec2 fold(vec2 uv) { return 1.0 - abs(1.0 - 2.0 * fract(uv * 0.5)); }
+vec3 readAt(vec2 uv) { return straight(textureLod(u_tex, fold(uv * u_tiles), 0.0)); }
+vec2 onFace(vec3 q, vec3 axis) {
+  vec3 t1 = normalize(cross(abs(axis.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), axis));
+  vec3 t2 = cross(axis, t1);
+  return vec2(dot(q, t1), dot(q, t2)) * 0.6 + 0.5;
+}
+vec3 wrapAt(vec3 q, vec3 n) {
+  vec3 w = pow(abs(n), vec3(4.0));
+  w /= w.x + w.y + w.z;
+  vec3 color = vec3(0.0);
+  if (w.x > 0.01) color += w.x * readAt(onFace(q, vec3(sign(n.x), 0.0, 0.0)));
+  if (w.y > 0.01) color += w.y * readAt(onFace(q, vec3(0.0, sign(n.y), 0.0)));
+  if (w.z > 0.01) color += w.z * readAt(onFace(q, vec3(0.0, 0.0, sign(n.z))));
+  return color / max(dot(w, step(0.01, w)), 1e-4);
+}
+${SOLID_PAINT_GLSL}
+/**
+ * The surface direction with the material's bump picture. The picture's
+ * two directions on the surface come from how the place in the view and
+ * the place in the picture change from pixel to pixel. The picture's green
+ * is turned over, because a model file's pictures count rows from the top.
+ */
+vec3 detailed(vec3 n, vec3 bump) {
+  vec3 map = bump * 2.0 - 1.0;
+  map.xy *= u_normalScale;
+  map.y = -map.y;
+  vec3 dp1 = dFdx(v_world);
+  vec3 dp2 = dFdy(v_world);
+  vec2 d1 = dFdx(v_place);
+  vec2 d2 = dFdy(v_place);
+  vec3 dp2perp = cross(dp2, n);
+  vec3 dp1perp = cross(n, dp1);
+  vec3 t = dp2perp * d1.x + dp1perp * d2.x;
+  vec3 b = dp2perp * d1.y + dp1perp * d2.y;
+  float most = max(dot(t, t), dot(b, b));
+  if (most < 1e-20) return n;
+  float inv = inversesqrt(most);
+  return normalize(t * (inv * map.x) + b * (inv * map.y) + n * map.z);
+}
+void main() {
+  vec4 tint = texture(u_colorTex, v_place) * u_color;
+  vec3 bump = texture(u_normalTex, v_place).rgb;
+  vec3 gloss = texture(u_roughTex, v_place).rgb;
+  vec3 glow = texture(u_emissiveTex, v_place).rgb * u_emissive;
+  if (tint.a < u_cutoff) discard;
+  if (u_pass == 1) {
+    o = vec4(1.0);
+    return;
+  }
+  vec2 uv = gl_FragCoord.xy / u_view;
+  vec3 rd = normalize(v_world - vec3(0.0, 0.0, EYE));
+  vec3 n = normalize(v_normal);
+  if (dot(n, rd) > 0.0) n = -n;
+  vec3 color;
+  if (u_own) {
+    vec3 facing = u_hasNormal ? detailed(n, bump) : n;
+    float smoothness = 1.0 - clamp(gloss.g * u_rough, 0.0, 1.0);
+    float metal = clamp(gloss.b * u_metal, 0.0, 1.0);
+    float lit = mix(1.0, 0.18 + 0.82 * max(dot(facing, u_light), 0.0), u_shading);
+    float shine = pow(max(dot(reflect(-u_light, facing), -rd), 0.0), mix(6.0, 120.0, smoothness * smoothness)) * u_shine * mix(0.12, 1.4, smoothness);
+    color = tint.rgb * lit + mix(vec3(1.0), tint.rgb, metal) * shine + glow;
+  } else {
+    color = paint(v_shape, n, rd, uv);
+  }
+  float cover;
+  vec3 base = behind(uv, cover);
+  o = faded(uv, covered(mix(base, blendLayer(base, color, u_blend), u_opacity), mix(cover, 1.0, u_opacity)));
+}`;
+

@@ -12,7 +12,7 @@ import { DEFAULT_LAND_KM, loadTerrain, randomLandPlace } from "../lib/terrain";
 import type { TerrainData } from "../engine/terrain";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
-import { CONE_SHAPES, CONE_SHAPE_KEYS, CONE_TYPES, CONE_TYPE_KEYS, TEXT_FILL_KEYS, TEXT_MOVES, TEXT_MOVE_KEYS, PATH_SHAPES, BUBBLE_SHAPES, BUBBLE_SHAPE_KEYS, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, PENROSE_SHAPES, SPHERE_SHAPES, PINWHEEL_SHAPES, TUNNEL_SHAPES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_PAINTS, SOLID_WRAPS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote, uniqueTo } from "../engine/submodes";
+import { CONE_SHAPES, CONE_SHAPE_KEYS, CONE_TYPES, CONE_TYPE_KEYS, TEXT_FILL_KEYS, TEXT_MOVES, TEXT_MOVE_KEYS, PATH_SHAPES, BUBBLE_SHAPES, BUBBLE_SHAPE_KEYS, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, PENROSE_SHAPES, SPHERE_SHAPES, PINWHEEL_SHAPES, TUNNEL_SHAPES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_PAINTS, SOLID_MODEL_PAINTS, SOLID_WRAPS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote, uniqueTo } from "../engine/submodes";
 import type { BlurMask, BubbleShape, ColorFill, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, MaskMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidPaint, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { SpiroWheels } from "./SpiroWheels";
@@ -58,6 +58,8 @@ interface Props {
   solidMediaName: string | null;
   onPickSolidMedia: () => void;
   onRemoveSolidMedia: () => void;
+  /** Asks for a 3D model file for the 3D Object's Model shape. */
+  onPickModel: () => void;
   /** The FX audio button was turned on while the app listens to nothing: the play toolbar shows a tip at its Input menu. */
   onNeedAudioInput: () => void;
   /** An input with sound was picked and turned the audio buttons on: a tip at the FX audio button tells what it does, and a tip shows the next step. */
@@ -116,7 +118,7 @@ const CAMERA_REPEATS = [[0, "Mirror"], [1, "Tile"], [2, "None"]] as const;
 /** The controls of the left panel whose press is work on the scene (see onWork): buttons, fields, the sliders' parts, the gradient and the effect grips. */
 const WORK_CONTROLS = "button, input, select, textarea, a, label, [role=slider], [role=button], [role=option], [role=menuitem], [contenteditable=true], .range-grab, .range-low, .range-high, .gradient-bar, .gradient-stop, .panel-group-grip";
 
-export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, transport, onWork, driverVideoName, onPickDriverVideo, pictureName, onPickPicture, onRemovePicture, solidMediaName, onPickSolidMedia, onRemoveSolidMedia, onNeedAudioInput, linksTip, onLinksTipDone, nextTip, onNextTipDone, onFirstEffect }: Props) {
+export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, transport, onWork, driverVideoName, onPickDriverVideo, pictureName, onPickPicture, onRemovePicture, solidMediaName, onPickSolidMedia, onRemoveSolidMedia, onPickModel, onNeedAudioInput, linksTip, onLinksTipDone, nextTip, onNextTipDone, onFirstEffect }: Props) {
   const holdOnly = useSceneHoldOnly();
   const row = useParamRows(engine);
   /** True while MIDI holds any range: the Effects header then shows a play button that plays them all again. */
@@ -409,7 +411,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     ),
     solid: (grip) => (
       <Group engine={engine} group="solid" title="3D object" grip={grip} {...accordion("solid")}>
-        <SolidSection engine={engine} row={row} mediaName={solidMediaName} onPickMedia={onPickSolidMedia} onRemoveMedia={onRemoveSolidMedia} />
+        <SolidSection engine={engine} row={row} mediaName={solidMediaName} onPickMedia={onPickSolidMedia} onRemoveMedia={onRemoveSolidMedia} onPickModel={onPickModel} />
       </Group>
     ),
     sort: (grip) => (
@@ -1211,24 +1213,53 @@ function CyclesSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =
 }
 
 /** The 3D Object: its shape and map menus, then the sliders that the shape and the map use, then Blend and Opacity. */
-function SolidSection({ engine, row, mediaName, onPickMedia, onRemoveMedia }: { engine: Engine; row: (key: ParamKey) => ReactNode; mediaName: string | null; onPickMedia: () => void; onRemoveMedia: () => void }) {
+function SolidSection({ engine, row, mediaName, onPickMedia, onRemoveMedia, onPickModel }: { engine: Engine; row: (key: ParamKey) => ReactNode; mediaName: string | null; onPickMedia: () => void; onRemoveMedia: () => void; onPickModel: () => void }) {
   const [shape, setShape] = useState<SolidShape>(engine.state.solidShape);
   const [map, setMap] = useState<SolidMap>(engine.state.solidMap);
   const [paint, setPaint] = useState<SolidPaint>(engine.state.solidPaint);
+  const [modelName, setModelName] = useState<string | null>(engine.model?.name ?? null);
+  useEffect(() => engine.watchModel(() => setModelName(engine.model?.name ?? null)), [engine]);
+  /* The model's own colors (Source: Model) do not use the Map, its sliders or Bump. */
+  const own = shape === 11 && paint === 3;
   const mapOnly = Object.values(SOLID_MAP_KEYS).flat();
   const shown = (key: ParamKey) => SOLID_SHAPE_ONLY.includes(key) ? SOLID_SHAPE_KEYS[shape].includes(key)
-    : mapOnly.includes(key) ? SOLID_MAP_KEYS[map].includes(key) : true;
+    : mapOnly.includes(key) ? !own && SOLID_MAP_KEYS[map].includes(key)
+    : key === "solidRelief" ? !own : true;
   /* The shape's own sliders go under Shape, and the map's under Map (see childRows); Roundness, which most shapes show, stays in the list. */
   const shapeOwn = uniqueTo(SOLID_SHAPE_KEYS, shape);
+  const mapRows = own ? [] : SOLID_MAP_KEYS[map];
+  /* Source: Model is only for the Model shape: it comes with the shape, and goes back to Slot A with another shape. */
+  const pickPaint = (next: SolidPaint) => {
+    engine.state.solidPaint = next;
+    setPaint(next);
+  };
   return (
     <>
       <ModeSelect engine={engine} stateKey="solidShape" options={SOLID_SHAPES} name="Shape" onChange={(next) => {
         setShape(next);
         if (next === 10) standStarUp(engine);
+        if (next === 11) {
+          pickPaint(3);
+          if (!engine.model) onPickModel();
+        } else if (engine.state.solidPaint === 3) {
+          pickPaint(0);
+        }
       }} />
+      {shape === 11 && (
+        <div className="panel-select-row panel-select-named driver-video-row panel-child-row">
+          <span className="panel-row-name">File</span>
+          <span className="driver-video-name" data-tip={modelName ? `The 3D Object's model: ${modelName}` : "No model yet: only the picture behind shows"}>{modelName ?? "None"}</span>
+          <button className="button secondary small" onClick={onPickModel} data-tip="Pick a 3D model file (.glb). The scene file keeps a copy.">Choose…</button>
+          {modelName && (
+            <button className="button secondary small" onClick={() => engine.setModel(null)} data-tip="Take the model off the 3D Object" aria-label="Remove the 3D Object's model">
+              <X size={12} weight="bold" />
+            </button>
+          )}
+        </div>
+      )}
       {childRows(shapeOwn, row)}
-      {/* Source: Slot A (the picture made so far), Slot B, or the 3D Object's own image or video; picking Image or Video with no file opens the Open dialog. */}
-      <ModeSelect engine={engine} stateKey="solidPaint" options={SOLID_PAINTS} name="Source" onChange={(next) => {
+      {/* Source: Slot A (the picture made so far), Slot B, or the 3D Object's own image or video; picking Image or Video with no file opens the Open dialog. The Model shape adds Model: the model's own colors and pictures. The key makes the menu show a Source that the Shape menu set. */}
+      <ModeSelect key={`${shape === 11} ${paint}`} engine={engine} stateKey="solidPaint" options={shape === 11 ? SOLID_MODEL_PAINTS : SOLID_PAINTS} name="Source" onChange={(next) => {
         setPaint(next);
         if (next === 1 && !mediaName) onPickMedia();
       }} />
@@ -1244,11 +1275,11 @@ function SolidSection({ engine, row, mediaName, onPickMedia, onRemoveMedia }: { 
           )}
         </div>
       )}
-      <ModeSelect engine={engine} stateKey="solidMap" options={SOLID_MAPS} name="Map" onChange={setMap} />
+      {!own && <ModeSelect engine={engine} stateKey="solidMap" options={SOLID_MAPS} name="Map" onChange={setMap} />}
       {shape === 10 && map === 0 && <ModeSelect engine={engine} stateKey="solidWrap" options={SOLID_WRAPS} name="Wrap" child />}
-      {childRows(SOLID_MAP_KEYS[map], row)}
+      {childRows(mapRows, row)}
       <KeepBackground engine={engine} />
-      <SplitRows keys={without(SOLID_KEYS.filter(shown), [...shapeOwn, ...SOLID_MAP_KEYS[map]])} row={row} blend={<ModeSelect engine={engine} stateKey="solidBlend" options={LAYER_BLENDS} name="Blend" />} />
+      <SplitRows keys={without(SOLID_KEYS.filter(shown), [...shapeOwn, ...mapRows])} row={row} blend={<ModeSelect engine={engine} stateKey="solidBlend" options={LAYER_BLENDS} name="Blend" />} />
     </>
   );
 }

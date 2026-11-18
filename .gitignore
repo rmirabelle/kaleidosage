@@ -35,3 +35,4 @@ Thumbs.db
 
 # Copies of projects that were open when a help capture run started (src/help/capture.ts)
 /help-stash/
+/test-models/

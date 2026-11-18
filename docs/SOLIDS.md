@@ -217,6 +217,44 @@ Roundness costs nothing on the CPU. Wrap reads the faces as the rays did
 SOLID_WRAP_GLSL). The ray shader still has these shapes' distances; it
 draws them no more.
 
+## A model from a file
+
+Built 2026-11-18, step 1 of 2 (step 2: a browser for free models, such as
+Poly Haven's, inside the app). Shape 11, Model, draws a 3D model file:
+glTF 2.0 in its one-file binary form (.glb).
+
+- The file: `model.ts` reads it (parseModel): every mesh of the file's
+  scene, with each node's move, turn and size worked into the corners,
+  as one list of triangles per material. The model is moved and sized to
+  fit a ball of radius 1, so Size works as for the other shapes. Not read:
+  bones and motion (the model stands as it was made), morph shapes, colors
+  per corner, a second picture layout, and packed files (Draco, Meshopt,
+  KTX2), which give a clear error. Pictures beside the file (a .gltf with
+  loose files) are not read; step 2 needs them.
+- Source gets a choice for this shape only, Model (SolidPaint 3, the
+  default when the shape is picked): the surface shows the model's own
+  materials. Each material gives its color and color picture, its bump
+  picture (the normal map; no tangents needed), roughness and metal (a
+  smooth material has a small sharp highlight, a rough one a wide weak
+  one; metal tints it), its own light, and its cut-out level. Shading and
+  Shine work as for the other shapes. Map, its sliders and Bump hide.
+- With another Source (Slot A, Slot B, Image or Video) the picture goes on
+  the model by Map, as on the other shapes. Wrap casts the picture from the
+  six directions of a box (a model's own picture layout fits its own
+  pictures only).
+- Drawing: as the mesh shapes (drawModel, SOLID_MODEL_SHADER): the shadow's
+  outline, the picture behind, then the triangles with 4 samples per
+  pixel, one draw per material.
+- The scene file keeps the .glb file as it was picked (`model`: name and
+  base64 data), while the 3D Object is in the list with the Model shape.
+  The scene owns the model, as it owns Terrain's land (engine.model).
+  Undo does not bring back a model that was taken off.
+- The file is picked with the system's Open dialog (the app's own Open
+  dialog does not list .glb files yet).
+- Random all keeps the Model shape, and does not pick it.
+- Freeze background: with Source Model, the effects after the 3D Object do
+  not change the model's colors (there is no Source picture to change).
+
 ## Open points
 
 - Next: a Mandelbulb, and a cut gem.

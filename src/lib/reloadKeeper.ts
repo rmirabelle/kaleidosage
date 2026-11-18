@@ -1,5 +1,7 @@
 import type { TerrainData } from "../engine/terrain";
 import { terrainFromScene, terrainToScene } from "./terrain";
+import type { ModelData } from "../engine/model";
+import { loadModel } from "./model";
 import type { VideoFile } from "./videos";
 
 /**
@@ -43,6 +45,8 @@ export interface KeptDoc {
   solidMedia?: KeptImage | null;
   /** Terrain's real land: its key in IndexedDB (see keepTerrain); missing when there is none. */
   terrain?: string | null;
+  /** The 3D Object's model: its key in IndexedDB (see keepModel); missing when there is none. */
+  model?: string | null;
   openGroup: string | null;
 }
 
@@ -190,6 +194,37 @@ export async function keptTerrain(key: string): Promise<TerrainData | null> {
   }
 }
 
+/**
+ * The 3D Object's model for the snapshot: its key in IndexedDB. The first
+ * time, its file (named after the model) starts to go there in the
+ * background.
+ */
+export function keepModel(model: ModelData | null | undefined): string | null {
+  if (!model) return null;
+  let key = imageKeys.get(model);
+  if (!key) {
+    key = crypto.randomUUID();
+    adoptImage(model, key);
+    const storing = key;
+    void blobStore("readwrite", (store) => store.put(new File([model.file as Uint8Array<ArrayBuffer>], model.name), storing))
+      .catch(() => { imageKeys.delete(model); });
+  }
+  return key;
+}
+
+/** A kept model, or null when it never made it to IndexedDB or cannot be read. */
+export async function keptModel(key: string): Promise<ModelData | null> {
+  try {
+    const blob = await keptImageBytes(key);
+    if (!blob) return null;
+    const model = await loadModel(new Uint8Array(await blob.arrayBuffer()), blob instanceof File ? blob.name : "Model");
+    adoptImage(model, key);
+    return model;
+  } catch {
+    return null;
+  }
+}
+
 /** Each track's stored analysis: the analysis and its song map as they were stored, and the key of their text. */
 const analysisKeys = new Map<string, { analysis: object; edits: unknown; key: string }>();
 
@@ -315,7 +350,7 @@ if (import.meta.hot) {
 /** Removes the stored bytes that neither the latest snapshot nor this page uses (those of a page before this one). */
 async function pruneImages() {
   const kept = readKept();
-  const used = new Set([...keysHere, ...[...(kept?.docs ?? []), ...readUnopened()].flatMap((doc) => [...doc.images.map((image) => image?.key), doc.picture?.key, doc.solidMedia?.key, doc.terrain]), ...Object.values(kept?.file?.analyses ?? {})].filter(Boolean));
+  const used = new Set([...keysHere, ...[...(kept?.docs ?? []), ...readUnopened()].flatMap((doc) => [...doc.images.map((image) => image?.key), doc.picture?.key, doc.solidMedia?.key, doc.terrain, doc.model]), ...Object.values(kept?.file?.analyses ?? {})].filter(Boolean));
   try {
     const keys = await blobStore<IDBValidKey[]>("readonly", (store) => store.getAllKeys());
     for (const key of keys) if (typeof key === "string" && !used.has(key)) await blobStore("readwrite", (store) => store.delete(key));

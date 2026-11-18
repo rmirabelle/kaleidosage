@@ -81,6 +81,26 @@ pub async fn read_image_file(path: String) -> Result<Response, String> {
         .map_err(|error| format!("Could not read {path}: {error}"))
 }
 
+/** A 3D model file for the 3D Object's Model shape: glTF in its one-file binary form. */
+pub(crate) fn is_model_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("glb"))
+}
+
+/** Reads a model file the user picked, and returns its raw bytes to the webview. */
+#[tauri::command]
+pub async fn read_model_file(path: String) -> Result<Response, String> {
+    let file = Path::new(&path);
+    if !is_model_path(file) {
+        return Err(format!("{path} is not a .glb model file"));
+    }
+    tokio::fs::read(file)
+        .await
+        .map(Response::new)
+        .map_err(|error| format!("Could not read {path}: {error}"))
+}
+
 /**
  * Reads a whole audio file of the tracks and returns its raw bytes, for the
  * song analysis (see src/lib/songAnalysis.ts). The "video" stream that

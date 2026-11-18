@@ -29,6 +29,13 @@ export interface SceneImages {
   solidMedia?: { media: SceneImage; name: string };
   /** Terrain's real land (see SceneTerrain). */
   terrain?: SceneTerrain;
+  /** The 3D Object's model (the Model shape, see model.ts): its file name, and the .glb file's bytes in base64. */
+  model?: SceneModel;
+}
+
+export interface SceneModel {
+  name: string;
+  data: string;
 }
 
 /**
@@ -496,10 +503,10 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   if (isNumber(saved.outlineTime)) state.outlineTime = ((saved.outlineTime % 1) + 1) % 1;
   if (isNumber(saved.outlineSnakeTime)) state.outlineSnakeTime = saved.outlineSnakeTime;
   if (isNumber(saved.outlineFlowTime)) state.outlineFlowTime = ((saved.outlineFlowTime % 1) + 1) % 1;
-  state.solidShape = mode(saved.solidShape, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const) ?? state.solidShape;
+  state.solidShape = mode(saved.solidShape, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] as const) ?? state.solidShape;
   state.solidMap = mode(saved.solidMap, [0, 1, 2] as const) ?? state.solidMap;
   state.solidWrap = mode(saved.solidWrap, [0, 1, 2, 3] as const) ?? state.solidWrap;
-  state.solidPaint = mode(saved.solidPaint, [0, 1, 2] as const) ?? state.solidPaint;
+  state.solidPaint = mode(saved.solidPaint, [0, 1, 2, 3] as const) ?? state.solidPaint;
   state.solidBlend = mode(saved.solidBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? state.solidBlend;
   /* A scene from before Freeze background has the 3D Object in the one picture, as it had then. */
   state.solidKeep = saved.solidKeep === true;
@@ -517,7 +524,9 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   const solidMediaScene = sceneImage(scene.solidMedia);
   const solidMedia = solidMediaScene ? { media: solidMediaScene, name: isRecord(scene.solidMedia) && typeof scene.solidMedia.name === "string" ? scene.solidMedia.name : "Image or Video" } : undefined;
   const terrain = sceneTerrain(scene.terrain);
-  return { image, ...(image2 ? { image2 } : {}), ...(driverVideo ? { driverVideo } : {}), ...(picture ? { picture } : {}), ...(solidMedia ? { solidMedia } : {}), ...(terrain ? { terrain } : {}) };
+  const model = isRecord(scene.model) && typeof scene.model.data === "string" && scene.model.data
+    ? { name: typeof scene.model.name === "string" ? scene.model.name : "Model", data: scene.model.data } : undefined;
+  return { image, ...(image2 ? { image2 } : {}), ...(driverVideo ? { driverVideo } : {}), ...(picture ? { picture } : {}), ...(solidMedia ? { solidMedia } : {}), ...(terrain ? { terrain } : {}), ...(model ? { model } : {}) };
 }
 
 /**
@@ -526,7 +535,7 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
  * images are loaded (by id). Animation time, the clocks and the range
  * timing are left out, so playing, pausing and Stop do not count as changes.
  */
-/** imageIds: the ids of the first and second images, then of the driver video, of the overlay's image or video, of the real terrain and of the 3D Object's image or video (missing or null when there is none). */
+/** imageIds: the ids of the first and second images, then of the driver video, of the overlay's image or video, of the real terrain, of the 3D Object's image or video and of its model (missing or null when there is none). */
 export function sceneFingerprint(params: Params, state: PlayState, imageIds: readonly (number | null)[]): string {
   const settings = PARAM_KEYS.map((key) => {
     const { value, low, high, on, ease, custom, seconds } = params[key];

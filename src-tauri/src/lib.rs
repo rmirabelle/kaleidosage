@@ -127,6 +127,7 @@ pub fn run() {
             browse::copy_browse_entry,
             files::read_image_file,
             files::read_audio_file,
+            files::read_model_file,
             video_stream::open_video_file,
             video_stream::begin_video_upload,
             video_stream::append_video_upload,
