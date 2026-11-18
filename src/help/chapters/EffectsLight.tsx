@@ -65,6 +65,29 @@ export function EffectsLight() {
         fan. <b>Source X</b> and <b>Source Y</b> move the point that the beams come from.
       </p>
 
+      <h2>Light cone</h2>
+      <Shot name="fx-cone" alt="The Light cone effect, a spotlight that shines down onto a pool of light" side="block" />
+      <p>
+        Light cone shines a beam of light down from one point, through drifting fog, onto a floor, as
+        a stage light does. The <b>Type</b> menu has two looks. <b>Spotlight</b> fills the beam with
+        soft light and makes a pool of light on the floor; <b>Softness</b> sets how soft its edge is.
+      </p>
+      <Shot name="fx-cone-shell" alt="The Light cone effect as a Laser shell pyramid with bright corner lines" side="block" />
+      <p>
+        <b>Laser shell</b> lights only a thin surface, as a laser show in fog does: the surface is
+        brightest where you see it from the side. <b>Edge width</b> sets how thick the surface
+        is, and <b>Corner lines</b> how bright the corners of a pyramid are. The <b>Shape</b> menu makes
+        the beam a round <b>Cone</b> or a <b>Pyramid</b>, with 3 to 8 <b>Sides</b> and a <b>Turn</b>.
+      </p>
+      <p>
+        <b>Spread</b> sets how wide the beam is. <b>Swing</b> moves it from side to side,
+        and <b>Tilt</b> moves it toward you or away. A new Light cone has a range on Swing, so the
+        beam swings at once. <b>Source X</b>, <b>Source height</b> and <b>Distance</b> move the point
+        that the light comes from. <b>Fog</b>, <b>Fog size</b> and <b>Fog speed</b> set the clouds in the
+        beam. <b>Floor light</b> sets how bright the light on the floor is, and <b>Fade</b> makes the
+        light dimmer far from its source. The color square on <b>Brightness</b> sets the color of the light.
+      </p>
+
       <h2>Light paths</h2>
       <Shot name="fx-paths" alt="The Light paths effect with Greek key lines around the center" side="block" />
       <p>

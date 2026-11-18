@@ -12,7 +12,7 @@ import { DEFAULT_LAND_KM, loadTerrain, randomLandPlace } from "../lib/terrain";
 import type { TerrainData } from "../engine/terrain";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
-import { TEXT_FILL_KEYS, TEXT_MOVES, TEXT_MOVE_KEYS, PATH_SHAPES, BUBBLE_SHAPES, BUBBLE_SHAPE_KEYS, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, PENROSE_SHAPES, SPHERE_SHAPES, PINWHEEL_SHAPES, TUNNEL_SHAPES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_PAINTS, SOLID_WRAPS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote, uniqueTo } from "../engine/submodes";
+import { CONE_SHAPES, CONE_SHAPE_KEYS, CONE_TYPES, CONE_TYPE_KEYS, TEXT_FILL_KEYS, TEXT_MOVES, TEXT_MOVE_KEYS, PATH_SHAPES, BUBBLE_SHAPES, BUBBLE_SHAPE_KEYS, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, PENROSE_SHAPES, SPHERE_SHAPES, PINWHEEL_SHAPES, TUNNEL_SHAPES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_PAINTS, SOLID_WRAPS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote, uniqueTo } from "../engine/submodes";
 import type { BlurMask, BubbleShape, ColorFill, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, MaskMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidPaint, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { SpiroWheels } from "./SpiroWheels";
@@ -315,6 +315,14 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
         const { low, high } = sweep.low !== sweep.high ? sweep : createParams().laserSweep;
         Object.assign(sweep, { low, high, on: true });
       },
+      cone: () => {
+        if (engine.params.coneAmount.value !== 0 || engine.params.coneAmount.on) return;
+        start("coneAmount", 1);
+        /* The beam swings from side to side, as a moving head light does. */
+        const swing = engine.params.coneSwing;
+        const { low, high } = swing.low !== swing.high ? swing : createParams().coneSwing;
+        Object.assign(swing, { low, high, on: true });
+      },
       paths: () => start("pathAmount", 1),
       spiro: () => start("spiroAmount", 1),
       bloom: () => start("bloomAmount", 1),
@@ -444,6 +452,11 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     lasers: (grip) => (
       <Group engine={engine} group="lasers" title="Lasers" grip={grip} {...accordion("lasers")}>
         <SplitRows keys={LASER_KEYS} row={row} blend={<ModeSelect engine={engine} stateKey="laserBlend" options={LAYER_BLENDS} name="Blend" />} />
+      </Group>
+    ),
+    cone: (grip) => (
+      <Group engine={engine} group="cone" title="Light cone" grip={grip} {...accordion("cone")}>
+        <ConeSection engine={engine} row={row} />
       </Group>
     ),
     paths: (grip) => (
@@ -923,7 +936,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "penroseShape" | "sphereShape" | "pinwheelShape" | "tunnelShape" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "bubbleShape" | "bubbleBlend" | "bubbleShadow" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "pathShape" | "pathBlend" | "spiroBlend" | "textMove" | "textBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidWrap" | "solidPaint" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "penroseShape" | "sphereShape" | "pinwheelShape" | "tunnelShape" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "bubbleShape" | "bubbleBlend" | "bubbleShadow" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "pathShape" | "pathBlend" | "spiroBlend" | "textMove" | "textBlend" | "coneType" | "coneShape" | "coneBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidWrap" | "solidPaint" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange, child }: {
@@ -1314,6 +1327,28 @@ function ColorSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =>
         {childRows(uniqueTo(COLOR_FILL_KEYS, fill), row)}
         <SplitRows keys={[...without(COLOR_FILL_KEYS[fill], uniqueTo(COLOR_FILL_KEYS, fill)), ...COLOR_KEYS]} row={row} blend={<ColorBlend engine={engine} />} />
       </Fragment>
+    </>
+  );
+}
+
+/** The Light cone's sliders that every type and shape shows, in panel order. */
+const CONE_KEYS: ParamKey[] = ["coneAmount", "coneSpread", "coneSwing", "coneTilt", "coneX", "coneHeight", "coneDepth", "coneFog", "coneFogSize", "coneFogSpeed", "coneFade", "coneFloor", "coneEmitter", "coneOpacity"];
+
+/**
+ * The Light cone: the Type menu (Spotlight or Laser shell) with its own
+ * sliders under it, the Shape menu (Cone or Pyramid) with its own, then the
+ * sliders that all show. The light's color is the swatch on Brightness.
+ */
+function ConeSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
+  const [type, setType] = useState<number>(engine.state.coneType);
+  const [shape, setShape] = useState<number>(engine.state.coneShape);
+  return (
+    <>
+      <ModeSelect engine={engine} stateKey="coneType" options={CONE_TYPES} name="Type" onChange={setType} />
+      <Fragment key={`type-${type}`}>{childRows(CONE_TYPE_KEYS[type] ?? [], row)}</Fragment>
+      <ModeSelect engine={engine} stateKey="coneShape" options={CONE_SHAPES} name="Shape" onChange={setShape} />
+      <Fragment key={`shape-${shape}`}>{childRows(CONE_SHAPE_KEYS[shape] ?? [], row)}</Fragment>
+      <SplitRows keys={CONE_KEYS} row={row} blend={<ModeSelect engine={engine} stateKey="coneBlend" options={LAYER_BLENDS} name="Blend" />} />
     </>
   );
 }

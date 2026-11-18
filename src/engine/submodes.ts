@@ -4,7 +4,7 @@ import type { BubbleShape, ColorFill, MaskMode, BlurMask, CycleMove, CyclePaint,
 /** The effects in the Add effect menu, in menu order, with the names their groups show. */
 export const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
   ["kaleidoscope", "Kaleidoscope"], ["map", "Algorithm"], ["warp", "Warp"], ["blur", "Blur"], ["trails", "Trails"],
-  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["driver", "Driver"], ["terrain", "Terrain"], ["camera", "Camera"], ["solid", "3D object"], ["sort", "Pixel sort"], ["particles", "Particles"], ["cycles", "Light cycles"], ["rays", "Light rays"], ["lasers", "Lasers"], ["paths", "Light paths"], ["spiro", "Spirograph"], ["outlines", "Light shapes"], ["picture", "Image or Video"], ["bloom", "Bloom"], ["sharpen", "Sharpen"], ["color", "Color"], ["levels", "Levels"], ["mask", "Opacity mask"], ["bubble", "Bubble"], ["text", "Text"]
+  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["driver", "Driver"], ["terrain", "Terrain"], ["camera", "Camera"], ["solid", "3D object"], ["sort", "Pixel sort"], ["particles", "Particles"], ["cycles", "Light cycles"], ["rays", "Light rays"], ["lasers", "Lasers"], ["cone", "Light cone"], ["paths", "Light paths"], ["spiro", "Spirograph"], ["outlines", "Light shapes"], ["picture", "Image or Video"], ["bloom", "Bloom"], ["sharpen", "Sharpen"], ["color", "Color"], ["levels", "Levels"], ["mask", "Opacity mask"], ["bubble", "Bubble"], ["text", "Text"]
 ];
 
 /** An effect's name in the panel and the menus. */
@@ -194,7 +194,7 @@ export const COLOR_FILL_KEYS: Record<ColorFill, ParamKey[]> = {
   2: ["colorSize", "colorStretch", "colorTurn", "colorX", "colorY", "colorShift", "colorRepeat"]
 };
 
-export type SubmodeKey = "bubbleShape" | "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape" | "cyclesMove" | "cyclesPaint" | "solidShape" | "solidMap" | "maskMode" | "colorFill" | "textFill" | "textMove";
+export type SubmodeKey = "bubbleShape" | "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape" | "cyclesMove" | "cyclesPaint" | "solidShape" | "solidMap" | "maskMode" | "colorFill" | "textFill" | "textMove" | "coneType" | "coneShape";
 
 /** One submode menu: the play-state setting it sets, its choices (value and name), and the sliders each choice shows. */
 export interface Submode {
@@ -216,6 +216,11 @@ export const TEXT_FILLS = [[0, "Solid"], [1, "Gradient"]] as const;
 export const TEXT_FILL_KEYS: Record<number, ParamKey[]> = { 0: [], 1: ["textGradientAngle"] };
 export const TEXT_MOVES = [[0, "Still"], [1, "Scroll left"], [2, "Scroll right"], [3, "Scroll up"], [4, "Scroll down"], [5, "Type on"]] as const;
 export const TEXT_MOVE_KEYS: Record<number, ParamKey[]> = { 0: [], 1: ["textSpeed"], 2: ["textSpeed"], 3: ["textSpeed"], 4: ["textSpeed"], 5: ["textSpeed", "textHold"] };
+/** The Light cone's Type and Shape menus (see ConeType and ConeShape), and the sliders each shows. */
+export const CONE_TYPES = [[0, "Spotlight"], [1, "Laser shell"]] as const;
+export const CONE_TYPE_KEYS: Record<number, ParamKey[]> = { 0: ["coneSoftness"], 1: ["coneEdge", "coneEdgeLines"] };
+export const CONE_SHAPES = [[0, "Cone"], [1, "Pyramid"]] as const;
+export const CONE_SHAPE_KEYS: Record<number, ParamKey[]> = { 0: [], 1: ["coneSides", "coneTurn"] };
 export const TRAIL_MODES = [[1, "Mix (smoky)"], [2, "Lighten (glowing)"]] as const;
 export const DRIVER_SOURCES = [[0, "Caustics"], [1, "Smoke"], [2, "Ink"], [3, "Fire"], [4, "Ripples"], [5, "Video"]] as const;
 
@@ -227,7 +232,7 @@ export const DRIVER_SOURCES = [[0, "Caustics"], [1, "Smoke"], [2, "Ink"], [3, "F
  */
 export const EFFECT_TYPES: Partial<Record<FxStep, readonly (readonly [number, string])[]>> = {
   kaleidoscope: FOLD_MODES, map: MAP_MODES, warp: WARP_TYPES, blur: BLUR_MASKS,
-  trails: TRAIL_MODES, driver: DRIVER_SOURCES, paths: PATH_SHAPES, outlines: OUTLINE_SHAPES, bubble: BUBBLE_SHAPES
+  trails: TRAIL_MODES, driver: DRIVER_SOURCES, paths: PATH_SHAPES, outlines: OUTLINE_SHAPES, bubble: BUBBLE_SHAPES, cone: CONE_TYPES
 };
 
 export const SUBMODES: readonly Submode[] = [
@@ -244,7 +249,9 @@ export const SUBMODES: readonly Submode[] = [
   { stateKey: "bubbleShape", options: BUBBLE_SHAPES, keys: BUBBLE_SHAPE_KEYS },
   { stateKey: "colorFill", options: COLOR_FILLS, keys: COLOR_FILL_KEYS },
   { stateKey: "textFill", options: TEXT_FILLS, keys: TEXT_FILL_KEYS },
-  { stateKey: "textMove", options: TEXT_MOVES, keys: TEXT_MOVE_KEYS }
+  { stateKey: "textMove", options: TEXT_MOVES, keys: TEXT_MOVE_KEYS },
+  { stateKey: "coneType", options: CONE_TYPES, keys: CONE_TYPE_KEYS },
+  { stateKey: "coneShape", options: CONE_SHAPES, keys: CONE_SHAPE_KEYS }
 ];
 
 /** The submode menu that shows or hides the slider, or undefined for a slider that always shows. */

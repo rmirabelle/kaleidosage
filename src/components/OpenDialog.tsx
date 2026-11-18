@@ -145,6 +145,7 @@ const EFFECT_GROUPS: [GroupKey, string][] = [
   ["cycles", "Light cycles"],
   ["rays", "Light rays"],
   ["lasers", "Lasers"],
+  ["cone", "Light cone"],
   ["paths", "Light paths"],
   ["spiro", "Spirograph"],
   ["outlines", "Light shapes"],

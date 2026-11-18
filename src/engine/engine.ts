@@ -1109,6 +1109,7 @@ export class Engine {
     this.state.outlineFlowTime = 0;
     this.state.outlineSnakeTime = 0;
     this.state.textTime = 0;
+    this.state.coneFogTime = 0;
     this.state.solidSpinTurns = 0;
     this.state.solidTumbleTurns = 0;
     this.state.outlineSpinTurns = 0;
@@ -1260,6 +1261,7 @@ export class Engine {
     this.state.outlineFlowTime = (this.state.outlineFlowTime + animated * this.live("outlineFlow") + 1) % 1;
     this.state.outlineSnakeTime += animated / Math.max(0.05, this.live("outlineDrawTime"));
     this.stepText(animated);
+    this.state.coneFogTime += animated * this.live("coneFogSpeed");
     /* The 3D Object's spin and tumble are speeds in turns per minute, added up the same way. */
     this.state.solidSpinTurns = (this.state.solidSpinTurns + animated * this.live("solidSpin") / 60) % 1;
     this.state.solidTumbleTurns = (this.state.solidTumbleTurns + animated * this.live("solidTumble") / 60) % 1;
@@ -1891,6 +1893,29 @@ export class Engine {
       pictureY: this.live("pictureY"),
       pictureTurn: this.live("pictureTurn") * DEGREES,
       pictureKey: this.live("pictureKey"),
+      cone: on.cone ? this.live("coneAmount") : 0,
+      coneOpacity: this.live("coneOpacity"),
+      coneBlend: this.state.coneBlend,
+      coneType: this.state.coneType,
+      coneShape: this.state.coneShape,
+      coneSides: this.live("coneSides"),
+      coneSpread: this.live("coneSpread") * DEGREES,
+      coneTurn: this.live("coneTurn") * DEGREES,
+      coneSwing: this.live("coneSwing") * DEGREES,
+      coneTilt: this.live("coneTilt") * DEGREES,
+      coneX: this.live("coneX"),
+      coneHeight: this.live("coneHeight"),
+      coneDepth: this.live("coneDepth"),
+      coneSoftness: this.live("coneSoftness"),
+      coneEdge: this.live("coneEdge"),
+      coneEdgeLines: this.live("coneEdgeLines"),
+      coneFog: this.live("coneFog"),
+      coneFogSize: this.live("coneFogSize"),
+      coneFogTime: this.state.coneFogTime,
+      coneFade: this.live("coneFade"),
+      coneFloor: this.live("coneFloor"),
+      coneEmitter: this.live("coneEmitter"),
+      coneColor: hexToRgb(this.state.coneColor),
       text: on.text ? this.live("textAmount") : 0,
       textBlend: this.state.textBlend,
       textLook: {

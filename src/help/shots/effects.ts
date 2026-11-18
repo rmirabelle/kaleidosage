@@ -155,6 +155,18 @@ export const EFFECTS: Shot[] = [
   }),
   look({ effect: "Light rays", name: "rays", pattern: "Random shapes" }),
   look({ effect: "Lasers", name: "lasers", pattern: "Solid Black", wait: 2500, wide: true }),
+  look({ effect: "Light cone", name: "cone", pattern: "Random shapes", wait: 2500, wide: true }),
+  look({
+    effect: "Light cone",
+    name: "cone-shell",
+    pattern: "Random shapes",
+    adjust: async (page) => {
+      await pickMenu(page, "Light cone", "Type", "Laser shell");
+      await pickMenu(page, "Light cone", "Shape", "Pyramid");
+    },
+    wait: 2500,
+    wide: true
+  }),
   look({ effect: "Light paths", name: "paths", pattern: "Solid Black", wait: 5000, wide: true }),
   look({ effect: "Light shapes", name: "outlines", pattern: "Solid Black", wait: 6000, wide: true }),
   look({ effect: "Spirograph", name: "spiro", pattern: "Solid Black", wait: 5000, wide: true }),

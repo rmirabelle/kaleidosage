@@ -1,4 +1,4 @@
-import type { PenroseShape, PinwheelShape, TunnelShape, SphereShape, BlendMode, BlurMask, BubbleShadow, BubbleShape, CameraColors, CameraHeightSource, CameraRepeat, ColorFill, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidPaint, SolidShape, SolidWrap, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, MaskMode, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
+import type { ConeShape, ConeType, PenroseShape, PinwheelShape, TunnelShape, SphereShape, BlendMode, BlurMask, BubbleShadow, BubbleShape, CameraColors, CameraHeightSource, CameraRepeat, ColorFill, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidPaint, SolidShape, SolidWrap, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, MaskMode, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
 
 import type { PathShape } from "./paths";
 import { MAX_SPIRO_WHEELS, defaultSpiroWheels, randomSpiroWheels, type SpiroWheelSpec } from "./spiro";
@@ -41,7 +41,8 @@ export const PARAM_KEYS = [
   "pathAmount", "pathArms", "pathSteps", "pathStep", "pathTurn", "pathRadius", "pathWidth", "pathDraw", "pathFade", "pathHue", "pathRainbow", "pathPicture", "pathBackground", "pathRotation", "pathX", "pathY", "pathYaw", "pathTilt",
   "spiroAmount", "spiroRing", "spiroSize", "spiroWidth", "spiroDraw", "spiroPicture", "spiroBackground", "spiroRotation", "spiroYaw", "spiroTilt", "spiroX", "spiroY",
   "spiroHoleX1", "spiroHoleX2", "spiroHoleX3", "spiroHoleX4", "spiroHoleX5", "spiroHoleX6", "spiroHoleY1", "spiroHoleY2", "spiroHoleY3", "spiroHoleY4", "spiroHoleY5", "spiroHoleY6",
-  "textAmount", "textSize", "textX", "textY", "textAngle", "textLetterSpacing", "textLineSpacing", "textGradientAngle", "textOutline", "textGlow", "textGlowSize", "textShadow", "textShadowSoftness", "textShadowDistance", "textSpeed", "textHold"
+  "textAmount", "textSize", "textX", "textY", "textAngle", "textLetterSpacing", "textLineSpacing", "textGradientAngle", "textOutline", "textGlow", "textGlowSize", "textShadow", "textShadowSoftness", "textShadowDistance", "textSpeed", "textHold",
+  "coneAmount", "coneOpacity", "coneSpread", "coneSides", "coneTurn", "coneSwing", "coneTilt", "coneX", "coneHeight", "coneDepth", "coneSoftness", "coneEdge", "coneEdgeLines", "coneFog", "coneFogSize", "coneFogSpeed", "coneFade", "coneFloor", "coneEmitter"
 ] as const;
 export type ParamKey = typeof PARAM_KEYS[number];
 
@@ -281,7 +282,7 @@ export type Params = Record<ParamKey, Param>;
 export type ContourTone = "hue" | "black" | "white";
 export const CONTOUR_TONES: readonly ContourTone[] = ["hue", "black", "white"];
 
-export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "paths" | "spiro" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble" | "text";
+export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "paths" | "spiro" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble" | "text" | "cone";
 
 export interface PlayState {
   /** Which groups are on. A group that is off has no effect, but keeps its settings. */
@@ -429,6 +430,12 @@ export interface PlayState {
    * the move's progress: screens scrolled at SCROLL_RATE, or letters typed
    * (past the last letter it counts on through the Hold).
    */
+  /** Light cone (see CONE_SHADER): Spotlight or Laser shell, round or a pyramid, the light's color, its blend (Add, 7, at the start), and the fog's clock. */
+  coneType: ConeType;
+  coneShape: ConeShape;
+  coneColor: string;
+  coneBlend: LayerBlend;
+  coneFogTime: number;
   textContent: string;
   textFont: string;
   textBold: boolean;
@@ -1161,6 +1168,34 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   bubbleShadowWidth: { label: "Shadow width", min: 0, max: 0.5, step: 0.005, value: 0.08, drift: "wave", low: 0.03, high: 0.15, on: false },
   bubbleShadowSoftness: { label: "Shadow softness", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0.3, high: 1, on: false },
   /**
+   * Light cone (see CONE_SHADER): the world has the eye at 0 and the floor
+   * 1 unit below it. Source X and Source height place the beam's start,
+   * Distance how far it is in front of the eye. Spread is the beam's half
+   * angle; Swing leans it to the side and Tilt away from the eye. Edge width
+   * is the shell's thickness in world units. Fog size is the fog's clouds
+   * per world unit, and Fog speed moves them. Fade dims the light per unit
+   * from the source.
+   */
+  coneAmount: { label: "Brightness", min: 0, max: 3, step: 0.01, value: 0, drift: "wave", low: 0.8, high: 1.5, on: false },
+  coneOpacity: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0.5, high: 1, on: false },
+  coneSpread: { label: "Spread", min: 2, max: 60, step: 0.5, value: 18, unit: "°", drift: "wave", low: 12, high: 26, on: false },
+  coneSides: { label: "Sides", min: 3, max: 8, step: 1, value: 4, drift: "wave", low: 3, high: 6, on: false },
+  coneTurn: { label: "Turn", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "spin", low: -180, high: 180, on: false },
+  coneSwing: { label: "Swing", min: -60, max: 60, step: 0.5, value: 0, unit: "°", drift: "wave", low: -25, high: 25, on: false },
+  coneTilt: { label: "Tilt", min: -60, max: 60, step: 0.5, value: 0, unit: "°", drift: "wave", low: -15, high: 15, on: false },
+  coneX: { label: "Source X", min: -3, max: 3, step: 0.01, value: 0, drift: "wave", low: -1, high: 1, on: false },
+  coneHeight: { label: "Source height", min: -0.5, max: 4, step: 0.01, value: 1.6, drift: "wave", low: 1.2, high: 2, on: false },
+  coneDepth: { label: "Distance", min: 2, max: 15, step: 0.05, value: 4.5, drift: "wave", low: 4, high: 6, on: false },
+  coneSoftness: { label: "Softness", min: 0, max: 1, step: 0.01, value: 0.35, drift: "wave", low: 0.2, high: 0.6, on: false },
+  coneEdge: { label: "Edge width", min: 0.002, max: 0.1, step: 0.001, value: 0.012, drift: "wave", low: 0.008, high: 0.02, on: false },
+  coneEdgeLines: { label: "Corner lines", min: 0, max: 2, step: 0.01, value: 1, drift: "wave", low: 0.5, high: 1.5, on: false },
+  coneFog: { label: "Fog", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.3, high: 0.9, on: false },
+  coneFogSize: { label: "Fog size", min: 0.1, max: 4, step: 0.01, scale: "log", value: 1, drift: "wave", low: 0.6, high: 1.5, on: false },
+  coneFogSpeed: { label: "Fog speed", min: -2, max: 2, step: 0.01, value: 0.3, drift: "wave", low: 0.1, high: 0.6, on: false },
+  coneFade: { label: "Fade", min: 0, max: 2, step: 0.01, value: 0.25, drift: "wave", low: 0.1, high: 0.5, on: false },
+  coneFloor: { label: "Floor light", min: 0, max: 2, step: 0.01, value: 0.8, drift: "wave", low: 0.4, high: 1.2, on: false },
+  coneEmitter: { label: "Source glow", min: 0, max: 2, step: 0.01, value: 0.6, drift: "wave", low: 0.3, high: 1, on: false },
+  /**
    * Text (see textLayer.ts): Size is one line's height in screen heights.
    * X and Y move the text's center (a part of the screen from its center),
    * and Angle turns it. Letter spacing, Outline, Glow size, Shadow softness
@@ -1269,7 +1304,7 @@ export function createParams(): Params {
 
 /** The start-up orders: the fold, then the map bends the folded picture, then the warp; and blur, trails, time smear, contours, relief, driver, camera, 3D object, pixel sort, particles, light cycles, light rays, lasers, bloom, final effects. */
 export const defaultShapeOrder = (): ShapeStep[] => ["kaleidoscope", "map", "warp"];
-export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble", "text"];
+export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "cone", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble", "text"];
 export const defaultFxOrder = (): FxStep[] => [...defaultShapeOrder(), ...defaultPictureOrder()];
 
 /**
@@ -1321,6 +1356,7 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
     case "outlines": return used("outlineAmount");
     case "mask": return used("maskAmount");
     case "bubble": return used("bubbleAmount");
+    case "cone": return used("coneAmount");
     case "text": return used("textAmount") && state.textContent.trim().length > 0;
     case "picture": return used("pictureAmount");
     case "bloom": return used("bloomAmount");
@@ -1334,9 +1370,9 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
 export function createPlayState(): PlayState {
   return {
     /* No effect is in the list at start-up, so every effect group is off. */
-    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false },
-    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, tunnelTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, penroseShape: 0, sphereShape: 2, pinwheelShape: 1, tunnelShape: 0, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, pathShape: 2, pathBlend: 7, spiroWheels: defaultSpiroWheels(), spiroBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, textContent: DEFAULT_TEXT, textFont: "Segoe UI", textBold: true, textItalic: false, textAlign: 1, textFill: 0, textColor: "#ffffff", textStops: defaultTextStops(), textOutlineColor: "#000000", textGlowColor: "#18e0ff", textShadowColor: "#000000", textMove: 0, textBlend: 0, textTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false, cone: false },
+    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false, cone: false },
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, tunnelTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, penroseShape: 0, sphereShape: 2, pinwheelShape: 1, tunnelShape: 0, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, pathShape: 2, pathBlend: 7, spiroWheels: defaultSpiroWheels(), spiroBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, coneType: 0, coneShape: 0, coneColor: "#8fe6ff", coneBlend: 7, coneFogTime: 0, textContent: DEFAULT_TEXT, textFont: "Segoe UI", textBold: true, textItalic: false, textAlign: 1, textFill: 0, textColor: "#ffffff", textStops: defaultTextStops(), textOutlineColor: "#000000", textGlowColor: "#18e0ff", textShadowColor: "#000000", textMove: 0, textBlend: 0, textTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1782,6 +1818,12 @@ const GROUP_MODES: Partial<Record<GroupKey, (state: PlayState, fresh: PlayState)
     state.bubbleBlend = fresh.bubbleBlend;
     state.bubbleShadow = fresh.bubbleShadow;
   },
+  cone: (state, fresh) => {
+    state.coneType = fresh.coneType;
+    state.coneShape = fresh.coneShape;
+    state.coneColor = fresh.coneColor;
+    state.coneBlend = fresh.coneBlend;
+  },
   /* A new Text keeps the words and the font: they are the user's, and typing them again would be work. */
   text: (state, fresh) => {
     state.textAlign = fresh.textAlign;
@@ -1869,6 +1911,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   outlines: ["outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineInner", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"],
   mask: ["maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY"],
   bubble: ["bubbleAmount", "bubbleBackground", "bubbleDepth", "bubbleSize", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments", "bubbleInner", "bubbleShadowStrength", "bubbleShadowWidth", "bubbleShadowSoftness", "bubbleRotation"],
+  cone: ["coneAmount", "coneOpacity", "coneSpread", "coneSides", "coneTurn", "coneSwing", "coneTilt", "coneX", "coneHeight", "coneDepth", "coneSoftness", "coneEdge", "coneEdgeLines", "coneFog", "coneFogSize", "coneFogSpeed", "coneFade", "coneFloor", "coneEmitter"],
   text: ["textAmount", "textSize", "textX", "textY", "textAngle", "textLetterSpacing", "textLineSpacing", "textGradientAngle", "textOutline", "textGlow", "textGlowSize", "textShadow", "textShadowSoftness", "textShadowDistance", "textSpeed", "textHold"],
   bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
   sharpen: ["sharpen", "sharpenRadius"],
@@ -1903,6 +1946,7 @@ const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   paths: ["pathShape", "pathBlend"],
   spiro: ["spiroWheels", "spiroBlend"],
   text: ["textColor", "textStops", "textGlowColor"],
+  cone: ["coneType", "coneShape", "coneColor", "coneBlend"],
   solid: ["solidShape", "solidMap", "solidWrap", "solidBlend"],
   driver: ["driverSource", "driverMode"],
   color: ["overlayColor", "colorBlend", "colorFill", "colorStops"]
@@ -1956,7 +2000,7 @@ export function removeSpiroWheel(params: Params, state: PlayState, index: number
 }
 
 /** The settings named Opacity: Randomize shows every effect fully. */
-const FULL_OPACITY: readonly ParamKey[] = ["warpOpacity", "mapOpacity", "foldOpacity", "smearAmount", "contourOpacity", "cameraAmount", "viewAmount", "sortAmount", "particleAmount", "cyclesAmount", "solidAmount", "driverAmount", "laserOpacity", "bubbleAmount", "pictureAmount", "pathAmount", "spiroAmount", "textAmount"];
+const FULL_OPACITY: readonly ParamKey[] = ["warpOpacity", "mapOpacity", "foldOpacity", "smearAmount", "contourOpacity", "cameraAmount", "viewAmount", "sortAmount", "particleAmount", "cyclesAmount", "solidAmount", "driverAmount", "laserOpacity", "bubbleAmount", "pictureAmount", "pathAmount", "spiroAmount", "textAmount", "coneOpacity"];
 
 /**
  * The chance that Randomize puts each effect in the list. Blur looks the
@@ -1974,7 +2018,8 @@ const EFFECT_CHANCE: Record<FxStep, number> = {
   /* A bubble leaves black around its rim, which Randomize should not do on its own. */
   bubble: 0,
   /* Text needs words of the user's own. */
-  text: 0
+  text: 0,
+  cone: 0.15
 };
 
 /** The most effects that Randomize puts in the list, locked ones and Light shapes too, so a random scene does not overload the graphics card. */
@@ -2404,6 +2449,21 @@ function randomizeAll(params: Params, state?: PlayState) {
     set(holeX, rand(0.3, 0.85), rand(0, 0.25));
     set(holeY, Math.random() < 0.6 ? 0 : rand(-0.5, 0.5), rand(0, 0.25));
   }
+  /* The Light cone, last for the same reason. */
+  if (state && !state.locks.cone) {
+    state.coneType = (Math.random() < 0.5 ? 0 : 1) as ConeType;
+    state.coneShape = (Math.random() < 0.5 ? 0 : 1) as ConeShape;
+    state.coneColor = hslToHex(rand(0, 360), rand(0.6, 1), rand(0.6, 0.8));
+    state.coneBlend = 7;
+  }
+  set("coneAmount", rand(0.8, 1.5));
+  set("coneSpread", rand(10, 30), rand(0, 5));
+  set("coneSides", Math.round(rand(3, 6)));
+  set("coneTurn", 0);
+  set("coneSwing", 0, rand(10, 30));
+  set("coneTilt", rand(-10, 10), rand(0, 10));
+  set("coneX", rand(-0.8, 0.8));
+  set("coneFog", rand(0.3, 0.9));
   /* The Text's colors, last for the same reason; its words, font and sizes stay. */
   if (state && !state.locks.text) {
     const hue = rand(0, 360);

@@ -4,7 +4,7 @@ import { pathSegments, writePathInstances, type PathShape } from "./paths";
 import { spiroSegments, writeSpiroInstances, type SpiroWheel } from "./spiro";
 import { SCROLL_RATE, TextPicture, letterCount, type TextLook, type TextMove } from "./textLayer";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, BUBBLE_SHADER, MASK_SHADER, OUTLINE_SHADER, OUTLINE_GLOW_SHADER, OUTLINE_LINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, SOLID_MESH_VERTEX, SOLID_MESH_SHADER, SOLID_BACK_SHADER, SOLID_SHADE_BLUR_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, CONE_SHADER, BUBBLE_SHADER, MASK_SHADER, OUTLINE_SHADER, OUTLINE_GLOW_SHADER, OUTLINE_LINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, SOLID_MESH_VERTEX, SOLID_MESH_SHADER, SOLID_BACK_SHADER, SOLID_SHADE_BLUR_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 import { MESH_SHAPES, flatMesh } from "./flatMesh";
 import { MESH_STRIDE, starKinds, starMesh } from "./starMesh";
 import { halveGrid, type TerrainData } from "./terrain";
@@ -36,7 +36,7 @@ export type ShapeStep = "warp" | "map" | "kaleidoscope";
 /** The kind of warp: noise, ripple, waves, swirl, bulge and pinch, cells. */
 export type WarpType = 0 | 1 | 2 | 3 | 4 | 5;
 /** The steps that change the drawn picture. The user sets their order. */
-export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "paths" | "spiro" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble" | "text";
+export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "cone" | "paths" | "spiro" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble" | "text";
 /**
  * Any effect step. The user sets one order for all of them. Shape steps
  * that are next to each other run in one pass; a shape step after a
@@ -44,7 +44,7 @@ export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | 
  */
 export type FxStep = ShapeStep | PictureStep;
 export const SHAPE_STEPS: readonly ShapeStep[] = ["warp", "map", "kaleidoscope"];
-export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble", "text"];
+export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "cone", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble", "text"];
 
 /** Sharpen, Color and Levels, in the order FINISH_SHADER applies them (see drawFinish). */
 type FinishPart = "sharpen" | "color" | "levels";
@@ -320,6 +320,10 @@ export type OutlineShape = 0 | 1 | 2 | 3 | 4;
 export type OutlineDraw = 0 | 1 | 2;
 /** Opacity mask (see MASK_SHADER): 0 by the picture's brightness, 1 a radial gradient. */
 export type MaskMode = 0 | 1;
+/** The Light cone's look: 0 Spotlight (a filled beam), 1 Laser shell (only its surface). */
+export type ConeType = 0 | 1;
+/** The Light cone's shape: 0 a round cone, 1 a pyramid with Sides sides. */
+export type ConeShape = 0 | 1;
 /** The Bubble's closed shape (see BUBBLE_SHAPES). */
 export type BubbleShape = 0 | 3 | 4;
 /** The Bubble's shadow: 0 inside the edge, 1 outside it. */
@@ -948,6 +952,35 @@ export interface FrameValues {
   /** The black key (0 = off): parts darker than this become clear. */
   pictureKey: number;
   /**
+   * Light cone (see CONE_SHADER): brightness (0 = off), opacity, blend, type
+   * and shape, the sides of a pyramid, then the beam: Spread (its half
+   * angle), Turn, Swing and Tilt in radians; the source's X, height and
+   * distance in world units; the look's settings; the fog's clock; the color.
+   */
+  cone: number;
+  coneOpacity: number;
+  coneBlend: LayerBlend;
+  coneType: ConeType;
+  coneShape: ConeShape;
+  coneSides: number;
+  coneSpread: number;
+  coneTurn: number;
+  coneSwing: number;
+  coneTilt: number;
+  coneX: number;
+  coneHeight: number;
+  coneDepth: number;
+  coneSoftness: number;
+  coneEdge: number;
+  coneEdgeLines: number;
+  coneFog: number;
+  coneFogSize: number;
+  coneFogTime: number;
+  coneFade: number;
+  coneFloor: number;
+  coneEmitter: number;
+  coneColor: [number, number, number];
+  /**
    * Text (see TextPicture): opacity (0 = off), the blend, what the text
    * shows, the font size (one line's height, in screen heights), the center
    * (a part of the screen from its center) and the turn in radians. "textMove"
@@ -1187,6 +1220,7 @@ export class KaleidoRenderer {
   private readonly rays: Program;
   private readonly raysMix: Program;
   private readonly lasers: Program;
+  private readonly cone: Program;
   private readonly outlines: Program;
   /** Light shapes in two passes, when the GPU has float targets: the glow into outlineGlowTarget, then the line (see drawOutlines). */
   private readonly outlineGlow: Program;
@@ -1313,6 +1347,7 @@ export class KaleidoRenderer {
     };
     this.raysMix = this.createProgram(RAYS_MIX_SHADER);
     this.lasers = this.createProgram(LASER_SHADER);
+    this.cone = this.createProgram(CONE_SHADER);
     this.outlines = this.createProgram(OUTLINE_SHADER);
     this.outlineGlow = this.createProgram(OUTLINE_GLOW_SHADER);
     this.outlineLine = this.createProgram(OUTLINE_LINE_SHADER);
@@ -1584,6 +1619,7 @@ export class KaleidoRenderer {
       sort: v.sort > 0 && this.floatTargets,
       rays: v.rays > 0,
       lasers: v.lasers > 0,
+      cone: v.cone > 0,
       paths: v.paths > 0,
       spiro: v.spiro > 0,
       outlines: v.outlines > 0,
@@ -1731,6 +1767,7 @@ export class KaleidoRenderer {
         else if (step === "cycles") this.drawCycles(v, source, target, width, height);
         else if (step === "rays") this.drawRays(v, source, target, width, height);
         else if (step === "lasers") this.drawLasers(v, source, target, width, height);
+        else if (step === "cone") this.drawCone(v, source, target, width, height);
         else if (step === "paths") this.drawPaths(v, source, target, width, height);
         else if (step === "spiro") this.drawSpiro(v, source, target, width, height);
         else if (step === "outlines") this.drawOutlines(v, source, target, width, height);
@@ -3640,6 +3677,53 @@ export class KaleidoRenderer {
     gl.uniform1f(l.uniforms.u_amount, Math.max(0, v.lasers));
     gl.uniform1f(l.uniforms.u_opacity, Math.min(1, Math.max(0, v.laserOpacity)));
     gl.uniform1i(l.uniforms.u_blend, v.laserBlend);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /**
+   * Light cone: the beam, in one pass (CONE_SHADER). The beam's axis points
+   * down, leans sideways by Swing and away from the eye by Tilt; the
+   * pyramid's corners turn about it from e1, which lies across the screen.
+   */
+  private drawCone(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+    const gl = this.gl;
+    const c = this.cone;
+    const axis = [Math.sin(v.coneSwing), -Math.cos(v.coneSwing) * Math.cos(v.coneTilt), -Math.cos(v.coneSwing) * Math.sin(v.coneTilt)];
+    const cross = (a: number[], b: number[]) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    const unit = (a: number[]) => {
+      const length = Math.hypot(a[0], a[1], a[2]);
+      return length > 1e-6 ? a.map((part) => part / length) : [1, 0, 0];
+    };
+    const e1 = unit(cross(axis, [0, 0, 1]));
+    const e2 = cross(axis, e1);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(c.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.uniform1i(c.uniforms.u_picture, 0);
+    gl.uniform2f(c.uniforms.u_res, width, height);
+    gl.uniform1i(c.uniforms.u_type, v.coneType);
+    gl.uniform1i(c.uniforms.u_sides, v.coneShape === 1 ? Math.min(8, Math.max(3, Math.round(v.coneSides))) : 0);
+    gl.uniform3f(c.uniforms.u_apex, v.coneX, v.coneHeight, -Math.max(0.5, v.coneDepth));
+    gl.uniform3f(c.uniforms.u_axis, axis[0], axis[1], axis[2]);
+    gl.uniform3f(c.uniforms.u_e1, e1[0], e1[1], e1[2]);
+    gl.uniform3f(c.uniforms.u_e2, e2[0], e2[1], e2[2]);
+    gl.uniform1f(c.uniforms.u_tan, Math.tan(Math.min(1.4, Math.max(0.01, v.coneSpread))));
+    gl.uniform1f(c.uniforms.u_turn, v.coneTurn);
+    gl.uniform1f(c.uniforms.u_softness, Math.min(1, Math.max(0, v.coneSoftness)));
+    gl.uniform1f(c.uniforms.u_edge, Math.max(0.001, v.coneEdge));
+    gl.uniform1f(c.uniforms.u_edgeLines, Math.max(0, v.coneEdgeLines));
+    gl.uniform1f(c.uniforms.u_fog, Math.min(1, Math.max(0, v.coneFog)));
+    gl.uniform1f(c.uniforms.u_fogSize, Math.max(0.01, v.coneFogSize));
+    gl.uniform1f(c.uniforms.u_fogTime, v.coneFogTime);
+    gl.uniform1f(c.uniforms.u_fade, Math.max(0, v.coneFade));
+    gl.uniform1f(c.uniforms.u_floor, Math.max(0, v.coneFloor));
+    gl.uniform1f(c.uniforms.u_emitter, Math.max(0, v.coneEmitter));
+    gl.uniform3f(c.uniforms.u_color, v.coneColor[0], v.coneColor[1], v.coneColor[2]);
+    gl.uniform1f(c.uniforms.u_amount, Math.max(0, v.cone));
+    gl.uniform1f(c.uniforms.u_opacity, Math.min(1, Math.max(0, v.coneOpacity)));
+    gl.uniform1i(c.uniforms.u_blend, v.coneBlend);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 

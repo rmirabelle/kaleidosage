@@ -344,6 +344,7 @@ function ParamRow({ engine, paramKey, readout, marker, singleMarker, after, badg
         {paramKey === "overlayOpacity" && engine.state.colorFill === 0 && <ColorSwatch engine={engine} stateKey="overlayColor" label="Overlay color" />}
         {paramKey === "trailTint" && <ColorSwatch engine={engine} stateKey="trailColor" label="Trail color" />}
         {paramKey === "cameraSky" && <ColorSwatch engine={engine} stateKey="skyColor" label="Sky color" />}
+        {paramKey === "coneAmount" && <ColorSwatch engine={engine} stateKey="coneColor" label="Light color" />}
         {paramKey === "textOutline" && <ColorSwatch engine={engine} stateKey="textOutlineColor" label="Outline color" />}
         {paramKey === "textGlow" && <ColorSwatch engine={engine} stateKey="textGlowColor" label="Glow color" />}
         {paramKey === "textShadow" && <ColorSwatch engine={engine} stateKey="textShadowColor" label="Shadow color" />}
@@ -559,7 +560,7 @@ function ToneChips({ tone, onChange }: { tone: ContourTone; onChange: (tone: Con
 }
 
 /** A color of the play state (the overlay, trail or sky color, or a Text color): a swatch that opens the color picker. */
-function ColorSwatch({ engine, stateKey, label }: { engine: Engine; stateKey: "overlayColor" | "trailColor" | "skyColor" | "textOutlineColor" | "textGlowColor" | "textShadowColor"; label: string }) {
+function ColorSwatch({ engine, stateKey, label }: { engine: Engine; stateKey: "overlayColor" | "trailColor" | "skyColor" | "textOutlineColor" | "textGlowColor" | "textShadowColor" | "coneColor"; label: string }) {
   const [color, setColor] = useState(engine.state[stateKey]);
   return (
     <ColorPicker

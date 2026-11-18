@@ -3743,6 +3743,269 @@ void main() {
 }`;
 
 /**
+ * Light cone: a beam of light from one point, seen in 3D. The eye is at
+ * the origin and looks along -z; the screen's height spans 2 * TAN_HALF at
+ * a distance of 1. The floor is the plane y = FLOOR_Y. The beam starts at
+ * u_apex and goes along u_axis; its radius is u_tan per unit along the
+ * axis. With u_sides 3 to 8 it is a pyramid with that many sides (corners
+ * on the round cone's edge, the first one turned by u_turn about the axis
+ * from u_e1 toward u_e2); with 0 it is a round cone. The floor ends it.
+ * u_type 0 (Spotlight) fills the beam: the fog in it sends light to the eye,
+ * added up in steps along the ray, with an edge u_softness soft, and a
+ * bright pool where it meets the floor. u_type 1 (Laser shell) lights only
+ * the surface, a sheet u_edge thick (world units): where the eye looks
+ * along the sheet, it is brighter, so the outline shines; a pyramid's
+ * corners are bright lines (u_edgeLines), and the floor gets a thin outline.
+ * Fog (u_fog, 0 = even light) is drifting 3D noise of size 1/u_fogSize;
+ * u_fogTime moves it. The light gets dimmer with distance from the source
+ * by u_fade. A glow of u_emitter shows at the source. The light is added
+ * with Add (7), or is a layer in the other blends, as the Lasers' is.
+ */
+export const CONE_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_picture;
+uniform vec2 u_res;
+uniform int u_type;
+uniform int u_sides;
+uniform vec3 u_apex;
+uniform vec3 u_axis;
+uniform vec3 u_e1;
+uniform vec3 u_e2;
+uniform float u_tan;
+uniform float u_turn;
+uniform float u_softness;
+uniform float u_edge;
+uniform float u_edgeLines;
+uniform float u_fog;
+uniform float u_fogSize;
+uniform float u_fogTime;
+uniform float u_fade;
+uniform float u_floor;
+uniform float u_emitter;
+uniform vec3 u_color;
+uniform float u_amount;
+uniform float u_opacity;
+uniform int u_blend;
+const float FLOOR_Y = -1.0;
+const float FAR = 60.0;
+const float TAN_HALF = 0.5;
+const float PI = 3.14159265;
+float hot(vec3 color) { return clamp(max(color.r, max(color.g, color.b)), 0.0, 1.0); }
+vec3 blendLayer(vec3 base, vec3 top, int mode) {
+  if (mode == 1) return 1.0 - (1.0 - base) * (1.0 - top);
+  if (mode == 2) return base * top;
+  if (mode == 3) return mix(2.0 * base * top, 1.0 - 2.0 * (1.0 - base) * (1.0 - top), step(0.5, base));
+  if (mode == 4) return abs(base - top);
+  if (mode == 5) return max(base, top);
+  if (mode == 6) return min(base, top);
+  if (mode == 7) return min(base + top, 1.0);
+  return top;
+}
+${COVER_GLSL}
+float hash3(vec3 p) {
+  p = fract(p * 0.3183099 + 0.1);
+  p *= 17.0;
+  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+float noise3(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(mix(hash3(i), hash3(i + vec3(1.0, 0.0, 0.0)), f.x), mix(hash3(i + vec3(0.0, 1.0, 0.0)), hash3(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
+    mix(mix(hash3(i + vec3(0.0, 0.0, 1.0)), hash3(i + vec3(1.0, 0.0, 1.0)), f.x), mix(hash3(i + vec3(0.0, 1.0, 1.0)), hash3(i + vec3(1.0, 1.0, 1.0)), f.x), f.y),
+    f.z);
+}
+/* How thick the fog is at p: 1 everywhere with no Fog; with Fog, drifting clouds from almost none to about twice that. */
+float fogAt(vec3 p) {
+  vec3 q = p * u_fogSize + vec3(u_fogTime * 0.7, u_fogTime * 0.15, u_fogTime * 0.4);
+  float n = noise3(q) * 0.65 + noise3(q * 2.3 + 5.1) * 0.35;
+  return mix(1.0, smoothstep(0.2, 0.85, n) * 2.2, u_fog);
+}
+/* The shape's radius at angle phi about the axis, as a part of the round cone's: 1 for the cone; a pyramid's sides are straight between its corners. */
+float shapeRadius(float phi) {
+  if (u_sides < 3) return 1.0;
+  float sector = 2.0 * PI / float(u_sides);
+  float a = mod(phi - u_turn, sector) - sector * 0.5;
+  return cos(sector * 0.5) / cos(a);
+}
+/* Where p is in the beam: x is 0 on the axis and 1 on the surface; y is the distance along the axis from the source. */
+vec2 place(vec3 p) {
+  vec3 v = p - u_apex;
+  float h = dot(v, u_axis);
+  if (h <= 1e-5) return vec2(1e6, h);
+  vec3 q = v - u_axis * h;
+  float phi = atan(dot(q, u_e2), dot(q, u_e1));
+  return vec2(length(q) / (h * u_tan * shapeRadius(phi)), h);
+}
+/* The direction of a pyramid's corner line number i, from the source. */
+vec3 cornerLine(int i) {
+  float a = u_turn + 2.0 * PI * float(i) / float(u_sides);
+  return normalize(u_axis + u_tan * (cos(a) * u_e1 + sin(a) * u_e2));
+}
+/* True when p is inside the round cone (on the source's side that the axis points to). */
+bool inCone(vec3 p, float c2) {
+  vec3 v = p - u_apex;
+  float h = dot(v, u_axis);
+  return h > 0.0 && h * h >= c2 * dot(v, v);
+}
+/**
+ * The part of the ray from the eye along d, up to tEnd, inside the beam:
+ * from t0 to t1. n0 and n1 are the surface's normals at the two ends, or
+ * zero where an end is not on the surface (the eye inside, or the floor).
+ * False when the ray misses the beam.
+ */
+bool segment(vec3 d, float tEnd, out float t0, out float t1, out vec3 n0, out vec3 n1) {
+  t0 = 0.0;
+  t1 = tEnd;
+  n0 = vec3(0.0);
+  n1 = vec3(0.0);
+  vec3 co = -u_apex;
+  if (u_sides >= 3) {
+    /* A pyramid is the space on the inner side of all its faces; each face cuts the ray (Cyrus-Beck). */
+    for (int i = 0; i < 8; i++) {
+      if (i >= u_sides) break;
+      vec3 n = normalize(cross(cornerLine(i), cornerLine(i + 1 == u_sides ? 0 : i + 1)));
+      if (dot(n, u_axis) < 0.0) n = -n;
+      float num = dot(co, n);
+      float den = dot(d, n);
+      if (abs(den) < 1e-6) {
+        if (num < 0.0) return false;
+        continue;
+      }
+      float t = -num / den;
+      if (den > 0.0) {
+        if (t > t0) { t0 = t; n0 = n; }
+      } else if (t < t1) {
+        t1 = t;
+        n1 = n;
+      }
+    }
+    return t0 < t1;
+  }
+  /* The round cone: where the ray crosses its surface, then the part between those places that is inside. */
+  float c2 = 1.0 / (1.0 + u_tan * u_tan);
+  float dv = dot(d, u_axis);
+  float cv = dot(co, u_axis);
+  float qa = dv * dv - c2;
+  float qb = 2.0 * (dv * cv - dot(d, co) * c2);
+  float qc = cv * cv - dot(co, co) * c2;
+  float r1 = -1.0;
+  float r2 = -1.0;
+  if (abs(qa) < 1e-7) {
+    if (abs(qb) > 1e-7) r1 = r2 = -qc / qb;
+  } else {
+    float disc = qb * qb - 4.0 * qa * qc;
+    if (disc >= 0.0) {
+      float s = sqrt(disc);
+      r1 = (-qb - s) / (2.0 * qa);
+      r2 = (-qb + s) / (2.0 * qa);
+      if (r1 > r2) { float r = r1; r1 = r2; r2 = r; }
+    }
+  }
+  float ts[4] = float[4](0.0, clamp(r1, 0.0, tEnd), clamp(r2, 0.0, tEnd), tEnd);
+  bool found = false;
+  for (int k = 0; k < 3; k++) {
+    if (ts[k + 1] <= ts[k]) continue;
+    if (!inCone(d * (0.5 * (ts[k] + ts[k + 1])), c2)) continue;
+    if (!found) t0 = ts[k];
+    found = true;
+    t1 = ts[k + 1];
+  }
+  if (!found) return false;
+  vec3 v0 = d * t0 - u_apex;
+  vec3 v1 = d * t1 - u_apex;
+  if (t0 > 0.0) n0 = normalize(u_axis * dot(v0, u_axis) - v0 * c2);
+  if (t1 < tEnd) n1 = normalize(u_axis * dot(v1, u_axis) - v1 * c2);
+  return true;
+}
+/* The light of the shell's sheet where the ray crosses it at p, with surface normal n, and of the corner lines near p. */
+vec3 shellAt(vec3 p, vec3 d, vec3 n) {
+  vec2 at = place(p);
+  float facing = max(abs(dot(d, n)), 0.08);
+  float sheet = u_edge * 12.0 / facing;
+  float lines = 0.0;
+  if (u_sides >= 3) {
+    for (int i = 0; i < 8; i++) {
+      if (i >= u_sides) break;
+      float away = length(cross(p - u_apex, cornerLine(i))) / max(u_edge * 1.5, 1e-4);
+      lines = max(lines, exp(-away * away));
+    }
+  }
+  lines *= u_edgeLines;
+  return (u_color * (sheet * fogAt(p) + lines * 1.5) + hot(u_color) * lines * 0.6) / (1.0 + max(at.y, 0.0) * u_fade);
+}
+void main() {
+  vec4 picture = texture(u_picture, v_uv);
+  float aspect = u_res.x / u_res.y;
+  vec3 d = normalize(vec3((v_uv.x - 0.5) * aspect * 2.0 * TAN_HALF, (v_uv.y - 0.5) * 2.0 * TAN_HALF, -1.0));
+  float tFloor = d.y < -1e-4 ? FLOOR_Y / d.y : FAR;
+  float tEnd = min(tFloor, FAR);
+  vec3 light = vec3(0.0);
+  float t0;
+  float t1;
+  vec3 n0;
+  vec3 n1;
+  if (segment(d, tEnd, t0, t1, n0, n1)) {
+    if (u_type == 0) {
+      /* Each step starts at a fixed random place in its length, so no bands show. */
+      const int STEPS = 28;
+      float dt = (t1 - t0) / float(STEPS);
+      float jitter = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+      float sum = 0.0;
+      for (int i = 0; i < STEPS; i++) {
+        vec3 p = d * (t0 + (float(i) + jitter) * dt);
+        vec2 at = place(p);
+        float edge = smoothstep(1.0, 1.0 - max(u_softness, 0.01), at.x);
+        sum += edge * fogAt(p) / (1.0 + max(at.y, 0.0) * u_fade);
+      }
+      light += u_color * sum * dt * 0.6;
+    } else {
+      if (dot(n0, n0) > 0.0) light += shellAt(d * t0, d, n0);
+      if (dot(n1, n1) > 0.0) light += shellAt(d * t1, d, n1);
+    }
+  }
+  /* The floor: a pool of light (Spotlight) or the shape's outline (Laser shell) where the beam meets it. The pool lights the picture, so the bright parts of the picture show most. */
+  if (u_floor > 0.0 && d.y < -1e-4 && tFloor < FAR) {
+    vec3 p = d * tFloor;
+    vec2 at = place(p);
+    if (at.y > 0.0) {
+      float fall = 1.0 / (1.0 + at.y * u_fade);
+      if (u_type == 0) {
+        float lum = dot(straight(picture), vec3(0.299, 0.587, 0.114));
+        float pool = smoothstep(1.0, 1.0 - max(u_softness, 0.01), at.x);
+        light += u_color * pool * u_floor * fall * (0.25 + 0.9 * lum);
+      } else {
+        float inner = u_sides >= 3 ? cos(PI / float(u_sides)) : 1.0;
+        float away = abs(1.0 - at.x) * at.y * u_tan * inner / max(u_edge * 1.5, 1e-4);
+        float ring = exp(-away * away);
+        light += (u_color + 0.5 * hot(u_color)) * ring * u_floor * fall * 1.5 + u_color * step(at.x, 1.0) * u_floor * fall * 0.06;
+      }
+    }
+  }
+  /* The glow at the source. */
+  if (u_emitter > 0.0 && u_apex.z < -1e-3) {
+    vec2 screen = u_apex.xy / (-u_apex.z) / (2.0 * TAN_HALF);
+    vec2 source = vec2(screen.x / aspect, screen.y) + 0.5;
+    float away = length((v_uv - source) * u_res) / u_res.y * 1080.0;
+    float glow = exp(-away * away / 36.0) * 1.5 + exp(-away / 18.0) * 0.4;
+    light += (u_color + 0.6 * hot(u_color)) * glow * u_emitter;
+  }
+  light *= u_amount;
+  if (u_blend == 7) {
+    o = addLight(picture, light * u_opacity);
+    return;
+  }
+  float cover = clamp(max(light.r, max(light.g, light.b)), 0.0, 1.0);
+  vec3 top = cover > 1e-4 ? clamp(light / cover, 0.0, 1.0) : vec3(0.0);
+  vec3 base = straight(picture);
+  float mark = cover * u_opacity;
+  o = covered(mix(base, blendLayer(base, top, u_blend), mark), mix(picture.a, 1.0, mark));
+}`;
+
+/**
  * Bubble: the picture bends inside a closed shape around the screen's center.
  * u_shape picks the shape (see BUBBLE_SHAPES). shapeDistance says how far a point
  * is from the center, as a part of the way to the shape's edge: 0 at the center
