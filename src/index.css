@@ -970,13 +970,13 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 .text-style-bold { font-weight: 800; }
 .text-style-italic { font-style: italic; font-family: Georgia, serif; }
 .cycles-paint-row .color-swatch { flex: 0 0 auto; margin-top: 0; }
-.font-picker-button span { color: #e8eaf0; }
-.toolbar-dropdown.dropdown-list.font-picker-list { position: fixed; display: flex; flex-direction: column; padding: 0; overflow: hidden; }
-.font-picker-search { display: flex; flex: 0 0 auto; align-items: center; gap: 7px; padding: 7px 10px; border-bottom: 1px solid #3a3f4d; color: var(--muted); }
-.font-picker-search input { flex: 1; min-width: 0; padding: 3px 0; border: 0; color: #fff; background: transparent; font: inherit; font-size: 12px; outline: none; }
-.font-picker-names { flex: 1; min-height: 0; padding: 5px; overflow-y: auto; }
-.font-picker-names .toolbar-dropdown-item.active { color: #fff; background: rgba(75,118,247,.3); }
-.font-picker-names .toolbar-dropdown-item.selected { background: rgba(75,118,247,.45); }
+/* The Font combo box: a text box that looks like the menu buttons, with a blue edge while it has the focus. */
+.font-picker-box { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; cursor: text; }
+.font-picker-box:hover { border-color: #5a6890; }
+.fx-card .font-picker-box:focus-within, .font-picker-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.font-picker-box input { flex: 1; min-width: 0; padding: 0; border: 0; color: #e8eaf0; background: transparent; font: inherit; outline: none; cursor: text; }
+.font-picker-box.open .dropdown-caret { transform: rotate(180deg); }
+.font-picker-list .toolbar-dropdown-item.active:not(.selected) { color: #fff; background: rgba(75,118,247,.3); }
 .font-picker-none { padding: 8px 9px; color: var(--muted); font-size: 12px; }
 /* The Spirograph's wheels (see SpiroWheels): a card for each wheel, with a picture of the wheel at the left and its settings at the right. The two hole sliders come after each card. */
 .spiro-wheel { display: flex; align-items: center; gap: 10px; margin: 8px 14px 4px; padding: 6px; border: 1px solid var(--border); border-radius: 6px; background: #1b1e25; }
