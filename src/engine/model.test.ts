@@ -64,6 +64,10 @@ describe("parseModel", () => {
     expect(vertices[MODEL_STRIDE]).toBeCloseTo(far);
     /* No directions in the file: the triangle's own, toward +z. */
     expect([vertices[3], vertices[4], vertices[5]]).toEqual([0, 0, 1]);
+    /* The file's own zero point is the first corner. */
+    expect(model.origin[0]).toBeCloseTo(vertices[0]);
+    expect(model.origin[1]).toBeCloseTo(vertices[1]);
+    expect(model.origin[2]).toBeCloseTo(0);
   });
 
   it("reads the material's color, roughness and cut-out level", () => {

@@ -1136,6 +1136,9 @@ export class Engine {
     this.state.textTime = 0;
     this.state.coneFogTime = 0;
     this.state.solidSpinTurns = 0;
+    this.state.solidTurnsX = 0;
+    this.state.solidTurnsY = 0;
+    this.state.solidTurnsZ = 0;
     this.state.solidTumbleTurns = 0;
     this.state.outlineSpinTurns = 0;
     this.state.outlineTumbleTurns = 0;
@@ -1290,6 +1293,9 @@ export class Engine {
     /* The 3D Object's spin and tumble are speeds in turns per minute, added up the same way. */
     this.state.solidSpinTurns = (this.state.solidSpinTurns + animated * this.live("solidSpin") / 60) % 1;
     this.state.solidTumbleTurns = (this.state.solidTumbleTurns + animated * this.live("solidTumble") / 60) % 1;
+    this.state.solidTurnsX = (this.state.solidTurnsX + animated * this.live("solidSpinX") / 60) % 1;
+    this.state.solidTurnsY = (this.state.solidTurnsY + animated * this.live("solidSpinY") / 60) % 1;
+    this.state.solidTurnsZ = (this.state.solidTurnsZ + animated * this.live("solidSpinZ") / 60) % 1;
     this.state.outlineSpinTurns = (this.state.outlineSpinTurns + animated * this.live("outlineSpin") / 60) % 1;
     this.state.outlineTumbleTurns = (this.state.outlineTumbleTurns + animated * this.live("outlineTumble") / 60) % 1;
     /* Tunnel speed is a speed too, so the distance flown is added up the same way. */
@@ -1735,6 +1741,11 @@ export class Engine {
       solidSpin: this.state.solidSpinTurns * Math.PI * 2,
       solidTumble: this.state.solidTumbleTurns * Math.PI * 2,
       solidTilt: this.live("solidTilt") * DEGREES,
+      /* The Model shape: each line's angle is its Rotate plus what its Spin has added up. */
+      solidAngleX: this.live("solidRotateX") * DEGREES + this.state.solidTurnsX * Math.PI * 2,
+      solidAngleY: this.live("solidRotateY") * DEGREES + this.state.solidTurnsY * Math.PI * 2,
+      solidAngleZ: this.live("solidRotateZ") * DEGREES + this.state.solidTurnsZ * Math.PI * 2,
+      solidPivot: this.state.solidPivot,
       solidBend: this.live("solidBend"),
       solidFrost: this.live("solidFrost"),
       solidTiles: this.live("solidTiles"),

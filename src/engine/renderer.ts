@@ -351,6 +351,8 @@ export type SolidMap = 0 | 1 | 2;
 export type SolidWrap = 0 | 1 | 2 | 3;
 /** What paints the 3D Object: 0 the picture made so far, 1 its own image or video (see setSolidMedia), 2 Source B (the scene's second image or video), 3 the model's own materials (the Model shape only, see setModel). */
 export type SolidPaint = 0 | 1 | 2 | 3;
+/** The Model shape's pivot, the point it turns around: 0 the middle of its box, 1 the point its maker set (the file's own zero point). */
+export type SolidPivot = 0 | 1;
 /** How the two images fade: 0 = crossfade, 1 = dissolve by brightness (light areas change first). */
 export type BlendMode = 0 | 1;
 /**
@@ -676,6 +678,11 @@ export interface FrameValues {
   solidTime: number;
   solidSpin: number;
   solidTumble: number;
+  /** The Model shape's turn about the x, y and z lines, in radians (in place of Spin, Tumble and Tilt), and its pivot. */
+  solidAngleX: number;
+  solidAngleY: number;
+  solidAngleZ: number;
+  solidPivot: SolidPivot;
   solidTilt: number;
   solidBend: number;
   /** Project's frost: 0 clear glass, 1 frosted (see SOLID_SHADER). */
@@ -1155,7 +1162,7 @@ export class KaleidoRenderer {
   /** The Model shape's triangles (see drawModel). */
   private readonly modelProgram: Program;
   /** The loaded model on the graphics card: each material's triangles, and each texture (null for a picture that could not be read). */
-  private model: { parts: { vertices: WebGLVertexArrayObject; buffers: WebGLBuffer[]; count: number; material: ModelMaterial }[]; textures: (WebGLTexture | null)[] } | null = null;
+  private model: { parts: { vertices: WebGLVertexArrayObject; buffers: WebGLBuffer[]; count: number; material: ModelMaterial }[]; textures: (WebGLTexture | null)[]; origin: readonly number[] } | null = null;
   /** The 1 by 1 pictures that stand in for a material's missing ones (see modelBlanks). */
   private modelBlank: { white: WebGLTexture; flat: WebGLTexture } | null = null;
   /** The star's triangles, one buffer per core drawn (two while Points fades between two counts), rebuilt when their settings change. */
@@ -2545,11 +2552,19 @@ export class KaleidoRenderer {
   /** The 3D Object's turn, place, map and light settings, which the ray shader and the mesh shapes share. */
   private solidLook(s: Program, v: FrameValues) {
     const gl = this.gl;
-    const [cs, ss] = [Math.cos(v.solidSpin), Math.sin(v.solidSpin)];
-    const tilt = v.solidTilt + v.solidTumble;
+    /* The Model shape turns by its three angles; the other shapes by Spin (about y) and Tilt plus Tumble (about x). */
+    const model = v.solidShape === 11;
+    const spin = model ? v.solidAngleY : v.solidSpin;
+    const [cs, ss] = [Math.cos(spin), Math.sin(spin)];
+    const tilt = model ? v.solidAngleX : v.solidTilt + v.solidTumble;
     const [ct, st] = [Math.cos(tilt), Math.sin(tilt)];
     /* Rows of (turn about x by tilt) times (spin about y), given by columns for GLSL. */
-    const rows = [[cs, 0, ss], [st * ss, ct, -st * cs], [-ct * ss, st, ct * cs]];
+    let rows = [[cs, 0, ss], [st * ss, ct, -st * cs], [-ct * ss, st, ct * cs]];
+    if (model) {
+      /* Then the roll about z, the line toward the viewer. */
+      const [cz, sz] = [Math.cos(v.solidAngleZ), Math.sin(v.solidAngleZ)];
+      rows = [rows[0].map((value, i) => cz * value - sz * rows[1][i]), rows[1].map((value, i) => sz * rows[0][i] + cz * value), rows[2]];
+    }
     gl.uniformMatrix3fv(s.uniforms.u_turn, false, [0, 1, 2].flatMap((column) => rows.map((row) => row[column])));
     /* The Sphere's turn shows only on a turned copy of the picture (see SOLID_PAINT_GLSL). */
     gl.uniform1i(s.uniforms.u_turnCopy, v.solidShape === 0 ? 1 : 0);
@@ -2725,6 +2740,9 @@ export class KaleidoRenderer {
       gl.uniform2f(s.uniforms.u_shadeMix, 1, 0);
       gl.uniform1f(s.uniforms.u_fade, 1);
       gl.uniform1i(s.uniforms.u_own, v.solidPaint === 3 ? 1 : 0);
+      /* The point the model turns around, which also sits at Center X and Y: the middle of its box (0, 0, 0), or its maker's point. */
+      const pivot = v.solidPivot === 1 && this.model ? this.model.origin : [0, 0, 0];
+      gl.uniform3f(s.uniforms.u_pivot, pivot[0], pivot[1], pivot[2]);
       const textures: [WebGLTexture, string][] = [[source, "u_tex"], [back, "u_back"], [back, "u_under"], [shadeTexture, "u_shade"]];
       textures.forEach(([texture, name], unit) => {
         gl.activeTexture(gl.TEXTURE0 + unit);
@@ -2870,7 +2888,7 @@ export class KaleidoRenderer {
       return texture;
     });
     gl.bindTexture(gl.TEXTURE_2D, bound);
-    this.model = { parts, textures };
+    this.model = { parts, textures, origin: model.shape.origin };
   }
 
   /** The vertex buffer in one slot (two for the star while it fades between two cores), rebuilt only when its key changes (the shape, and the star's core, Point length and Hollow). */

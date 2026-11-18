@@ -176,12 +176,13 @@ describe("scene files", () => {
 
   it("keep the 3D object's Model shape, its Model source and its model file", () => {
     const state = createPlayState();
-    Object.assign(state, { solidShape: 11, solidPaint: 3 });
+    Object.assign(state, { solidShape: 11, solidPaint: 3, solidPivot: 1, solidTurnsY: 0.25 });
     const scene = JSON.parse(serializeScene(createParams(), state, { image: IMAGE }));
     scene.model = { name: "duck.glb", data: "Z2xURg==" };
     const loaded = createPlayState();
     const media = applyScene(JSON.stringify(scene), createParams(), loaded);
-    expect([loaded.solidShape, loaded.solidPaint]).toEqual([11, 3]);
+    expect([loaded.solidShape, loaded.solidPaint, loaded.solidPivot, loaded.solidTurnsY]).toEqual([11, 3, 1, 0.25]);
+    expect(sceneFingerprint(createParams(), loaded, [])).not.toBe(sceneFingerprint(createParams(), { ...loaded, solidPivot: 0 }, []));
     expect(media.model).toEqual({ name: "duck.glb", data: "Z2xURg==" });
   });
 

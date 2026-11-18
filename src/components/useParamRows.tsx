@@ -120,6 +120,9 @@ const VALUE_SNAPS: Partial<Record<ParamKey, number[]>> = {
   solidPointLength: [0.6],
   cameraTilt: [-90, -60, -30, 30, 60],
   solidTilt: [-90, -60, -30, 30, 60, 90],
+  solidRotateX: [-180, -90, -45, 45, 90, 180],
+  solidRotateY: [-180, -90, -45, 45, 90, 180],
+  solidRotateZ: [-180, -90, -45, 45, 90, 180],
   solidTiles: [0.5, 1, 2, 3, 4, 6, 8],
   solidRepeats: [0.5, 1, 2, 3, 4, 6, 8, 12, 16],
   pathTurn: [45, 90, 135]

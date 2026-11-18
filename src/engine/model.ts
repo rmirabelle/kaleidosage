@@ -59,6 +59,8 @@ export interface ModelShape {
   textures: ModelTexture[];
   images: ModelImage[];
   triangles: number;
+  /** The file's own zero point (the pivot its maker set, often at the base), in the frame of the corners: the model's box has its middle at 0, 0, 0. */
+  origin: [number, number, number];
   /** Who made the model and its license, when the file says so (see modelCredit); null when it does not. */
   credit: string | null;
 }
@@ -462,7 +464,7 @@ export function parseModel(file: Uint8Array): ModelShape {
     triangles += indices.length / 3;
     parts.push({ material, vertices, indices });
   }
-  return { parts, materials, textures, images, triangles, credit: modelCredit(json) };
+  return { parts, materials, textures, images, triangles, origin: [-middle[0] * size, -middle[1] * size, -middle[2] * size], credit: modelCredit(json) };
 }
 
 /**

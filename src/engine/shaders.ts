@@ -6342,6 +6342,8 @@ uniform float u_size;
 uniform float u_aspect;
 uniform vec3 u_light;
 uniform int u_pass;
+/* The pivot: the point of the model that it turns around, and that sits at u_center. */
+uniform vec3 u_pivot;
 out vec3 v_world;
 out vec3 v_normal;
 out vec3 v_shape;
@@ -6352,7 +6354,7 @@ const float NEAR = 0.1;
 const float FAR = 20.0;
 void main() {
   float scale = 0.5 * u_size;
-  vec3 world = u_turn * (a_pos * scale) + vec3(u_center, 0.0);
+  vec3 world = u_turn * ((a_pos - u_pivot) * scale) + vec3(u_center, 0.0);
   v_world = world;
   v_normal = u_turn * a_normal;
   v_shape = a_pos;

@@ -249,6 +249,16 @@ glTF 2.0 in its one-file binary form (.glb).
   base64 data), while the 3D Object is in the list with the Model shape.
   The scene owns the model, as it owns Terrain's land (engine.model).
   Undo does not bring back a model that was taken off.
+- Turn (2026-11-18, the user's wish): the Model shape has Rotate X, Y, Z
+  (angles that pose it) and Spin X, Y, Z (speeds, turns per minute) in
+  place of Spin, Tumble and Tilt. Each line's angle is its Rotate plus
+  what its Spin has added up (solidTurnsX, Y, Z). The order is Y first
+  (around the model's own upright line), then X, then Z (the roll in the
+  screen), as Spin and Tilt go for the other shapes.
+- Pivot menu (solidPivot): Center turns the model around the middle of its
+  box (calculated). Model's own turns it around the file's zero point, which
+  its maker set (often at the base); that point then sits at Center X and
+  Center Y.
 - The File row has two buttons. File… picks a .glb on the PC with the
   system's Open dialog (the app's own Open dialog does not list .glb files
   yet). Browse… opens the model browser; picking the Model shape with no
