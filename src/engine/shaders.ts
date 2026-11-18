@@ -3755,7 +3755,9 @@ void main() {
  * bright pool where it meets the floor. u_type 1 (Laser shell) lights only
  * the surface, a sheet u_edge thick (world units): where the eye looks
  * along the sheet, it is brighter, so the outline shines; a pyramid's
- * corners are bright lines (u_edgeLines), and the floor gets a thin outline.
+ * corners are bright lines (u_edgeLines), and the floor gets an outline as
+ * wide on the screen as a corner line at the same distance. Lines are at
+ * least one pixel wide, so a far or flat line does not break into steps.
  * Fog (u_fog, 0 = even light) is drifting 3D noise of size 1/u_fogSize;
  * u_fogTime moves it. The light gets dimmer with distance from the source
  * by u_fade. A glow of u_emitter shows at the source. The light is added
@@ -3921,6 +3923,10 @@ bool segment(vec3 d, float tEnd, out float t0, out float t1, out vec3 n0, out ve
   if (t1 < tEnd) n1 = normalize(u_axis * dot(v1, u_axis) - v1 * c2);
   return true;
 }
+/* The size of one screen pixel, in world units, at distance t from the eye. */
+float pixelAt(float t) { return 2.0 * TAN_HALF * t / u_res.y; }
+/* The half width of a corner line at distance t, in world units: Edge width times 1.5, but at least one pixel. */
+float lineWidth(float t) { return max(u_edge * 1.5, pixelAt(t)); }
 /* The light of the shell's sheet where the ray crosses it at p, with surface normal n, and of the corner lines near p. */
 vec3 shellAt(vec3 p, vec3 d, vec3 n) {
   vec2 at = place(p);
@@ -3930,7 +3936,7 @@ vec3 shellAt(vec3 p, vec3 d, vec3 n) {
   if (u_sides >= 3) {
     for (int i = 0; i < 8; i++) {
       if (i >= u_sides) break;
-      float away = length(cross(p - u_apex, cornerLine(i))) / max(u_edge * 1.5, 1e-4);
+      float away = length(cross(p - u_apex, cornerLine(i))) / lineWidth(length(p));
       lines = max(lines, exp(-away * away));
     }
   }
@@ -3943,6 +3949,15 @@ void main() {
   vec3 d = normalize(vec3((v_uv.x - 0.5) * aspect * 2.0 * TAN_HALF, (v_uv.y - 0.5) * 2.0 * TAN_HALF, -1.0));
   float tFloor = d.y < -1e-4 ? FLOOR_Y / d.y : FAR;
   float tEnd = min(tFloor, FAR);
+  /**
+   * The floor's distance inside the beam's edge, in world units, and how
+   * much it changes from one pixel to the next. Both are found here, for
+   * every pixel, as the change needs the neighbor pixels.
+   */
+  vec2 floorAt = place(d * tFloor);
+  float inner = u_sides >= 3 ? cos(PI / float(u_sides)) : 1.0;
+  float floorIn = (1.0 - floorAt.x) * max(floorAt.y, 0.0) * u_tan * inner;
+  float floorStep = max(fwidth(floorIn), 1e-6);
   vec3 light = vec3(0.0);
   float t0;
   float t1;
@@ -3969,8 +3984,7 @@ void main() {
   }
   /* The floor: a pool of light (Spotlight) or the shape's outline (Laser shell) where the beam meets it. The pool lights the picture, so the bright parts of the picture show most. */
   if (u_floor > 0.0 && d.y < -1e-4 && tFloor < FAR) {
-    vec3 p = d * tFloor;
-    vec2 at = place(p);
+    vec2 at = floorAt;
     if (at.y > 0.0) {
       float fall = 1.0 / (1.0 + at.y * u_fade);
       if (u_type == 0) {
@@ -3978,10 +3992,12 @@ void main() {
         float pool = smoothstep(1.0, 1.0 - max(u_softness, 0.01), at.x);
         light += u_color * pool * u_floor * fall * (0.25 + 0.9 * lum);
       } else {
-        float inner = u_sides >= 3 ? cos(PI / float(u_sides)) : 1.0;
-        float away = abs(1.0 - at.x) * at.y * u_tan * inner / max(u_edge * 1.5, 1e-4);
+        /* The outline is as many pixels wide as a corner line at this distance; the floor seen from the side would make a world width too thin. */
+        float widthPixels = lineWidth(tFloor) / pixelAt(tFloor);
+        float away = abs(floorIn) / floorStep / widthPixels;
         float ring = exp(-away * away);
-        light += (u_color + 0.5 * hot(u_color)) * ring * u_floor * fall * 1.5 + u_color * step(at.x, 1.0) * u_floor * fall * 0.06;
+        float fill = clamp(floorIn / floorStep + 0.5, 0.0, 1.0);
+        light += (u_color + 0.5 * hot(u_color)) * ring * u_floor * fall * 1.5 + u_color * fill * u_floor * fall * 0.06;
       }
     }
   }
