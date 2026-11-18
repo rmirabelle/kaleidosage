@@ -184,8 +184,8 @@ export function EffectsSpace() {
       <Shot name="fx-solid" alt="The 3D object effect with a cube that carries the picture" side="block" />
       <p>
         3D object puts the picture on a shape that turns in space. The <b>Shape</b> menu has
-        eleven shapes: Sphere, Cube, Morph, Blobs, Wobbly ball, Spike ball, Octahedron, Icosahedron,
-        Pyramid, Menger sponge, and Moravian star. Some shapes show more settings below the menu, such
+        twelve shapes: Sphere, Cube, Morph, Blobs, Wobbly ball, Spike ball, Octahedron, Icosahedron,
+        Pyramid, Menger sponge, Moravian star, and Model. Some shapes show more settings below the menu, such
         as <b>Spikes</b> for the Spike ball or <b>Points</b> for the Moravian star.
       </p>
       <p>
@@ -203,6 +203,36 @@ export function EffectsSpace() {
         With <b>Freeze background</b> on, the effects that come after the 3D object in the list change
         only the picture on the shape. The background stays as it was.
       </p>
+
+      <h3>A 3D model as the shape</h3>
+      <p>
+        The <b>Model</b> shape shows a 3D model from a file. In the <b>File</b> row, <b>Browse…</b> opens
+        the model browser, and <b>File…</b> picks a <b>.glb</b> file on this PC. The scene keeps a copy of
+        the model, so the project opens later with no connection.
+      </p>
+      <p>
+        The model browser has two tabs. <b>Poly Haven</b> has about 520 free models that need no
+        account: search, select a <b>Category</b>, an <b>Order</b> and a <b>Textures</b> size, then click
+        a model. <b>Sketchfab</b> has many more models, with science fiction and fantasy among them. Its
+        search needs no account, but a download needs your own Sketchfab API token, which a free
+        Sketchfab account gives you. Put the token in the token row one time.
+      </p>
+      <p>
+        With <b>Source</b> set to <b>Model</b>, the model shows its own colors and
+        materials. <b>Slot A</b>, <b>Slot B</b> or <b>Image or Video</b> puts your picture on the model
+        instead, with the <b>Map</b> menu as for the other shapes.
+      </p>
+      <p>
+        The Model shape has its own turn settings. <b>Rotate X</b>, <b>Rotate Y</b> and <b>Rotate
+        Z</b> are angles that pose the model. <b>Spin X</b>, <b>Spin Y</b> and <b>Spin Z</b> turn it
+        around each axis at a speed in turns per minute. The <b>Pivot</b> menu sets the point that the
+        model turns around: <b>Center</b> is the middle of the model, and <b>Model's own</b> is the
+        point that its maker set, often at the base.
+      </p>
+      <Tip>
+        Most Sketchfab models need a credit to their maker. The app writes the credit into the model
+        file. Point at the model's name in the <b>File</b> row to read it.
+      </Tip>
     </>
   );
 }

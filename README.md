@@ -89,7 +89,7 @@ Play full screen, cast to a projector or a second screen while the controls stay
 
 ## More than mirrors
 
-The effects go far past a kaleidoscope. **Terrain** flies a camera over real land, with heights and satellite pictures from the internet. **3D object** puts your picture on a turning shape of glass or chrome. **Light cycles**, **Lasers**, **Light cone**, **Light paths** and **Spirograph** draw with light, and **Particles** sends moving points of light out of the bright areas.
+The effects go far past a kaleidoscope. **Terrain** flies a camera over real land, with heights and satellite pictures from the internet. **3D object** puts your picture on a turning shape of glass or chrome, or shows a 3D model from a `.glb` file or from the free models of Poly Haven and Sketchfab. **Light cycles**, **Lasers**, **Light cone**, **Light paths** and **Spirograph** draw with light, and **Particles** sends moving points of light out of the bright areas.
 
 <p align="center">
   <img src="docs/readme/fx-terrain.jpg" alt="The Terrain effect: its controls, and a camera view of real land of the Appalachians" width="760">
@@ -175,7 +175,7 @@ Add effects in any order. The picture goes through the list from top to bottom.
 |---|---|
 | **Mirrors and math** | Kaleidoscope (radial, triangle, hexagon, square, hyperbolic, Penrose, sphere, pinwheel, mirror tunnel, fractal), Algorithm (Mandelbrot, Julia, Möbius, Droste spiral, log spiral, seamless spiral, tunnel, sine, power), Bubble (circle, square, radial) |
 | **Motion and time** | Warp, Driver (caustics, smoke, ink, fire, ripples, video), Trails, Time smear, Pixel sort |
-| **3D** | 3D object (sphere, cube, morph, blobs, star, Menger sponge and more), Terrain, Camera |
+| **3D** | 3D object (sphere, cube, morph, blobs, star, Menger sponge, 3D models from a file and more), Terrain, Camera |
 | **Light** | Bloom, Light rays, Lasers, Light cone (spotlight, laser shell; cone or pyramid), Light paths, Spirograph, Light shapes, Light cycles, Particles |
 | **Line and surface** | Contours, Relief, Sharpen, Blur |
 | **Color, text and layers** | Color, Levels, Opacity mask, Image or Video, Text (any installed font, glow, outline, shadow, scroll, type on) |

@@ -1253,7 +1253,7 @@ function SolidSection({ engine, row, mediaName, onPickMedia, onRemoveMedia, onPi
         <div className="panel-select-row panel-select-named driver-video-row panel-child-row">
           <span className="panel-row-name">File</span>
           <span className="driver-video-name" data-tip={modelName ? `The 3D Object's model: ${modelName}${modelCredit ? `. Credit: ${modelCredit}` : ""}` : "No model yet: only the picture behind shows"}>{modelName ?? "None"}</span>
-          <button className="button secondary small" onClick={onBrowseModels} data-tip="Pick one of the free 3D models of Poly Haven. The scene file keeps a copy.">Browse…</button>
+          <button className="button secondary small" onClick={onBrowseModels} data-tip="Pick one of the free 3D models of Poly Haven or Sketchfab. The scene file keeps a copy.">Browse…</button>
           <button className="button secondary small" onClick={onPickModel} data-tip="Pick a 3D model file (.glb) on this PC. The scene file keeps a copy.">File…</button>
           {modelName && (
             <button className="button secondary small" onClick={() => engine.setModel(null)} data-tip="Take the model off the 3D Object" aria-label="Remove the 3D Object's model">
