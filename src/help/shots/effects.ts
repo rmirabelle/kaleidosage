@@ -103,6 +103,16 @@ const look = (item: Look): Shot => ({
   box: besidePicture(item.wide)
 });
 
+/** Where the model browser keeps its choices (STORE_KEY in ModelBrowserDialog.tsx), and the user's own choices while the model shots run. */
+const MODEL_BROWSER_KEY = "kaleidosage.model-browser";
+let keptBrowser: string | null = null;
+
+/** The model that the model shots pick in the browser: one that fills the picture well, or the first one if Poly Haven no longer has it. */
+const modelTile = (page: Page): HTMLElement => {
+  const tiles = page.findAll(".model-browser-result") as HTMLElement[];
+  return tiles.find((tile) => tile.querySelector(".model-browser-name")?.textContent?.trim() === "Marble Bust 01") ?? tiles[0];
+};
+
 export const EFFECTS: Shot[] = [
   /* Effects that shape space */
   look({ effect: "Kaleidoscope", name: "kaleidoscope", pattern: "Random shapes" }),
@@ -136,6 +146,67 @@ export const EFFECTS: Shot[] = [
     margin: 22
   },
   look({ effect: "3D object", name: "solid", pattern: "Color grid", wait: 2500, wide: true }),
+  {
+    /**
+     * The model browser, which the Model shape opens when it has no model.
+     * It needs the internet. The browser's kept choices are set to a known
+     * start (Poly Haven, no search words, small pictures) and put back by
+     * the last shot of the group.
+     */
+    name: "fx-solid-model-browser",
+    needs: "blank",
+    group: "fx-solid-model",
+    setup: async (page) => {
+      keptBrowser = localStorage.getItem(MODEL_BROWSER_KEY);
+      localStorage.setItem(MODEL_BROWSER_KEY, JSON.stringify({ source: "haven", words: "", category: "", order: "used", size: "1k" }));
+      await addEffect(page, "3D object");
+      await pickMenu(page, "3D object", "Shape", "Model");
+      await page.waitFor(".model-browser-dialog");
+      /** The list comes from Poly Haven; then the first pictures must load. */
+      const end = Date.now() + 60000;
+      while (Date.now() < end && page.findAll(".model-browser-result").length === 0) await page.settle(500);
+      const loaded = () => page.findAll(".model-browser-result img").slice(0, 12).every((image) => (image as HTMLImageElement).complete);
+      while (Date.now() < end && !loaded()) await page.settle(500);
+      await page.settle(800);
+    },
+    cursor: modelTile,
+    target: ".model-browser-dialog",
+    /** Little space above and below: the help line under the dialog would show a cut tip. */
+    margin: [2, 20]
+  },
+  {
+    /** A click on the model downloads it; the picture shows the model with its own colors, beside the Model shape's settings. */
+    name: "fx-solid-model",
+    needs: "blank",
+    group: "fx-solid-model",
+    setup: async (page) => {
+      modelTile(page).click();
+      const end = Date.now() + 120000;
+      while (Date.now() < end && page.findAll(".model-browser-dialog").length) await page.settle(500);
+      if (page.findAll(".model-browser-dialog").length) throw new Error("The model did not load");
+      await page.settle(3500);
+    },
+    box: besidePicture(true)
+  },
+  {
+    /** The File row of the Model shape with the mouse on Browse, and the Pivot menu and the turn settings below it. */
+    name: "fx-solid-model-file",
+    needs: "blank",
+    group: "fx-solid-model",
+    /** A tall page, so the panel shows all six turn settings at one time. */
+    page: { width: 1280, height: 1250 },
+    setup: async (page) => {
+      menuRow(page, "3D object", "File").scrollIntoView({ block: "start" });
+      await page.settle(300);
+    },
+    cursor: (page) => Array.from(effectGroup(page, "3D object").querySelectorAll<HTMLElement>("button")).find((item) => item.textContent?.trim().startsWith("Browse"))!,
+    target: (page) => [menuRow(page, "3D object", "File"), settingRow(page, "Spin Z")],
+    margin: 22,
+    cleanup: () => {
+      if (keptBrowser === null) localStorage.removeItem(MODEL_BROWSER_KEY);
+      else localStorage.setItem(MODEL_BROWSER_KEY, keptBrowser);
+    }
+  },
   look({ effect: "Bubble", name: "bubble" }),
 
   /* Effects that draw light */

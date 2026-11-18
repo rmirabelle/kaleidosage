@@ -205,11 +205,13 @@ export function EffectsSpace() {
       </p>
 
       <h3>A 3D model as the shape</h3>
+      <Shot name="fx-solid-model" alt="The 3D object effect with the Model shape and a model that shows its own colors" side="block" />
       <p>
         The <b>Model</b> shape shows a 3D model from a file. In the <b>File</b> row, <b>Browse…</b> opens
         the model browser, and <b>File…</b> picks a <b>.glb</b> file on this PC. The scene keeps a copy of
         the model, so the project opens later with no connection.
       </p>
+      <Shot name="fx-solid-model-browser" alt="The model browser with the Poly Haven tab, its search box and menus, and the mouse on a model" side="block" />
       <p>
         The model browser has two tabs. <b>Poly Haven</b> has about 520 free models that need no
         account: search, select a <b>Category</b>, an <b>Order</b> and a <b>Textures</b> size, then click
@@ -222,6 +224,7 @@ export function EffectsSpace() {
         materials. <b>Slot A</b>, <b>Slot B</b> or <b>Image or Video</b> puts your picture on the model
         instead, with the <b>Map</b> menu as for the other shapes.
       </p>
+      <Shot name="fx-solid-model-file" alt="The File row of the Model shape with the mouse on Browse, and the Pivot menu and the Rotate and Spin settings below it" />
       <p>
         The Model shape has its own turn settings. <b>Rotate X</b>, <b>Rotate Y</b> and <b>Rotate
         Z</b> are angles that pose the model. <b>Spin X</b>, <b>Spin Y</b> and <b>Spin Z</b> turn it
