@@ -2,6 +2,7 @@ import { GROUP_PARAMS, NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, SPIRO_HOLE_KEYS, 
 import { KaleidoRenderer, LASER_BEAMS, type FrameValues, type ImageSource } from "./renderer";
 import type { TerrainData } from "./terrain";
 import { MANDEL_CENTERS } from "./submodes";
+import { TYPE_RATE, letterCount } from "./textLayer";
 import { audioLinkable, pushRange, pushedValue, type AudioSignal } from "./audio";
 import { copyVideo, cueVideo, releaseVideo, seekVideo, syncVideo, videoLoopPlan, videoLoopTime } from "./video";
 import { familyOf, intensityAt, positionAt, speedAt, travelAt, type Family, type SongScript } from "./songScript";
@@ -1107,6 +1108,7 @@ export class Engine {
     this.state.outlineTime = 0;
     this.state.outlineFlowTime = 0;
     this.state.outlineSnakeTime = 0;
+    this.state.textTime = 0;
     this.state.solidSpinTurns = 0;
     this.state.solidTumbleTurns = 0;
     this.state.outlineSpinTurns = 0;
@@ -1257,6 +1259,7 @@ export class Engine {
     this.state.outlineTime = (this.state.outlineTime + animated / Math.max(0.05, this.live("outlineDrawTime"))) % 1;
     this.state.outlineFlowTime = (this.state.outlineFlowTime + animated * this.live("outlineFlow") + 1) % 1;
     this.state.outlineSnakeTime += animated / Math.max(0.05, this.live("outlineDrawTime"));
+    this.stepText(animated);
     /* The 3D Object's spin and tumble are speeds in turns per minute, added up the same way. */
     this.state.solidSpinTurns = (this.state.solidSpinTurns + animated * this.live("solidSpin") / 60) % 1;
     this.state.solidTumbleTurns = (this.state.solidTumbleTurns + animated * this.live("solidTumble") / 60) % 1;
@@ -1375,6 +1378,27 @@ export class Engine {
     for (const listener of this.frameListeners) listener();
     this.frameId = this.requestFrame();
   };
+
+  /**
+   * The Text effect's own move (see TextMove). A scroll adds up the screens
+   * it moved, at Speed times SCROLL_RATE. Type on adds up letters, at Speed
+   * times TYPE_RATE; past the last letter the count goes on through Hold
+   * seconds, then starts again at none. Still text keeps its count.
+   */
+  private stepText(animated: number) {
+    const move = this.state.textMove;
+    if (move === 0) return;
+    const speed = Math.max(0, this.live("textSpeed"));
+    if (move !== 5) {
+      this.state.textTime += animated * speed;
+      return;
+    }
+    const rate = speed * TYPE_RATE;
+    const letters = letterCount(this.state.textContent);
+    const end = letters + Math.max(0, this.live("textHold")) * rate;
+    this.state.textTime += animated * rate;
+    if (this.state.textTime >= end || this.state.textTime < 0) this.state.textTime = 0;
+  }
 
   /** Draws the picture for the current time. "animated" and "elapsed" are the times since the last frame (see step). */
   draw(animated: number, elapsed: number) {
@@ -1867,6 +1891,37 @@ export class Engine {
       pictureY: this.live("pictureY"),
       pictureTurn: this.live("pictureTurn") * DEGREES,
       pictureKey: this.live("pictureKey"),
+      text: on.text ? this.live("textAmount") : 0,
+      textBlend: this.state.textBlend,
+      textLook: {
+        content: this.state.textContent,
+        font: this.state.textFont,
+        bold: this.state.textBold,
+        italic: this.state.textItalic,
+        align: this.state.textAlign,
+        fill: this.state.textFill,
+        color: this.state.textColor,
+        stops: this.state.textStops,
+        gradientAngle: this.live("textGradientAngle"),
+        letterSpacing: this.live("textLetterSpacing"),
+        lineSpacing: this.live("textLineSpacing"),
+        outline: this.live("textOutline"),
+        outlineColor: this.state.textOutlineColor,
+        glow: this.live("textGlow"),
+        glowSize: this.live("textGlowSize"),
+        glowColor: this.state.textGlowColor,
+        shadow: this.live("textShadow"),
+        shadowSoftness: this.live("textShadowSoftness"),
+        shadowDistance: this.live("textShadowDistance"),
+        shadowColor: this.state.textShadowColor,
+        shown: Infinity
+      },
+      textSize: this.live("textSize"),
+      textX: this.live("textX"),
+      textY: this.live("textY"),
+      textAngle: this.live("textAngle") * DEGREES,
+      textMove: this.state.textMove,
+      textTime: this.state.textTime,
       bloom: on.bloom ? this.live("bloomAmount") : 0,
       bloomThreshold: this.live("bloomThreshold"),
       bloomSoftness: this.live("bloomSoftness"),

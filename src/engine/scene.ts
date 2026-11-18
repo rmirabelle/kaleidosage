@@ -1,12 +1,13 @@
-import { CONTOUR_TONES, EASES, MAX_CUSTOM_SECONDS, MAX_GRADIENT_STOPS, PARAM_KEYS, REFERENCE_CYCLE, SPIRO_HOLE_KEYS, defaultColorStops, defaultCycleStops, defaultTerrainStops, defaultFxOrder, defaultOutlineStops, defaultMaskStops, defaultGradientStops, defaultPictureOrder, defaultShapeOrder, effectShows, lensFocal, type ContourTone, type Ease, type GradientStop, type GroupKey, type Param, type Params, type PlayState } from "./params";
+import { CONTOUR_TONES, EASES, MAX_CUSTOM_SECONDS, MAX_GRADIENT_STOPS, PARAM_KEYS, REFERENCE_CYCLE, SPIRO_HOLE_KEYS, createPlayState, defaultColorStops, defaultCycleStops, defaultTerrainStops, defaultFxOrder, defaultOutlineStops, defaultMaskStops, defaultGradientStops, defaultPictureOrder, defaultShapeOrder, effectShows, lensFocal, type ContourTone, type Ease, type GradientStop, type GroupKey, type Param, type Params, type PlayState } from "./params";
 import { isShapeStep, type FxStep } from "./renderer";
 import { readSound, soundList } from "./audio";
+import { MAX_TEXT_LENGTH } from "./textLayer";
 import { defaultSpiroWheels, readSpiroWheels } from "./spiro";
 
 export const SCENE_EXTENSION = "ksage";
 /** 6: the landscape effect is Terrain, and Camera views the flat picture with the same camera. 5: Terrain made the land, and Camera viewed it. 4: the camera Lens is a focal length in mm, not an angle. 3: reads as 2 (it changed only an effect that was later removed). 2: ranges share one cycle, and a custom range keeps its own seconds. 1: each range had its own rate, and a speed. */
 const SCENE_VERSION = 6;
-const GROUP_KEYS: GroupKey[] = ["warp", "map", "kaleidoscope", "blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "paths", "spiro", "outlines", "mask", "bubble", "bloom", "sharpen", "color", "levels"];
+const GROUP_KEYS: GroupKey[] = ["warp", "map", "kaleidoscope", "blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "paths", "spiro", "outlines", "mask", "bubble", "text", "bloom", "sharpen", "color", "levels"];
 
 /** Still images and legacy videos use base64. New videos refer to an embedded archive entry. */
 export type SceneImage = { type: string; data: string; video?: never }
@@ -82,7 +83,7 @@ export function serializeScene(params: Params, state: PlayState, { image, image2
     app: "KaleidoSage",
     version: SCENE_VERSION,
     params: savedParams,
-    state: { groups: { ...groups }, blendMode, tiling, warpMode, warpType, mapMode, foldMode, penroseShape, sphereShape, pinwheelShape, tunnelShape, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, viewBlend, skyColor, cameraRepeat, cameraHeightSource, cameraColors, cameraStops, sortOrder, particleBlend, particleShape, pictureBlend, particleStops: particleStops.map((stop) => ({ ...stop })), cyclesMove, cyclesBlend, laserBlend, pathShape, pathBlend, spiroWheels: spiroWheels.map((wheel) => ({ ...wheel })), spiroBlend, cyclesPaint, cyclesStops: cyclesStops.map((stop) => ({ ...stop })), solidShape, solidMap, solidWrap, solidPaint, solidBlend, solidKeep, mandelPlace, solidSpinTurns, solidTumbleTurns, outlineSpinTurns, outlineTumbleTurns, driverSource, driverMode, videoCrossfade, time, clock, warpTime, mandelFlowTime, driverTime, mapTravel, tunnelTravel, cameraX, cameraY, effects: [...fxOrder], shapeStack, pictureOrder, layerBlend: { ...layerBlend }, bubbleShape, bubbleBlend, bubbleShadow, outlineShape, outlineDraw, outlineStops: outlineStops.map((stop) => ({ ...stop })), maskMode, maskStops: maskStops.map((stop) => ({ ...stop })), colorFill, colorStops: colorStops.map((stop) => ({ ...stop })), outlineTime, outlineFlowTime, outlineSnakeTime, sound: soundList(state.sound) },
+    state: { groups: { ...groups }, blendMode, tiling, warpMode, warpType, mapMode, foldMode, penroseShape, sphereShape, pinwheelShape, tunnelShape, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, viewBlend, skyColor, cameraRepeat, cameraHeightSource, cameraColors, cameraStops, sortOrder, particleBlend, particleShape, pictureBlend, particleStops: particleStops.map((stop) => ({ ...stop })), cyclesMove, cyclesBlend, laserBlend, pathShape, pathBlend, spiroWheels: spiroWheels.map((wheel) => ({ ...wheel })), spiroBlend, cyclesPaint, cyclesStops: cyclesStops.map((stop) => ({ ...stop })), solidShape, solidMap, solidWrap, solidPaint, solidBlend, solidKeep, mandelPlace, solidSpinTurns, solidTumbleTurns, outlineSpinTurns, outlineTumbleTurns, driverSource, driverMode, videoCrossfade, time, clock, warpTime, mandelFlowTime, driverTime, mapTravel, tunnelTravel, cameraX, cameraY, effects: [...fxOrder], shapeStack, pictureOrder, layerBlend: { ...layerBlend }, bubbleShape, bubbleBlend, bubbleShadow, outlineShape, outlineDraw, outlineStops: outlineStops.map((stop) => ({ ...stop })), maskMode, maskStops: maskStops.map((stop) => ({ ...stop })), colorFill, colorStops: colorStops.map((stop) => ({ ...stop })), outlineTime, outlineFlowTime, outlineSnakeTime, ...textFields(state), textTime: state.textTime, sound: soundList(state.sound) },
     image,
     ...(image2 ? { image2 } : {})
   };
@@ -92,6 +93,32 @@ export function serializeScene(params: Params, state: PlayState, { image, image2
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const isNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+
+/** The Text effect's settings in the play state (not its move's progress), as a scene keeps them. */
+function textFields(state: PlayState) {
+  const { textContent, textFont, textBold, textItalic, textAlign, textFill, textColor, textStops, textOutlineColor, textGlowColor, textShadowColor, textMove, textBlend } = state;
+  return { textContent, textFont, textBold, textItalic, textAlign, textFill, textColor, textStops: textStops.map((stop) => ({ ...stop })), textOutlineColor, textGlowColor, textShadowColor, textMove, textBlend };
+}
+
+/** Reads the Text effect's settings; a scene from before Text (or with a bad value) gets the start-up value. */
+function readTextFields(saved: Record<string, unknown>, state: PlayState) {
+  const fresh = createPlayState();
+  const color = (value: unknown, fallback: string) => (typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback);
+  state.textContent = typeof saved.textContent === "string" ? saved.textContent.slice(0, MAX_TEXT_LENGTH) : fresh.textContent;
+  state.textFont = typeof saved.textFont === "string" && saved.textFont.trim() ? saved.textFont.slice(0, 200) : fresh.textFont;
+  state.textBold = typeof saved.textBold === "boolean" ? saved.textBold : fresh.textBold;
+  state.textItalic = typeof saved.textItalic === "boolean" ? saved.textItalic : fresh.textItalic;
+  state.textAlign = mode(saved.textAlign, [0, 1, 2] as const) ?? fresh.textAlign;
+  state.textFill = mode(saved.textFill, [0, 1] as const) ?? fresh.textFill;
+  state.textColor = color(saved.textColor, fresh.textColor);
+  state.textStops = readGradientStops(saved.textStops) ?? fresh.textStops;
+  state.textOutlineColor = color(saved.textOutlineColor, fresh.textOutlineColor);
+  state.textGlowColor = color(saved.textGlowColor, fresh.textGlowColor);
+  state.textShadowColor = color(saved.textShadowColor, fresh.textShadowColor);
+  state.textMove = mode(saved.textMove, [0, 1, 2, 3, 4, 5] as const) ?? fresh.textMove;
+  state.textBlend = mode(saved.textBlend, [0, 1, 2] as const) ?? fresh.textBlend;
+  state.textTime = isNumber(saved.textTime) && saved.textTime >= 0 ? saved.textTime : 0;
+}
 
 /** The effects that older scenes had as one, Final effects ("finish"), in their order. */
 const FINISH_PARTS: FxStep[] = ["sharpen", "color", "levels"];
@@ -447,6 +474,7 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   if (!isRecord(savedParams.bubbleInner)) params.bubbleInner.value = saved.bubbleShape === 6 ? 0.381966 / Math.cos(Math.PI / 5) : 1;
   state.bubbleBlend = mode(saved.bubbleBlend, [0, 1, 2, 3, 4, 5, 6, 7] as const) ?? 0;
   state.bubbleShadow = mode(saved.bubbleShadow, [0, 1] as const) ?? 0;
+  readTextFields(saved, state);
   state.maskStops = readGradientStops(saved.maskStops) ?? defaultMaskStops();
   if (isNumber(saved.outlineTime)) state.outlineTime = ((saved.outlineTime % 1) + 1) % 1;
   if (isNumber(saved.outlineSnakeTime)) state.outlineSnakeTime = saved.outlineSnakeTime;
@@ -488,7 +516,7 @@ export function sceneFingerprint(params: Params, state: PlayState, imageIds: rea
     return [value, low, high, on, ease ?? null, custom ?? false, custom ? seconds : null];
   });
   const { groups, blendMode, tiling, warpType, mapMode, foldMode, penroseShape, sphereShape, pinwheelShape, tunnelShape, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, viewBlend, skyColor, cameraRepeat, cameraHeightSource, cameraColors, cameraStops, sortOrder, particleBlend, particleShape, pictureBlend, particleStops, cyclesMove, cyclesBlend, laserBlend, pathShape, pathBlend, spiroWheels, spiroBlend, cyclesPaint, cyclesStops, solidShape, solidMap, solidWrap, solidPaint, solidBlend, solidKeep, mandelPlace, driverSource, driverMode, videoCrossfade, fxOrder, layerBlend, bubbleShape, bubbleBlend, bubbleShadow, outlineShape, outlineDraw, outlineStops, maskMode, maskStops, colorFill, colorStops } = state;
-  return JSON.stringify([settings, bubbleShape, bubbleBlend, bubbleShadow, outlineShape, outlineDraw, outlineStops, maskMode, maskStops, colorFill, colorStops, groups, blendMode, tiling, warpType, mapMode, foldMode, penroseShape, sphereShape, pinwheelShape, tunnelShape, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, viewBlend, skyColor, cameraRepeat, cameraHeightSource, cameraColors, cameraStops, sortOrder, particleBlend, particleShape, pictureBlend, particleStops, cyclesMove, cyclesBlend, laserBlend, pathShape, pathBlend, spiroWheels, spiroBlend, cyclesPaint, cyclesStops, solidShape, solidMap, solidWrap, solidPaint, solidBlend, solidKeep, mandelPlace, driverSource, driverMode, videoCrossfade, fxOrder, layerBlend, soundList(state.sound), imageIds]);
+  return JSON.stringify([settings, bubbleShape, bubbleBlend, bubbleShadow, outlineShape, outlineDraw, outlineStops, maskMode, maskStops, colorFill, colorStops, groups, blendMode, tiling, warpType, mapMode, foldMode, penroseShape, sphereShape, pinwheelShape, tunnelShape, blurMask, trailMode, overlayColor, colorBlend, trailColor, smearShape, contourTone, contourBlend, cameraBlend, viewBlend, skyColor, cameraRepeat, cameraHeightSource, cameraColors, cameraStops, sortOrder, particleBlend, particleShape, pictureBlend, particleStops, cyclesMove, cyclesBlend, laserBlend, pathShape, pathBlend, spiroWheels, spiroBlend, cyclesPaint, cyclesStops, solidShape, solidMap, solidWrap, solidPaint, solidBlend, solidKeep, mandelPlace, driverSource, driverMode, videoCrossfade, fxOrder, layerBlend, textFields(state), soundList(state.sound), imageIds]);
 }
 
 /** Uint8Array.fromBase64 and toBase64, in newer browsers; much faster for a large video. */

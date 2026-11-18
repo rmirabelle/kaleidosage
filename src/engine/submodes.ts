@@ -4,7 +4,7 @@ import type { BubbleShape, ColorFill, MaskMode, BlurMask, CycleMove, CyclePaint,
 /** The effects in the Add effect menu, in menu order, with the names their groups show. */
 export const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
   ["kaleidoscope", "Kaleidoscope"], ["map", "Algorithm"], ["warp", "Warp"], ["blur", "Blur"], ["trails", "Trails"],
-  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["driver", "Driver"], ["terrain", "Terrain"], ["camera", "Camera"], ["solid", "3D object"], ["sort", "Pixel sort"], ["particles", "Particles"], ["cycles", "Light cycles"], ["rays", "Light rays"], ["lasers", "Lasers"], ["paths", "Light paths"], ["spiro", "Spirograph"], ["outlines", "Light shapes"], ["picture", "Image or Video"], ["bloom", "Bloom"], ["sharpen", "Sharpen"], ["color", "Color"], ["levels", "Levels"], ["mask", "Opacity mask"], ["bubble", "Bubble"]
+  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["driver", "Driver"], ["terrain", "Terrain"], ["camera", "Camera"], ["solid", "3D object"], ["sort", "Pixel sort"], ["particles", "Particles"], ["cycles", "Light cycles"], ["rays", "Light rays"], ["lasers", "Lasers"], ["paths", "Light paths"], ["spiro", "Spirograph"], ["outlines", "Light shapes"], ["picture", "Image or Video"], ["bloom", "Bloom"], ["sharpen", "Sharpen"], ["color", "Color"], ["levels", "Levels"], ["mask", "Opacity mask"], ["bubble", "Bubble"], ["text", "Text"]
 ];
 
 /** An effect's name in the panel and the menus. */
@@ -194,7 +194,7 @@ export const COLOR_FILL_KEYS: Record<ColorFill, ParamKey[]> = {
   2: ["colorSize", "colorStretch", "colorTurn", "colorX", "colorY", "colorShift", "colorRepeat"]
 };
 
-export type SubmodeKey = "bubbleShape" | "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape" | "cyclesMove" | "cyclesPaint" | "solidShape" | "solidMap" | "maskMode" | "colorFill";
+export type SubmodeKey = "bubbleShape" | "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape" | "cyclesMove" | "cyclesPaint" | "solidShape" | "solidMap" | "maskMode" | "colorFill" | "textFill" | "textMove";
 
 /** One submode menu: the play-state setting it sets, its choices (value and name), and the sliders each choice shows. */
 export interface Submode {
@@ -211,6 +211,11 @@ export const OUTLINE_SHAPES = [[0, "Ring"], [1, "Square"], [2, "Triangle"], [3, 
 export const PATH_SHAPES = [[0, "Zigzag"], [1, "Square wave"], [2, "Greek key"], [3, "Spiral"], [4, "Flower"], [5, "Circuit"]] as const;
 /** The shapes of a Spirograph wheel (see SpiroShape). */
 export const SPIRO_SHAPES = [[0, "Circle"], [1, "Football"], [2, "Egg"], [3, "Triangle"], [4, "Square"], [5, "Cross"]] as const;
+/** The Text effect's Fill and Move menus (see TextFill and TextMove), and the sliders each shows. */
+export const TEXT_FILLS = [[0, "Solid"], [1, "Gradient"]] as const;
+export const TEXT_FILL_KEYS: Record<number, ParamKey[]> = { 0: [], 1: ["textGradientAngle"] };
+export const TEXT_MOVES = [[0, "Still"], [1, "Scroll left"], [2, "Scroll right"], [3, "Scroll up"], [4, "Scroll down"], [5, "Type on"]] as const;
+export const TEXT_MOVE_KEYS: Record<number, ParamKey[]> = { 0: [], 1: ["textSpeed"], 2: ["textSpeed"], 3: ["textSpeed"], 4: ["textSpeed"], 5: ["textSpeed", "textHold"] };
 export const TRAIL_MODES = [[1, "Mix (smoky)"], [2, "Lighten (glowing)"]] as const;
 export const DRIVER_SOURCES = [[0, "Caustics"], [1, "Smoke"], [2, "Ink"], [3, "Fire"], [4, "Ripples"], [5, "Video"]] as const;
 
@@ -237,7 +242,9 @@ export const SUBMODES: readonly Submode[] = [
   { stateKey: "solidMap", options: SOLID_MAPS, keys: SOLID_MAP_KEYS },
   { stateKey: "maskMode", options: MASK_MODES, keys: MASK_KEYS },
   { stateKey: "bubbleShape", options: BUBBLE_SHAPES, keys: BUBBLE_SHAPE_KEYS },
-  { stateKey: "colorFill", options: COLOR_FILLS, keys: COLOR_FILL_KEYS }
+  { stateKey: "colorFill", options: COLOR_FILLS, keys: COLOR_FILL_KEYS },
+  { stateKey: "textFill", options: TEXT_FILLS, keys: TEXT_FILL_KEYS },
+  { stateKey: "textMove", options: TEXT_MOVES, keys: TEXT_MOVE_KEYS }
 ];
 
 /** The submode menu that shows or hides the slider, or undefined for a slider that always shows. */

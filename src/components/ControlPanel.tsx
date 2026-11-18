@@ -12,10 +12,13 @@ import { DEFAULT_LAND_KM, loadTerrain, randomLandPlace } from "../lib/terrain";
 import type { TerrainData } from "../engine/terrain";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
-import { PATH_SHAPES, BUBBLE_SHAPES, BUBBLE_SHAPE_KEYS, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, PENROSE_SHAPES, SPHERE_SHAPES, PINWHEEL_SHAPES, TUNNEL_SHAPES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_PAINTS, SOLID_WRAPS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote, uniqueTo } from "../engine/submodes";
+import { TEXT_FILL_KEYS, TEXT_MOVES, TEXT_MOVE_KEYS, PATH_SHAPES, BUBBLE_SHAPES, BUBBLE_SHAPE_KEYS, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, PENROSE_SHAPES, SPHERE_SHAPES, PINWHEEL_SHAPES, TUNNEL_SHAPES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_PAINTS, SOLID_WRAPS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote, uniqueTo } from "../engine/submodes";
 import type { BlurMask, BubbleShape, ColorFill, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, MaskMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidPaint, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { SpiroWheels } from "./SpiroWheels";
+import { FontPicker } from "./FontPicker";
+import { ColorPicker } from "./ColorPicker";
+import { MAX_TEXT_LENGTH, type TextAlign, type TextFill } from "../engine/textLayer";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ContextMenu } from "./ContextMenu";
 import { Dropdown } from "./Dropdown";
@@ -318,6 +321,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       outlines: () => start("outlineAmount", 1),
       mask: () => start("maskAmount", 1),
       bubble: () => start("bubbleAmount", 1),
+      text: () => start("textAmount", 1),
       picture: () => {
         start("pictureAmount", 1);
         /* An overlay shows nothing until it has an image or a video. */
@@ -462,6 +466,11 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     bubble: (grip) => (
       <Group engine={engine} group="bubble" title="Bubble" grip={grip} {...accordion("bubble")}>
         <BubbleSection engine={engine} row={row} />
+      </Group>
+    ),
+    text: (grip) => (
+      <Group engine={engine} group="text" title="Text" grip={grip} {...accordion("text")}>
+        <TextSection engine={engine} row={row} />
       </Group>
     ),
     mask: (grip) => (
@@ -914,7 +923,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "penroseShape" | "sphereShape" | "pinwheelShape" | "tunnelShape" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "bubbleShape" | "bubbleBlend" | "bubbleShadow" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "pathShape" | "pathBlend" | "spiroBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidWrap" | "solidPaint" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "penroseShape" | "sphereShape" | "pinwheelShape" | "tunnelShape" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "bubbleShape" | "bubbleBlend" | "bubbleShadow" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "pathShape" | "pathBlend" | "spiroBlend" | "textMove" | "textBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidWrap" | "solidPaint" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange, child }: {
@@ -1305,6 +1314,86 @@ function ColorSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =>
         {childRows(uniqueTo(COLOR_FILL_KEYS, fill), row)}
         <SplitRows keys={[...without(COLOR_FILL_KEYS[fill], uniqueTo(COLOR_FILL_KEYS, fill)), ...COLOR_KEYS]} row={row} blend={<ColorBlend engine={engine} />} />
       </Fragment>
+    </>
+  );
+}
+
+/** The Text effect's sliders, in panel order; Gradient angle, Speed and Hold show only for their choices (see TEXT_FILL_KEYS and TEXT_MOVE_KEYS). */
+const TEXT_KEYS: ParamKey[] = ["textSize", "textLetterSpacing", "textLineSpacing", "textOutline", "textGlow", "textGlowSize", "textShadow", "textShadowSoftness", "textShadowDistance", "textX", "textY", "textAngle", "textAmount"];
+const TEXT_ALIGNS: readonly (readonly [TextAlign, string, string])[] = [[0, "Left", "Line up the lines at the left"], [1, "Center", "Center each line"], [2, "Right", "Line up the lines at the right"]];
+
+/**
+ * The Text effect: the words, the font, bold, italic and how the lines
+ * line up, the fill (one color or a gradient), the move (still, a scroll or
+ * Type on), then the sliders. The outline, glow and shadow colors are
+ * swatches on their sliders (see useParamRows). The words go to the engine
+ * as they are typed.
+ */
+function TextSection({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
+  const state = engine.state;
+  const [content, setContent] = useState(state.textContent);
+  const [font, setFont] = useState(state.textFont);
+  const [bold, setBold] = useState(state.textBold);
+  const [italic, setItalic] = useState(state.textItalic);
+  const [align, setAlign] = useState<TextAlign>(state.textAlign);
+  const [fill, setFill] = useState<TextFill>(state.textFill);
+  const [color, setColor] = useState(state.textColor);
+  const [move, setMove] = useState(state.textMove);
+  const pickFill = (next: TextFill) => {
+    state.textFill = next;
+    setFill(next);
+  };
+  return (
+    <>
+      <div className="panel-select-row panel-select-named text-content-row">
+        <span className="panel-row-name">Text</span>
+        <textarea
+          className="text-content"
+          value={content}
+          rows={Math.min(6, Math.max(2, content.split("\n").length))}
+          maxLength={MAX_TEXT_LENGTH}
+          spellCheck={false}
+          aria-label="The words to show"
+          data-tip="The words to show. Enter starts a new line."
+          onChange={(event) => {
+            state.textContent = event.target.value;
+            setContent(event.target.value);
+          }}
+        />
+      </div>
+      <div className="panel-select-row panel-select-named">
+        <span className="panel-row-name">Font</span>
+        <FontPicker
+          value={font}
+          onChange={(next) => {
+            state.textFont = next;
+            setFont(next);
+          }}
+        />
+      </div>
+      <div className="panel-select-row panel-select-named cycles-paint-row">
+        <span className="panel-row-name">Style</span>
+        <div className="panel-buttons">
+          <button className={`panel-button text-only text-style-bold ${bold ? "active" : ""}`} aria-pressed={bold} data-tip="Bold letters" onClick={() => { state.textBold = !bold; setBold(!bold); }}>B</button>
+          <button className={`panel-button text-only text-style-italic ${italic ? "active" : ""}`} aria-pressed={italic} data-tip="Italic letters" onClick={() => { state.textItalic = !italic; setItalic(!italic); }}>I</button>
+          {TEXT_ALIGNS.map(([value, name, tip]) => (
+            <button key={name} className={`panel-button text-only ${align === value ? "active" : ""}`} aria-pressed={align === value} data-tip={tip} onClick={() => { state.textAlign = value; setAlign(value); }}>{name}</button>
+          ))}
+        </div>
+      </div>
+      <div className="panel-select-row panel-select-named cycles-paint-row">
+        <span className="panel-row-name">Fill</span>
+        <div className="panel-buttons">
+          <button className={`panel-button text-only ${fill === 0 ? "active" : ""}`} aria-pressed={fill === 0} data-tip="One color" onClick={() => pickFill(0)}>Solid</button>
+          <button className={`panel-button text-only ${fill === 1 ? "active" : ""}`} aria-pressed={fill === 1} data-tip="A gradient across the text, at Gradient angle" onClick={() => pickFill(1)}>Gradient</button>
+        </div>
+        {fill === 0 && <ColorPicker color={color} label="Text color" onChange={(next) => { state.textColor = next; setColor(next); }} />}
+      </div>
+      {fill === 1 && <GradientEditor engine={engine} stateKey="textStops" ends={["Start", "End"]} />}
+      {fill === 1 && childRows(TEXT_FILL_KEYS[1], row)}
+      <ModeSelect engine={engine} stateKey="textMove" options={TEXT_MOVES} name="Move" onChange={setMove} />
+      <Fragment key={move}>{childRows(TEXT_MOVE_KEYS[move] ?? [], row)}</Fragment>
+      <SplitRows keys={TEXT_KEYS} row={row} blend={<ModeSelect engine={engine} stateKey="textBlend" options={PICTURE_BLENDS} name="Blend" />} />
     </>
   );
 }

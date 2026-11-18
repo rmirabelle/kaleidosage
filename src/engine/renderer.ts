@@ -2,6 +2,7 @@ import { GpuTimer } from "./gpuTimer";
 import { CycleSim, INSTANCE_FLOATS, type CycleSettings, type Picture } from "./cycles";
 import { pathSegments, writePathInstances, type PathShape } from "./paths";
 import { spiroSegments, writeSpiroInstances, type SpiroWheel } from "./spiro";
+import { SCROLL_RATE, TextPicture, letterCount, type TextLook, type TextMove } from "./textLayer";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
 import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, BUBBLE_SHADER, MASK_SHADER, OUTLINE_SHADER, OUTLINE_GLOW_SHADER, OUTLINE_LINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, SOLID_MESH_VERTEX, SOLID_MESH_SHADER, SOLID_BACK_SHADER, SOLID_SHADE_BLUR_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 import { MESH_SHAPES, flatMesh } from "./flatMesh";
@@ -35,7 +36,7 @@ export type ShapeStep = "warp" | "map" | "kaleidoscope";
 /** The kind of warp: noise, ripple, waves, swirl, bulge and pinch, cells. */
 export type WarpType = 0 | 1 | 2 | 3 | 4 | 5;
 /** The steps that change the drawn picture. The user sets their order. */
-export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "paths" | "spiro" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble";
+export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "paths" | "spiro" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble" | "text";
 /**
  * Any effect step. The user sets one order for all of them. Shape steps
  * that are next to each other run in one pass; a shape step after a
@@ -43,7 +44,7 @@ export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | 
  */
 export type FxStep = ShapeStep | PictureStep;
 export const SHAPE_STEPS: readonly ShapeStep[] = ["warp", "map", "kaleidoscope"];
-export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble"];
+export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble", "text"];
 
 /** Sharpen, Color and Levels, in the order FINISH_SHADER applies them (see drawFinish). */
 type FinishPart = "sharpen" | "color" | "levels";
@@ -947,6 +948,22 @@ export interface FrameValues {
   /** The black key (0 = off): parts darker than this become clear. */
   pictureKey: number;
   /**
+   * Text (see TextPicture): opacity (0 = off), the blend, what the text
+   * shows, the font size (one line's height, in screen heights), the center
+   * (a part of the screen from its center) and the turn in radians. "textMove"
+   * scrolls it or types it on; "textTime" is its progress (screens scrolled
+   * at SCROLL_RATE, or letters typed).
+   */
+  text: number;
+  textBlend: PictureBlend;
+  textLook: TextLook;
+  textSize: number;
+  textX: number;
+  textY: number;
+  textAngle: number;
+  textMove: TextMove;
+  textTime: number;
+  /**
    * Bloom (see BLOOM_SHADER): strength (0 = off), the brightness where the
    * glow starts and how gradually, and its size (a mip level at 1080p).
    */
@@ -1573,6 +1590,7 @@ export class KaleidoRenderer {
       mask: v.mask > 0,
       bubble: v.bubble > 0,
       picture: v.picture > 0 && this.pictureSource !== null,
+      text: v.text > 0 && v.textLook.content.trim().length > 0,
       bloom: v.bloom > 0,
       sharpen: v.sharpen > 0,
       color: v.overlayOpacity > 0,
@@ -1719,6 +1737,7 @@ export class KaleidoRenderer {
         else if (step === "mask") this.drawMask(v, source, target, width, height);
         else if (step === "bubble") this.drawBubble(v, source, target, width, height);
         else if (step === "picture") this.drawPicture(v, source, target, width, height);
+        else if (step === "text") this.drawText(v, source, target, width, height);
         else if (step === "sort") this.drawSort(v, source, target, width, height);
         else if (step === "bloom") this.drawBloom(v, source, target, width, height);
         if (target) source = target.texture;
@@ -3529,6 +3548,66 @@ export class KaleidoRenderer {
     gl.uniform2f(p.uniforms.u_offset, v.pictureX, v.pictureY);
     gl.uniform1f(p.uniforms.u_turn, v.pictureTurn);
     gl.uniform1f(p.uniforms.u_key, Math.max(0, v.pictureKey ?? 0));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /** The Text effect's picture (see TextPicture) and its texture. */
+  private readonly textPicture = new TextPicture();
+  private textTexture: WebGLTexture | null = null;
+
+  /**
+   * Text: the words, drawn by the canvas (see TextPicture), over the picture
+   * made so far with PICTURE_SHADER. The canvas draws at a step of the font
+   * size on the screen, and the shader scales it to the exact Size. A scroll
+   * moves the text from just past one edge of the screen to just past the
+   * other, then again; Type on shows "textTime" letters.
+   */
+  private drawText(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+    const gl = this.gl;
+    const picture = this.textPicture;
+    const typing = v.textMove === 5;
+    const look = typing ? { ...v.textLook, shown: Math.min(letterCount(v.textLook.content), Math.floor(v.textTime)) } : v.textLook;
+    picture.update(look, Math.max(0.001, v.textSize) * height);
+    if (!this.textTexture) this.textTexture = gl.createTexture()!;
+    if (picture.take()) this.uploadPicture(this.textTexture, picture.canvas, true);
+    const layerWidth = picture.canvas.width;
+    const layerHeight = picture.canvas.height;
+    const layerAspect = layerWidth / layerHeight;
+    const aspect = width / height;
+    /* The layer's height on the screen, in screen heights: its lines are Size tall. */
+    const screenHeight = layerHeight / picture.pixels * Math.max(0.001, v.textSize);
+    const screenWidth = screenHeight * layerAspect / aspect;
+    let x = v.textX;
+    let y = v.textY;
+    if (v.textMove >= 1 && v.textMove <= 4) {
+      const across = v.textMove <= 2;
+      const length = across ? 1 + screenWidth : 1 + screenHeight;
+      const travel = ((v.textTime * SCROLL_RATE) % length + length) % length;
+      const start = length / 2;
+      /* Left and down start past the right and top edges; right and up start past the left and bottom. */
+      const place = v.textMove === 1 || v.textMove === 4 ? start - travel : travel - start;
+      if (across) x += place;
+      else y += place;
+    }
+    const p = this.pictureProgram;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(p.program);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.textTexture);
+    gl.uniform1i(p.uniforms.u_layer, 1);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.uniform1i(p.uniforms.u_tex, 0);
+    gl.uniform2f(p.uniforms.u_res, width, height);
+    gl.uniform1f(p.uniforms.u_opacity, Math.min(1, Math.max(0, v.text)));
+    gl.uniform1i(p.uniforms.u_blend, v.textBlend);
+    gl.uniform1f(p.uniforms.u_layerAspect, layerAspect);
+    /* PICTURE_SHADER's Size 1 is the screen's height, or more for a layer narrower than the screen. */
+    gl.uniform1f(p.uniforms.u_size, screenHeight / Math.max(1, aspect / layerAspect));
+    gl.uniform2f(p.uniforms.u_offset, x, y);
+    gl.uniform1f(p.uniforms.u_turn, v.textAngle);
+    gl.uniform1f(p.uniforms.u_key, 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 

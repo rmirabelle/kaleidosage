@@ -962,6 +962,22 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 /* A named part inside an effect's own settings (Terrain's Camera): the same band, in grey. */
 .panel-sub-head { padding: 6px 14px 5px; color: #a9afbd; background: #1b1e25; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; cursor: default; }
 .gradient-editor { position: relative; flex: 1; min-width: 0; height: 30px; margin: 0 6px; }
+/* The Text effect (see TextSection): the words box, the Style buttons, and the Font list with its search box. */
+.text-content-row { align-items: flex-start; }
+.text-content-row > .panel-row-name { padding-top: 6px; }
+.text-content { flex: 1; min-width: 0; padding: 5px 8px; border: 1px solid #3e4a6c; border-radius: 6px; color: #e8eaf0; background: #1b2438; font: inherit; font-size: 13px; line-height: 1.35; resize: vertical; }
+.text-content:focus { border-color: var(--accent); outline: none; }
+.text-style-bold { font-weight: 800; }
+.text-style-italic { font-style: italic; font-family: Georgia, serif; }
+.cycles-paint-row .color-swatch { flex: 0 0 auto; margin-top: 0; }
+.font-picker-button span { color: #e8eaf0; }
+.toolbar-dropdown.dropdown-list.font-picker-list { position: fixed; display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.font-picker-search { display: flex; flex: 0 0 auto; align-items: center; gap: 7px; padding: 7px 10px; border-bottom: 1px solid #3a3f4d; color: var(--muted); }
+.font-picker-search input { flex: 1; min-width: 0; padding: 3px 0; border: 0; color: #fff; background: transparent; font: inherit; font-size: 12px; outline: none; }
+.font-picker-names { flex: 1; min-height: 0; padding: 5px; overflow-y: auto; }
+.font-picker-names .toolbar-dropdown-item.active { color: #fff; background: rgba(75,118,247,.3); }
+.font-picker-names .toolbar-dropdown-item.selected { background: rgba(75,118,247,.45); }
+.font-picker-none { padding: 8px 9px; color: var(--muted); font-size: 12px; }
 /* The Spirograph's wheels (see SpiroWheels): a card for each wheel, with a picture of the wheel at the left and its settings at the right. The two hole sliders come after each card. */
 .spiro-wheel { display: flex; align-items: center; gap: 10px; margin: 8px 14px 4px; padding: 6px; border: 1px solid var(--border); border-radius: 6px; background: #1b1e25; }
 .spiro-wheel-picture { flex: 0 0 auto; width: 84px; height: 84px; border-radius: 4px; background: #101218; cursor: crosshair; touch-action: none; }

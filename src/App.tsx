@@ -2624,7 +2624,7 @@ export default function App() {
         return;
       }
       /* "?" opens the keyboard shortcuts sheet, also on the start screen, but not while typing in a text field. */
-      if (event.key === "?" && !(event.target instanceof HTMLInputElement && event.target.type === "text")) {
+      if (event.key === "?" && !((event.target instanceof HTMLInputElement && event.target.type === "text") || event.target instanceof HTMLTextAreaElement)) {
         event.preventDefault();
         setShortcutsOpen(true);
         return;
@@ -2648,7 +2648,7 @@ export default function App() {
         const key = event.key.toLowerCase();
         const target = event.target as HTMLElement | null;
         /* Text fields keep their own undo. */
-        const typing = target instanceof HTMLInputElement && target.type === "text";
+        const typing = (target instanceof HTMLInputElement && target.type === "text") || target instanceof HTMLTextAreaElement;
         const historyAction = { z: event.shiftKey ? redo : undo, y: redo }[key];
         if (historyAction && !typing) {
           event.preventDefault();
@@ -2672,7 +2672,7 @@ export default function App() {
       }
       const target = event.target as HTMLElement | null;
       /* Menus and text fields keep their own keys. */
-      if (target?.tagName === "SELECT" || (target instanceof HTMLInputElement && target.type === "text")) return;
+      if (target?.tagName === "SELECT" || (target instanceof HTMLInputElement && target.type === "text") || target instanceof HTMLTextAreaElement) return;
       const key = event.key.toLowerCase();
       /* The number keys 1 to 9 select the tab with that number, with a crossfade. */
       if (/^[1-9]$/.test(key)) {

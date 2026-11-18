@@ -2,6 +2,7 @@ import type { PenroseShape, PinwheelShape, TunnelShape, SphereShape, BlendMode, 
 
 import type { PathShape } from "./paths";
 import { MAX_SPIRO_WHEELS, defaultSpiroWheels, randomSpiroWheels, type SpiroWheelSpec } from "./spiro";
+import { DEFAULT_TEXT, type TextAlign, type TextFill, type TextMove } from "./textLayer";
 
 export const PARAM_KEYS = [
   "cycle",
@@ -39,7 +40,8 @@ export const PARAM_KEYS = [
   "bubbleAmount", "bubbleSize", "bubbleBackground", "bubbleDepth", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments", "bubbleInner", "bubbleShadowStrength", "bubbleShadowWidth", "bubbleShadowSoftness", "bubbleRotation",
   "pathAmount", "pathArms", "pathSteps", "pathStep", "pathTurn", "pathRadius", "pathWidth", "pathDraw", "pathFade", "pathHue", "pathRainbow", "pathPicture", "pathBackground", "pathRotation", "pathX", "pathY", "pathYaw", "pathTilt",
   "spiroAmount", "spiroRing", "spiroSize", "spiroWidth", "spiroDraw", "spiroPicture", "spiroBackground", "spiroRotation", "spiroYaw", "spiroTilt", "spiroX", "spiroY",
-  "spiroHoleX1", "spiroHoleX2", "spiroHoleX3", "spiroHoleX4", "spiroHoleX5", "spiroHoleX6", "spiroHoleY1", "spiroHoleY2", "spiroHoleY3", "spiroHoleY4", "spiroHoleY5", "spiroHoleY6"
+  "spiroHoleX1", "spiroHoleX2", "spiroHoleX3", "spiroHoleX4", "spiroHoleX5", "spiroHoleX6", "spiroHoleY1", "spiroHoleY2", "spiroHoleY3", "spiroHoleY4", "spiroHoleY5", "spiroHoleY6",
+  "textAmount", "textSize", "textX", "textY", "textAngle", "textLetterSpacing", "textLineSpacing", "textGradientAngle", "textOutline", "textGlow", "textGlowSize", "textShadow", "textShadowSoftness", "textShadowDistance", "textSpeed", "textHold"
 ] as const;
 export type ParamKey = typeof PARAM_KEYS[number];
 
@@ -279,7 +281,7 @@ export type Params = Record<ParamKey, Param>;
 export type ContourTone = "hue" | "black" | "white";
 export const CONTOUR_TONES: readonly ContourTone[] = ["hue", "black", "white"];
 
-export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "paths" | "spiro" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble";
+export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "paths" | "spiro" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble" | "text";
 
 export interface PlayState {
   /** Which groups are on. A group that is off has no effect, but keeps its settings. */
@@ -419,6 +421,28 @@ export interface PlayState {
   bubbleShape: BubbleShape;
   bubbleBlend: LayerBlend;
   bubbleShadow: BubbleShadow;
+  /**
+   * Text (see textLayer.ts): the words (lines split at line breaks), the
+   * font family, bold and italic, how the lines line up, the fill (one color
+   * or a gradient), the outline, glow and shadow colors, how it moves on its
+   * own, and how it goes onto the picture (Normal, Screen, Add). "textTime" is
+   * the move's progress: screens scrolled at SCROLL_RATE, or letters typed
+   * (past the last letter it counts on through the Hold).
+   */
+  textContent: string;
+  textFont: string;
+  textBold: boolean;
+  textItalic: boolean;
+  textAlign: TextAlign;
+  textFill: TextFill;
+  textColor: string;
+  textStops: GradientStop[];
+  textOutlineColor: string;
+  textGlowColor: string;
+  textShadowColor: string;
+  textMove: TextMove;
+  textBlend: PictureBlend;
+  textTime: number;
   /**
    * 3D Object (see SOLID_SHADER): the shape preset, how the picture goes onto
    * it (wrap, project, mirror), how the shape combines with the picture
@@ -1137,6 +1161,31 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   bubbleShadowWidth: { label: "Shadow width", min: 0, max: 0.5, step: 0.005, value: 0.08, drift: "wave", low: 0.03, high: 0.15, on: false },
   bubbleShadowSoftness: { label: "Shadow softness", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0.3, high: 1, on: false },
   /**
+   * Text (see textLayer.ts): Size is one line's height in screen heights.
+   * X and Y move the text's center (a part of the screen from its center),
+   * and Angle turns it. Letter spacing, Outline, Glow size, Shadow softness
+   * and Shadow distance are parts of the font size (em). Speed is screens a
+   * second times SCROLL_RATE for a scroll, or letters a second times
+   * TYPE_RATE for Type on; Hold is how long all the letters stay before
+   * Type on starts again.
+   */
+  textAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
+  textSize: { label: "Size", min: 0.02, max: 1, step: 0.005, value: 0.15, drift: "wave", low: 0.12, high: 0.2, on: false },
+  textX: { label: "X", min: -0.75, max: 0.75, step: 0.005, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
+  textY: { label: "Y", min: -0.75, max: 0.75, step: 0.005, value: 0, drift: "wave", low: -0.1, high: 0.1, on: false },
+  textAngle: { label: "Angle", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "spin", low: -180, high: 180, on: false },
+  textLetterSpacing: { label: "Letter spacing", min: -0.2, max: 1, step: 0.005, value: 0, drift: "wave", low: 0, high: 0.3, on: false },
+  textLineSpacing: { label: "Line spacing", min: 0.6, max: 3, step: 0.01, value: 1.15, drift: "wave", low: 1, high: 1.5, on: false },
+  textGradientAngle: { label: "Gradient angle", min: 0, max: 360, step: 1, value: 90, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  textOutline: { label: "Outline", min: 0, max: 0.25, step: 0.002, value: 0, drift: "wave", low: 0.02, high: 0.06, on: false },
+  textGlow: { label: "Glow", min: 0, max: 2, step: 0.01, value: 0, drift: "wave", low: 0.6, high: 1.2, on: false },
+  textGlowSize: { label: "Glow size", min: 0.02, max: 1, step: 0.005, value: 0.3, drift: "wave", low: 0.2, high: 0.4, on: false },
+  textShadow: { label: "Shadow", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.4, high: 0.8, on: false },
+  textShadowSoftness: { label: "Shadow softness", min: 0, max: 0.5, step: 0.005, value: 0.08, drift: "wave", low: 0.04, high: 0.15, on: false },
+  textShadowDistance: { label: "Shadow distance", min: 0, max: 0.5, step: 0.005, value: 0.08, drift: "wave", low: 0.04, high: 0.15, on: false },
+  textSpeed: { label: "Speed", min: 0.05, max: 5, step: 0.01, scale: "log", value: 1, drift: "wave", low: 0.5, high: 1.5, on: false },
+  textHold: { label: "Hold", min: 0, max: 20, step: 0.1, value: 3, unit: " s", drift: "wave", low: 1, high: 5, on: false },
+  /**
    * Image or Video (see PICTURE_SHADER): an image or a video of the scene's own
    * over the picture made so far, by its blend (pictureBlend). Size 1
    * covers the screen and keeps the media's shape; X and Y move its center,
@@ -1220,7 +1269,7 @@ export function createParams(): Params {
 
 /** The start-up orders: the fold, then the map bends the folded picture, then the warp; and blur, trails, time smear, contours, relief, driver, camera, 3D object, pixel sort, particles, light cycles, light rays, lasers, bloom, final effects. */
 export const defaultShapeOrder = (): ShapeStep[] => ["kaleidoscope", "map", "warp"];
-export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble"];
+export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble", "text"];
 export const defaultFxOrder = (): FxStep[] => [...defaultShapeOrder(), ...defaultPictureOrder()];
 
 /**
@@ -1272,6 +1321,7 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
     case "outlines": return used("outlineAmount");
     case "mask": return used("maskAmount");
     case "bubble": return used("bubbleAmount");
+    case "text": return used("textAmount") && state.textContent.trim().length > 0;
     case "picture": return used("pictureAmount");
     case "bloom": return used("bloomAmount");
     case "sharpen": return used("sharpen");
@@ -1284,9 +1334,9 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
 export function createPlayState(): PlayState {
   return {
     /* No effect is in the list at start-up, so every effect group is off. */
-    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false },
-    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, tunnelTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, penroseShape: 0, sphereShape: 2, pinwheelShape: 1, tunnelShape: 0, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, pathShape: 2, pathBlend: 7, spiroWheels: defaultSpiroWheels(), spiroBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false },
+    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false },
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, tunnelTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, penroseShape: 0, sphereShape: 2, pinwheelShape: 1, tunnelShape: 0, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, pathShape: 2, pathBlend: 7, spiroWheels: defaultSpiroWheels(), spiroBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, textContent: DEFAULT_TEXT, textFont: "Segoe UI", textBold: true, textItalic: false, textAlign: 1, textFill: 0, textColor: "#ffffff", textStops: defaultTextStops(), textOutlineColor: "#000000", textGlowColor: "#18e0ff", textShadowColor: "#000000", textMove: 0, textBlend: 0, textTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidKeep: false, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1419,6 +1469,8 @@ export const defaultTerrainStops = (): GradientStop[] => [
 /** Light shapes' colors along the outline: the same color at both ends, so no seam shows at the top. */
 export const defaultOutlineStops = (): GradientStop[] => [{ at: 0, color: "#18e0ff" }, { at: 0.5, color: "#ff2bd6" }, { at: 1, color: "#18e0ff" }];
 /** The Opacity mask's grays: dark pixels clear, bright pixels stay, with a soft step between. */
+/** The Text effect's gradient: cyan at the top to magenta at the bottom (Gradient angle 90). */
+export const defaultTextStops = (): GradientStop[] => [{ at: 0, color: "#18e0ff" }, { at: 1, color: "#ff2bd6" }];
 export const defaultMaskStops = (): GradientStop[] => [{ at: 0, color: "#000000" }, { at: 0.2, color: "#000000" }, { at: 0.6, color: "#ffffff" }, { at: 1, color: "#ffffff" }];
 
 /** The Color effect's gradient: from the overlay's orange through pink to blue. */
@@ -1730,6 +1782,19 @@ const GROUP_MODES: Partial<Record<GroupKey, (state: PlayState, fresh: PlayState)
     state.bubbleBlend = fresh.bubbleBlend;
     state.bubbleShadow = fresh.bubbleShadow;
   },
+  /* A new Text keeps the words and the font: they are the user's, and typing them again would be work. */
+  text: (state, fresh) => {
+    state.textAlign = fresh.textAlign;
+    state.textFill = fresh.textFill;
+    state.textColor = fresh.textColor;
+    state.textStops = fresh.textStops;
+    state.textOutlineColor = fresh.textOutlineColor;
+    state.textGlowColor = fresh.textGlowColor;
+    state.textShadowColor = fresh.textShadowColor;
+    state.textMove = fresh.textMove;
+    state.textBlend = fresh.textBlend;
+    state.textTime = 0;
+  },
   driver: (state, fresh) => {
     state.driverSource = fresh.driverSource;
     state.driverMode = fresh.driverMode;
@@ -1804,6 +1869,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   outlines: ["outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineInner", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"],
   mask: ["maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY"],
   bubble: ["bubbleAmount", "bubbleBackground", "bubbleDepth", "bubbleSize", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments", "bubbleInner", "bubbleShadowStrength", "bubbleShadowWidth", "bubbleShadowSoftness", "bubbleRotation"],
+  text: ["textAmount", "textSize", "textX", "textY", "textAngle", "textLetterSpacing", "textLineSpacing", "textGradientAngle", "textOutline", "textGlow", "textGlowSize", "textShadow", "textShadowSoftness", "textShadowDistance", "textSpeed", "textHold"],
   bloom: ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"],
   sharpen: ["sharpen", "sharpenRadius"],
   color: ["overlayOpacity", "colorAngle", "colorShift", "colorRepeat", "colorSize", "colorStretch", "colorTurn", "colorX", "colorY"],
@@ -1836,6 +1902,7 @@ const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   lasers: ["laserBlend"],
   paths: ["pathShape", "pathBlend"],
   spiro: ["spiroWheels", "spiroBlend"],
+  text: ["textColor", "textStops", "textGlowColor"],
   solid: ["solidShape", "solidMap", "solidWrap", "solidBlend"],
   driver: ["driverSource", "driverMode"],
   color: ["overlayColor", "colorBlend", "colorFill", "colorStops"]
@@ -1889,7 +1956,7 @@ export function removeSpiroWheel(params: Params, state: PlayState, index: number
 }
 
 /** The settings named Opacity: Randomize shows every effect fully. */
-const FULL_OPACITY: readonly ParamKey[] = ["warpOpacity", "mapOpacity", "foldOpacity", "smearAmount", "contourOpacity", "cameraAmount", "viewAmount", "sortAmount", "particleAmount", "cyclesAmount", "solidAmount", "driverAmount", "laserOpacity", "bubbleAmount", "pictureAmount", "pathAmount", "spiroAmount"];
+const FULL_OPACITY: readonly ParamKey[] = ["warpOpacity", "mapOpacity", "foldOpacity", "smearAmount", "contourOpacity", "cameraAmount", "viewAmount", "sortAmount", "particleAmount", "cyclesAmount", "solidAmount", "driverAmount", "laserOpacity", "bubbleAmount", "pictureAmount", "pathAmount", "spiroAmount", "textAmount"];
 
 /**
  * The chance that Randomize puts each effect in the list. Blur looks the
@@ -1905,7 +1972,9 @@ const EFFECT_CHANCE: Record<FxStep, number> = {
   /* A mask hides part of the picture, which Randomize should not do on its own. */
   mask: 0,
   /* A bubble leaves black around its rim, which Randomize should not do on its own. */
-  bubble: 0
+  bubble: 0,
+  /* Text needs words of the user's own. */
+  text: 0
 };
 
 /** The most effects that Randomize puts in the list, locked ones and Light shapes too, so a random scene does not overload the graphics card. */
@@ -2334,5 +2403,12 @@ function randomizeAll(params: Params, state?: PlayState) {
   for (const [holeX, holeY] of SPIRO_HOLE_KEYS) {
     set(holeX, rand(0.3, 0.85), rand(0, 0.25));
     set(holeY, Math.random() < 0.6 ? 0 : rand(-0.5, 0.5), rand(0, 0.25));
+  }
+  /* The Text's colors, last for the same reason; its words, font and sizes stay. */
+  if (state && !state.locks.text) {
+    const hue = rand(0, 360);
+    state.textColor = hslToHex(hue, rand(0.6, 1), rand(0.55, 0.75));
+    state.textGlowColor = hslToHex((hue + rand(-40, 40) + 360) % 360, 1, 0.55);
+    state.textStops = [{ at: 0, color: hslToHex(hue, 1, 0.6) }, { at: 1, color: hslToHex((hue + rand(60, 180)) % 360, 1, 0.6) }];
   }
 }

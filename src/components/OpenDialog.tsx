@@ -154,6 +154,7 @@ const EFFECT_GROUPS: [GroupKey, string][] = [
   ["color", "Color"],
   ["levels", "Levels"],
   ["mask", "Opacity mask"],
+  ["text", "Text"],
   ["bubble", "Bubble"]
 ];
 

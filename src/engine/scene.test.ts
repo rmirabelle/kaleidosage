@@ -6,6 +6,29 @@ const IMAGE = { type: "image/png", data: "iVBORw0KGgo=" };
 const IMAGE2 = { type: "image/jpeg", data: "/9j/4AAQ" };
 
 describe("scene files", () => {
+  it("keep the Text effect's words, font, look and move, and give a scene from before Text the start-up text", () => {
+    const state = createPlayState();
+    Object.assign(state, {
+      textContent: "Line one\nLine two", textFont: "Georgia", textBold: false, textItalic: true, textAlign: 2, textFill: 1,
+      textColor: "#112233", textStops: [{ at: 0, color: "#ff0000" }, { at: 1, color: "#0000ff" }], textOutlineColor: "#445566",
+      textGlowColor: "#778899", textShadowColor: "#aabbcc", textMove: 5, textBlend: 2, textTime: 7.5
+    });
+    const loaded = createPlayState();
+    applyScene(serializeScene(createParams(), state, { image: IMAGE }), createParams(), loaded);
+    for (const key of ["textContent", "textFont", "textBold", "textItalic", "textAlign", "textFill", "textColor", "textStops", "textOutlineColor", "textGlowColor", "textShadowColor", "textMove", "textBlend", "textTime"] as const) {
+      expect(loaded[key]).toEqual(state[key]);
+    }
+    expect(sceneFingerprint(createParams(), loaded, [])).not.toBe(sceneFingerprint(createParams(), createPlayState(), []));
+
+    const older = JSON.parse(serializeScene(createParams(), createPlayState(), { image: IMAGE }));
+    for (const key of Object.keys(older.state)) if (key.startsWith("text")) delete older.state[key];
+    const fromOlder = createPlayState();
+    Object.assign(fromOlder, { textContent: "kept from before", textMove: 3 });
+    applyScene(JSON.stringify(older), createParams(), fromOlder);
+    expect(fromOlder.textContent).toBe(createPlayState().textContent);
+    expect(fromOlder.textMove).toBe(0);
+  });
+
   it("turn a Dome from before the Depth slider into its Depth", () => {
     const older = (state: Record<string, unknown>, magnify?: number) => {
       const scene = JSON.parse(serializeScene(createParams(), createPlayState(), { image: IMAGE }));
@@ -254,7 +277,7 @@ describe("scene files", () => {
     /* Earlier versions of the app read a full order inside each kind: the list's order first. */
     const savedState = JSON.parse(text).state;
     expect(savedState.shapeStack).toEqual(["warp", "map", "kaleidoscope"]);
-    expect(savedState.pictureOrder).toEqual(["relief", "blur", "trails", "smear", "contours", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble"]);
+    expect(savedState.pictureOrder).toEqual(["relief", "blur", "trails", "smear", "contours", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble", "text"]);
 
     /* Scenes from before the effect list: every effect that is on and changes the picture, in their order. */
     const showing = { warpAmount: { value: 0.3 }, blurAmount: { value: 10 }, trailAmount: { value: 0.5 }, smearAmount: { value: 1 }, contourOpacity: { value: 1 }, reliefAmount: { value: 1 }, sharpen: { value: 1 } };

@@ -2,6 +2,7 @@ mod browse;
 mod cast;
 mod export_stream;
 mod files;
+mod fonts;
 mod help;
 mod file_archive;
 mod output_choice;
@@ -148,6 +149,7 @@ pub fn run() {
             file_archive::matching_scenes,
             files::reveal_file,
             files::cursor_position,
+            fonts::font_families,
             screen::screen_color_at_cursor,
             song_analysis::analyze_song,
             song_models::ensure_song_models,
