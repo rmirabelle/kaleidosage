@@ -59,6 +59,8 @@ export interface ModelShape {
   textures: ModelTexture[];
   images: ModelImage[];
   triangles: number;
+  /** Who made the model and its license, when the file says so (see modelCredit); null when it does not. */
+  credit: string | null;
 }
 
 /**
@@ -273,6 +275,19 @@ function readMaterial(material: Json, textureCount: number): ModelMaterial {
 /** The material of a part that names none: plain light gray. */
 const PLAIN: ModelMaterial = { color: [0.8, 0.8, 0.8, 1], colorTexture: null, normalTexture: null, normalScale: 1, roughTexture: null, roughness: 0.6, metallic: 0, emissive: [0, 0, 0], emissiveTexture: null, cutoff: 0 };
 
+/**
+ * The credit a model file carries: its copyright text, or (a file from
+ * Sketchfab) its title, maker, license and address.
+ */
+function modelCredit(json: Json): string | null {
+  const asset = isRecord(json.asset) ? json.asset : {};
+  if (typeof asset.copyright === "string" && asset.copyright.trim()) return asset.copyright.trim();
+  const extras = isRecord(asset.extras) ? asset.extras : {};
+  const { title, author, license, source } = extras;
+  if (typeof author !== "string" || !author) return null;
+  return [`${typeof title === "string" && title ? `"${title}" ` : ""}by ${author}`, typeof license === "string" ? license : "", typeof source === "string" ? source : ""].filter(Boolean).join(", ");
+}
+
 /** Reads a .glb file. It throws an Error with a plain message for a file that cannot be read. */
 export function parseModel(file: Uint8Array): ModelShape {
   const { json, bin } = splitGlb(file);
@@ -447,7 +462,7 @@ export function parseModel(file: Uint8Array): ModelShape {
     triangles += indices.length / 3;
     parts.push({ material, vertices, indices });
   }
-  return { parts, materials, textures, images, triangles };
+  return { parts, materials, textures, images, triangles, credit: modelCredit(json) };
 }
 
 /**
@@ -506,9 +521,15 @@ export function packGlb(description: unknown, files: ReadonlyMap<string, Uint8Ar
   json.bufferViews = views;
   json.buffers = [{ byteLength: length }];
 
+  return writeGlb(json, blocks, length);
+}
+
+/** A .glb file from a description and its binary blocks, which are "length" bytes together (0 for none). */
+function writeGlb(json: Json, blocks: readonly Uint8Array[], length: number): Uint8Array {
   const text = new TextEncoder().encode(JSON.stringify(json));
   const textLength = text.byteLength + ((4 - (text.byteLength % 4)) % 4);
-  const file = new Uint8Array(12 + 8 + textLength + 8 + length);
+  const binLength = length + ((4 - (length % 4)) % 4);
+  const file = new Uint8Array(12 + 8 + textLength + (binLength ? 8 + binLength : 0));
   const view = new DataView(file.buffer);
   view.setUint32(0, GLB_MAGIC, true);
   view.setUint32(4, 2, true);
@@ -518,7 +539,8 @@ export function packGlb(description: unknown, files: ReadonlyMap<string, Uint8Ar
   /* The description ends with spaces up to a place that 4 divides, as the format asks. */
   file.fill(0x20, 20, 20 + textLength);
   file.set(text, 20);
-  view.setUint32(20 + textLength, length, true);
+  if (!binLength) return file;
+  view.setUint32(20 + textLength, binLength, true);
   view.setUint32(24 + textLength, CHUNK_BIN, true);
   let at = 28 + textLength;
   for (const block of blocks) {
@@ -526,4 +548,15 @@ export function packGlb(description: unknown, files: ReadonlyMap<string, Uint8Ar
     at += block.byteLength;
   }
   return file;
+}
+
+/**
+ * The same .glb file with "credit" as its copyright text (the format's
+ * own field for it), so the credit of a model from the internet stays
+ * with the model in the scene file. parseModel reads it back.
+ */
+export function stampGlb(file: Uint8Array, credit: string): Uint8Array {
+  const { json, bin } = splitGlb(file);
+  json.asset = { ...(isRecord(json.asset) ? json.asset : { version: "2.0" }), copyright: credit };
+  return writeGlb(json, [bin], bin.byteLength);
 }

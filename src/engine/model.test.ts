@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MODEL_STRIDE, packGlb, parseModel } from "./model";
+import { MODEL_STRIDE, packGlb, parseModel, stampGlb } from "./model";
 
 /** A .glb file from a description and a binary block. */
 function glb(json: object, bin: Uint8Array = new Uint8Array(0)): Uint8Array {
@@ -152,5 +152,20 @@ describe("packGlb", () => {
 
   it("names a loose file that is missing", () => {
     expect(() => packGlb({ buffers: [{ uri: "gone.bin" }] }, new Map())).toThrow(/gone\.bin/);
+  });
+});
+
+describe("stampGlb", () => {
+  it("puts a credit in the file, and the file still reads the same", () => {
+    expect(parseModel(triangle()).credit).toBeNull();
+    const model = parseModel(stampGlb(triangle(), "\"Ship\" by Ann, CC Attribution"));
+    expect(model.credit).toBe("\"Ship\" by Ann, CC Attribution");
+    expect(model.triangles).toBe(1);
+    expect([...model.parts[0].indices]).toEqual([0, 1, 2]);
+  });
+
+  it("reads the credit that a Sketchfab file carries", () => {
+    const model = parseModel(triangle({ asset: { version: "2.0", extras: { title: "Ship", author: "Ann (https://sketchfab.com/ann)", license: "CC-BY-4.0", source: "https://sketchfab.com/3d-models/ship-1" } } }));
+    expect(model.credit).toBe("\"Ship\" by Ann (https://sketchfab.com/ann), CC-BY-4.0, https://sketchfab.com/3d-models/ship-1");
   });
 });

@@ -264,6 +264,23 @@ glTF 2.0 in its one-file binary form (.glb).
   the pictures, and packs them into one .glb (packGlb in `model.ts`), so
   the scene file keeps it as it keeps a picked file. Only files on Poly
   Haven's own servers are read.
+- Sketchfab (2026-11-18, the user's wish for science fiction and fantasy
+  models, which Poly Haven does not have; `lib/sketchfab.ts`): the second
+  tab of the model browser. Sketchfab does the search (only models that
+  anyone can download, 24 at a time, with Category, License and Order
+  menus); the search needs no account. A download needs the user's own
+  Sketchfab API token (a free account gives one, at
+  sketchfab.com/settings/password): the token row of the browser takes it,
+  the app keeps it in the window's local storage, and sends it only to
+  Sketchfab's API with the request for a model's download address. The
+  model comes as one .glb file. Models with only a .gltf archive do not
+  show.
+- Credit: most Sketchfab models need a credit to their maker. The credit
+  (name, maker, license, page) goes into the model file as its copyright
+  text (stampGlb), and Poly Haven models get one too, so the scene file
+  keeps it with no field of its own. parseModel reads it (also the credit
+  that Sketchfab's own files carry), and the File row's name shows it in
+  its tip.
 - Random all keeps the Model shape, and does not pick it.
 - Freeze background: with Source Model, the effects after the 3D Object do
   not change the model's colors (there is no Source picture to change).

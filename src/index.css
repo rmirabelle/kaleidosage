@@ -1774,6 +1774,22 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .model-browser-name { padding: 5px 6px 6px; overflow: hidden; font-size: 12px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
 .model-browser-progress { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: #fff; font-size: 13px; background: rgb(17 19 24 / 0.72); }
 .model-browser-error { margin: 0; color: #ffb4a8; }
+.model-browser-sources { display: flex; gap: 4px; padding: 3px; border: 1px solid #3a3f4d; border-radius: 7px; background: #1d2029; align-self: flex-start; }
+.model-browser-sources button { min-height: 28px; padding: 0 16px; border: 0; border-radius: 5px; color: var(--muted); background: transparent; font: inherit; font-size: 13px; cursor: pointer; }
+.model-browser-sources button:hover { color: #f1f2f4; }
+.model-browser-sources button.active { color: #fff; background: var(--accent); }
+.model-browser-bar.fab { grid-template-columns: minmax(0, 1fr) auto auto; }
+.model-browser-bar.fab .button { min-height: 32px; padding: 0 16px; }
+.model-browser-bar.menus { grid-template-columns: 220px 210px 140px minmax(0, 1fr); }
+.model-browser-token-button { justify-self: end; }
+.model-browser-token { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid #474c5e; border-radius: 7px; background: #1f222b; }
+.model-browser-token p { margin: 0; }
+.model-browser-address { color: #f1f2f4; user-select: text; }
+.model-browser-results.wide { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+.model-browser-result.wide img, .model-browser-blank { aspect-ratio: 16 / 9; object-fit: cover; }
+.model-browser-blank { display: block; width: 100%; background: #1b1e26; }
+.model-browser-result.wide .model-browser-name { padding-bottom: 1px; }
+.model-browser-maker { padding: 0 6px 6px; overflow: hidden; color: var(--muted); font-size: 11px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
 
 .spin { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }

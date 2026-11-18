@@ -1221,6 +1221,8 @@ function SolidSection({ engine, row, mediaName, onPickMedia, onRemoveMedia, onPi
   const [paint, setPaint] = useState<SolidPaint>(engine.state.solidPaint);
   const [modelName, setModelName] = useState<string | null>(engine.model?.name ?? null);
   useEffect(() => engine.watchModel(() => setModelName(engine.model?.name ?? null)), [engine]);
+  /* The model's credit (its maker and license, when its file has them) shows in the name's tip. */
+  const modelCredit = engine.model?.shape.credit;
   /* The model's own colors (Source: Model) do not use the Map, its sliders or Bump. */
   const own = shape === 11 && paint === 3;
   const mapOnly = Object.values(SOLID_MAP_KEYS).flat();
@@ -1250,7 +1252,7 @@ function SolidSection({ engine, row, mediaName, onPickMedia, onRemoveMedia, onPi
       {shape === 11 && (
         <div className="panel-select-row panel-select-named driver-video-row panel-child-row">
           <span className="panel-row-name">File</span>
-          <span className="driver-video-name" data-tip={modelName ? `The 3D Object's model: ${modelName}` : "No model yet: only the picture behind shows"}>{modelName ?? "None"}</span>
+          <span className="driver-video-name" data-tip={modelName ? `The 3D Object's model: ${modelName}${modelCredit ? `. Credit: ${modelCredit}` : ""}` : "No model yet: only the picture behind shows"}>{modelName ?? "None"}</span>
           <button className="button secondary small" onClick={onBrowseModels} data-tip="Pick one of the free 3D models of Poly Haven. The scene file keeps a copy.">Browse…</button>
           <button className="button secondary small" onClick={onPickModel} data-tip="Pick a 3D model file (.glb) on this PC. The scene file keeps a copy.">File…</button>
           {modelName && (

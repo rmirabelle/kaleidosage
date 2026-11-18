@@ -120,6 +120,9 @@ export async function loadHavenModel(model: Pick<HavenModel, "id" | "name">, siz
   };
   const [description, ...loose] = await Promise.all([download(url), ...include.map(([, address]) => download(address))]);
   const files = new Map(include.map(([name], index) => [name, loose[index]] as const));
-  const glb = packGlb(JSON.parse(new TextDecoder().decode(description)), files);
+  const json: unknown = JSON.parse(new TextDecoder().decode(description));
+  /* The credit goes into the file (its copyright text), so the scene keeps it. */
+  if (isRecord(json)) json.asset = { ...(isRecord(json.asset) ? json.asset : { version: "2.0" }), copyright: `"${model.name}" from Poly Haven, CC0, https://polyhaven.com/a/${model.id}` };
+  const glb = packGlb(json, files);
   return loadModel(glb, `${model.name}.glb`);
 }
