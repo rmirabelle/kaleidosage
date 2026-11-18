@@ -970,11 +970,12 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   solidTilt: { label: "Tilt", min: -90, max: 90, step: 1, value: 20, unit: "°", drift: "wave", low: -30, high: 30, on: false },
   /**
    * The Model shape's turn (in place of Spin, Tumble and Tilt): Rotate X,
-   * Y and Z are angles that pose the model (X tips it toward the viewer,
-   * Y turns it around its upright line, Z rolls it in the screen), and
-   * Spin X, Y and Z are speeds in turns per minute that turn it on around
-   * the same lines. Each line's angle is its Rotate plus what its Spin has
-   * added up.
+   * Y and Z are angles that pose the model, and Spin X, Y and Z are
+   * speeds in turns per minute that turn it on around the same lines.
+   * Each line's angle is its Rotate plus what its Spin has added up. The
+   * turns go X first, then Y, then Z: X is around the model's own x line
+   * (which Y and Z carry with them), Y around a line that only Z moves,
+   * and Z around the line toward the viewer (see solidLook).
    */
   solidRotateX: { label: "Rotate X", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "wave", low: -30, high: 30, on: false },
   solidRotateY: { label: "Rotate Y", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "wave", low: -45, high: 45, on: false },

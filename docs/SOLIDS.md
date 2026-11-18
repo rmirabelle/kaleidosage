@@ -252,9 +252,13 @@ glTF 2.0 in its one-file binary form (.glb).
 - Turn (2026-11-18, the user's wish): the Model shape has Rotate X, Y, Z
   (angles that pose it) and Spin X, Y, Z (speeds, turns per minute) in
   place of Spin, Tumble and Tilt. Each line's angle is its Rotate plus
-  what its Spin has added up (solidTurnsX, Y, Z). The order is Y first
-  (around the model's own upright line), then X, then Z (the roll in the
-  screen), as Spin and Tilt go for the other shapes.
+  what its Spin has added up (solidTurnsX, Y, Z). The order is X first,
+  then Y, then Z (the order 3D programs name XYZ), so the X turn is always
+  around the model's own x line: a bullet that lies along x keeps its spin
+  around its length while Y turns it like a coin. (First built with Y
+  first, as Spin and Tilt go for the other shapes: X and Y together then
+  looked like a wobble to the user. A try with one steady turn around the
+  screen's lines was also not what the user wanted.)
 - Pivot menu (solidPivot): Center turns the model around the middle of its
   box (calculated). Model's own turns it around the file's zero point, which
   its maker set (often at the base); that point then sits at Center X and

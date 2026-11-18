@@ -2552,18 +2552,26 @@ export class KaleidoRenderer {
   /** The 3D Object's turn, place, map and light settings, which the ray shader and the mesh shapes share. */
   private solidLook(s: Program, v: FrameValues) {
     const gl = this.gl;
-    /* The Model shape turns by its three angles; the other shapes by Spin (about y) and Tilt plus Tumble (about x). */
-    const model = v.solidShape === 11;
-    const spin = model ? v.solidAngleY : v.solidSpin;
-    const [cs, ss] = [Math.cos(spin), Math.sin(spin)];
-    const tilt = model ? v.solidAngleX : v.solidTilt + v.solidTumble;
+    const [cs, ss] = [Math.cos(v.solidSpin), Math.sin(v.solidSpin)];
+    const tilt = v.solidTilt + v.solidTumble;
     const [ct, st] = [Math.cos(tilt), Math.sin(tilt)];
     /* Rows of (turn about x by tilt) times (spin about y), given by columns for GLSL. */
     let rows = [[cs, 0, ss], [st * ss, ct, -st * cs], [-ct * ss, st, ct * cs]];
-    if (model) {
-      /* Then the roll about z, the line toward the viewer. */
+    if (v.solidShape === 11) {
+      /**
+       * The Model shape turns by its three angles, X first, then Y, then
+       * Z (the order 3D programs name XYZ): rows of (about z) times
+       * (about y) times (about x). So the X turn is always around the
+       * model's own x line, which the Y and Z turns carry with them: a
+       * bullet that lies along x keeps its spin around its length while
+       * Y turns it like a coin (the user's wish, 2026-11-18; with Y
+       * first, the two turns together looked like a wobble).
+       */
+      const [cx, sx] = [Math.cos(v.solidAngleX), Math.sin(v.solidAngleX)];
+      const [cy, sy] = [Math.cos(v.solidAngleY), Math.sin(v.solidAngleY)];
       const [cz, sz] = [Math.cos(v.solidAngleZ), Math.sin(v.solidAngleZ)];
-      rows = [rows[0].map((value, i) => cz * value - sz * rows[1][i]), rows[1].map((value, i) => sz * rows[0][i] + cz * value), rows[2]];
+      const inner = [[cy, sy * sx, sy * cx], [0, cx, -sx], [-sy, cy * sx, cy * cx]];
+      rows = [inner[0].map((value, i) => cz * value - sz * inner[1][i]), inner[1].map((value, i) => sz * inner[0][i] + cz * value), inner[2]];
     }
     gl.uniformMatrix3fv(s.uniforms.u_turn, false, [0, 1, 2].flatMap((column) => rows.map((row) => row[column])));
     /* The Sphere's turn shows only on a turned copy of the picture (see SOLID_PAINT_GLSL). */
