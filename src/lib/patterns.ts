@@ -320,6 +320,53 @@ function honeycomb(side: number): Draw {
   };
 }
 
+/**
+ * Spiral curves: thin colored loop curves on black, different each time.
+ * Each is the path of a point on a small circle that rolls inside a large
+ * one (a hypotrochoid, as the Spirograph toy draws): "petals" loops, closed
+ * after "turns" times around. Each curve is drawn some times with the point
+ * a little farther out and the hue a little changed, which gives bands of
+ * close lines. One large curve is on the center; the others are smaller, at
+ * random places.
+ */
+const spiralCurves: Draw = (context, width, height) => {
+  context.fillStyle = "#000";
+  context.fillRect(0, 0, width, height);
+  context.lineJoin = "round";
+  const shared = (a: number, b: number): number => (b === 0 ? a : shared(b, a % b));
+  const curve = (centerX: number, centerY: number, size: number) => {
+    const petals = Math.floor(rand(3, 13));
+    let turns = Math.floor(rand(1, petals));
+    while (shared(petals, turns) !== 1) turns--;
+    const small = turns / petals;
+    const arm = small * rand(0.5, 1.5);
+    const copies = Math.floor(rand(3, 8));
+    const hue = rand(0, 360);
+    const turnAngle = rand(0, Math.PI * 2);
+    context.lineWidth = pick([2, 3, 4]);
+    for (let copy = 0; copy < copies; copy++) {
+      const reach = arm * (1 - 0.06 * copy);
+      /* The farthest point of the first copy is "size" from the center. */
+      const scale = size / (1 - small + arm);
+      const steps = turns * 720;
+      context.strokeStyle = `hsl(${hue + copy * 9} 95% ${62 - copy * 3}%)`;
+      context.beginPath();
+      for (let step = 0; step <= steps; step++) {
+        const angle = (step / steps) * turns * Math.PI * 2;
+        const inner = angle * (1 - small) / small;
+        const x = (1 - small) * Math.cos(angle) + reach * Math.cos(inner);
+        const y = (1 - small) * Math.sin(angle) - reach * Math.sin(inner);
+        const turnedX = x * Math.cos(turnAngle) - y * Math.sin(turnAngle);
+        const turnedY = x * Math.sin(turnAngle) + y * Math.cos(turnAngle);
+        context.lineTo(centerX + turnedX * scale, centerY + turnedY * scale);
+      }
+      context.stroke();
+    }
+  };
+  curve(width / 2, height / 2, height * rand(0.42, 0.49));
+  for (let index = 0; index < 6; index++) curve(rand(0, width), rand(0, height), height * rand(0.1, 0.3));
+};
+
 /** Black, with one white band from top to bottom through the center, "part" of the width wide. */
 function centerLine(part: number): Draw {
   return (context, width, height) => {
@@ -371,6 +418,7 @@ export const PATTERNS: Pattern[] = [
   { id: "rings", label: "Rings", group: "Not repeating", draw: rings },
   { id: "sunburst", label: "Sunburst", group: "Not repeating", draw: sunburst },
   { id: "stars", label: "Star field", group: "Not repeating", draw: starField },
+  { id: "spirals", label: "Spiral curves", group: "Not repeating", draw: spiralCurves },
   { id: "clouds", label: "Color clouds", group: "Not repeating", draw: colorClouds },
   { id: "lines", label: "Scattered lines", group: "Not repeating", draw: scatteredLines }
 ];
