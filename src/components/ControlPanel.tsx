@@ -1301,7 +1301,7 @@ function ModelSection({ engine, row, fxOrder, onPickModel, onBrowseModels }: { e
             <FolderOpen size={14} weight="bold" />
           </button>
           <button className="panel-button icon" disabled={!modelName} onClick={() => engine.setModel(null)} data-tip="Clear: take the model out of the scene" aria-label="Remove the model">
-            <X size={14} weight="bold" />
+            <Trash size={14} />
           </button>
         </div>
       </div>
