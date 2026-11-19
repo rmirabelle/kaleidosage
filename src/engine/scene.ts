@@ -9,8 +9,8 @@ export const SCENE_EXTENSION = "ksage";
  * A scene from when the model was the 3D Object's Model shape (one day,
  * 2026-11-18, version 0.30.0): the 3D Object in its lists becomes the 3D
  * model effect, with the settings the two have in common. The model shows
- * its own colors; a picture on the model (Source: Slot A, Slot B, Image or
- * Video) is not kept. The 3D Object goes back to a cube, out of the list.
+ * its own colors, or with Map: Mirror it is chrome; another picture on
+ * the model (Wrap, Project) is not kept. The 3D Object goes back to a cube, out of the list.
  */
 function modelFromSolid(savedParams: Record<string, unknown>, saved: Record<string, unknown>) {
   if (saved.solidShape !== 11) return;
@@ -19,6 +19,11 @@ function modelFromSolid(savedParams: Record<string, unknown>, saved: Record<stri
   }
   for (const part of ["Pivot", "TurnsX", "TurnsY", "TurnsZ", "Blend"]) {
     if (saved[`solid${part}`] !== undefined) saved[`model${part}`] = saved[`solid${part}`];
+  }
+  /* A model that was painted by Mirror (Source: a picture, Map: Mirror) opens as full Chrome, with its Repeats. */
+  if (saved.solidPaint !== 3 && saved.solidMap === 2) {
+    savedParams.modelChrome = { value: 1 };
+    if (isRecord(savedParams.solidRepeats)) savedParams.modelRepeats = savedParams.solidRepeats;
   }
   const steps = Array.isArray(saved.effects) ? saved.effects as unknown[] : [];
   if (Array.isArray(saved.solidFx)) {

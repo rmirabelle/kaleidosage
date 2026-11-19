@@ -6369,13 +6369,13 @@ void main() {
 }`;
 
 /**
- * The Model shape's triangles, one material at a time. With u_own (Source:
- * Model) the surface shows the material: its color and color picture, its
+ * The 3D model's triangles, one material at a time. At u_chrome 0 the
+ * surface shows the material: its color and color picture, its
  * bump picture (the normal map, laid out by the picture places' change
  * across the screen, so the file needs no tangents), a highlight that is
  * sharp on a smooth material and wide and weak on a rough one, tinted by
- * the color on metal, and the material's own light. With another Source,
- * the picture goes on by Map, as on the other shapes (SOLID_PAINT_GLSL);
+ * the color on metal, and the material's own light. Toward u_chrome 1,
+ * the picture goes on by Map, as on the 3D Object's shapes (SOLID_PAINT_GLSL);
  * Wrap casts it from the six directions of a box and blends by the way the
  * surface looks, because a model's own picture layout is made for its own
  * pictures only. Parts of a material under its cut-out level are not
@@ -6403,7 +6403,12 @@ uniform float u_tiles;
 uniform vec3 u_light;
 uniform float u_shading;
 uniform float u_shine;
-uniform bool u_own;
+/**
+ * Chrome: 0 shows the model's own colors, 1 the picture painted on by the
+ * Map (for the 3D model effect, Mirror: the surface reflects the picture
+ * behind, as chrome does). Between them the two mix.
+ */
+uniform float u_chrome;
 uniform vec4 u_color;
 uniform sampler2D u_colorTex;
 uniform bool u_hasNormal;
@@ -6482,17 +6487,17 @@ void main() {
   vec3 rd = normalize(v_world - vec3(0.0, 0.0, EYE));
   vec3 n = normalize(v_normal);
   if (dot(n, rd) > 0.0) n = -n;
-  vec3 color;
-  if (u_own) {
-    vec3 facing = u_hasNormal ? detailed(n, bump) : n;
+  vec3 color = vec3(0.0);
+  /* The material's bump picture also shapes the reflection, so the chrome keeps the model's fine detail. */
+  vec3 facing = u_hasNormal ? detailed(n, bump) : n;
+  if (u_chrome < 1.0) {
     float smoothness = 1.0 - clamp(gloss.g * u_rough, 0.0, 1.0);
     float metal = clamp(gloss.b * u_metal, 0.0, 1.0);
     float lit = mix(1.0, 0.18 + 0.82 * max(dot(facing, u_light), 0.0), u_shading);
     float shine = pow(max(dot(reflect(-u_light, facing), -rd), 0.0), mix(6.0, 120.0, smoothness * smoothness)) * u_shine * mix(0.12, 1.4, smoothness);
     color = tint.rgb * lit + mix(vec3(1.0), tint.rgb, metal) * shine + glow;
-  } else {
-    color = paint(v_shape, n, rd, uv);
   }
+  if (u_chrome > 0.0) color = mix(color, paint(v_shape, facing, rd, uv), u_chrome);
   float cover;
   vec3 base = behind(uv, cover);
   o = faded(uv, covered(mix(base, blendLayer(base, color, u_blend), u_opacity), mix(cover, 1.0, u_opacity)));

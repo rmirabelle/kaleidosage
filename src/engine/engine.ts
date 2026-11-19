@@ -1724,6 +1724,8 @@ export class Engine {
       modelX: this.live("modelX"),
       modelY: this.live("modelY"),
       modelBlend: this.state.modelBlend,
+      modelChrome: this.live("modelChrome"),
+      modelRepeats: this.live("modelRepeats"),
       solid: on.solid ? this.live("solidAmount") : 0,
       solidShape: this.state.solidShape,
       solidMap: this.state.solidMap,

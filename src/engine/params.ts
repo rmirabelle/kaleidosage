@@ -26,7 +26,7 @@ export const PARAM_KEYS = [
   "cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead",
   "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY",
   "solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidPoints", "solidPointLength", "solidHollow", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidFrost", "solidTiles", "solidRepeats", "solidLight", "solidShading", "solidShine", "solidRelief", "solidShadow", "solidX", "solidY",
-  "modelAmount", "modelSize", "modelRotateX", "modelRotateY", "modelRotateZ", "modelSpinX", "modelSpinY", "modelSpinZ", "modelLight", "modelShading", "modelShine", "modelShadow", "modelX", "modelY",
+  "modelAmount", "modelSize", "modelRotateX", "modelRotateY", "modelRotateZ", "modelSpinX", "modelSpinY", "modelSpinZ", "modelLight", "modelShading", "modelShine", "modelShadow", "modelChrome", "modelRepeats", "modelX", "modelY",
   "raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY",
   "laserAmount", "laserOpacity", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY",
   "outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineInner", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineX", "outlineY",
@@ -1010,6 +1010,9 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   modelShading: { label: "Shading", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.3, high: 0.9, on: false },
   modelShine: { label: "Shine", min: 0, max: 1, step: 0.01, value: 0.4, drift: "wave", low: 0.1, high: 0.7, on: false },
   modelShadow: { label: "Shadow", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.2, high: 0.8, on: false },
+  /** Chrome: 0 the model's own colors, 1 a mirror of the picture behind it. Repeats: how many times that picture goes around the reflection. */
+  modelChrome: { label: "Chrome", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 1, on: false },
+  modelRepeats: { label: "Repeats", min: 0.25, max: 16, step: 0.01, scale: "log", value: 1, drift: "wave", low: 1, high: 4, on: false },
   modelX: { label: "Center X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.25, high: 0.25, on: false },
   modelY: { label: "Center Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   /** Driver (see DRIVER_SHADER): opacity, how strongly the driver bends, reveals or lights, its size, its speed, and its contrast. */
@@ -1946,7 +1949,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   /** Camera shares its camera with Terrain (see SPECS). */
   camera: ["viewAmount", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraFog", "cameraSky"],
   solid: ["solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidPoints", "solidPointLength", "solidHollow", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidFrost", "solidTiles", "solidRepeats", "solidLight", "solidShading", "solidShine", "solidRelief", "solidShadow", "solidX", "solidY"],
-  model: ["modelAmount", "modelSize", "modelRotateX", "modelRotateY", "modelRotateZ", "modelSpinX", "modelSpinY", "modelSpinZ", "modelLight", "modelShading", "modelShine", "modelShadow", "modelX", "modelY"],
+  model: ["modelAmount", "modelSize", "modelRotateX", "modelRotateY", "modelRotateZ", "modelSpinX", "modelSpinY", "modelSpinZ", "modelLight", "modelShading", "modelShine", "modelShadow", "modelChrome", "modelRepeats", "modelX", "modelY"],
   sort: ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"],
   particles: ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost", "particleRingRadius"],
   cycles: ["cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead", "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY"],
@@ -2312,6 +2315,8 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("modelShading", rand(0.3, 0.9), rand(0, 0.2));
   set("modelShine", rand(0, 0.8), rand(0, 0.2));
   set("modelShadow", rand(0.2, 0.8), rand(0, 0.2));
+  set("modelChrome", Math.random() < 0.5 ? 0 : rand(0.4, 1), rand(0, 0.3));
+  set("modelRepeats", Math.random() < 0.4 ? 1 : rand(1, 6), rand(0, 0.5));
   set("modelX", Math.random() < 0.6 ? 0 : rand(-0.3, 0.3), rand(0.05, 0.2));
   set("modelY", Math.random() < 0.6 ? 0 : rand(-0.2, 0.2), rand(0.05, 0.15));
   set("solidX", Math.random() < 0.6 ? 0 : rand(-0.3, 0.3), rand(0.05, 0.2));

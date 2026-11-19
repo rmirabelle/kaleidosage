@@ -187,7 +187,7 @@ export const SOLID_PAINTS = [[0, "Slot A"], [2, "Slot B"], [1, "Image or Video"]
 /** The Source menu of the Model shape: first the model's own colors and pictures, then the others. */
 /** The Model shape's Pivot menu (see ModelPivot). */
 /** The 3D model effect's sliders, in panel order (Opacity last, with Blend: see SplitRows). */
-export const MODEL_KEYS: readonly ParamKey[] = ["modelSize", "modelRotateX", "modelRotateY", "modelRotateZ", "modelSpinX", "modelSpinY", "modelSpinZ", "modelLight", "modelShading", "modelShine", "modelShadow", "modelX", "modelY", "modelAmount"];
+export const MODEL_KEYS: readonly ParamKey[] = ["modelSize", "modelRotateX", "modelRotateY", "modelRotateZ", "modelSpinX", "modelSpinY", "modelSpinZ", "modelLight", "modelShading", "modelShine", "modelShadow", "modelChrome", "modelRepeats", "modelX", "modelY", "modelAmount"];
 export const MODEL_PIVOTS = [[0, "Center"], [1, "Model's own"]] as const;
 export const SOLID_MODEL_PAINTS = [[3, "Model"], ...SOLID_PAINTS] as const;
 
