@@ -257,6 +257,69 @@ const starField: Draw = (context, width, height) => {
   for (let index = 0; index < 28; index++) star(rand(8, 18), 7, rand(8, 14));
 };
 
+/**
+ * Honeycomb: six-sided cells with bright outlines on black, which repeats
+ * with no seam. A colored line (the hue goes once around across) with a
+ * thin white line along its middle, as the Truchet tiles have. Some cells,
+ * different each time, are filled with a dim color and a few with a bright
+ * one. The cells are flat on top; "side" is the length of a cell side. The
+ * width must hold an even number of columns (width / (1.5 * side)). A true
+ * six-sided cell cannot fit a whole number of times both across and down,
+ * so the cell height is changed a little (less than 3% at side 80) to fit.
+ */
+function honeycomb(side: number): Draw {
+  return (context, width, height) => {
+    const columns = Math.round(width / (1.5 * side));
+    const rows = Math.round(height / (Math.sqrt(3) * side));
+    const cellHeight = height / rows;
+    const half = cellHeight / 2;
+    const cell = (column: number, row: number) => {
+      const x = column * 1.5 * side;
+      const y = row * cellHeight + (((column % 2) + 2) % 2 === 1 ? half : 0);
+      const path = new Path2D();
+      path.moveTo(x + side, y);
+      path.lineTo(x + side / 2, y + half);
+      path.lineTo(x - side / 2, y + half);
+      path.lineTo(x - side, y);
+      path.lineTo(x - side / 2, y - half);
+      path.lineTo(x + side / 2, y - half);
+      path.closePath();
+      return path;
+    };
+    /* A cell that crosses an edge is drawn on both sides, with the same fill, so the repeat has no seam. */
+    const fills = Array.from({ length: columns * rows }, () => {
+      const chance = Math.random();
+      return chance < 0.03 ? 255 : chance < 0.16 ? Math.round(rand(50, 110)) : 0;
+    });
+    const outlines = new Path2D();
+    context.fillStyle = "#000";
+    context.fillRect(0, 0, width, height);
+    for (let column = -1; column <= columns; column++) {
+      for (let row = -1; row <= rows; row++) {
+        const path = cell(column, row);
+        outlines.addPath(path);
+        const gray = fills[((column + columns) % columns) * rows + ((row + rows) % rows)];
+        if (gray === 0) continue;
+        context.fillStyle = `rgb(${gray} ${gray} ${gray})`;
+        context.fill(path);
+      }
+    }
+    context.lineJoin = "round";
+    context.strokeStyle = "#fff";
+    context.lineWidth = side * 0.14;
+    context.stroke(outlines);
+    /* The colors go on the light parts only: black times a color stays black. */
+    const hues = context.createLinearGradient(0, 0, width, 0);
+    for (let stop = 0; stop <= 12; stop++) hues.addColorStop(stop / 12, `hsl(${stop * 30} 90% 55%)`);
+    context.globalCompositeOperation = "multiply";
+    context.fillStyle = hues;
+    context.fillRect(0, 0, width, height);
+    context.globalCompositeOperation = "source-over";
+    context.lineWidth = side * 0.03;
+    context.stroke(outlines);
+  };
+}
+
 /** Black, with one white band from top to bottom through the center, "part" of the width wide. */
 function centerLine(part: number): Draw {
   return (context, width, height) => {
@@ -303,6 +366,7 @@ export const PATTERNS: Pattern[] = [
   { id: "dots", label: "Dot grid", group: "Repeating", draw: dotGrid(120) },
   { id: "color-grid", label: "Color grid", group: "Repeating", draw: colorGrid(120) },
   { id: "truchet", label: "Truchet tiles", group: "Repeating", draw: truchetTiles(240) },
+  { id: "honeycomb", label: "Honeycomb", group: "Repeating", draw: honeycomb(80) },
   { id: "center-line", label: "Center line", group: "Not repeating", draw: centerLine(0.25) },
   { id: "rings", label: "Rings", group: "Not repeating", draw: rings },
   { id: "sunburst", label: "Sunburst", group: "Not repeating", draw: sunburst },
