@@ -507,6 +507,9 @@ button { border: 0; }
 .panel-title-all { margin-left: auto; margin-right: 8px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .panel-title-play + .panel-title-all { margin-left: 0; }
 .panel-title-buttons .panel-button { height: 28px; }
+/* The 3D model's File row: Search, File and Clear as icons in one bordered toolbar, at the right of the name. */
+.panel-file-buttons { flex: 0 0 auto; }
+.panel-file-buttons .panel-button.icon { width: 30px; height: 26px; }
 .midi-remove { color: #c3c7d0; }
 .midi-remove:hover { color: #fff; background: #c83232; }
 /* The Effects panel does not scroll as a whole: its top stays, and only .panel-scroll under it scrolls. */

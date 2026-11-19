@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { MagnifyingGlass, CaretRight, DiceFive, DotsSixVertical, Eye, EyeSlash, LockSimple, LockSimpleOpen, Play, SpeakerSimpleHigh, Trash, Wind, X } from "@phosphor-icons/react";
+import { FolderOpen, MagnifyingGlass, CaretRight, DiceFive, DotsSixVertical, Eye, EyeSlash, LockSimple, LockSimpleOpen, Play, SpeakerSimpleHigh, Trash, Wind, X } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
 import { GROUP_PARAMS, addEffect, applyRadialStart, createParams, freshEffect, removeEffect, type GroupKey, type ParamKey, type PlayState } from "../engine/params";
 import { midi } from "../lib/midi";
@@ -1277,8 +1277,8 @@ function SolidSection({ engine, row, fxOrder, mediaName, onPickMedia, onRemoveMe
 
 /**
  * The 3D model effect (see docs/SOLIDS.md): a model from a file, which
- * shows its own colors. The File row picks it: Search opens the model
- * browser, File the system's Open dialog for a .glb file. Pivot is the
+ * shows its own colors. The File row picks it, with icon buttons: Search opens the model
+ * browser, File the system's Open dialog for a .glb file, Clear takes the model out. Pivot is the
  * point the model turns around, which sits at Center X and Center Y.
  */
 function ModelSection({ engine, row, fxOrder, onPickModel, onBrowseModels }: { engine: Engine; row: (key: ParamKey) => ReactNode; fxOrder: readonly FxStep[]; onPickModel: () => void; onBrowseModels: () => void }) {
@@ -1292,13 +1292,18 @@ function ModelSection({ engine, row, fxOrder, onPickModel, onBrowseModels }: { e
       <div className="panel-select-row panel-select-named driver-video-row">
         <span className="panel-row-name">File</span>
         <span className="driver-video-name" data-tip={modelName ? `The model: ${modelName}${modelCredit ? `. Credit: ${modelCredit}` : ""}` : "No model yet: only the picture behind shows"}>{modelName ?? "None"}</span>
-        <button className="button secondary small" onClick={onBrowseModels} data-tip="Search the free 3D models of Poly Haven and Sketchfab. The scene file keeps a copy."><MagnifyingGlass size={12} weight="bold" /> Search</button>
-        <button className="button secondary small" onClick={onPickModel} data-tip="Pick a 3D model file (.glb) on this PC. The scene file keeps a copy.">File…</button>
-        {modelName && (
-          <button className="button secondary small" onClick={() => engine.setModel(null)} data-tip="Take the model out of the scene" aria-label="Remove the model">
-            <X size={12} weight="bold" />
+        {/* Search, File and Clear as icons in one bordered toolbar; Clear is off with no model. */}
+        <div className="panel-buttons panel-file-buttons">
+          <button className="panel-button icon" onClick={onBrowseModels} data-tip="Search the free 3D models of Poly Haven and Sketchfab. The scene file keeps a copy." aria-label="Search for a 3D model">
+            <MagnifyingGlass size={14} weight="bold" />
           </button>
-        )}
+          <button className="panel-button icon" onClick={onPickModel} data-tip="Open a 3D model file (.glb) on this PC. The scene file keeps a copy." aria-label="Open a 3D model file">
+            <FolderOpen size={14} weight="bold" />
+          </button>
+          <button className="panel-button icon" disabled={!modelName} onClick={() => engine.setModel(null)} data-tip="Clear: take the model out of the scene" aria-label="Remove the model">
+            <X size={14} weight="bold" />
+          </button>
+        </div>
       </div>
       <ModeSelect engine={engine} stateKey="modelPivot" options={MODEL_PIVOTS} name="Pivot" />
       {/* Map: how the picture behind the model goes onto it. Map amount mixes it with the model's own colors; then the map's own sliders. */}
