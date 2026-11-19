@@ -99,35 +99,6 @@ const colorClouds: Draw = (context, width, height) => {
   context.filter = "none";
 };
 
-/**
- * Sharp-edged circles, boxes and triangles in random sizes and grays, from
- * dark gray to white, on black. The black is the bare background, where no
- * shape falls: this few shapes leave about 60% to 70% of it open.
- */
-const randomShapes: Draw = (context, width, height) => {
-  context.fillStyle = "#000";
-  context.fillRect(0, 0, width, height);
-  for (let index = 0; index < 350; index++) {
-    const size = pick([12, 30, 60, 120, 240]) * rand(0.6, 1.4);
-    const x = rand(-size, width);
-    const y = rand(-size, height);
-    const gray = Math.round(rand(30, 255));
-    context.fillStyle = `rgb(${gray} ${gray} ${gray})`;
-    const kind = Math.random();
-    context.beginPath();
-    if (kind < 0.4) {
-      context.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
-    } else if (kind < 0.7) {
-      context.rect(x, y, size, size * rand(0.3, 1.5));
-    } else {
-      context.moveTo(x, y + size);
-      context.lineTo(x + size / 2, y);
-      context.lineTo(x + size, y + size);
-    }
-    context.fill();
-  }
-};
-
 /** Thin light lines at random angles on black: shows the motion blur direction clearly. */
 const scatteredLines: Draw = (context, width, height) => {
   context.fillStyle = "#000";
@@ -190,13 +161,11 @@ const solidBlack: Draw = (context, width, height) => {
 export const PATTERNS: Pattern[] = [
   { id: "dark-stage", label: "Dark Stage", group: "Templates", draw: darkStage },
   { id: "solid-black", label: "Solid Black", group: "Templates", draw: solidBlack },
-  { id: "checker-large", label: "Checkerboard, large", group: "Repeating", draw: checkerboard(120) },
-  { id: "checker-fine", label: "Checkerboard, fine", group: "Repeating", draw: checkerboard(24) },
+  { id: "checker-large", label: "Checkerboard", group: "Repeating", draw: checkerboard(120) },
   { id: "dots", label: "Dot grid", group: "Repeating", draw: dotGrid(120) },
   { id: "color-grid", label: "Color grid", group: "Repeating", draw: colorGrid(120) },
   { id: "center-line", label: "Center line", group: "Not repeating", draw: centerLine(0.25) },
   { id: "clouds", label: "Color clouds", group: "Not repeating", draw: colorClouds },
-  { id: "shapes", label: "Random shapes", group: "Not repeating", draw: randomShapes },
   { id: "lines", label: "Scattered lines", group: "Not repeating", draw: scatteredLines }
 ];
 
