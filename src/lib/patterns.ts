@@ -370,7 +370,8 @@ const spiralCurves: Draw = (context, width, height) => {
 /**
  * Contour lines: thin lines of equal height, as on a map of hills, on
  * black, different each time. The land is a sum of random smooth hills and
- * hollows. The hue goes from the lowest line to the highest; each fifth
+ * hollows. The hue goes from the lowest line to the highest, through the
+ * blues and purples only; each fifth
  * line is wider and lighter, as on a map. The height is found on a grid of
  * "grid" pixel squares, and each line is cut into short straight parts, one
  * per square it crosses, which look smooth at this size.
@@ -426,12 +427,13 @@ const contourLines: Draw = (context, width, height) => {
       }
     }
   }
-  const firstHue = rand(0, 360);
+  /* Light blue (190) through blue and purple to pink (320), with no green (user, 2026-11-19); the low end is one or the other. */
+  const upward = Math.random() < 0.5;
   context.lineCap = "round";
   lines.forEach((path, line) => {
     const wide = line % 5 === 2;
     context.lineWidth = wide ? 7 : 3;
-    context.strokeStyle = `hsl(${firstHue + (line / count) * 300} 95% ${wide ? 72 : 55}%)`;
+    context.strokeStyle = `hsl(${190 + (upward ? line : count - 1 - line) / (count - 1) * 130} 95% ${wide ? 76 : 62}%)`;
     context.stroke(path);
   });
 };
