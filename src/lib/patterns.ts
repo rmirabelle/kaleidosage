@@ -186,7 +186,8 @@ const rings: Draw = (context, width, height) => {
  * widths and the spaces between them are random, from thin lines to wide
  * wedges, so each time is different. The colors are warm only: the hue goes
  * from pink (320) through red and orange to yellow (55) and back, two times
- * around the center, from a random start. Some thin rays are white.
+ * around the center, from a random start. The user asked for these colors
+ * and black only (2026-11-19), so no ray is white.
  */
 const sunburst: Draw = (context, width, height) => {
   context.fillStyle = "#000";
@@ -198,8 +199,7 @@ const sunburst: Draw = (context, width, height) => {
   let angle = 0;
   while (angle < turn) {
     const rayWidth = Math.min(pick([0.4, 0.8, 1.5, 3, 6]) * rand(0.7, 1.3) * degree, turn - angle);
-    const white = rayWidth < degree && Math.random() < 0.35;
-    context.fillStyle = white ? "#fff" : `hsl(${320 + 95 * (0.5 - 0.5 * Math.cos((angle / turn + firstTurn) * 2 * turn))} 95% 55%)`;
+    context.fillStyle = `hsl(${320 + 95 * (0.5 - 0.5 * Math.cos((angle / turn + firstTurn) * 2 * turn))} 95% 55%)`;
     context.beginPath();
     context.moveTo(width / 2, height / 2);
     context.arc(width / 2, height / 2, reach, angle, angle + rayWidth);
