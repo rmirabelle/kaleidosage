@@ -4,7 +4,7 @@ import type { BubbleShape, ColorFill, MaskMode, BlurMask, CycleMove, CyclePaint,
 /** The effects in the Add effect menu, in menu order, with the names their groups show. */
 export const EFFECT_NAMES: readonly (readonly [FxStep, string])[] = [
   ["kaleidoscope", "Kaleidoscope"], ["map", "Algorithm"], ["warp", "Warp"], ["blur", "Blur"], ["trails", "Trails"],
-  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["driver", "Driver"], ["terrain", "Terrain"], ["camera", "Camera"], ["solid", "3D object"], ["sort", "Pixel sort"], ["particles", "Particles"], ["cycles", "Light cycles"], ["rays", "Light rays"], ["lasers", "Lasers"], ["cone", "Light cone"], ["paths", "Light paths"], ["spiro", "Spirograph"], ["outlines", "Light shapes"], ["picture", "Image or Video"], ["bloom", "Bloom"], ["sharpen", "Sharpen"], ["color", "Color"], ["levels", "Levels"], ["mask", "Opacity mask"], ["bubble", "Bubble"], ["text", "Text"]
+  ["smear", "Time smear"], ["contours", "Contours"], ["relief", "Relief"], ["driver", "Driver"], ["terrain", "Terrain"], ["camera", "Camera"], ["solid", "3D object"], ["model", "3D model"], ["sort", "Pixel sort"], ["particles", "Particles"], ["cycles", "Light cycles"], ["rays", "Light rays"], ["lasers", "Lasers"], ["cone", "Light cone"], ["paths", "Light paths"], ["spiro", "Spirograph"], ["outlines", "Light shapes"], ["picture", "Image or Video"], ["bloom", "Bloom"], ["sharpen", "Sharpen"], ["color", "Color"], ["levels", "Levels"], ["mask", "Opacity mask"], ["bubble", "Bubble"], ["text", "Text"]
 ];
 
 /** An effect's name in the panel and the menus. */
@@ -158,7 +158,7 @@ export const CYCLE_PAINT_KEYS: Record<CyclePaint, ParamKey[]> = {
 export const CYCLE_PAINTS = [[0, "Cycle"], [1, "Trail"], [2, "Position, linear"], [3, "Position, radial"]] as const;
 
 /** The 3D Object's sliders, in panel order. Roundness and the map's own sliders show only where they do something (see SOLID_SHAPE_KEYS and SOLID_MAP_KEYS). */
-export const SOLID_KEYS: readonly ParamKey[] = ["solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidPoints", "solidPointLength", "solidHollow", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidRotateX", "solidRotateY", "solidRotateZ", "solidSpinX", "solidSpinY", "solidSpinZ", "solidTiles", "solidRepeats", "solidBend", "solidFrost", "solidLight", "solidShading", "solidShine", "solidRelief", "solidShadow", "solidBackground", "solidX", "solidY", "solidAmount"];
+export const SOLID_KEYS: readonly ParamKey[] = ["solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidPoints", "solidPointLength", "solidHollow", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidTiles", "solidRepeats", "solidBend", "solidFrost", "solidLight", "solidShading", "solidShine", "solidRelief", "solidShadow", "solidBackground", "solidX", "solidY", "solidAmount"];
 /**
  * Each shape's own sliders. The sphere and Morph have no edges to round;
  * for the blobs Roundness is how softly they merge, for the spike ball how
@@ -172,11 +172,11 @@ const SOLID_TURN: readonly ParamKey[] = ["solidSpin", "solidTumble", "solidTilt"
 export const SOLID_SHAPE_KEYS: Record<SolidShape, ParamKey[]> = {
   0: [...SOLID_TURN], 1: ["solidRound", ...SOLID_TURN], 2: ["solidMorph", ...SOLID_TURN], 3: ["solidBlobs", "solidRound", ...SOLID_TURN], 4: ["solidBumps", "solidWaves", ...SOLID_TURN], 5: ["solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidRound", ...SOLID_TURN],
   6: ["solidRound", ...SOLID_TURN], 7: ["solidRound", ...SOLID_TURN], 8: ["solidRound", ...SOLID_TURN], 9: ["solidLevels", "solidRound", ...SOLID_TURN], 10: ["solidPoints", "solidPointLength", "solidHollow", ...SOLID_TURN],
-  11: ["solidRotateX", "solidRotateY", "solidRotateZ", "solidSpinX", "solidSpinY", "solidSpinZ"]
+  11: []
 };
 /** The sliders that only some shapes show (see SOLID_SHAPE_KEYS). */
-export const SOLID_SHAPE_ONLY: readonly ParamKey[] = ["solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidPoints", "solidPointLength", "solidHollow", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidRotateX", "solidRotateY", "solidRotateZ", "solidSpinX", "solidSpinY", "solidSpinZ"];
-export const SOLID_SHAPES = [[0, "Sphere"], [1, "Cube"], [2, "Morph"], [3, "Blobs"], [4, "Wobbly ball"], [5, "Spike ball"], [6, "Octahedron"], [7, "Icosahedron"], [8, "Pyramid"], [9, "Menger sponge"], [10, "Moravian star"], [11, "Model"]] as const;
+export const SOLID_SHAPE_ONLY: readonly ParamKey[] = ["solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidPoints", "solidPointLength", "solidHollow", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "modelRotateX", "modelRotateY", "modelRotateZ", "modelSpinX", "modelSpinY", "modelSpinZ"];
+export const SOLID_SHAPES = [[0, "Sphere"], [1, "Cube"], [2, "Morph"], [3, "Blobs"], [4, "Wobbly ball"], [5, "Spike ball"], [6, "Octahedron"], [7, "Icosahedron"], [8, "Pyramid"], [9, "Menger sponge"], [10, "Moravian star"]] as const;
 /** Tiles is for Wrap; Bend and Frost for Project; Repeats for Project and Mirror. */
 export const SOLID_MAP_KEYS: Record<SolidMap, ParamKey[]> = { 0: ["solidTiles"], 1: ["solidBend", "solidFrost", "solidRepeats"], 2: ["solidRepeats"] };
 export const SOLID_MAPS = [[0, "Wrap"], [1, "Project"], [2, "Mirror"]] as const;
@@ -185,8 +185,10 @@ export const SOLID_WRAPS = [[0, "Globe"], [1, "Faces"], [2, "Six sides"], [3, "P
 /** What paints the 3D Object, the Source menu (see SolidPaint): Slot A is the picture made so far (Source A after the effects above the 3D Object). */
 export const SOLID_PAINTS = [[0, "Slot A"], [2, "Slot B"], [1, "Image or Video"]] as const;
 /** The Source menu of the Model shape: first the model's own colors and pictures, then the others. */
-/** The Model shape's Pivot menu (see SolidPivot). */
-export const SOLID_PIVOTS = [[0, "Center"], [1, "Model's own"]] as const;
+/** The Model shape's Pivot menu (see ModelPivot). */
+/** The 3D model effect's sliders, in panel order (Opacity last, with Blend: see SplitRows). */
+export const MODEL_KEYS: readonly ParamKey[] = ["modelSize", "modelRotateX", "modelRotateY", "modelRotateZ", "modelSpinX", "modelSpinY", "modelSpinZ", "modelLight", "modelShading", "modelShine", "modelShadow", "modelX", "modelY", "modelAmount"];
+export const MODEL_PIVOTS = [[0, "Center"], [1, "Model's own"]] as const;
 export const SOLID_MODEL_PAINTS = [[3, "Model"], ...SOLID_PAINTS] as const;
 
 /** The Opacity mask's types, and the sliders each shows under the gradient (Strength always shows, above it). */

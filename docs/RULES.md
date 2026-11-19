@@ -343,6 +343,10 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - An effect that is taken out of the FX list loses its check.
 - A scene saved with Freeze background on (before 2026-11-18) opens with a check on each effect after the 3D Object, up to an Image or Video.
 - The 3D Object's Background slider shows only in a scene that uses it (not 1, or with a range).
+- The 3D model is an effect of its own, not a shape of the 3D Object. It shows the model's own colors.
+- The 3D model has its own list of effects for the object only. An effect is in the list of one 3D effect only: a check in one takes it out of the other.
+- Adding the 3D model effect with no model opens the model browser.
+- A scene saved with the 3D Object's Model shape opens with the 3D model effect in its place.
 - With its range off, a value is its slider value.
 - When a range comes on, the end handle takes the single value.
 - A setting that goes below zero starts its range at ±10% around 0.

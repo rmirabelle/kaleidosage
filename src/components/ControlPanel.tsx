@@ -12,7 +12,7 @@ import { DEFAULT_LAND_KM, loadTerrain, randomLandPlace } from "../lib/terrain";
 import type { TerrainData } from "../engine/terrain";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
-import { effectName, CONE_SHAPES, CONE_SHAPE_KEYS, CONE_TYPES, CONE_TYPE_KEYS, TEXT_FILL_KEYS, TEXT_MOVES, TEXT_MOVE_KEYS, PATH_SHAPES, BUBBLE_SHAPES, BUBBLE_SHAPE_KEYS, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, PENROSE_SHAPES, SPHERE_SHAPES, PINWHEEL_SHAPES, TUNNEL_SHAPES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_PAINTS, SOLID_MODEL_PAINTS, SOLID_PIVOTS, SOLID_WRAPS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote, uniqueTo } from "../engine/submodes";
+import { MODEL_KEYS, effectName, CONE_SHAPES, CONE_SHAPE_KEYS, CONE_TYPES, CONE_TYPE_KEYS, TEXT_FILL_KEYS, TEXT_MOVES, TEXT_MOVE_KEYS, PATH_SHAPES, BUBBLE_SHAPES, BUBBLE_SHAPE_KEYS, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, PENROSE_SHAPES, SPHERE_SHAPES, PINWHEEL_SHAPES, TUNNEL_SHAPES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_PAINTS, MODEL_PIVOTS, SOLID_WRAPS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote, uniqueTo } from "../engine/submodes";
 import { canPaintSolid } from "../engine/renderer";
 import type { BlurMask, BubbleShape, ColorFill, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, MaskMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidPaint, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
@@ -308,6 +308,11 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       terrain: () => start("cameraAmount", 1),
       camera: () => start("viewAmount", 1),
       solid: () => start("solidAmount", 1),
+      model: () => {
+        start("modelAmount", 1);
+        /* A model effect shows nothing until it has a model: the browser opens. */
+        if (!engine.model) onBrowseModels();
+      },
       sort: () => start("sortAmount", 1),
       particles: () => start("particleAmount", 1),
       cycles: () => start("cyclesAmount", 1),
@@ -349,8 +354,10 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
   };
   const remove = (step: FxStep) => {
     removeEffect(engine.state, step);
-    /* An effect that is taken out no longer counts as one for the 3D Object only. */
-    if (engine.state.solidFx.includes(step)) engine.state.solidFx = engine.state.solidFx.filter((each) => each !== step);
+    /* An effect that is taken out no longer counts as one for a 3D effect's object only. */
+    for (const list of ["solidFx", "modelFx"] as const) {
+      if (engine.state[list].includes(step)) engine.state[list] = engine.state[list].filter((each) => each !== step);
+    }
     setFxOrder(engine.state.fxOrder);
     if (openGroup === step) onOpenGroup(null);
   };
@@ -416,7 +423,12 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     ),
     solid: (grip) => (
       <Group engine={engine} group="solid" title="3D object" grip={grip} {...accordion("solid")}>
-        <SolidSection engine={engine} row={row} fxOrder={fxOrder} mediaName={solidMediaName} onPickMedia={onPickSolidMedia} onRemoveMedia={onRemoveSolidMedia} onPickModel={onPickModel} onBrowseModels={onBrowseModels} />
+        <SolidSection engine={engine} row={row} fxOrder={fxOrder} mediaName={solidMediaName} onPickMedia={onPickSolidMedia} onRemoveMedia={onRemoveSolidMedia} />
+      </Group>
+    ),
+    model: (grip) => (
+      <Group engine={engine} group="model" title="3D model" grip={grip} {...accordion("model")}>
+        <ModelSection engine={engine} row={row} fxOrder={fxOrder} onPickModel={onPickModel} onBrowseModels={onBrowseModels} />
       </Group>
     ),
     sort: (grip) => (
@@ -943,7 +955,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "penroseShape" | "sphereShape" | "pinwheelShape" | "tunnelShape" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "bubbleShape" | "bubbleBlend" | "bubbleShadow" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "pathShape" | "pathBlend" | "spiroBlend" | "textMove" | "textBlend" | "coneType" | "coneShape" | "coneBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidWrap" | "solidPaint" | "solidPivot" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "penroseShape" | "sphereShape" | "pinwheelShape" | "tunnelShape" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "bubbleShape" | "bubbleBlend" | "bubbleShadow" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "pathShape" | "pathBlend" | "spiroBlend" | "textMove" | "textBlend" | "coneType" | "coneShape" | "coneBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidWrap" | "solidPaint" | "modelBlend" | "modelPivot" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange, child }: {
@@ -1218,60 +1230,27 @@ function CyclesSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =
 }
 
 /** The 3D Object: its shape and map menus, then the sliders that the shape and the map use, then Blend and Opacity. */
-function SolidSection({ engine, row, fxOrder, mediaName, onPickMedia, onRemoveMedia, onPickModel, onBrowseModels }: { engine: Engine; row: (key: ParamKey) => ReactNode; fxOrder: readonly FxStep[]; mediaName: string | null; onPickMedia: () => void; onRemoveMedia: () => void; onPickModel: () => void; onBrowseModels: () => void }) {
+function SolidSection({ engine, row, fxOrder, mediaName, onPickMedia, onRemoveMedia }: { engine: Engine; row: (key: ParamKey) => ReactNode; fxOrder: readonly FxStep[]; mediaName: string | null; onPickMedia: () => void; onRemoveMedia: () => void }) {
   const [shape, setShape] = useState<SolidShape>(engine.state.solidShape);
   const [map, setMap] = useState<SolidMap>(engine.state.solidMap);
   const [paint, setPaint] = useState<SolidPaint>(engine.state.solidPaint);
-  const [modelName, setModelName] = useState<string | null>(engine.model?.name ?? null);
-  useEffect(() => engine.watchModel(() => setModelName(engine.model?.name ?? null)), [engine]);
-  /* The model's credit (its maker and license, when its file has them) shows in the name's tip. */
-  const modelCredit = engine.model?.shape.credit;
-  /* The model's own colors (Source: Model) do not use the Map, its sliders or Bump. */
-  const own = shape === 11 && paint === 3;
   const mapOnly = Object.values(SOLID_MAP_KEYS).flat();
   const shown = (key: ParamKey) => SOLID_SHAPE_ONLY.includes(key) ? SOLID_SHAPE_KEYS[shape].includes(key)
-    : mapOnly.includes(key) ? !own && SOLID_MAP_KEYS[map].includes(key)
-    : key === "solidRelief" ? !own
+    : mapOnly.includes(key) ? SOLID_MAP_KEYS[map].includes(key)
     /* The object draws only itself: Background (how much of the picture behind shows) is there only for a scene that uses it. */
     : key === "solidBackground" ? engine.params.solidBackground.value !== 1 || engine.params.solidBackground.on : true;
   /* The shape's own sliders go under Shape, and the map's under Map (see childRows); Roundness, which most shapes show, stays in the list. */
   const shapeOwn = uniqueTo(SOLID_SHAPE_KEYS, shape);
-  const mapRows = own ? [] : SOLID_MAP_KEYS[map];
-  /* Source: Model is only for the Model shape: it comes with the shape, and goes back to Slot A with another shape. */
-  const pickPaint = (next: SolidPaint) => {
-    engine.state.solidPaint = next;
-    setPaint(next);
-  };
+  const mapRows = SOLID_MAP_KEYS[map];
   return (
     <>
       <ModeSelect engine={engine} stateKey="solidShape" options={SOLID_SHAPES} name="Shape" onChange={(next) => {
         setShape(next);
         if (next === 10) standStarUp(engine);
-        if (next === 11) {
-          pickPaint(3);
-          if (!engine.model) onBrowseModels();
-        } else if (engine.state.solidPaint === 3) {
-          pickPaint(0);
-        }
       }} />
-      {shape === 11 && (
-        <div className="panel-select-row panel-select-named driver-video-row panel-child-row">
-          <span className="panel-row-name">File</span>
-          <span className="driver-video-name" data-tip={modelName ? `The 3D Object's model: ${modelName}${modelCredit ? `. Credit: ${modelCredit}` : ""}` : "No model yet: only the picture behind shows"}>{modelName ?? "None"}</span>
-          <button className="button secondary small" onClick={onBrowseModels} data-tip="Pick one of the free 3D models of Poly Haven or Sketchfab. The scene file keeps a copy.">Browse…</button>
-          <button className="button secondary small" onClick={onPickModel} data-tip="Pick a 3D model file (.glb) on this PC. The scene file keeps a copy.">File…</button>
-          {modelName && (
-            <button className="button secondary small" onClick={() => engine.setModel(null)} data-tip="Take the model off the 3D Object" aria-label="Remove the 3D Object's model">
-              <X size={12} weight="bold" />
-            </button>
-          )}
-        </div>
-      )}
-      {/* Pivot: the point the model turns around, and that sits at Center X and Center Y. */}
-      {shape === 11 && <ModeSelect engine={engine} stateKey="solidPivot" options={SOLID_PIVOTS} name="Pivot" child />}
       {childRows(shapeOwn, row)}
-      {/* Source: Slot A (the picture made so far), Slot B, or the 3D Object's own image or video; picking Image or Video with no file opens the Open dialog. The Model shape adds Model: the model's own colors and pictures. The key makes the menu show a Source that the Shape menu set. */}
-      <ModeSelect key={`${shape === 11} ${paint}`} engine={engine} stateKey="solidPaint" options={shape === 11 ? SOLID_MODEL_PAINTS : SOLID_PAINTS} name="Source" onChange={(next) => {
+      {/* Source: Slot A (the picture made so far), Slot B, or the 3D Object's own image or video; picking Image or Video with no file opens the Open dialog. */}
+      <ModeSelect engine={engine} stateKey="solidPaint" options={SOLID_PAINTS} name="Source" onChange={(next) => {
         setPaint(next);
         if (next === 1 && !mediaName) onPickMedia();
       }} />
@@ -1287,11 +1266,42 @@ function SolidSection({ engine, row, fxOrder, mediaName, onPickMedia, onRemoveMe
           )}
         </div>
       )}
-      {!own && <ModeSelect engine={engine} stateKey="solidMap" options={SOLID_MAPS} name="Map" onChange={setMap} />}
+      <ModeSelect engine={engine} stateKey="solidMap" options={SOLID_MAPS} name="Map" onChange={setMap} />
       {shape === 10 && map === 0 && <ModeSelect engine={engine} stateKey="solidWrap" options={SOLID_WRAPS} name="Wrap" child />}
       {childRows(mapRows, row)}
-      <ObjectEffects engine={engine} fxOrder={fxOrder} own={own} />
+      <ObjectEffects engine={engine} fxOrder={fxOrder} list="solidFx" />
       <SplitRows keys={without(SOLID_KEYS.filter(shown), [...shapeOwn, ...mapRows])} row={row} blend={<ModeSelect engine={engine} stateKey="solidBlend" options={LAYER_BLENDS} name="Blend" />} />
+    </>
+  );
+}
+
+/**
+ * The 3D model effect (see docs/SOLIDS.md): a model from a file, which
+ * shows its own colors. The File row picks it: Browse opens the model
+ * browser, File the system's Open dialog for a .glb file. Pivot is the
+ * point the model turns around, which sits at Center X and Center Y.
+ */
+function ModelSection({ engine, row, fxOrder, onPickModel, onBrowseModels }: { engine: Engine; row: (key: ParamKey) => ReactNode; fxOrder: readonly FxStep[]; onPickModel: () => void; onBrowseModels: () => void }) {
+  const [modelName, setModelName] = useState<string | null>(engine.model?.name ?? null);
+  useEffect(() => engine.watchModel(() => setModelName(engine.model?.name ?? null)), [engine]);
+  /* The model's credit (its maker and license, when its file has them) shows in the name's tip. */
+  const modelCredit = engine.model?.shape.credit;
+  return (
+    <>
+      <div className="panel-select-row panel-select-named driver-video-row">
+        <span className="panel-row-name">File</span>
+        <span className="driver-video-name" data-tip={modelName ? `The model: ${modelName}${modelCredit ? `. Credit: ${modelCredit}` : ""}` : "No model yet: only the picture behind shows"}>{modelName ?? "None"}</span>
+        <button className="button secondary small" onClick={onBrowseModels} data-tip="Pick one of the free 3D models of Poly Haven or Sketchfab. The scene file keeps a copy.">Browse…</button>
+        <button className="button secondary small" onClick={onPickModel} data-tip="Pick a 3D model file (.glb) on this PC. The scene file keeps a copy.">File…</button>
+        {modelName && (
+          <button className="button secondary small" onClick={() => engine.setModel(null)} data-tip="Take the model out of the scene" aria-label="Remove the model">
+            <X size={12} weight="bold" />
+          </button>
+        )}
+      </div>
+      <ModeSelect engine={engine} stateKey="modelPivot" options={MODEL_PIVOTS} name="Pivot" />
+      <ObjectEffects engine={engine} fxOrder={fxOrder} list="modelFx" />
+      <SplitRows keys={MODEL_KEYS} row={row} blend={<ModeSelect engine={engine} stateKey="modelBlend" options={LAYER_BLENDS} name="Blend" />} />
     </>
   );
 }
@@ -1317,18 +1327,22 @@ function standStarUp(engine: Engine) {
 }
 
 /**
- * The effects that change only the 3D Object (see PlayState.solidFx): one
- * check box for each other effect of the scene, in the FX list's order. A
- * checked effect changes the object and not the rest of the picture. With
- * no check, an effect works by its place in the list: above the 3D Object
- * it changes the picture behind it, below it the whole result.
+ * The effects that change only a 3D effect's object (see PlayState.solidFx
+ * and modelFx): one check box for each other effect of the scene, in the
+ * FX list's order. A checked effect changes the object and not the rest
+ * of the picture. With no check, an effect works by its place in the
+ * list: above the 3D effect it changes the picture behind its object,
+ * below it the whole result. An effect is for one object only: a check
+ * here takes it out of the other 3D effect's list.
  */
-function ObjectEffects({ engine, fxOrder, own }: { engine: Engine; fxOrder: readonly FxStep[]; own: boolean }) {
-  const [picked, setPicked] = useState(engine.state.solidFx);
+function ObjectEffects({ engine, fxOrder, list }: { engine: Engine; fxOrder: readonly FxStep[]; list: "solidFx" | "modelFx" }) {
+  const [picked, setPicked] = useState(engine.state[list]);
+  const other = list === "solidFx" ? "modelFx" : "solidFx";
   const others = fxOrder.filter(canPaintSolid);
-  const what = own ? "the model" : "the picture on the object";
+  const what = list === "modelFx" ? "the model" : "the picture on the object";
+  const owner = list === "modelFx" ? "3D model" : "3D object";
   return (
-    <div className="panel-object-effects" data-tip={`Effects for the object only: a checked effect changes ${what}, and not the rest of the picture. With no check, an effect above the 3D object changes the picture behind it, and an effect below it changes the whole result.`}>
+    <div className="panel-object-effects" data-tip={`Effects for the object only: a checked effect changes ${what}, and not the rest of the picture. With no check, an effect above the ${owner} changes the picture behind it, and an effect below it changes the whole result.`}>
       <span className="panel-row-name">Effects for the object only</span>
       {others.length === 0 && <span className="panel-object-effects-none">Add another effect to select it here</span>}
       {others.map((step) => (
@@ -1337,8 +1351,9 @@ function ObjectEffects({ engine, fxOrder, own }: { engine: Engine; fxOrder: read
             type="checkbox"
             checked={picked.includes(step)}
             onChange={(event) => {
-              const next = event.target.checked ? [...engine.state.solidFx, step] : engine.state.solidFx.filter((each) => each !== step);
-              engine.state.solidFx = next;
+              const next = event.target.checked ? [...engine.state[list], step] : engine.state[list].filter((each) => each !== step);
+              engine.state[list] = next;
+              if (event.target.checked && engine.state[other].includes(step)) engine.state[other] = engine.state[other].filter((each) => each !== step);
               setPicked(next);
             }}
           />

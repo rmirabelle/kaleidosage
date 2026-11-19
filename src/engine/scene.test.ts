@@ -174,16 +174,44 @@ describe("scene files", () => {
     expect(media.solidMedia).toEqual({ media: IMAGE, name: "logo.png" });
   });
 
-  it("keep the 3D object's Model shape, its Model source and its model file", () => {
+  it("keep the 3D model effect, its pivot, its turn and its model file", () => {
     const state = createPlayState();
-    Object.assign(state, { solidShape: 11, solidPaint: 3, solidPivot: 1, solidTurnsY: 0.25 });
+    Object.assign(state, { fxOrder: ["model"], modelBlend: 2, modelPivot: 1, modelTurnsY: 0.25 });
     const scene = JSON.parse(serializeScene(createParams(), state, { image: IMAGE }));
     scene.model = { name: "duck.glb", data: "Z2xURg==" };
     const loaded = createPlayState();
     const media = applyScene(JSON.stringify(scene), createParams(), loaded);
-    expect([loaded.solidShape, loaded.solidPaint, loaded.solidPivot, loaded.solidTurnsY]).toEqual([11, 3, 1, 0.25]);
-    expect(sceneFingerprint(createParams(), loaded, [])).not.toBe(sceneFingerprint(createParams(), { ...loaded, solidPivot: 0 }, []));
+    expect([loaded.fxOrder, loaded.modelBlend, loaded.modelPivot, loaded.modelTurnsY]).toEqual([["model"], 2, 1, 0.25]);
+    expect(sceneFingerprint(createParams(), loaded, [])).not.toBe(sceneFingerprint(createParams(), { ...loaded, modelPivot: 0 }, []));
     expect(media.model).toEqual({ name: "duck.glb", data: "Z2xURg==" });
+  });
+
+  it("open a scene with the 3D object's Model shape as the 3D model effect", () => {
+    const old = JSON.parse(serializeScene(createParams(), createPlayState(), { image: IMAGE }));
+    old.state.effects = ["kaleidoscope", "solid", "bloom"];
+    old.state.groups.solid = true;
+    old.state.solidShape = 11;
+    old.state.solidPaint = 3;
+    old.state.solidPivot = 1;
+    old.state.solidFx = ["bloom"];
+    old.params.solidAmount = { ...old.params.solidAmount, value: 0.8 };
+    old.params.solidSize = { ...old.params.solidSize, value: 0.9 };
+    old.params.solidRotateX = { ...old.params.modelRotateX, value: 45 };
+    delete old.params.modelRotateX;
+    const params = createParams();
+    const loaded = createPlayState();
+    applyScene(JSON.stringify(old), params, loaded);
+    expect(loaded.fxOrder).toEqual(["kaleidoscope", "model", "bloom"]);
+    expect(loaded.groups.model).toBe(true);
+    expect(loaded.groups.solid).toBe(false);
+    expect(loaded.solidShape).toBe(1);
+    expect(loaded.solidPaint).toBe(0);
+    expect(loaded.modelPivot).toBe(1);
+    expect(loaded.modelFx).toEqual(["bloom"]);
+    expect(loaded.solidFx).toEqual([]);
+    expect(params.modelAmount.value).toBe(0.8);
+    expect(params.modelSize.value).toBe(0.9);
+    expect(params.modelRotateX.value).toBe(45);
   });
 
   it("keep the effects for the 3D object only, and read Freeze background of an older scene as the effects after it", () => {
@@ -294,7 +322,7 @@ describe("scene files", () => {
     /* Earlier versions of the app read a full order inside each kind: the list's order first. */
     const savedState = JSON.parse(text).state;
     expect(savedState.shapeStack).toEqual(["warp", "map", "kaleidoscope"]);
-    expect(savedState.pictureOrder).toEqual(["relief", "blur", "trails", "smear", "contours", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "cone", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble", "text"]);
+    expect(savedState.pictureOrder).toEqual(["relief", "blur", "trails", "smear", "contours", "driver", "terrain", "camera", "solid", "model", "sort", "particles", "cycles", "rays", "lasers", "cone", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble", "text"]);
 
     /* Scenes from before the effect list: every effect that is on and changes the picture, in their order. */
     const showing = { warpAmount: { value: 0.3 }, blurAmount: { value: 10 }, trailAmount: { value: 0.5 }, smearAmount: { value: 1 }, contourOpacity: { value: 1 }, reliefAmount: { value: 1 }, sharpen: { value: 1 } };

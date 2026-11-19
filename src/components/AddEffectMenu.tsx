@@ -18,6 +18,7 @@ const EFFECT_NOTES: Record<FxStep, string> = {
   terrain: "Flies a camera over the picture as a landscape.",
   camera: "Flies a camera over the flat picture.",
   solid: "Puts the picture on a turning 3D shape.",
+  model: "Shows a 3D model from a file, or from the free models of Poly Haven and Sketchfab.",
   sort: "Sorts pixels by brightness into streaks.",
   particles: "Bright areas send out moving particles.",
   cycles: "Light cycles race and leave lines in the picture's colors.",

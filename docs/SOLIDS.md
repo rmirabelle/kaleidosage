@@ -325,8 +325,38 @@ layers, and I only ever wanted it to be one layer: just the object").
 - The Background slider shows only in a scene that uses it: the object
   draws only itself, and a Levels or Color effect above it darkens the
   picture behind.
-- Planned next, not built: the Model as an effect of its own, and 3D
-  effects next to each other in the list in one space with true depth.
+- Planned next, not built: 3D effects next to each other in the list in
+  one space with true depth.
+
+## The 3D model effect
+
+Built 2026-11-18, the same day as the Model shape, which it replaces. The
+user did not mean the model to be a shape of the 3D Object: one effect did
+too many things, and a scene could not have a model and a 3D object.
+
+- A new effect, "3D model" (step and group `model`), with its own
+  settings: Opacity, Size, Rotate X, Y, Z, Spin X, Y, Z, Light angle,
+  Shading, Shine, Shadow, Center X, Center Y, the Pivot menu, Blend, and
+  its own list of effects for the object only (PlayState.modelFx). An
+  effect is in the list of one 3D effect only: a check in one takes it
+  out of the other.
+- It shows the model's own colors only. A picture on the model (the Model
+  shape's Source: Slot A, Slot B, Image or Video, with Map) is gone; it
+  can come back as a Source menu if the user wants it.
+- The 3D Object has no Model shape and no Source: Model now.
+- Drawing: the 3D Object's code (drawModel, solidLook), which reads the
+  model's settings in the place of the 3D Object's (modelValues in
+  renderer.ts).
+- With effects of its own, each 3D effect cuts the FX list (see render):
+  the steps before it make the picture behind, the object is drawn over
+  it with its effects, and the steps after it go on from the result. Two
+  3D effects with effects of their own cut the list two times.
+- A scene has one model (engine.model), as before. The scene file keeps
+  it while the 3D model effect is in the list.
+- A scene saved with the Model shape opens with the 3D model effect at
+  the 3D Object's place, with its settings (modelFromSolid in scene.ts).
+- Adding the effect with no model opens the model browser. Random all
+  does not pick it.
 
 ## Open points
 

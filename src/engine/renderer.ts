@@ -37,7 +37,7 @@ export type ShapeStep = "warp" | "map" | "kaleidoscope";
 /** The kind of warp: noise, ripple, waves, swirl, bulge and pinch, cells. */
 export type WarpType = 0 | 1 | 2 | 3 | 4 | 5;
 /** The steps that change the drawn picture. The user sets their order. */
-export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "cone" | "paths" | "spiro" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble" | "text";
+export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "model" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "cone" | "paths" | "spiro" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble" | "text";
 /**
  * Any effect step. The user sets one order for all of them. Shape steps
  * that are next to each other run in one pass; a shape step after a
@@ -45,15 +45,19 @@ export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | 
  */
 export type FxStep = ShapeStep | PictureStep;
 export const SHAPE_STEPS: readonly ShapeStep[] = ["warp", "map", "kaleidoscope"];
-export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "cone", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble", "text"];
+export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "model", "sort", "particles", "cycles", "rays", "lasers", "cone", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble", "text"];
 
 /** Sharpen, Color and Levels, in the order FINISH_SHADER applies them (see drawFinish). */
 type FinishPart = "sharpen" | "color" | "levels";
 const FINISH_PARTS: readonly FinishPart[] = ["sharpen", "color", "levels"];
 const isFinishPart = (step: FxStep): step is FinishPart => (FINISH_PARTS as readonly string[]).includes(step);
 export const isShapeStep = (step: FxStep): step is ShapeStep => (SHAPE_STEPS as readonly FxStep[]).includes(step);
-/** An effect that can change only the 3D Object (see PlayState.solidFx): any but the 3D Object itself, and Camera and Terrain, which show a whole world. */
-export const canPaintSolid = (step: FxStep) => step !== "solid" && step !== "camera" && step !== "terrain";
+/** The 3D effects: each draws an object over the picture made so far, and can have effects of its own (see PlayState.solidFx and modelFx). */
+export type ObjectStep = "solid" | "model";
+export const OBJECT_STEPS: readonly ObjectStep[] = ["solid", "model"];
+export const isObjectStep = (step: FxStep): step is ObjectStep => (OBJECT_STEPS as readonly FxStep[]).includes(step);
+/** An effect that can change only a 3D effect's object: any but the 3D effects themselves, and Camera and Terrain, which show a whole world. */
+export const canPaintSolid = (step: FxStep) => !isObjectStep(step) && step !== "camera" && step !== "terrain";
 /** The most laser beams: the shader draws at most this many (see LASER_SHADER). */
 export const LASER_BEAMS = 32;
 /**
@@ -354,7 +358,7 @@ export type SolidWrap = 0 | 1 | 2 | 3;
 /** What paints the 3D Object: 0 the picture made so far, 1 its own image or video (see setSolidMedia), 2 Source B (the scene's second image or video), 3 the model's own materials (the Model shape only, see setModel). */
 export type SolidPaint = 0 | 1 | 2 | 3;
 /** The Model shape's pivot, the point it turns around: 0 the middle of its box, 1 the point its maker set (the file's own zero point). */
-export type SolidPivot = 0 | 1;
+export type ModelPivot = 0 | 1;
 /** How the two images fade: 0 = crossfade, 1 = dissolve by brightness (light areas change first). */
 export type BlendMode = 0 | 1;
 /**
@@ -369,14 +373,13 @@ export interface FrameValues {
   /** Every effect step, in the order they act on the picture. */
   fxOrder: FxStep[];
   /**
-   * The effects for the 3D Object only (see render and PlayState.solidFx),
-   * or null when there is none: fxOrder in three parts. "object" is the
-   * steps that change only the object, in the list's order, wherever they
-   * are in it. "before" is the other steps before the 3D Object, which make
-   * the picture behind it; "after" the other steps after it, which change
-   * the whole picture.
+   * The effects that change only each 3D effect's object (see render,
+   * PlayState.solidFx and modelFx), in fxOrder's order, wherever they are
+   * in it. An effect is in at most one of the two lists. The other steps
+   * work by their place: before a 3D effect they make the picture behind
+   * its object, after it they change the whole picture.
    */
-  freeze: { before: FxStep[]; object: FxStep[]; after: FxStep[] } | null;
+  objectFx: Record<ObjectStep, FxStep[]>;
   /** Which shape steps are on; a step that is off is left out, so it costs no pass. */
   shapeActive: Record<ShapeStep, boolean>;
   /** Each shape step's opacity, and how its result combines with the picture without it (see LayerBlend). */
@@ -652,6 +655,20 @@ export interface FrameValues {
    * angle (radians), shading, shine, shadow, and its place (screen heights
    * from the screen center).
    */
+  /**
+   * The 3D model (see drawModel): its opacity, size (a part of the screen
+   * height), place, light and Blend. Its turn is modelAngleX, Y and Z, and
+   * its pivot modelPivot.
+   */
+  model: number;
+  modelSize: number;
+  modelX: number;
+  modelY: number;
+  modelLight: number;
+  modelShading: number;
+  modelShine: number;
+  modelShadow: number;
+  modelBlend: LayerBlend;
   solid: number;
   solidShape: SolidShape;
   solidMap: SolidMap;
@@ -682,10 +699,10 @@ export interface FrameValues {
   solidSpin: number;
   solidTumble: number;
   /** The Model shape's turn about the x, y and z lines, in radians (in place of Spin, Tumble and Tilt), and its pivot. */
-  solidAngleX: number;
-  solidAngleY: number;
-  solidAngleZ: number;
-  solidPivot: SolidPivot;
+  modelAngleX: number;
+  modelAngleY: number;
+  modelAngleZ: number;
+  modelPivot: ModelPivot;
   solidTilt: number;
   solidBend: number;
   /** Project's frost: 0 clear glass, 1 frosted (see SOLID_SHADER). */
@@ -1584,74 +1601,93 @@ export class KaleidoRenderer {
     const shapeSteps = v.fxOrder.filter((step): step is ShapeStep => isShapeStep(step) && active[step]);
     this.info.shapeVersions = 1 + shapeSteps.filter((step) => opacity(step) < 1 || v.layerBlend[step] !== 0).length;
     for (const step of PICTURE_STEPS) if (!active[step]) delete this.timer.times[step];
-    if (!active.solid) delete this.timer.times.screen;
+    if (!active.solid && !active.model) delete this.timer.times.screen;
 
     /**
-     * Effects for the 3D Object only (see FrameValues.freeze): the "before"
-     * steps make the picture behind the object, which is kept. The "object"
-     * steps change a copy of the object's Source, which the object is
-     * painted with, over the kept picture, so its outline does not change.
-     * A model with its own colors has no Source picture: see
-     * renderOwnModel. The "after" steps then change the whole picture.
-     * Else the list draws onto the screen in one run.
+     * Effects for a 3D effect's object only (see FrameValues.objectFx).
+     * With none, the list draws onto the screen in one run. Else the list
+     * without those effects is cut at each 3D effect that has some: the
+     * steps before it make the picture behind its object, which is kept;
+     * the object is drawn over it with its own effects; the steps after it
+     * go on from that result.
      */
-    const freeze = active.solid ? v.freeze : null;
-    if (!freeze) {
+    const special = v.fxOrder.filter((step): step is ObjectStep => isObjectStep(step) && active[step] && v.objectFx[step].length > 0);
+    if (special.length === 0) {
       this.output = null;
       this.drawStack(v, v.fxOrder, null, width, height);
       this.endFrame(active);
       return;
     }
-    const image = this.layerTarget("image", width, height);
-    this.output = image.framebuffer;
-    this.drawStack(v, freeze.before, null, width, height);
-    if (v.solidShape === 11 && v.solidPaint === 3) {
-      this.renderOwnModel(v, freeze, image, width, height);
-      this.endFrame(active);
-      return;
+    const own = new Set(special.flatMap((step) => v.objectFx[step]));
+    const plain = v.fxOrder.filter((step) => !own.has(step));
+    let input: WebGLTexture | null = null;
+    let from = 0;
+    for (const step of special) {
+      const at = plain.indexOf(step);
+      const image = this.layerTarget(`${step} image`, width, height);
+      this.output = image.framebuffer;
+      this.drawStack(v, plain.slice(from, at), input, width, height);
+      const into = at < plain.length - 1 ? this.layerTarget(`${step} stack`, width, height) : null;
+      this.output = null;
+      if (step === "solid") this.drawPaintedSolid(v, v.objectFx.solid, image, into, width, height);
+      else this.drawModelWith(v, v.objectFx.model, image, into, width, height);
+      if (!into) {
+        this.endFrame(active);
+        return;
+      }
+      input = into.texture;
+      from = at + 1;
     }
-    const paint = this.layerTarget("solid paint", width, height);
-    this.output = paint.framebuffer;
-    /* The object steps change the 3D Object's Source: Slot A (the picture made so far), Slot B or its own image or video (found 2026-11-07: Slot B skipped them). */
-    this.drawStack(v, freeze.object, this.solidSource(v, image.texture), width, height);
-    const into = freeze.after.length > 0 ? this.layerTarget("stack", width, height) : null;
     this.output = null;
-    this.timer.begin("solid");
-    this.drawSolid(v, paint.texture, into, width, height, image.texture, true);
-    this.timer.end();
-    if (into) this.drawStack(v, freeze.after, into.texture, width, height);
+    this.drawStack(v, plain.slice(from), input, width, height);
     this.endFrame(active);
   }
 
   /**
-   * The effects for the object only, for a model that shows its own colors
-   * (Source: Model). It has no Source picture for the steps to change, so
-   * they change the drawn model: the model alone on a clear picture, with
-   * no shadow, goes through the "object" steps (every step carries the
-   * cover, see docs/LAYERS.md, rule 1). The result goes over the picture
-   * behind, which has the model's shadow. A step that moves the picture
-   * (Warp, Kaleidoscope) so moves the model's outline too.
+   * The 3D Object with effects of its own: the steps change a copy of its
+   * Source (Slot A is "image", the picture made so far; else Slot B or its
+   * own image or video), which the object is painted with, over "image",
+   * so its outline does not change.
    */
-  private renderOwnModel(v: FrameValues, freeze: NonNullable<FrameValues["freeze"]>, image: Target, width: number, height: number) {
+  private drawPaintedSolid(v: FrameValues, steps: readonly FxStep[], image: Target, into: Target | null, width: number, height: number) {
+    const paint = this.layerTarget("solid paint", width, height);
+    this.output = paint.framebuffer;
+    this.drawStack(v, steps, this.solidSource(v, image.texture), width, height);
+    this.output = null;
+    this.timer.begin("solid");
+    this.drawSolid(v, paint.texture, into, width, height, image.texture, true);
+    this.timer.end();
+  }
+
+  /**
+   * The 3D model with effects of its own. It shows its own colors, so it
+   * has no Source picture for the steps to change: they change the drawn
+   * model. The model alone on a clear picture, with no shadow, goes
+   * through the steps (every step carries the cover, see docs/LAYERS.md,
+   * rule 1). The result goes over the picture behind, which has the
+   * model's shadow. A step that moves the picture (Warp, Kaleidoscope) so
+   * moves the model's outline too.
+   */
+  private drawModelWith(v: FrameValues, steps: readonly FxStep[], image: Target, into: Target | null, width: number, height: number) {
     const gl = this.gl;
-    const clear = this.layerTarget("solid clear", width, height);
+    const look = this.modelValues(v);
+    const clear = this.layerTarget("model clear", width, height);
     gl.bindFramebuffer(gl.FRAMEBUFFER, clear.framebuffer);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
-    const alone = this.layerTarget("solid alone", width, height);
-    this.timer.begin("solid");
+    const alone = this.layerTarget("model alone", width, height);
+    this.timer.begin("model");
     this.modelPart = "alone";
-    this.drawModel(v, clear.texture, alone, width, height, clear.texture);
+    this.drawModel(look, clear.texture, alone, width, height, clear.texture);
     this.modelPart = "all";
     this.timer.end();
-    const paint = this.layerTarget("solid paint", width, height);
+    const paint = this.layerTarget("model paint", width, height);
     this.output = paint.framebuffer;
-    this.drawStack(v, freeze.object, alone.texture, width, height);
-    const into = freeze.after.length > 0 ? this.layerTarget("stack", width, height) : null;
+    this.drawStack(v, steps, alone.texture, width, height);
     this.output = null;
-    this.timer.begin("solid");
+    this.timer.begin("model");
     this.modelPart = "behind";
-    this.drawModel(v, image.texture, into, width, height, image.texture);
+    this.drawModel(look, image.texture, into, width, height, image.texture);
     this.modelPart = "all";
     gl.viewport(0, 0, width, height);
     gl.enable(gl.BLEND);
@@ -1659,7 +1695,20 @@ export class KaleidoRenderer {
     this.drawCopy(paint.texture, into);
     gl.disable(gl.BLEND);
     this.timer.end();
-    if (into) this.drawStack(v, freeze.after, into.texture, width, height);
+  }
+
+  /**
+   * The frame's values as drawModel and solidLook read them, for the 3D
+   * model: the model's own settings in the place of the 3D Object's (the
+   * two effects share the drawing code). The other values come from "v".
+   */
+  private modelValues(v: FrameValues): FrameValues {
+    const own: Partial<FrameValues> = {
+      solid: v.model, solidShape: 11, solidPaint: 3, solidSize: v.modelSize, solidX: v.modelX, solidY: v.modelY,
+      solidLight: v.modelLight, solidShading: v.modelShading, solidShine: v.modelShine, solidShadow: v.modelShadow,
+      solidBlend: v.modelBlend, solidBackground: 1, solidRelief: 0
+    };
+    return Object.assign(Object.create(v) as FrameValues, own);
   }
 
   /** The steps that do something in this frame. A shape step that is off does nothing either, and neither does one at opacity 0. */
@@ -1681,6 +1730,7 @@ export class KaleidoRenderer {
       particles: v.particles > 0 && this.floatTargets,
       cycles: v.cycles > 0,
       solid: v.solid > 0,
+      model: v.model > 0,
       /* The sort keeps column numbers in half floats, so it needs float textures. */
       sort: v.sort > 0 && this.floatTargets,
       rays: v.rays > 0,
@@ -1827,6 +1877,7 @@ export class KaleidoRenderer {
         else if (step === "terrain") this.drawTerrain(v, source, target, width, height);
         else if (step === "camera") this.drawCamera(v, source, target, width, height);
         else if (step === "solid") this.drawSolid(v, source, target, width, height, source);
+        else if (step === "model") this.drawModel(this.modelValues(v), source, target, width, height, source);
         else if (step === "contours") this.drawContours(v, source, target, width, height);
         else if (step === "smear") this.drawSmear(v, source, target, width, height);
         else if (step === "particles") this.drawParticles(v, source, target, width, height);
@@ -2618,9 +2669,9 @@ export class KaleidoRenderer {
        * Y turns it like a coin (the user's wish, 2026-11-18; with Y
        * first, the two turns together looked like a wobble).
        */
-      const [cx, sx] = [Math.cos(v.solidAngleX), Math.sin(v.solidAngleX)];
-      const [cy, sy] = [Math.cos(v.solidAngleY), Math.sin(v.solidAngleY)];
-      const [cz, sz] = [Math.cos(v.solidAngleZ), Math.sin(v.solidAngleZ)];
+      const [cx, sx] = [Math.cos(v.modelAngleX), Math.sin(v.modelAngleX)];
+      const [cy, sy] = [Math.cos(v.modelAngleY), Math.sin(v.modelAngleY)];
+      const [cz, sz] = [Math.cos(v.modelAngleZ), Math.sin(v.modelAngleZ)];
       const inner = [[cy, sy * sx, sy * cx], [0, cx, -sx], [-sy, cy * sx, cy * cx]];
       rows = [inner[0].map((value, i) => cz * value - sz * inner[1][i]), inner[1].map((value, i) => sz * inner[0][i] + cz * value), inner[2]];
     }
@@ -2802,7 +2853,7 @@ export class KaleidoRenderer {
       gl.uniform1f(s.uniforms.u_fade, 1);
       gl.uniform1i(s.uniforms.u_own, v.solidPaint === 3 ? 1 : 0);
       /* The point the model turns around, which also sits at Center X and Y: the middle of its box (0, 0, 0), or its maker's point. */
-      const pivot = v.solidPivot === 1 && this.model ? this.model.origin : [0, 0, 0];
+      const pivot = v.modelPivot === 1 && this.model ? this.model.origin : [0, 0, 0];
       gl.uniform3f(s.uniforms.u_pivot, pivot[0], pivot[1], pivot[2]);
       const textures: [WebGLTexture, string][] = [[source, "u_tex"], [back, "u_back"], [back, "u_under"], [shadeTexture, "u_shade"]];
       textures.forEach(([texture, name], unit) => {

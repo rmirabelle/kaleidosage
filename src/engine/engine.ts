@@ -1,5 +1,5 @@
 import { GROUP_PARAMS, NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, SPIRO_HOLE_KEYS, createParams, createPlayState, defaultValue, hexToRgb, lensAngle, liveValue, rangeAt, rangeClock, startRangeAt, type GroupKey, type ParamKey, type Params, type PlayState } from "./params";
-import { KaleidoRenderer, LASER_BEAMS, canPaintSolid, type FrameValues, type FxStep, type ImageSource } from "./renderer";
+import { KaleidoRenderer, LASER_BEAMS, canPaintSolid, type FrameValues, type ImageSource } from "./renderer";
 import type { TerrainData } from "./terrain";
 import type { ModelData } from "./model";
 import { MANDEL_CENTERS } from "./submodes";
@@ -531,16 +531,16 @@ export class Engine {
     syncVideo(video, target, paused || this.gated);
   }
 
-  /** The FX list in three parts, for the effects that change only the 3D Object (see FrameValues.freeze), or null. */
-  private freezeParts(): FrameValues["freeze"] {
+  /**
+   * The effects that change only each 3D effect's object (see
+   * FrameValues.objectFx), in the FX list's order. An effect that both
+   * lists name counts for the 3D Object only.
+   */
+  private objectFx(): FrameValues["objectFx"] {
     const order = this.state.fxOrder;
-    const at = order.indexOf("solid");
-    if (at < 0) return null;
-    const picked = this.state.solidFx;
-    const object = order.filter((step) => picked.includes(step) && canPaintSolid(step));
-    if (object.length === 0) return null;
-    const others = (steps: FxStep[]) => steps.filter((step) => !object.includes(step));
-    return { before: others(order.slice(0, at)), object, after: others(order.slice(at + 1)) };
+    const solid = order.filter((step) => this.state.solidFx.includes(step) && canPaintSolid(step));
+    const model = order.filter((step) => this.state.modelFx.includes(step) && canPaintSolid(step) && !solid.includes(step));
+    return { solid, model };
   }
 
   /** The camera's real terrain (see docs/TERRAIN.md), or null. The scene owns it; the engine draws with it. */
@@ -1136,9 +1136,9 @@ export class Engine {
     this.state.textTime = 0;
     this.state.coneFogTime = 0;
     this.state.solidSpinTurns = 0;
-    this.state.solidTurnsX = 0;
-    this.state.solidTurnsY = 0;
-    this.state.solidTurnsZ = 0;
+    this.state.modelTurnsX = 0;
+    this.state.modelTurnsY = 0;
+    this.state.modelTurnsZ = 0;
     this.state.solidTumbleTurns = 0;
     this.state.outlineSpinTurns = 0;
     this.state.outlineTumbleTurns = 0;
@@ -1293,9 +1293,9 @@ export class Engine {
     /* The 3D Object's spin and tumble are speeds in turns per minute, added up the same way. */
     this.state.solidSpinTurns = (this.state.solidSpinTurns + animated * this.live("solidSpin") / 60) % 1;
     this.state.solidTumbleTurns = (this.state.solidTumbleTurns + animated * this.live("solidTumble") / 60) % 1;
-    this.state.solidTurnsX = (this.state.solidTurnsX + animated * this.live("solidSpinX") / 60) % 1;
-    this.state.solidTurnsY = (this.state.solidTurnsY + animated * this.live("solidSpinY") / 60) % 1;
-    this.state.solidTurnsZ = (this.state.solidTurnsZ + animated * this.live("solidSpinZ") / 60) % 1;
+    this.state.modelTurnsX = (this.state.modelTurnsX + animated * this.live("modelSpinX") / 60) % 1;
+    this.state.modelTurnsY = (this.state.modelTurnsY + animated * this.live("modelSpinY") / 60) % 1;
+    this.state.modelTurnsZ = (this.state.modelTurnsZ + animated * this.live("modelSpinZ") / 60) % 1;
     this.state.outlineSpinTurns = (this.state.outlineSpinTurns + animated * this.live("outlineSpin") / 60) % 1;
     this.state.outlineTumbleTurns = (this.state.outlineTumbleTurns + animated * this.live("outlineTumble") / 60) % 1;
     /* Tunnel speed is a speed too, so the distance flown is added up the same way. */
@@ -1526,7 +1526,7 @@ export class Engine {
     const fadeIn = Math.min(1, Math.max(0, (divePart - (1 - diveFade)) / diveFade));
     return {
       fxOrder: this.state.fxOrder,
-      freeze: this.freezeParts(),
+      objectFx: this.objectFx(),
       shapeActive: { warp: on.warp, map: on.map, kaleidoscope: on.kaleidoscope },
       /* A group that is off does nothing, so full opacity in normal mode costs no extra picture. */
       shapeOpacity: {
@@ -1715,6 +1715,15 @@ export class Engine {
       skyColor: hexToRgb(this.state.skyColor),
       cameraShine: this.live("cameraShine"),
       cameraSmooth: this.live("cameraSmooth"),
+      model: on.model ? this.live("modelAmount") : 0,
+      modelSize: this.live("modelSize"),
+      modelLight: this.live("modelLight") * DEGREES,
+      modelShading: this.live("modelShading"),
+      modelShine: this.live("modelShine"),
+      modelShadow: this.live("modelShadow"),
+      modelX: this.live("modelX"),
+      modelY: this.live("modelY"),
+      modelBlend: this.state.modelBlend,
       solid: on.solid ? this.live("solidAmount") : 0,
       solidShape: this.state.solidShape,
       solidMap: this.state.solidMap,
@@ -1741,11 +1750,11 @@ export class Engine {
       solidSpin: this.state.solidSpinTurns * Math.PI * 2,
       solidTumble: this.state.solidTumbleTurns * Math.PI * 2,
       solidTilt: this.live("solidTilt") * DEGREES,
-      /* The Model shape: each line's angle is its Rotate plus what its Spin has added up. */
-      solidAngleX: this.live("solidRotateX") * DEGREES + this.state.solidTurnsX * Math.PI * 2,
-      solidAngleY: this.live("solidRotateY") * DEGREES + this.state.solidTurnsY * Math.PI * 2,
-      solidAngleZ: this.live("solidRotateZ") * DEGREES + this.state.solidTurnsZ * Math.PI * 2,
-      solidPivot: this.state.solidPivot,
+      /* The 3D model: each line's angle is its Rotate plus what its Spin has added up. */
+      modelAngleX: this.live("modelRotateX") * DEGREES + this.state.modelTurnsX * Math.PI * 2,
+      modelAngleY: this.live("modelRotateY") * DEGREES + this.state.modelTurnsY * Math.PI * 2,
+      modelAngleZ: this.live("modelRotateZ") * DEGREES + this.state.modelTurnsZ * Math.PI * 2,
+      modelPivot: this.state.modelPivot,
       solidBend: this.live("solidBend"),
       solidFrost: this.live("solidFrost"),
       solidTiles: this.live("solidTiles"),

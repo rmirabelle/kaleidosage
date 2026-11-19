@@ -1,4 +1,4 @@
-import type { ConeShape, ConeType, PenroseShape, PinwheelShape, TunnelShape, SphereShape, BlendMode, BlurMask, BubbleShadow, BubbleShape, CameraColors, CameraHeightSource, CameraRepeat, ColorFill, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidPaint, SolidPivot, SolidShape, SolidWrap, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, MaskMode, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
+import type { ConeShape, ConeType, PenroseShape, PinwheelShape, TunnelShape, SphereShape, BlendMode, BlurMask, BubbleShadow, BubbleShape, CameraColors, CameraHeightSource, CameraRepeat, ColorFill, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidPaint, ModelPivot, SolidShape, SolidWrap, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, MaskMode, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
 
 import type { PathShape } from "./paths";
 import { MAX_SPIRO_WHEELS, defaultSpiroWheels, randomSpiroWheels, type SpiroWheelSpec } from "./spiro";
@@ -25,7 +25,8 @@ export const PARAM_KEYS = [
   "particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost", "particleRingRadius",
   "cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead",
   "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY",
-  "solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidPoints", "solidPointLength", "solidHollow", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidRotateX", "solidRotateY", "solidRotateZ", "solidSpinX", "solidSpinY", "solidSpinZ", "solidBend", "solidFrost", "solidTiles", "solidRepeats", "solidLight", "solidShading", "solidShine", "solidRelief", "solidShadow", "solidX", "solidY",
+  "solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidPoints", "solidPointLength", "solidHollow", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidFrost", "solidTiles", "solidRepeats", "solidLight", "solidShading", "solidShine", "solidRelief", "solidShadow", "solidX", "solidY",
+  "modelAmount", "modelSize", "modelRotateX", "modelRotateY", "modelRotateZ", "modelSpinX", "modelSpinY", "modelSpinZ", "modelLight", "modelShading", "modelShine", "modelShadow", "modelX", "modelY",
   "raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY",
   "laserAmount", "laserOpacity", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY",
   "outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineInner", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineX", "outlineY",
@@ -282,7 +283,7 @@ export type Params = Record<ParamKey, Param>;
 export type ContourTone = "hue" | "black" | "white";
 export const CONTOUR_TONES: readonly ContourTone[] = ["hue", "black", "white"];
 
-export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "paths" | "spiro" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble" | "text" | "cone";
+export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "model" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "paths" | "spiro" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble" | "text" | "cone";
 
 export interface PlayState {
   /** Which groups are on. A group that is off has no effect, but keeps its settings. */
@@ -472,12 +473,15 @@ export interface PlayState {
    * of it: every effect after the 3D Object, up to an Image or Video.
    */
   solidFx: FxStep[];
+  /** The 3D model's Blend, and the effects that change only the model (as solidFx; an effect is in at most one of the two lists). */
+  modelBlend: LayerBlend;
+  modelFx: FxStep[];
   /** The Model shape's pivot, the point it turns around: 0 the middle of its box, 1 the point its maker set (the file's own zero point, often at the base). */
-  solidPivot: SolidPivot;
+  modelPivot: ModelPivot;
   /** The Model shape: how far Spin X, Y and Z have turned it, in turns (0 to 1). */
-  solidTurnsX: number;
-  solidTurnsY: number;
-  solidTurnsZ: number;
+  modelTurnsX: number;
+  modelTurnsY: number;
+  modelTurnsZ: number;
   solidSpinTurns: number;
   /** Light shapes: how far the first outline has turned by Spin and Tumble (turns, 0 to 1). */
   outlineSpinTurns: number;
@@ -980,12 +984,12 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * (which Y and Z carry with them), Y around a line that only Z moves,
    * and Z around the line toward the viewer (see solidLook).
    */
-  solidRotateX: { label: "Rotate X", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "wave", low: -30, high: 30, on: false },
-  solidRotateY: { label: "Rotate Y", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "wave", low: -45, high: 45, on: false },
-  solidRotateZ: { label: "Rotate Z", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "wave", low: -20, high: 20, on: false },
-  solidSpinX: { label: "Spin X", min: -60, max: 60, step: 0.1, value: 0, unit: " rpm", drift: "wave", low: -3, high: 3, on: false },
-  solidSpinY: { label: "Spin Y", min: -60, max: 60, step: 0.1, value: 6, unit: " rpm", drift: "wave", low: 3, high: 12, on: false },
-  solidSpinZ: { label: "Spin Z", min: -60, max: 60, step: 0.1, value: 0, unit: " rpm", drift: "wave", low: -3, high: 3, on: false },
+  modelRotateX: { label: "Rotate X", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "wave", low: -30, high: 30, on: false },
+  modelRotateY: { label: "Rotate Y", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "wave", low: -45, high: 45, on: false },
+  modelRotateZ: { label: "Rotate Z", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "wave", low: -20, high: 20, on: false },
+  modelSpinX: { label: "Spin X", min: -60, max: 60, step: 0.1, value: 0, unit: " rpm", drift: "wave", low: -3, high: 3, on: false },
+  modelSpinY: { label: "Spin Y", min: -60, max: 60, step: 0.1, value: 6, unit: " rpm", drift: "wave", low: 3, high: 12, on: false },
+  modelSpinZ: { label: "Spin Z", min: -60, max: 60, step: 0.1, value: 0, unit: " rpm", drift: "wave", low: -3, high: 3, on: false },
   solidBend: { label: "Bend", min: 0, max: 1, step: 0.01, value: 0.4, drift: "wave", low: 0.2, high: 0.7, on: false },
   solidFrost: { label: "Frost", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.6, on: false },
   solidTiles: { label: "Tiles", min: 0.25, max: 8, step: 0.01, scale: "log", value: 1, drift: "wave", low: 1, high: 3, on: false },
@@ -999,6 +1003,15 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   solidShadow: { label: "Shadow", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.2, high: 0.8, on: false },
   solidX: { label: "Center X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.25, high: 0.25, on: false },
   solidY: { label: "Center Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
+  /** 3D model (see docs/SOLIDS.md): a model from a file, with its own colors. Its turn settings are modelRotateX to modelSpinZ, above. */
+  modelAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
+  modelSize: { label: "Size", min: 0.1, max: 1.5, step: 0.01, scale: "log", value: 0.6, drift: "wave", low: 0.45, high: 0.8, on: false },
+  modelLight: { label: "Light angle", min: 0, max: 360, step: 1, value: 135, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  modelShading: { label: "Shading", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.3, high: 0.9, on: false },
+  modelShine: { label: "Shine", min: 0, max: 1, step: 0.01, value: 0.4, drift: "wave", low: 0.1, high: 0.7, on: false },
+  modelShadow: { label: "Shadow", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.2, high: 0.8, on: false },
+  modelX: { label: "Center X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.25, high: 0.25, on: false },
+  modelY: { label: "Center Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   /** Driver (see DRIVER_SHADER): opacity, how strongly the driver bends, reveals or lights, its size, its speed, and its contrast. */
   driverAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
   driverStrength: { label: "Strength", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.3, high: 0.8, on: false },
@@ -1310,7 +1323,7 @@ export const NO_EFFECT: Partial<Record<ParamKey, number>> = {
   particleGravity: 0,
   cyclesCenterX: 0, cyclesCenterY: 0,
   solidSpin: 0, solidTumble: 0, solidTilt: 0, solidX: 0, solidY: 0,
-  solidRotateX: 0, solidRotateY: 0, solidRotateZ: 0, solidSpinX: 0, solidSpinY: 0, solidSpinZ: 0,
+  modelRotateX: 0, modelRotateY: 0, modelRotateZ: 0, modelSpinX: 0, modelSpinY: 0, modelSpinZ: 0, modelX: 0, modelY: 0,
   outlineSpin: 0, outlineTumble: 0,
   raysX: 0, raysY: 0,
   colorX: 0, colorY: 0,
@@ -1329,7 +1342,7 @@ export function createParams(): Params {
 
 /** The start-up orders: the fold, then the map bends the folded picture, then the warp; and blur, trails, time smear, contours, relief, driver, camera, 3D object, pixel sort, particles, light cycles, light rays, lasers, bloom, final effects. */
 export const defaultShapeOrder = (): ShapeStep[] => ["kaleidoscope", "map", "warp"];
-export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "sort", "particles", "cycles", "rays", "lasers", "cone", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble", "text"];
+export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "model", "sort", "particles", "cycles", "rays", "lasers", "cone", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble", "text"];
 export const defaultFxOrder = (): FxStep[] => [...defaultShapeOrder(), ...defaultPictureOrder()];
 
 /**
@@ -1373,6 +1386,7 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
     case "sort": return used("sortAmount");
     case "particles": return used("particleAmount");
     case "solid": return used("solidAmount");
+    case "model": return used("modelAmount");
     case "cycles": return used("cyclesAmount");
     case "rays": return used("raysAmount");
     case "lasers": return used("laserAmount");
@@ -1395,9 +1409,9 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
 export function createPlayState(): PlayState {
   return {
     /* No effect is in the list at start-up, so every effect group is off. */
-    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false, cone: false },
-    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false, cone: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, tunnelTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, penroseShape: 0, sphereShape: 2, pinwheelShape: 1, tunnelShape: 0, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, pathShape: 2, pathBlend: 7, spiroWheels: defaultSpiroWheels(), spiroBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, coneType: 0, coneShape: 0, coneColor: "#8fe6ff", coneBlend: 7, coneFogTime: 0, textContent: DEFAULT_TEXT, textFont: "Segoe UI", textBold: true, textItalic: false, textAlign: 1, textFill: 0, textColor: "#ffffff", textStops: defaultTextStops(), textOutlineColor: "#000000", textGlowColor: "#18e0ff", textShadowColor: "#000000", textMove: 0, textBlend: 0, textTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidFx: [], solidPivot: 0, solidTurnsX: 0, solidTurnsY: 0, solidTurnsZ: 0, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, model: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false, cone: false },
+    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, model: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false, cone: false },
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, tunnelTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, penroseShape: 0, sphereShape: 2, pinwheelShape: 1, tunnelShape: 0, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, pathShape: 2, pathBlend: 7, spiroWheels: defaultSpiroWheels(), spiroBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, coneType: 0, coneShape: 0, coneColor: "#8fe6ff", coneBlend: 7, coneFogTime: 0, textContent: DEFAULT_TEXT, textFont: "Segoe UI", textBold: true, textItalic: false, textAlign: 1, textFill: 0, textColor: "#ffffff", textStops: defaultTextStops(), textOutlineColor: "#000000", textGlowColor: "#18e0ff", textShadowColor: "#000000", textMove: 0, textBlend: 0, textTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidFx: [], modelBlend: 0, modelFx: [], modelPivot: 0, modelTurnsX: 0, modelTurnsY: 0, modelTurnsZ: 0, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1818,12 +1832,16 @@ const GROUP_MODES: Partial<Record<GroupKey, (state: PlayState, fresh: PlayState)
     state.solidPaint = fresh.solidPaint;
     state.solidBlend = fresh.solidBlend;
     state.solidFx = fresh.solidFx;
-    state.solidPivot = fresh.solidPivot;
-    state.solidTurnsX = 0;
-    state.solidTurnsY = 0;
-    state.solidTurnsZ = 0;
     state.solidSpinTurns = 0;
     state.solidTumbleTurns = 0;
+  },
+  model: (state, fresh) => {
+    state.modelBlend = fresh.modelBlend;
+    state.modelFx = fresh.modelFx;
+    state.modelPivot = fresh.modelPivot;
+    state.modelTurnsX = 0;
+    state.modelTurnsY = 0;
+    state.modelTurnsZ = 0;
   },
   cycles: (state, fresh) => {
     state.cyclesMove = fresh.cyclesMove;
@@ -1927,7 +1945,8 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   terrain: ["cameraAmount", "cameraHeight", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth", "cameraTerrainScale", "cameraRoughness", "cameraRidges", "cameraSeed", "cameraDetail", "cameraDetailSize"],
   /** Camera shares its camera with Terrain (see SPECS). */
   camera: ["viewAmount", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraFog", "cameraSky"],
-  solid: ["solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidPoints", "solidPointLength", "solidHollow", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidRotateX", "solidRotateY", "solidRotateZ", "solidSpinX", "solidSpinY", "solidSpinZ", "solidBend", "solidFrost", "solidTiles", "solidRepeats", "solidLight", "solidShading", "solidShine", "solidRelief", "solidShadow", "solidX", "solidY"],
+  solid: ["solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidPoints", "solidPointLength", "solidHollow", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidFrost", "solidTiles", "solidRepeats", "solidLight", "solidShading", "solidShine", "solidRelief", "solidShadow", "solidX", "solidY"],
+  model: ["modelAmount", "modelSize", "modelRotateX", "modelRotateY", "modelRotateZ", "modelSpinX", "modelSpinY", "modelSpinZ", "modelLight", "modelShading", "modelShine", "modelShadow", "modelX", "modelY"],
   sort: ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"],
   particles: ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost", "particleRingRadius"],
   cycles: ["cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead", "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY"],
@@ -1977,6 +1996,7 @@ const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   text: ["textColor", "textStops", "textGlowColor"],
   cone: ["coneType", "coneShape", "coneColor", "coneBlend"],
   solid: ["solidShape", "solidMap", "solidWrap", "solidBlend"],
+  model: ["modelPivot", "modelBlend"],
   driver: ["driverSource", "driverMode"],
   color: ["overlayColor", "colorBlend", "colorFill", "colorStops"]
 };
@@ -2029,7 +2049,7 @@ export function removeSpiroWheel(params: Params, state: PlayState, index: number
 }
 
 /** The settings named Opacity: Randomize shows every effect fully. */
-const FULL_OPACITY: readonly ParamKey[] = ["warpOpacity", "mapOpacity", "foldOpacity", "smearAmount", "contourOpacity", "cameraAmount", "viewAmount", "sortAmount", "particleAmount", "cyclesAmount", "solidAmount", "driverAmount", "laserOpacity", "bubbleAmount", "pictureAmount", "pathAmount", "spiroAmount", "textAmount", "coneOpacity"];
+const FULL_OPACITY: readonly ParamKey[] = ["warpOpacity", "mapOpacity", "foldOpacity", "smearAmount", "contourOpacity", "cameraAmount", "viewAmount", "sortAmount", "particleAmount", "cyclesAmount", "solidAmount", "modelAmount", "driverAmount", "laserOpacity", "bubbleAmount", "pictureAmount", "pathAmount", "spiroAmount", "textAmount", "coneOpacity"];
 
 /**
  * The chance that Randomize puts each effect in the list. Blur looks the
@@ -2038,7 +2058,7 @@ const FULL_OPACITY: readonly ParamKey[] = ["warpOpacity", "mapOpacity", "foldOpa
  * Contours and Color.
  */
 const EFFECT_CHANCE: Record<FxStep, number> = {
-  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.08, relief: 0.4, driver: 0.3, terrain: 0.3, camera: 0, solid: 0.2, sort: 0.05, particles: 0.25, cycles: 0.25, rays: 0.25, lasers: 0.15, paths: 0.15, spiro: 0.15, bloom: 0.3, sharpen: 0, color: 0.05, levels: 0,
+  kaleidoscope: 0.9, map: 0.75, warp: 0.7, blur: 0, trails: 0.5, smear: 0.2, contours: 0.08, relief: 0.4, driver: 0.3, terrain: 0.3, camera: 0, solid: 0.2, model: 0, sort: 0.05, particles: 0.25, cycles: 0.25, rays: 0.25, lasers: 0.15, paths: 0.15, spiro: 0.15, bloom: 0.3, sharpen: 0, color: 0.05, levels: 0,
   /* An overlay needs an image or a video that the user picks. */
   picture: 0,
   outlines: 0.15,
@@ -2211,8 +2231,7 @@ function randomizeAll(params: Params, state?: PlayState) {
     state.cameraRepeat = (Math.random() < 0.7 ? 0 : Math.random() < 0.7 ? 1 : 2) as CameraRepeat;
     state.cyclesMove = (Math.random() < 0.6 ? 0 : 1) as CycleMove;
     state.cyclesPaint = Math.floor(Math.random() * 4) as CyclePaint;
-    /* A model from a file stays: a random shape would put the user's model away. */
-    if (state.solidShape !== 11) state.solidShape = Math.floor(Math.random() * 11) as SolidShape;
+    state.solidShape = Math.floor(Math.random() * 11) as SolidShape;
     state.solidMap = Math.floor(Math.random() * 3) as SolidMap;
     state.driverSource = Math.floor(Math.random() * 5) as DriverSource;
     state.driverMode = Math.floor(Math.random() * 3) as DriverMode;
@@ -2273,12 +2292,12 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("solidSpin", (Math.random() < 0.5 ? -1 : 1) * rand(2, 20), rand(0, 5));
   set("solidTumble", Math.random() < 0.5 ? 0 : rand(-8, 8), rand(0, 3));
   set("solidTilt", rand(-40, 40), rand(0, 20));
-  set("solidRotateX", rand(-30, 30), rand(0, 20));
-  set("solidRotateY", 0);
-  set("solidRotateZ", Math.random() < 0.7 ? 0 : rand(-20, 20), rand(0, 10));
-  set("solidSpinX", Math.random() < 0.6 ? 0 : rand(-8, 8), rand(0, 3));
-  set("solidSpinY", (Math.random() < 0.5 ? -1 : 1) * rand(2, 20), rand(0, 5));
-  set("solidSpinZ", Math.random() < 0.8 ? 0 : rand(-6, 6), rand(0, 3));
+  set("modelRotateX", rand(-30, 30), rand(0, 20));
+  set("modelRotateY", 0);
+  set("modelRotateZ", Math.random() < 0.7 ? 0 : rand(-20, 20), rand(0, 10));
+  set("modelSpinX", Math.random() < 0.6 ? 0 : rand(-8, 8), rand(0, 3));
+  set("modelSpinY", (Math.random() < 0.5 ? -1 : 1) * rand(2, 20), rand(0, 5));
+  set("modelSpinZ", Math.random() < 0.8 ? 0 : rand(-6, 6), rand(0, 3));
   set("solidBend", rand(0.2, 0.8), rand(0, 0.2));
   set("solidFrost", Math.random() < 0.6 ? 0 : rand(0.2, 0.8), rand(0, 0.2));
   set("solidTiles", rand(0.75, 3), rand(0, 0.5));
@@ -2288,6 +2307,13 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("solidShine", rand(0, 0.8), rand(0, 0.2));
   set("solidRelief", Math.random() < 0.6 ? 0 : rand(-0.8, 0.8), rand(0, 0.2));
   set("solidShadow", rand(0.2, 0.8), rand(0, 0.2));
+  set("modelSize", rand(0.5, 0.9), rand(0.05, 0.2));
+  setAngle("modelLight", 0.3);
+  set("modelShading", rand(0.3, 0.9), rand(0, 0.2));
+  set("modelShine", rand(0, 0.8), rand(0, 0.2));
+  set("modelShadow", rand(0.2, 0.8), rand(0, 0.2));
+  set("modelX", Math.random() < 0.6 ? 0 : rand(-0.3, 0.3), rand(0.05, 0.2));
+  set("modelY", Math.random() < 0.6 ? 0 : rand(-0.2, 0.2), rand(0.05, 0.15));
   set("solidX", Math.random() < 0.6 ? 0 : rand(-0.3, 0.3), rand(0.05, 0.2));
   set("solidY", Math.random() < 0.6 ? 0 : rand(-0.2, 0.2), rand(0.05, 0.15));
   set("driverStrength", rand(0.3, 0.9), rand(0.05, 0.2));
@@ -2419,6 +2445,7 @@ function randomizeAll(params: Params, state?: PlayState) {
     if (!locks.cycles) state.cyclesBlend = 0;
     if (!locks.lasers) state.laserBlend = 0;
     if (!locks.solid) state.solidBlend = 0;
+    if (!locks.model) state.modelBlend = 0;
     if (!locks.bubble) state.bubbleBlend = 0;
     if (!locks.picture) state.pictureBlend = 0;
     for (const step of ["warp", "map", "kaleidoscope"] as const) if (!locks[step]) state.layerBlend[step] = 0;

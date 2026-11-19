@@ -18,12 +18,12 @@ export const COMMON_ROLES: readonly (readonly [CommonRole, string])[] = [
  * Turn are not: they move the picture a little more each frame, not once.
  */
 const ROLES: Partial<Record<ParamKey, CommonRole>> = {
-  panX: "panX", mapPanX: "panX", mobiusPanX: "panX", solidX: "panX", bubblePanX: "panX", pathX: "panX", spiroX: "panX",
-  panY: "panY", mapPanY: "panY", mobiusPanY: "panY", solidY: "panY", bubblePanY: "panY", pathY: "panY", spiroY: "panY",
-  zoom: "zoom", mapScale: "zoom", juliaZoom: "zoom", mobiusZoom: "zoom", solidSize: "zoom",
+  panX: "panX", mapPanX: "panX", mobiusPanX: "panX", solidX: "panX", modelX: "panX", bubblePanX: "panX", pathX: "panX", spiroX: "panX",
+  panY: "panY", mapPanY: "panY", mobiusPanY: "panY", solidY: "panY", modelY: "panY", bubblePanY: "panY", pathY: "panY", spiroY: "panY",
+  zoom: "zoom", mapScale: "zoom", juliaZoom: "zoom", mobiusZoom: "zoom", solidSize: "zoom", modelSize: "zoom",
   rotation: "rotation", mapAngle: "rotation", mobiusTurn: "rotation", drosteRotation: "rotation", pathRotation: "rotation", spiroRotation: "rotation", textAngle: "rotation",
   foldOpacity: "opacity", mapOpacity: "opacity", warpOpacity: "opacity", smearAmount: "opacity", contourOpacity: "opacity",
-  driverAmount: "opacity", viewAmount: "opacity", cameraAmount: "opacity", sortAmount: "opacity", particleAmount: "opacity", cyclesAmount: "opacity", laserOpacity: "opacity", solidAmount: "opacity", overlayOpacity: "opacity", bubbleAmount: "opacity", pathAmount: "opacity", spiroAmount: "opacity", textAmount: "opacity", coneOpacity: "opacity"
+  driverAmount: "opacity", viewAmount: "opacity", cameraAmount: "opacity", sortAmount: "opacity", particleAmount: "opacity", cyclesAmount: "opacity", laserOpacity: "opacity", solidAmount: "opacity", modelAmount: "opacity", overlayOpacity: "opacity", bubbleAmount: "opacity", pathAmount: "opacity", spiroAmount: "opacity", textAmount: "opacity", coneOpacity: "opacity"
 };
 
 /** The kind of common setting that "key" is, or undefined for a setting of its effect's own. */

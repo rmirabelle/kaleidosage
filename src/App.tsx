@@ -242,7 +242,7 @@ async function writeSceneFile(path: string, params: Params, state: PlayState, [f
   /* Real terrain's land and picture go in while Terrain is in the list and uses them (Real terrain heights or Terrain picture colors). */
   if (terrain && state.fxOrder.includes("terrain") && (state.cameraHeightSource === 2 || state.cameraColors === 2)) scene.terrain = await terrainToScene(terrain);
   /* The 3D Object's model goes in while the 3D Object is in the list with the Model shape. */
-  if (model && state.fxOrder.includes("solid") && state.solidShape === 11) scene.model = await modelToScene(model);
+  if (model && state.fxOrder.includes("model")) scene.model = await modelToScene(model);
   await writeScene(path, JSON.stringify(scene));
 }
 
