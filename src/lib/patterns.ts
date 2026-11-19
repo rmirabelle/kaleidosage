@@ -207,6 +207,52 @@ const sunburst: Draw = (context, width, height) => {
   }
 };
 
+/**
+ * Star field: bright points on black, different each time. Most are very
+ * small, some are larger with a soft glow, and a few are large with a glow
+ * and four thin rays. The colors are those of stars: white, with light blue,
+ * yellow, orange and red. Much black stays open, for the effects that add
+ * light (Trails, Bloom, Light rays).
+ */
+const starField: Draw = (context, width, height) => {
+  context.fillStyle = "#000";
+  context.fillRect(0, 0, width, height);
+  const star = (radius: number, glow: number, rays: number) => {
+    const x = rand(0, width);
+    const y = rand(0, height);
+    const hue = pick([215, 215, 200, 50, 35, 20, 5]);
+    const base = Math.random() < 0.4 ? "0 0% 100%" : `${hue} ${Math.round(rand(50, 100))}% ${Math.round(rand(70, 85))}%`;
+    const color = (opacity: number) => `hsl(${base} / ${opacity})`;
+    if (glow > 0) {
+      const halo = context.createRadialGradient(x, y, radius * 0.5, x, y, radius * glow);
+      halo.addColorStop(0, color(0.55));
+      halo.addColorStop(0.35, color(0.12));
+      halo.addColorStop(1, color(0));
+      context.fillStyle = halo;
+      context.fillRect(x - radius * glow, y - radius * glow, radius * glow * 2, radius * glow * 2);
+    }
+    if (rays > 0) {
+      /* Each ray is a long thin diamond: bright at the star, a point at its end. */
+      context.fillStyle = color(0.8);
+      for (const [alongX, alongY] of [[1, 0], [0, 1]]) {
+        context.beginPath();
+        context.moveTo(x - alongX * radius * rays, y - alongY * radius * rays);
+        context.lineTo(x - alongY * radius * 0.3, y - alongX * radius * 0.3);
+        context.lineTo(x + alongX * radius * rays, y + alongY * radius * rays);
+        context.lineTo(x + alongY * radius * 0.3, y + alongX * radius * 0.3);
+        context.fill();
+      }
+    }
+    context.fillStyle = color(glow > 0 ? 1 : rand(0.35, 1));
+    context.beginPath();
+    context.arc(x, y, radius, 0, Math.PI * 2);
+    context.fill();
+  };
+  for (let index = 0; index < 2600; index++) star(rand(0.8, 2.6), 0, 0);
+  for (let index = 0; index < 220; index++) star(rand(3, 7), 5, 0);
+  for (let index = 0; index < 28; index++) star(rand(8, 18), 7, rand(8, 14));
+};
+
 /** Black, with one white band from top to bottom through the center, "part" of the width wide. */
 function centerLine(part: number): Draw {
   return (context, width, height) => {
@@ -256,6 +302,7 @@ export const PATTERNS: Pattern[] = [
   { id: "center-line", label: "Center line", group: "Not repeating", draw: centerLine(0.25) },
   { id: "rings", label: "Rings", group: "Not repeating", draw: rings },
   { id: "sunburst", label: "Sunburst", group: "Not repeating", draw: sunburst },
+  { id: "stars", label: "Star field", group: "Not repeating", draw: starField },
   { id: "clouds", label: "Color clouds", group: "Not repeating", draw: colorClouds },
   { id: "lines", label: "Scattered lines", group: "Not repeating", draw: scatteredLines }
 ];
