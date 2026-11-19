@@ -5710,6 +5710,25 @@ uniform vec3 u_light;
 uniform float u_shading;
 uniform float u_shine;
 uniform float u_shadow;
+/* Center Z: the shape's place along the view, toward the viewer (screen heights). */
+uniform float u_depth;
+/**
+ * Shared space (see docs/SOLIDS.md): when the 3D model is next to the 3D
+ * Object in the FX list, the model is drawn first and leaves a picture of
+ * how far its surface is at each pixel (u_other: red is the place along
+ * the view, from -4 to 4 as 0 to 1; alpha 1 where the model is). The 3D
+ * Object does not draw where the model is nearer to the eye, so each one
+ * can be in front of, behind or through the other.
+ */
+uniform sampler2D u_other;
+uniform bool u_shared;
+bool otherHere(vec2 uv) { return u_shared && textureLod(u_other, uv, 0.0).a > 0.5; }
+bool otherNearer(vec2 uv, float z) {
+  if (!u_shared) return false;
+  vec4 far = textureLod(u_other, uv, 0.0);
+  /* At the model's outline the picture holds a part of a pixel: red over alpha is the place. */
+  return far.a > 0.5 && far.r / far.a * 8.0 - 4.0 > z;
+}
 /**
  * The picture behind the shape: the same as u_tex, or with Freeze background
  * the picture kept at the 3D Object's place in the FX list, while u_tex,
@@ -5933,7 +5952,7 @@ float unitShape(vec3 q) {
 float scale() { return 0.5 * u_size; }
 
 /* A point of the view to the shape's unit frame. */
-vec3 toShape(vec3 p) { return transpose(u_turn) * (p - vec3(u_center, 0.0)) / scale(); }
+vec3 toShape(vec3 p) { return transpose(u_turn) * (p - vec3(u_center, u_depth)) / scale(); }
 
 float scene(vec3 p) { return unitShape(toShape(p)) * scale(); }
 
@@ -5968,7 +5987,7 @@ float castLight(vec2 screen) {
   const float WALL = 0.9;
   const float SOFT = 5.0;
   vec3 from = vec3(screen, -WALL * scale());
-  vec3 oc = from - vec3(u_center, 0.0);
+  vec3 oc = from - vec3(u_center, u_depth);
   float bound = 1.45 * scale();
   float b = dot(oc, u_light);
   float h = b * b - (dot(oc, oc) - bound * bound);
@@ -6003,7 +6022,7 @@ float castLight(vec2 screen) {
  */
 vec4 shoot(vec3 eye, vec3 rd) {
   /* The sphere around the shape: rays that miss it miss the shape. */
-  vec3 oc = eye - vec3(u_center, 0.0);
+  vec3 oc = eye - vec3(u_center, u_depth);
   float b = dot(oc, rd);
   float bound = 1.45 * scale();
   float h = b * b - (dot(oc, oc) - bound * bound);
@@ -6033,6 +6052,8 @@ vec4 shoot(vec3 eye, vec3 rd) {
   if (cover <= 0.0) return vec4(0.0);
   float at = hit ? t : nearestT;
   vec3 p = eye + rd * at;
+  /* Shared space: the model is nearer here, so the shape does not show. */
+  if (otherNearer(v_uv, p.z)) return vec4(0.0);
   vec4 around = probe(p, max(u_pixel * at / EYE * 0.5, 1e-4));
   vec3 n = normalize(around.xyz);
   return vec4(paint(toShape(p), n, rd, v_uv) * cover, cover);
@@ -6045,7 +6066,8 @@ void main() {
   vec3 base = straight(picture) * u_background;
   vec3 eye = vec3(0.0, 0.0, EYE);
 
-  if (u_shadow > 0.0) base *= 1.0 - u_shadow * 0.75 * (1.0 - castLight(screen));
+  /* The shadow falls on the picture behind, not on the model in front of it (shared space). */
+  if (u_shadow > 0.0 && !otherHere(v_uv)) base *= 1.0 - u_shadow * 0.75 * (1.0 - castLight(screen));
 
   vec4 sum = shoot(eye, normalize(vec3(screen, 0.0) - eye));
   vec3 color = sum.a > 0.0 ? sum.rgb / sum.a : vec3(0.0);
@@ -6078,6 +6100,8 @@ uniform vec3 u_light;
 uniform int u_pass;
 uniform int u_shape;
 uniform float u_round;
+/* Center Z: the shape's place along the view, toward the viewer (screen heights). */
+uniform float u_depth;
 out vec3 v_world;
 out vec3 v_normal;
 out vec3 v_shape;
@@ -6144,7 +6168,7 @@ void main() {
     rounded(shape, grad);
     facing = normalize(grad);
   }
-  vec3 world = u_turn * (shape * scale) + vec3(u_center, 0.0);
+  vec3 world = u_turn * (shape * scale) + vec3(u_center, u_depth);
   v_world = world;
   v_normal = u_turn * facing;
   v_shape = shape;
@@ -6181,8 +6205,26 @@ uniform float u_size;
 uniform float u_background;
 uniform float u_shadow;
 ${COVER_GLSL}
+/**
+ * Shared space (see docs/SOLIDS.md): when the 3D model is next to the 3D
+ * Object in the FX list, the model is drawn first and leaves a picture of
+ * how far its surface is at each pixel (u_other: red is the place along
+ * the view, from -4 to 4 as 0 to 1; alpha 1 where the model is). The 3D
+ * Object does not draw where the model is nearer to the eye, so each one
+ * can be in front of, behind or through the other.
+ */
+uniform sampler2D u_other;
+uniform bool u_shared;
+bool otherHere(vec2 uv) { return u_shared && textureLod(u_other, uv, 0.0).a > 0.5; }
+bool otherNearer(vec2 uv, float z) {
+  if (!u_shared) return false;
+  vec4 far = textureLod(u_other, uv, 0.0);
+  /* At the model's outline the picture holds a part of a pixel: red over alpha is the place. */
+  return far.a > 0.5 && far.r / far.a * 8.0 - 4.0 > z;
+}
 float shadowAt(vec2 uv) {
-  if (u_shadow <= 0.0) return 0.0;
+  /* The shadow falls on the picture behind, not on the model in front of it (shared space). */
+  if (u_shadow <= 0.0 || otherHere(uv)) return 0.0;
   return smoothstep(0.0, 1.0, dot(textureLod(u_shade, uv, 0.0).rg, u_shadeMix));
 }
 /* The picture behind, with its cover (premultiplied), and its color dimmed by Background and the shadow. */
@@ -6317,6 +6359,8 @@ void main() {
     return;
   }
   vec2 uv = gl_FragCoord.xy / u_view;
+  /* Shared space: the model is nearer here, so the shape does not show. */
+  if (otherNearer(uv, v_world.z)) discard;
   vec3 rd = normalize(v_world - vec3(0.0, 0.0, EYE));
   vec3 n = normalize(v_normal);
   if (dot(n, rd) > 0.0) n = -n;
@@ -6344,6 +6388,8 @@ uniform vec3 u_light;
 uniform int u_pass;
 /* The pivot: the point of the model that it turns around, and that sits at u_center. */
 uniform vec3 u_pivot;
+/* Center Z: the model's place along the view, toward the viewer (screen heights). */
+uniform float u_depth;
 out vec3 v_world;
 out vec3 v_normal;
 out vec3 v_shape;
@@ -6354,7 +6400,7 @@ const float NEAR = 0.1;
 const float FAR = 20.0;
 void main() {
   float scale = 0.5 * u_size;
-  vec3 world = u_turn * ((a_pos - u_pivot) * scale) + vec3(u_center, 0.0);
+  vec3 world = u_turn * ((a_pos - u_pivot) * scale) + vec3(u_center, u_depth);
   v_world = world;
   v_normal = u_turn * a_normal;
   v_shape = a_pos;
@@ -6481,6 +6527,11 @@ void main() {
   if (tint.a < u_cutoff) discard;
   if (u_pass == 1) {
     o = vec4(1.0);
+    return;
+  }
+  /* Pass 2: the surface's place along the view, for the 3D Object next to the model in the FX list (shared space, see u_other). */
+  if (u_pass == 2) {
+    o = vec4(clamp((v_world.z + 4.0) / 8.0, 0.0, 1.0), 0.0, 0.0, 1.0);
     return;
   }
   vec2 uv = gl_FragCoord.xy / u_view;

@@ -26,7 +26,7 @@ export const PARAM_KEYS = [
   "cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead",
   "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY",
   "solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidPoints", "solidPointLength", "solidHollow", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidFrost", "solidTiles", "solidRepeats", "solidLight", "solidShading", "solidShine", "solidRelief", "solidShadow", "solidX", "solidY",
-  "modelAmount", "modelSize", "modelRotateX", "modelRotateY", "modelRotateZ", "modelSpinX", "modelSpinY", "modelSpinZ", "modelLight", "modelShading", "modelShine", "modelShadow", "modelMapAmount", "modelTiles", "modelBend", "modelFrost", "modelRepeats", "modelX", "modelY",
+  "modelAmount", "modelSize", "modelRotateX", "modelRotateY", "modelRotateZ", "modelSpinX", "modelSpinY", "modelSpinZ", "modelLight", "modelShading", "modelShine", "modelShadow", "modelMapAmount", "modelTiles", "modelBend", "modelFrost", "modelRepeats", "modelX", "modelY", "modelZ", "solidZ",
   "raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY",
   "laserAmount", "laserOpacity", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY",
   "outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineInner", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineX", "outlineY",
@@ -1024,6 +1024,14 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   modelFrost: { label: "Frost", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.6, on: false },
   modelMapAmount: { label: "Map amount", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0, high: 1, on: false },
   modelRepeats: { label: "Repeats", min: 0.25, max: 16, step: 0.01, scale: "log", value: 1, drift: "wave", low: 1, high: 4, on: false },
+  /**
+   * Center Z: the object's place along the view, toward the viewer (in
+   * screen heights; the eye is 3 away). It shows when the 3D Object and
+   * the 3D model are next to each other in the FX list, where they share
+   * one space: the one with the larger Center Z is in front.
+   */
+  solidZ: { label: "Center Z", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.4, high: 0.4, on: false },
+  modelZ: { label: "Center Z", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.4, high: 0.4, on: false },
   modelX: { label: "Center X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.25, high: 0.25, on: false },
   modelY: { label: "Center Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   /** Driver (see DRIVER_SHADER): opacity, how strongly the driver bends, reveals or lights, its size, its speed, and its contrast. */
@@ -1337,7 +1345,7 @@ export const NO_EFFECT: Partial<Record<ParamKey, number>> = {
   particleGravity: 0,
   cyclesCenterX: 0, cyclesCenterY: 0,
   solidSpin: 0, solidTumble: 0, solidTilt: 0, solidX: 0, solidY: 0,
-  modelRotateX: 0, modelRotateY: 0, modelRotateZ: 0, modelSpinX: 0, modelSpinY: 0, modelSpinZ: 0, modelX: 0, modelY: 0,
+  modelRotateX: 0, modelRotateY: 0, modelRotateZ: 0, modelSpinX: 0, modelSpinY: 0, modelSpinZ: 0, modelX: 0, modelY: 0, modelZ: 0, solidZ: 0,
   outlineSpin: 0, outlineTumble: 0,
   raysX: 0, raysY: 0,
   colorX: 0, colorY: 0,
@@ -1959,8 +1967,8 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   terrain: ["cameraAmount", "cameraHeight", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraLightTurn", "cameraLightHeight", "cameraShadow", "cameraFog", "cameraSky", "cameraShine", "cameraSmooth", "cameraTerrainScale", "cameraRoughness", "cameraRidges", "cameraSeed", "cameraDetail", "cameraDetailSize"],
   /** Camera shares its camera with Terrain (see SPECS). */
   camera: ["viewAmount", "cameraPan", "cameraTilt", "cameraPedestal", "cameraDolly", "cameraTruck", "cameraLens", "cameraFog", "cameraSky"],
-  solid: ["solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidPoints", "solidPointLength", "solidHollow", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidFrost", "solidTiles", "solidRepeats", "solidLight", "solidShading", "solidShine", "solidRelief", "solidShadow", "solidX", "solidY"],
-  model: ["modelAmount", "modelSize", "modelRotateX", "modelRotateY", "modelRotateZ", "modelSpinX", "modelSpinY", "modelSpinZ", "modelLight", "modelShading", "modelShine", "modelShadow", "modelMapAmount", "modelTiles", "modelBend", "modelFrost", "modelRepeats", "modelX", "modelY"],
+  solid: ["solidAmount", "solidBackground", "solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidPoints", "solidPointLength", "solidHollow", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidBend", "solidFrost", "solidTiles", "solidRepeats", "solidLight", "solidShading", "solidShine", "solidRelief", "solidShadow", "solidX", "solidY", "solidZ"],
+  model: ["modelAmount", "modelSize", "modelRotateX", "modelRotateY", "modelRotateZ", "modelSpinX", "modelSpinY", "modelSpinZ", "modelLight", "modelShading", "modelShine", "modelShadow", "modelMapAmount", "modelTiles", "modelBend", "modelFrost", "modelRepeats", "modelX", "modelY", "modelZ"],
   sort: ["sortAmount", "sortLow", "sortHigh", "sortAngle", "sortLength", "sortThickness"],
   particles: ["particleAmount", "particleBackground", "particleCount", "particleLevel", "particleSize", "particleLife", "particleSpeed", "particleGravity", "particleAngle", "particleTurbulence", "particleDrag", "particleFollow", "particleCling", "particleGradient", "particleBoost", "particleRingRadius"],
   cycles: ["cyclesAmount", "cyclesBackground", "cyclesCount", "cyclesSpeed", "cyclesWidth", "cyclesLength", "cyclesTurns", "cyclesFollow", "cyclesDodge", "cyclesGrid", "cyclesHead", "cyclesGradient", "cyclesShift", "cyclesRepeat", "cyclesAngle", "cyclesCenterX", "cyclesCenterY"],

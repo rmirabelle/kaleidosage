@@ -348,6 +348,8 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Each Map shows its own sliders under it: Tiles for Wrap; Bend, Frost and Repeats for Project; Repeats for Mirror.
 - The 3D model has its own list of effects for the object only. An effect is in the list of one 3D effect only: a check in one takes it out of the other.
 - The 3D model always turns around the middle of its box; it has no Pivot setting.
+- The 3D model and the 3D Object next to each other in the FX list share one space: each can be in front of, behind or through the other. Another effect between them makes the first one a flat part of the picture.
+- Center Z moves the 3D Object or the 3D model toward the viewer (above 0) or away (below 0).
 - Adding the 3D model effect with no model opens the model browser.
 - A scene saved with the 3D Object's Model shape opens with the 3D model effect in its place.
 - With its range off, a value is its slider value.

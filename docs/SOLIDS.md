@@ -325,8 +325,6 @@ layers, and I only ever wanted it to be one layer: just the object").
 - The Background slider shows only in a scene that uses it: the object
   draws only itself, and a Levels or Color effect above it darkens the
   picture behind.
-- Planned next, not built: 3D effects next to each other in the list in
-  one space with true depth.
 
 ## The 3D model effect
 
@@ -371,6 +369,37 @@ too many things, and a scene could not have a model and a 3D object.
   the 3D Object's place, with its settings (modelFromSolid in scene.ts).
 - Adding the effect with no model opens the model browser. Random all
   does not pick it.
+
+## Shared space
+
+Built 2026-11-18, as a trial (the user: "let's try the shared space
+concept to see if we get a good result").
+
+- When the 3D model and the 3D Object are next to each other in the FX
+  list (the steps that do nothing, and the steps checked for one object
+  only, left out), they are in one space: each can be in front of,
+  behind or through the other. Any other step between them makes the
+  first one flat, a part of the picture, as before.
+- Center Z (solidZ, modelZ, -1 to 1, in screen heights; the eye is 3
+  away): the object's place along the view. The larger one is in front,
+  and looks a little larger (the view has perspective).
+- How (see render, drawModel pass 2, solidLook, and u_other in
+  shaders.ts): the model is always drawn first, whatever the order in
+  the list, and leaves a picture of how far its surface is at each pixel
+  ("model depth"). The 3D Object then does not draw where the model is
+  nearer: the mesh shapes discard those pixels, and the ray shapes count
+  them as a miss. The model goes first because it is a mesh, so its
+  depth picture is one more cheap draw; a ray shape's would be a second
+  walk of its rays.
+- Limits: no shadow of one on the other (the 3D Object's shadow does not
+  fall on the model; each shadow falls on the picture behind). Where the
+  two cross, the line is not smoothed. An object that is part clear
+  (Opacity under 1) or glass (Project) does not sort: the 3D Object's
+  glass shows the model through it only where the model is behind it in
+  the picture, which is correct, but the model's glass does not show the
+  3D Object. With the 3D Object before the model in the list, the model
+  is still drawn first, so the 3D Object's Blend works on the model's
+  picture, not the other way.
 
 ## Open points
 

@@ -1723,6 +1723,7 @@ export class Engine {
       modelShadow: this.live("modelShadow"),
       modelX: this.live("modelX"),
       modelY: this.live("modelY"),
+      modelZ: this.live("modelZ"),
       modelBlend: this.state.modelBlend,
       modelMap: this.state.modelMap,
       /* The slider is how much of the model's own look shows; the renderer takes how much of the Map's picture shows. */
@@ -1772,6 +1773,7 @@ export class Engine {
       solidShadow: this.live("solidShadow"),
       solidX: this.live("solidX"),
       solidY: this.live("solidY"),
+      solidZ: this.live("solidZ"),
       sort: on.sort ? this.live("sortAmount") : 0,
       sortOrder: this.state.sortOrder,
       sortLow: this.live("sortLow"),

@@ -158,7 +158,7 @@ export const CYCLE_PAINT_KEYS: Record<CyclePaint, ParamKey[]> = {
 export const CYCLE_PAINTS = [[0, "Cycle"], [1, "Trail"], [2, "Position, linear"], [3, "Position, radial"]] as const;
 
 /** The 3D Object's sliders, in panel order. Roundness and the map's own sliders show only where they do something (see SOLID_SHAPE_KEYS and SOLID_MAP_KEYS). */
-export const SOLID_KEYS: readonly ParamKey[] = ["solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidPoints", "solidPointLength", "solidHollow", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidTiles", "solidRepeats", "solidBend", "solidFrost", "solidLight", "solidShading", "solidShine", "solidRelief", "solidShadow", "solidBackground", "solidX", "solidY", "solidAmount"];
+export const SOLID_KEYS: readonly ParamKey[] = ["solidSize", "solidRound", "solidMorph", "solidBlobs", "solidBumps", "solidWaves", "solidSpikes", "solidSpikeCount", "solidSpikeTip", "solidPoints", "solidPointLength", "solidHollow", "solidLevels", "solidSpin", "solidTumble", "solidTilt", "solidTiles", "solidRepeats", "solidBend", "solidFrost", "solidLight", "solidShading", "solidShine", "solidRelief", "solidShadow", "solidBackground", "solidX", "solidY", "solidZ", "solidAmount"];
 /**
  * Each shape's own sliders. The sphere and Morph have no edges to round;
  * for the blobs Roundness is how softly they merge, for the spike ball how
@@ -188,7 +188,7 @@ export const SOLID_WRAPS = [[0, "Globe"], [1, "Faces"], [2, "Six sides"], [3, "P
 export const SOLID_PAINTS = [[0, "Slot A"], [2, "Slot B"], [1, "Image or Video"]] as const;
 /** The Source menu of the Model shape: first the model's own colors and pictures, then the others. */
 /** The 3D model effect's sliders, in panel order (Opacity last, with Blend: see SplitRows). */
-export const MODEL_KEYS: readonly ParamKey[] = ["modelSize", "modelRotateX", "modelRotateY", "modelRotateZ", "modelSpinX", "modelSpinY", "modelSpinZ", "modelLight", "modelShading", "modelShine", "modelShadow", "modelMapAmount", "modelTiles", "modelBend", "modelFrost", "modelRepeats", "modelX", "modelY", "modelAmount"];
+export const MODEL_KEYS: readonly ParamKey[] = ["modelSize", "modelRotateX", "modelRotateY", "modelRotateZ", "modelSpinX", "modelSpinY", "modelSpinZ", "modelLight", "modelShading", "modelShine", "modelShadow", "modelMapAmount", "modelTiles", "modelBend", "modelFrost", "modelRepeats", "modelX", "modelY", "modelZ", "modelAmount"];
 export const SOLID_MODEL_PAINTS = [[3, "Model"], ...SOLID_PAINTS] as const;
 
 /** The Opacity mask's types, and the sliders each shows under the gradient (Strength always shows, above it). */

@@ -662,6 +662,8 @@ export interface FrameValues {
   modelSize: number;
   modelX: number;
   modelY: number;
+  /** Center Z: the model's place along the view, toward the viewer (screen heights). The 3D Object's is solidZ. */
+  modelZ: number;
   modelLight: number;
   modelShading: number;
   modelShine: number;
@@ -722,6 +724,7 @@ export interface FrameValues {
   solidShadow: number;
   solidX: number;
   solidY: number;
+  solidZ: number;
   /**
    * Pixel sort (see SORT_STEP_SHADER): opacity (0 = off), the order, the
    * brightness range that is sorted, the angle of the sort lines (radians),
@@ -1275,6 +1278,13 @@ export class KaleidoRenderer {
   private output: WebGLFramebuffer | null = null;
   /** What drawModel draws (see renderOwnModel): all of it, the model alone with no shadow, or only the picture behind with the shadow. */
   private modelPart: "all" | "alone" | "behind" = "all";
+  /**
+   * Shared space (see render): in this frame the 3D model and the 3D Object
+   * are next to each other in the FX list, so the model leaves a picture
+   * of how far its surface is (modelDepth), which the 3D Object reads.
+   */
+  private shareSpace = false;
+  private modelDepth: WebGLTexture | null = null;
   /** Freeze background's pictures, by name, each made on first use (see layerTarget). */
   private readonly layerPictures = new Map<string, { target: Target; size: [number, number] }>();
   /** The steps that do something in this frame (see activeSteps). */
@@ -1615,15 +1625,34 @@ export class KaleidoRenderer {
      * the object is drawn over it with its own effects; the steps after it
      * go on from that result.
      */
-    const special = v.fxOrder.filter((step): step is ObjectStep => isObjectStep(step) && active[step] && v.objectFx[step].length > 0);
+    const withOwn = v.fxOrder.filter((step): step is ObjectStep => isObjectStep(step) && active[step] && v.objectFx[step].length > 0);
+    const own = new Set(withOwn.flatMap((step) => v.objectFx[step]));
+    const plain = v.fxOrder.filter((step) => !own.has(step));
+    /**
+     * Shared space: the 3D model and the 3D Object next to each other in
+     * the list (the steps that do nothing left out) are in one space. The
+     * model is always drawn first, whatever their order, and leaves a
+     * picture of how far its surface is; the 3D Object then does not draw
+     * where the model is nearer (see drawModel and solidLook). A model is
+     * a mesh, so that picture costs little; a ray shape's would cost a
+     * second walk of its rays.
+     */
+    const doing = plain.filter((step) => active[step]);
+    const [modelAt, solidAt] = [doing.indexOf("model"), doing.indexOf("solid")];
+    this.shareSpace = modelAt >= 0 && solidAt >= 0 && Math.abs(modelAt - solidAt) === 1;
+    this.modelDepth = null;
+    if (this.shareSpace && solidAt < modelAt) {
+      const [a, b] = [plain.indexOf("solid"), plain.indexOf("model")];
+      plain[a] = "model";
+      plain[b] = "solid";
+    }
+    const special = plain.filter((step): step is ObjectStep => withOwn.includes(step as ObjectStep));
     if (special.length === 0) {
       this.output = null;
-      this.drawStack(v, v.fxOrder, null, width, height);
+      this.drawStack(v, plain, null, width, height);
       this.endFrame(active);
       return;
     }
-    const own = new Set(special.flatMap((step) => v.objectFx[step]));
-    const plain = v.fxOrder.filter((step) => !own.has(step));
     let input: WebGLTexture | null = null;
     let from = 0;
     for (const step of special) {
@@ -1709,7 +1738,7 @@ export class KaleidoRenderer {
    */
   private modelValues(v: FrameValues): FrameValues {
     const own: Partial<FrameValues> = {
-      solid: v.model, solidShape: 11, solidPaint: 3, solidSize: v.modelSize, solidX: v.modelX, solidY: v.modelY,
+      solid: v.model, solidShape: 11, solidPaint: 3, solidSize: v.modelSize, solidX: v.modelX, solidY: v.modelY, solidZ: v.modelZ,
       solidLight: v.modelLight, solidShading: v.modelShading, solidShine: v.modelShine, solidShadow: v.modelShadow,
       solidBlend: v.modelBlend, solidBackground: 1, solidRelief: 0,
       solidMap: v.modelMap, solidTiles: v.modelTiles, solidBend: v.modelBend, solidFrost: v.modelFrost, solidRepeats: v.modelRepeats
@@ -2685,6 +2714,16 @@ export class KaleidoRenderer {
     /* The Sphere's turn shows only on a turned copy of the picture (see SOLID_PAINT_GLSL). */
     gl.uniform1i(s.uniforms.u_turnCopy, v.solidShape === 0 ? 1 : 0);
     gl.uniform2f(s.uniforms.u_center, v.solidX, v.solidY);
+    gl.uniform1f(s.uniforms.u_depth, v.solidZ);
+    /* Shared space: the 3D Object reads how far the model's surface is (see render and u_other in shaders.ts). The model itself does not. */
+    const other = v.solidShape === 11 ? null : this.modelDepth;
+    gl.uniform1i(s.uniforms.u_shared, other ? 1 : 0);
+    if (other) {
+      gl.activeTexture(gl.TEXTURE8);
+      gl.bindTexture(gl.TEXTURE_2D, other);
+      gl.uniform1i(s.uniforms.u_other, 8);
+      gl.activeTexture(gl.TEXTURE0);
+    }
     gl.uniform1f(s.uniforms.u_bend, Math.max(0, v.solidBend));
     gl.uniform1f(s.uniforms.u_frost, Math.min(1, Math.max(0, v.solidFrost)));
     gl.uniform1f(s.uniforms.u_tiles, Math.max(0.01, v.solidTiles));
@@ -2914,6 +2953,24 @@ export class KaleidoRenderer {
     }
     const samples = this.starSampleTarget(width, height);
     const whole = target ?? this.layerTarget("solid star", width, height);
+    if (this.shareSpace && this.modelPart !== "behind") {
+      /* Shared space: how far the model's surface is at each pixel, for the 3D Object (pass 2 of SOLID_MODEL_SHADER). */
+      const far = this.layerTarget("model depth", width, height);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, samples.framebuffer);
+      gl.viewport(0, 0, width, height);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      common(p, shade.texture);
+      gl.uniform1i(p.uniforms.u_pass, 2);
+      gl.enable(gl.DEPTH_TEST);
+      gl.depthFunc(gl.LESS);
+      drawParts(shadowParts);
+      gl.disable(gl.DEPTH_TEST);
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, samples.framebuffer);
+      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, far.framebuffer);
+      gl.blitFramebuffer(0, 0, width, height, 0, 0, width, height, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+      this.modelDepth = far.texture;
+    }
     gl.bindFramebuffer(gl.FRAMEBUFFER, samples.framebuffer);
     gl.viewport(0, 0, width, height);
     gl.clear(gl.DEPTH_BUFFER_BIT);
