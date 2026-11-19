@@ -125,6 +125,9 @@ const VALUE_SNAPS: Partial<Record<ParamKey, number[]>> = {
   modelRotateZ: [-180, -90, -45, 45, 90, 180],
   solidTiles: [0.5, 1, 2, 3, 4, 6, 8],
   solidRepeats: [0.5, 1, 2, 3, 4, 6, 8, 12, 16],
+  /* The 3D model's map sliders snap as the 3D Object's do. */
+  modelTiles: [0.5, 1, 2, 3, 4, 6, 8],
+  modelRepeats: [0.5, 1, 2, 3, 4, 6, 8, 12, 16],
   pathTurn: [45, 90, 135]
 };
 
