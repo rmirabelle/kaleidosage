@@ -157,6 +157,30 @@ function truchetTiles(tile: number): Draw {
   };
 }
 
+/**
+ * Rings: sharp circles around the center, out to the corners, on black. The
+ * widths and the spaces between them are random, from thin lines to wide
+ * bands, so each time is different. The hue goes two times around from the
+ * center to the corner, from a random start; some thin rings are white.
+ */
+const rings: Draw = (context, width, height) => {
+  context.fillStyle = "#000";
+  context.fillRect(0, 0, width, height);
+  const reach = Math.hypot(width, height) / 2;
+  const firstHue = rand(0, 360);
+  let inner = rand(10, 60);
+  while (inner < reach) {
+    const ringWidth = pick([3, 6, 12, 24, 48]) * rand(0.7, 1.3);
+    const white = ringWidth < 10 && Math.random() < 0.35;
+    context.strokeStyle = white ? "#fff" : `hsl(${firstHue + (inner / reach) * 720} 90% 55%)`;
+    context.lineWidth = ringWidth;
+    context.beginPath();
+    context.arc(width / 2, height / 2, inner + ringWidth / 2, 0, Math.PI * 2);
+    context.stroke();
+    inner += ringWidth + pick([6, 12, 24, 48]) * rand(0.7, 1.3);
+  }
+};
+
 /** Black, with one white band from top to bottom through the center, "part" of the width wide. */
 function centerLine(part: number): Draw {
   return (context, width, height) => {
@@ -204,6 +228,7 @@ export const PATTERNS: Pattern[] = [
   { id: "color-grid", label: "Color grid", group: "Repeating", draw: colorGrid(120) },
   { id: "truchet", label: "Truchet tiles", group: "Repeating", draw: truchetTiles(240) },
   { id: "center-line", label: "Center line", group: "Not repeating", draw: centerLine(0.25) },
+  { id: "rings", label: "Rings", group: "Not repeating", draw: rings },
   { id: "clouds", label: "Color clouds", group: "Not repeating", draw: colorClouds },
   { id: "lines", label: "Scattered lines", group: "Not repeating", draw: scatteredLines }
 ];
