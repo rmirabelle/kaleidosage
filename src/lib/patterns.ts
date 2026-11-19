@@ -119,6 +119,44 @@ const scatteredLines: Draw = (context, width, height) => {
   }
 };
 
+/**
+ * Truchet tiles: each square tile has two quarter circles around opposite
+ * corners, and is turned at random. The curves meet at the middle of each
+ * tile side, so they join into long paths and closed loops, different each
+ * time, and the pattern repeats with no seam. A wide colored band (the hue
+ * goes once around across) with a thin white line along its middle, on black.
+ */
+function truchetTiles(tile: number): Draw {
+  return (context, width, height) => {
+    const curves = new Path2D();
+    const quarter = Math.PI / 2;
+    for (let y = 0; y < height; y += tile) {
+      for (let x = 0; x < width; x += tile) {
+        const turned = Math.random() < 0.5;
+        const corners = turned ? [[x + tile, y, 1], [x, y + tile, 3]] : [[x, y, 0], [x + tile, y + tile, 2]];
+        for (const [cornerX, cornerY, start] of corners) {
+          curves.moveTo(cornerX + Math.cos(start * quarter) * tile / 2, cornerY + Math.sin(start * quarter) * tile / 2);
+          curves.arc(cornerX, cornerY, tile / 2, start * quarter, (start + 1) * quarter);
+        }
+      }
+    }
+    context.fillStyle = "#000";
+    context.fillRect(0, 0, width, height);
+    context.strokeStyle = "#fff";
+    context.lineWidth = tile * 0.3;
+    context.stroke(curves);
+    /* The colors go on the white bands only: black times a color stays black. */
+    const hues = context.createLinearGradient(0, 0, width, 0);
+    for (let stop = 0; stop <= 12; stop++) hues.addColorStop(stop / 12, `hsl(${stop * 30} 90% 55%)`);
+    context.globalCompositeOperation = "multiply";
+    context.fillStyle = hues;
+    context.fillRect(0, 0, width, height);
+    context.globalCompositeOperation = "source-over";
+    context.lineWidth = tile * 0.03;
+    context.stroke(curves);
+  };
+}
+
 /** Black, with one white band from top to bottom through the center, "part" of the width wide. */
 function centerLine(part: number): Draw {
   return (context, width, height) => {
@@ -164,6 +202,7 @@ export const PATTERNS: Pattern[] = [
   { id: "checker-large", label: "Checkerboard", group: "Repeating", draw: checkerboard(120) },
   { id: "dots", label: "Dot grid", group: "Repeating", draw: dotGrid(120) },
   { id: "color-grid", label: "Color grid", group: "Repeating", draw: colorGrid(120) },
+  { id: "truchet", label: "Truchet tiles", group: "Repeating", draw: truchetTiles(240) },
   { id: "center-line", label: "Center line", group: "Not repeating", draw: centerLine(0.25) },
   { id: "clouds", label: "Color clouds", group: "Not repeating", draw: colorClouds },
   { id: "lines", label: "Scattered lines", group: "Not repeating", draw: scatteredLines }
