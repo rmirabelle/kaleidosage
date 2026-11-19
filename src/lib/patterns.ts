@@ -367,6 +367,75 @@ const spiralCurves: Draw = (context, width, height) => {
   for (let index = 0; index < 6; index++) curve(rand(0, width), rand(0, height), height * rand(0.1, 0.3));
 };
 
+/**
+ * Contour lines: thin lines of equal height, as on a map of hills, on
+ * black, different each time. The land is a sum of random smooth hills and
+ * hollows. The hue goes from the lowest line to the highest; each fifth
+ * line is wider and lighter, as on a map. The height is found on a grid of
+ * "grid" pixel squares, and each line is cut into short straight parts, one
+ * per square it crosses, which look smooth at this size.
+ */
+const contourLines: Draw = (context, width, height) => {
+  context.fillStyle = "#000";
+  context.fillRect(0, 0, width, height);
+  const grid = 10;
+  const columns = Math.ceil(width / grid) + 1;
+  const rows = Math.ceil(height / grid) + 1;
+  const hills = Array.from({ length: 22 }, () => ({
+    x: rand(-0.1, 1.1) * width, y: rand(-0.1, 1.1) * height, size: rand(0.12, 0.4) * height, high: rand(0.4, 1) * (Math.random() < 0.35 ? -1 : 1)
+  }));
+  const land = new Float32Array(columns * rows);
+  let lowest = Infinity;
+  let highest = -Infinity;
+  for (let row = 0; row < rows; row++) {
+    for (let column = 0; column < columns; column++) {
+      let sum = 0;
+      for (const hill of hills) sum += hill.high * Math.exp(-((column * grid - hill.x) ** 2 + (row * grid - hill.y) ** 2) / (hill.size * hill.size));
+      land[row * columns + column] = sum;
+      lowest = Math.min(lowest, sum);
+      highest = Math.max(highest, sum);
+    }
+  }
+  const count = 34;
+  const step = (highest - lowest) / (count + 1);
+  const lines = Array.from({ length: count }, () => new Path2D());
+  for (let row = 0; row < rows - 1; row++) {
+    for (let column = 0; column < columns - 1; column++) {
+      const index = row * columns + column;
+      /* The four corners, around the square: top left, top right, bottom right, bottom left. */
+      const corners = [land[index], land[index + 1], land[index + columns + 1], land[index + columns]];
+      const first = Math.max(0, Math.ceil((Math.min(...corners) - lowest) / step) - 1);
+      const last = Math.min(count - 1, Math.floor((Math.max(...corners) - lowest) / step) - 1);
+      for (let line = first; line <= last; line++) {
+        const level = lowest + (line + 1) * step;
+        /* The points where the line crosses the sides of the square; two make one straight part, four make two. */
+        const points: number[] = [];
+        for (let side = 0; side < 4; side++) {
+          const from = corners[side];
+          const to = corners[(side + 1) % 4];
+          if ((from < level) === (to < level)) continue;
+          const along = (level - from) / (to - from);
+          const [fromX, fromY] = [[0, 0], [1, 0], [1, 1], [0, 1]][side];
+          const [toX, toY] = [[0, 0], [1, 0], [1, 1], [0, 1]][(side + 1) % 4];
+          points.push((column + fromX + (toX - fromX) * along) * grid, (row + fromY + (toY - fromY) * along) * grid);
+        }
+        for (let point = 0; point + 3 < points.length; point += 4) {
+          lines[line].moveTo(points[point], points[point + 1]);
+          lines[line].lineTo(points[point + 2], points[point + 3]);
+        }
+      }
+    }
+  }
+  const firstHue = rand(0, 360);
+  context.lineCap = "round";
+  lines.forEach((path, line) => {
+    const wide = line % 5 === 2;
+    context.lineWidth = wide ? 7 : 3;
+    context.strokeStyle = `hsl(${firstHue + (line / count) * 300} 95% ${wide ? 72 : 55}%)`;
+    context.stroke(path);
+  });
+};
+
 /** Black, with one white band from top to bottom through the center, "part" of the width wide. */
 function centerLine(part: number): Draw {
   return (context, width, height) => {
@@ -419,6 +488,7 @@ export const PATTERNS: Pattern[] = [
   { id: "sunburst", label: "Sunburst", group: "Not repeating", draw: sunburst },
   { id: "stars", label: "Star field", group: "Not repeating", draw: starField },
   { id: "spirals", label: "Spiral curves", group: "Not repeating", draw: spiralCurves },
+  { id: "contours", label: "Contour lines", group: "Not repeating", draw: contourLines },
   { id: "clouds", label: "Color clouds", group: "Not repeating", draw: colorClouds },
   { id: "lines", label: "Scattered lines", group: "Not repeating", draw: scatteredLines }
 ];
