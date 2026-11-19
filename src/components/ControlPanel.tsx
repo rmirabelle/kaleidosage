@@ -12,7 +12,8 @@ import { DEFAULT_LAND_KM, loadTerrain, randomLandPlace } from "../lib/terrain";
 import type { TerrainData } from "../engine/terrain";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
-import { CONE_SHAPES, CONE_SHAPE_KEYS, CONE_TYPES, CONE_TYPE_KEYS, TEXT_FILL_KEYS, TEXT_MOVES, TEXT_MOVE_KEYS, PATH_SHAPES, BUBBLE_SHAPES, BUBBLE_SHAPE_KEYS, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, PENROSE_SHAPES, SPHERE_SHAPES, PINWHEEL_SHAPES, TUNNEL_SHAPES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_PAINTS, SOLID_MODEL_PAINTS, SOLID_PIVOTS, SOLID_WRAPS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote, uniqueTo } from "../engine/submodes";
+import { effectName, CONE_SHAPES, CONE_SHAPE_KEYS, CONE_TYPES, CONE_TYPE_KEYS, TEXT_FILL_KEYS, TEXT_MOVES, TEXT_MOVE_KEYS, PATH_SHAPES, BUBBLE_SHAPES, BUBBLE_SHAPE_KEYS, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, PENROSE_SHAPES, SPHERE_SHAPES, PINWHEEL_SHAPES, TUNNEL_SHAPES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_PAINTS, SOLID_MODEL_PAINTS, SOLID_PIVOTS, SOLID_WRAPS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote, uniqueTo } from "../engine/submodes";
+import { canPaintSolid } from "../engine/renderer";
 import type { BlurMask, BubbleShape, ColorFill, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, MaskMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidPaint, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
 import { SpiroWheels } from "./SpiroWheels";
@@ -348,6 +349,8 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
   };
   const remove = (step: FxStep) => {
     removeEffect(engine.state, step);
+    /* An effect that is taken out no longer counts as one for the 3D Object only. */
+    if (engine.state.solidFx.includes(step)) engine.state.solidFx = engine.state.solidFx.filter((each) => each !== step);
     setFxOrder(engine.state.fxOrder);
     if (openGroup === step) onOpenGroup(null);
   };
@@ -413,7 +416,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
     ),
     solid: (grip) => (
       <Group engine={engine} group="solid" title="3D object" grip={grip} {...accordion("solid")}>
-        <SolidSection engine={engine} row={row} mediaName={solidMediaName} onPickMedia={onPickSolidMedia} onRemoveMedia={onRemoveSolidMedia} onPickModel={onPickModel} onBrowseModels={onBrowseModels} />
+        <SolidSection engine={engine} row={row} fxOrder={fxOrder} mediaName={solidMediaName} onPickMedia={onPickSolidMedia} onRemoveMedia={onRemoveSolidMedia} onPickModel={onPickModel} onBrowseModels={onBrowseModels} />
       </Group>
     ),
     sort: (grip) => (
@@ -1215,7 +1218,7 @@ function CyclesSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =
 }
 
 /** The 3D Object: its shape and map menus, then the sliders that the shape and the map use, then Blend and Opacity. */
-function SolidSection({ engine, row, mediaName, onPickMedia, onRemoveMedia, onPickModel, onBrowseModels }: { engine: Engine; row: (key: ParamKey) => ReactNode; mediaName: string | null; onPickMedia: () => void; onRemoveMedia: () => void; onPickModel: () => void; onBrowseModels: () => void }) {
+function SolidSection({ engine, row, fxOrder, mediaName, onPickMedia, onRemoveMedia, onPickModel, onBrowseModels }: { engine: Engine; row: (key: ParamKey) => ReactNode; fxOrder: readonly FxStep[]; mediaName: string | null; onPickMedia: () => void; onRemoveMedia: () => void; onPickModel: () => void; onBrowseModels: () => void }) {
   const [shape, setShape] = useState<SolidShape>(engine.state.solidShape);
   const [map, setMap] = useState<SolidMap>(engine.state.solidMap);
   const [paint, setPaint] = useState<SolidPaint>(engine.state.solidPaint);
@@ -1228,7 +1231,9 @@ function SolidSection({ engine, row, mediaName, onPickMedia, onRemoveMedia, onPi
   const mapOnly = Object.values(SOLID_MAP_KEYS).flat();
   const shown = (key: ParamKey) => SOLID_SHAPE_ONLY.includes(key) ? SOLID_SHAPE_KEYS[shape].includes(key)
     : mapOnly.includes(key) ? !own && SOLID_MAP_KEYS[map].includes(key)
-    : key === "solidRelief" ? !own : true;
+    : key === "solidRelief" ? !own
+    /* The object draws only itself: Background (how much of the picture behind shows) is there only for a scene that uses it. */
+    : key === "solidBackground" ? engine.params.solidBackground.value !== 1 || engine.params.solidBackground.on : true;
   /* The shape's own sliders go under Shape, and the map's under Map (see childRows); Roundness, which most shapes show, stays in the list. */
   const shapeOwn = uniqueTo(SOLID_SHAPE_KEYS, shape);
   const mapRows = own ? [] : SOLID_MAP_KEYS[map];
@@ -1285,7 +1290,7 @@ function SolidSection({ engine, row, mediaName, onPickMedia, onRemoveMedia, onPi
       {!own && <ModeSelect engine={engine} stateKey="solidMap" options={SOLID_MAPS} name="Map" onChange={setMap} />}
       {shape === 10 && map === 0 && <ModeSelect engine={engine} stateKey="solidWrap" options={SOLID_WRAPS} name="Wrap" child />}
       {childRows(mapRows, row)}
-      <KeepBackground engine={engine} />
+      <ObjectEffects engine={engine} fxOrder={fxOrder} own={own} />
       <SplitRows keys={without(SOLID_KEYS.filter(shown), [...shapeOwn, ...mapRows])} row={row} blend={<ModeSelect engine={engine} stateKey="solidBlend" options={LAYER_BLENDS} name="Blend" />} />
     </>
   );
@@ -1311,24 +1316,36 @@ function standStarUp(engine: Engine) {
   engine.paramChanged("solidTilt");
 }
 
-/** The 3D Object's Freeze background switch (see docs/LAYERS.md): the effects after it change only the picture painted on the object. */
-function KeepBackground({ engine }: { engine: Engine }) {
-  const [keep, setKeep] = useState(engine.state.solidKeep);
+/**
+ * The effects that change only the 3D Object (see PlayState.solidFx): one
+ * check box for each other effect of the scene, in the FX list's order. A
+ * checked effect changes the object and not the rest of the picture. With
+ * no check, an effect works by its place in the list: above the 3D Object
+ * it changes the picture behind it, below it the whole result.
+ */
+function ObjectEffects({ engine, fxOrder, own }: { engine: Engine; fxOrder: readonly FxStep[]; own: boolean }) {
+  const [picked, setPicked] = useState(engine.state.solidFx);
+  const others = fxOrder.filter(canPaintSolid);
+  const what = own ? "the model" : "the picture on the object";
   return (
-    <label
-      className="panel-check-inline panel-keep-background"
-      data-tip="Freeze background: the effects after the 3D Object in the FX list change only the picture painted on the object, which keeps its outline. The picture behind it stays as it is here. An Image or Video effect after it, and the effects after that, change the whole picture again."
-    >
-      <input
-        type="checkbox"
-        checked={keep}
-        onChange={(event) => {
-          engine.state.solidKeep = event.target.checked;
-          setKeep(event.target.checked);
-        }}
-      />
-      Freeze background
-    </label>
+    <div className="panel-object-effects" data-tip={`Effects for the object only: a checked effect changes ${what}, and not the rest of the picture. With no check, an effect above the 3D object changes the picture behind it, and an effect below it changes the whole result.`}>
+      <span className="panel-row-name">Effects for the object only</span>
+      {others.length === 0 && <span className="panel-object-effects-none">Add another effect to select it here</span>}
+      {others.map((step) => (
+        <label key={step} className="panel-check-inline" data-tip={`${effectName(step)} changes only ${what}`}>
+          <input
+            type="checkbox"
+            checked={picked.includes(step)}
+            onChange={(event) => {
+              const next = event.target.checked ? [...engine.state.solidFx, step] : engine.state.solidFx.filter((each) => each !== step);
+              engine.state.solidFx = next;
+              setPicked(next);
+            }}
+          />
+          {effectName(step)}
+        </label>
+      ))}
+    </div>
   );
 }
 

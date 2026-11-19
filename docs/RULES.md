@@ -335,11 +335,14 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 
 - The range button turns one handle into two, and the value moves between them.
 - When both new handles would be on one value, the range opens to a tenth of the slider: up from the value, or down at the top.
-- The 3D Object's Freeze background: the effects after it in the FX list change only the picture painted on the object; the picture behind it stays as it was at the 3D Object.
-- With Freeze background, the object is drawn last, so its outline does not change.
-- With Freeze background, an Image or Video after the 3D Object, and the effects after it, change the whole picture again.
-- With no effect after the 3D Object, Freeze background changes nothing.
-- A scene saved before Freeze background opens with it off.
+- The 3D Object has a list of the scene's other effects, each with a check box: a checked effect changes only the object, not the rest of the picture.
+- A checked effect changes the picture painted on the object; the object's outline does not change. For a model that shows its own colors, it changes the drawn model, so an effect that moves the picture moves the model's outline too.
+- The checked effects work in the FX list's order, wherever they are in the list.
+- An effect with no check works by its place: above the 3D Object it changes the picture behind it, below it the whole result.
+- Camera and Terrain cannot be checked.
+- An effect that is taken out of the FX list loses its check.
+- A scene saved with Freeze background on (before 2026-11-18) opens with a check on each effect after the 3D Object, up to an Image or Video.
+- The 3D Object's Background slider shows only in a scene that uses it (not 1, or with a range).
 - With its range off, a value is its slider value.
 - When a range comes on, the end handle takes the single value.
 - A setting that goes below zero starts its range at ±10% around 0.

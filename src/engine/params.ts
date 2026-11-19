@@ -464,11 +464,14 @@ export interface PlayState {
   solidPaint: SolidPaint;
   solidBlend: LayerBlend;
   /**
-   * Freeze background (see docs/LAYERS.md): the steps after the 3D Object
-   * in the FX list change only the picture painted on the object, which is
-   * drawn last; the picture behind it stays as it was at the 3D Object.
+   * The effects that change only the 3D Object (see docs/SOLIDS.md, "Effects
+   * for the object only"): each one changes the picture painted on the
+   * object, or the drawn model with its own colors, and not the rest of the
+   * picture. The list is never changed in place: a change puts a new list
+   * here. Freeze background (a switch, until 2026-11-18) was the fixed form
+   * of it: every effect after the 3D Object, up to an Image or Video.
    */
-  solidKeep: boolean;
+  solidFx: FxStep[];
   /** The Model shape's pivot, the point it turns around: 0 the middle of its box, 1 the point its maker set (the file's own zero point, often at the base). */
   solidPivot: SolidPivot;
   /** The Model shape: how far Spin X, Y and Z have turned it, in turns (0 to 1). */
@@ -1394,7 +1397,7 @@ export function createPlayState(): PlayState {
     /* No effect is in the list at start-up, so every effect group is off. */
     groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false, cone: false },
     locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false, cone: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, tunnelTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, penroseShape: 0, sphereShape: 2, pinwheelShape: 1, tunnelShape: 0, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, pathShape: 2, pathBlend: 7, spiroWheels: defaultSpiroWheels(), spiroBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, coneType: 0, coneShape: 0, coneColor: "#8fe6ff", coneBlend: 7, coneFogTime: 0, textContent: DEFAULT_TEXT, textFont: "Segoe UI", textBold: true, textItalic: false, textAlign: 1, textFill: 0, textColor: "#ffffff", textStops: defaultTextStops(), textOutlineColor: "#000000", textGlowColor: "#18e0ff", textShadowColor: "#000000", textMove: 0, textBlend: 0, textTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidKeep: false, solidPivot: 0, solidTurnsX: 0, solidTurnsY: 0, solidTurnsZ: 0, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, tunnelTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, penroseShape: 0, sphereShape: 2, pinwheelShape: 1, tunnelShape: 0, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, pathShape: 2, pathBlend: 7, spiroWheels: defaultSpiroWheels(), spiroBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, coneType: 0, coneShape: 0, coneColor: "#8fe6ff", coneBlend: 7, coneFogTime: 0, textContent: DEFAULT_TEXT, textFont: "Segoe UI", textBold: true, textItalic: false, textAlign: 1, textFill: 0, textColor: "#ffffff", textStops: defaultTextStops(), textOutlineColor: "#000000", textGlowColor: "#18e0ff", textShadowColor: "#000000", textMove: 0, textBlend: 0, textTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidFx: [], solidPivot: 0, solidTurnsX: 0, solidTurnsY: 0, solidTurnsZ: 0, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1814,7 +1817,7 @@ const GROUP_MODES: Partial<Record<GroupKey, (state: PlayState, fresh: PlayState)
     state.solidWrap = fresh.solidWrap;
     state.solidPaint = fresh.solidPaint;
     state.solidBlend = fresh.solidBlend;
-    state.solidKeep = fresh.solidKeep;
+    state.solidFx = fresh.solidFx;
     state.solidPivot = fresh.solidPivot;
     state.solidTurnsX = 0;
     state.solidTurnsY = 0;

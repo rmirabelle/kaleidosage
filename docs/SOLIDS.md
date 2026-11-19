@@ -299,6 +299,35 @@ glTF 2.0 in its one-file binary form (.glb).
 - Freeze background: with Source Model, the effects after the 3D Object do
   not change the model's colors (there is no Source picture to change).
 
+## Effects for the object only
+
+Built 2026-11-18, as a trial, in place of the Freeze background switch,
+which the user found hard to understand ("it feels like a 3D object is 2
+layers, and I only ever wanted it to be one layer: just the object").
+
+- The 3D Object's panel lists the scene's other effects, each with a check
+  box (PlayState.solidFx). A checked effect changes only the object. An
+  effect with no check works by its place in the FX list: above the 3D
+  Object it changes the picture behind it, below it the whole result. So
+  "the background only" and "the background and the object" need no
+  control; only "the object only" does.
+- The engine splits the FX list in three (FrameValues.freeze, as Freeze
+  background did): the unchecked steps before the object, the checked
+  steps (in the list's order, wherever they are), and the unchecked steps
+  after it.
+- A shape painted with a picture (Source: Slot A, Slot B, Image or Video):
+  the checked steps change that picture, and the object keeps its outline.
+- A model with its own colors (Source: Model) has no Source picture. The
+  model is drawn alone on a clear picture, the checked steps change that
+  picture, and it goes over the picture behind, which has the shadow
+  (renderOwnModel). So a step that moves the picture moves the outline.
+- Camera and Terrain cannot be checked (canPaintSolid).
+- The Background slider shows only in a scene that uses it: the object
+  draws only itself, and a Levels or Color effect above it darkens the
+  picture behind.
+- Planned next, not built: the Model as an effect of its own, and 3D
+  effects next to each other in the list in one space with true depth.
+
 ## Open points
 
 - Next: a Mandelbulb, and a cut gem.

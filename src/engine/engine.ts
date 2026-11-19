@@ -1,5 +1,5 @@
 import { GROUP_PARAMS, NO_EFFECT, PARAM_KEYS, REFERENCE_CYCLE, SPIRO_HOLE_KEYS, createParams, createPlayState, defaultValue, hexToRgb, lensAngle, liveValue, rangeAt, rangeClock, startRangeAt, type GroupKey, type ParamKey, type Params, type PlayState } from "./params";
-import { KaleidoRenderer, LASER_BEAMS, type FrameValues, type ImageSource } from "./renderer";
+import { KaleidoRenderer, LASER_BEAMS, canPaintSolid, type FrameValues, type FxStep, type ImageSource } from "./renderer";
 import type { TerrainData } from "./terrain";
 import type { ModelData } from "./model";
 import { MANDEL_CENTERS } from "./submodes";
@@ -531,16 +531,16 @@ export class Engine {
     syncVideo(video, target, paused || this.gated);
   }
 
-  /** Freeze background's three parts of the FX list (see FrameValues.freeze), or null. */
+  /** The FX list in three parts, for the effects that change only the 3D Object (see FrameValues.freeze), or null. */
   private freezeParts(): FrameValues["freeze"] {
     const order = this.state.fxOrder;
     const at = order.indexOf("solid");
-    if (!this.state.solidKeep || at < 0 || at === order.length - 1) return null;
-    const rest = order.slice(at + 1);
-    const picture = rest.indexOf("picture");
-    const end = picture < 0 ? rest.length : picture;
-    if (end === 0) return null;
-    return { before: order.slice(0, at), object: rest.slice(0, end), after: rest.slice(end) };
+    if (at < 0) return null;
+    const picked = this.state.solidFx;
+    const object = order.filter((step) => picked.includes(step) && canPaintSolid(step));
+    if (object.length === 0) return null;
+    const others = (steps: FxStep[]) => steps.filter((step) => !object.includes(step));
+    return { before: others(order.slice(0, at)), object, after: others(order.slice(at + 1)) };
   }
 
   /** The camera's real terrain (see docs/TERRAIN.md), or null. The scene owns it; the engine draws with it. */

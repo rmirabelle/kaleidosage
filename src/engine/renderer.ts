@@ -52,6 +52,8 @@ type FinishPart = "sharpen" | "color" | "levels";
 const FINISH_PARTS: readonly FinishPart[] = ["sharpen", "color", "levels"];
 const isFinishPart = (step: FxStep): step is FinishPart => (FINISH_PARTS as readonly string[]).includes(step);
 export const isShapeStep = (step: FxStep): step is ShapeStep => (SHAPE_STEPS as readonly FxStep[]).includes(step);
+/** An effect that can change only the 3D Object (see PlayState.solidFx): any but the 3D Object itself, and Camera and Terrain, which show a whole world. */
+export const canPaintSolid = (step: FxStep) => step !== "solid" && step !== "camera" && step !== "terrain";
 /** The most laser beams: the shader draws at most this many (see LASER_SHADER). */
 export const LASER_BEAMS = 32;
 /**
@@ -367,11 +369,12 @@ export interface FrameValues {
   /** Every effect step, in the order they act on the picture. */
   fxOrder: FxStep[];
   /**
-   * Freeze background (see render), or null when it is off or no step is
-   * after the 3D Object: fxOrder in three parts. "before" is the steps
-   * before the 3D Object; "object" the steps after it, up to an Image or
-   * Video, which change only the picture painted on the object; "after" the
-   * rest, which change the whole picture.
+   * The effects for the 3D Object only (see render and PlayState.solidFx),
+   * or null when there is none: fxOrder in three parts. "object" is the
+   * steps that change only the object, in the list's order, wherever they
+   * are in it. "before" is the other steps before the 3D Object, which make
+   * the picture behind it; "after" the other steps after it, which change
+   * the whole picture.
    */
   freeze: { before: FxStep[]; object: FxStep[]; after: FxStep[] } | null;
   /** Which shape steps are on; a step that is off is left out, so it costs no pass. */
@@ -1249,6 +1252,8 @@ export class KaleidoRenderer {
    * a picture of Freeze background's (see render).
    */
   private output: WebGLFramebuffer | null = null;
+  /** What drawModel draws (see renderOwnModel): all of it, the model alone with no shadow, or only the picture behind with the shadow. */
+  private modelPart: "all" | "alone" | "behind" = "all";
   /** Freeze background's pictures, by name, each made on first use (see layerTarget). */
   private readonly layerPictures = new Map<string, { target: Target; size: [number, number] }>();
   /** The steps that do something in this frame (see activeSteps). */
@@ -1582,10 +1587,12 @@ export class KaleidoRenderer {
     if (!active.solid) delete this.timer.times.screen;
 
     /**
-     * Freeze background (see FrameValues.freeze): the picture made before
-     * the 3D Object is kept, and the "object" steps change a copy of it,
-     * which the object is painted with, over the kept one, so its outline
-     * does not change. The "after" steps then change the whole picture.
+     * Effects for the 3D Object only (see FrameValues.freeze): the "before"
+     * steps make the picture behind the object, which is kept. The "object"
+     * steps change a copy of the object's Source, which the object is
+     * painted with, over the kept picture, so its outline does not change.
+     * A model with its own colors has no Source picture: see
+     * renderOwnModel. The "after" steps then change the whole picture.
      * Else the list draws onto the screen in one run.
      */
     const freeze = active.solid ? v.freeze : null;
@@ -1598,6 +1605,11 @@ export class KaleidoRenderer {
     const image = this.layerTarget("image", width, height);
     this.output = image.framebuffer;
     this.drawStack(v, freeze.before, null, width, height);
+    if (v.solidShape === 11 && v.solidPaint === 3) {
+      this.renderOwnModel(v, freeze, image, width, height);
+      this.endFrame(active);
+      return;
+    }
     const paint = this.layerTarget("solid paint", width, height);
     this.output = paint.framebuffer;
     /* The object steps change the 3D Object's Source: Slot A (the picture made so far), Slot B or its own image or video (found 2026-11-07: Slot B skipped them). */
@@ -1609,6 +1621,45 @@ export class KaleidoRenderer {
     this.timer.end();
     if (into) this.drawStack(v, freeze.after, into.texture, width, height);
     this.endFrame(active);
+  }
+
+  /**
+   * The effects for the object only, for a model that shows its own colors
+   * (Source: Model). It has no Source picture for the steps to change, so
+   * they change the drawn model: the model alone on a clear picture, with
+   * no shadow, goes through the "object" steps (every step carries the
+   * cover, see docs/LAYERS.md, rule 1). The result goes over the picture
+   * behind, which has the model's shadow. A step that moves the picture
+   * (Warp, Kaleidoscope) so moves the model's outline too.
+   */
+  private renderOwnModel(v: FrameValues, freeze: NonNullable<FrameValues["freeze"]>, image: Target, width: number, height: number) {
+    const gl = this.gl;
+    const clear = this.layerTarget("solid clear", width, height);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, clear.framebuffer);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    const alone = this.layerTarget("solid alone", width, height);
+    this.timer.begin("solid");
+    this.modelPart = "alone";
+    this.drawModel(v, clear.texture, alone, width, height, clear.texture);
+    this.modelPart = "all";
+    this.timer.end();
+    const paint = this.layerTarget("solid paint", width, height);
+    this.output = paint.framebuffer;
+    this.drawStack(v, freeze.object, alone.texture, width, height);
+    const into = freeze.after.length > 0 ? this.layerTarget("stack", width, height) : null;
+    this.output = null;
+    this.timer.begin("solid");
+    this.modelPart = "behind";
+    this.drawModel(v, image.texture, into, width, height, image.texture);
+    this.modelPart = "all";
+    gl.viewport(0, 0, width, height);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    this.drawCopy(paint.texture, into);
+    gl.disable(gl.BLEND);
+    this.timer.end();
+    if (into) this.drawStack(v, freeze.after, into.texture, width, height);
   }
 
   /** The steps that do something in this frame. A shape step that is off does nothing either, and neither does one at opacity 0. */
@@ -2535,7 +2586,7 @@ export class KaleidoRenderer {
     return (v.solidPaint === 1 ? this.solidMediaFrame() : null) ?? picture;
   }
 
-  /** "painted": the picture is already the Source, changed by the object steps (Freeze background); else the Source is picked here. */
+  /** "painted": the picture is already the Source, changed by the effects for the object only (see render); else the Source is picked here. */
   private drawSolid(v: FrameValues, picture: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture, painted = false) {
     const source = painted ? picture : this.solidSource(v, picture);
     if (v.solidShape === 11) {
@@ -2728,8 +2779,9 @@ export class KaleidoRenderer {
    */
   private drawModel(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number, back: WebGLTexture) {
     const gl = this.gl;
-    const parts = this.model?.parts ?? [];
-    const shadow = Math.min(1, Math.max(0, v.solidShadow));
+    const parts = this.modelPart === "behind" ? [] : this.model?.parts ?? [];
+    const shadowParts = this.model?.parts ?? [];
+    const shadow = this.modelPart === "alone" ? 0 : Math.min(1, Math.max(0, v.solidShadow));
     const shadeSize: [number, number] = [Math.max(1, Math.ceil(width / 4)), Math.max(1, Math.ceil(height / 4))];
     const shade = this.layerTarget("solid star shade", shadeSize[0], shadeSize[1]);
     const p = this.modelProgram;
@@ -2737,6 +2789,7 @@ export class KaleidoRenderer {
     const common = (s: Program, shadeTexture: WebGLTexture) => {
       gl.useProgram(s.program);
       this.solidLook(s, v);
+      if (this.modelPart === "alone") gl.uniform1f(s.uniforms.u_shadow, 0);
       gl.uniform1i(s.uniforms.u_turnCopy, 0);
       gl.uniform1f(s.uniforms.u_aspect, width / height);
       gl.uniform1f(s.uniforms.u_size, Math.max(0.01, v.solidSize));
@@ -2758,11 +2811,11 @@ export class KaleidoRenderer {
         gl.uniform1i(s.uniforms[name], unit);
       });
     };
-    const drawParts = () => {
+    const drawParts = (list = parts) => {
       const { white, flat } = this.modelBlanks();
       const textures = this.model?.textures ?? [];
       const picture = (index: number | null, blank: WebGLTexture) => (index === null ? null : textures[index]) ?? blank;
-      for (const { vertices, count, material } of parts) {
+      for (const { vertices, count, material } of list) {
         const slots: [WebGLTexture, string][] = [
           [picture(material.colorTexture, white), "u_colorTex"],
           [picture(material.normalTexture, flat), "u_normalTex"],
@@ -2799,7 +2852,7 @@ export class KaleidoRenderer {
       common(p, back);
       gl.uniform1i(p.uniforms.u_pass, 1);
       gl.colorMask(true, false, false, false);
-      drawParts();
+      drawParts(shadowParts);
       gl.colorMask(true, true, true, true);
       this.softenShade(shade.framebuffer, shade.texture, shadeSize, v.solidSize, width, height);
     }

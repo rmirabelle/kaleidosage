@@ -186,19 +186,24 @@ describe("scene files", () => {
     expect(media.model).toEqual({ name: "duck.glb", data: "Z2xURg==" });
   });
 
-  it("keep the 3D object's Freeze background, which is off in a scene from before it", () => {
+  it("keep the effects for the 3D object only, and read Freeze background of an older scene as the effects after it", () => {
     const state = createPlayState();
-    state.solidKeep = true;
+    state.fxOrder = ["kaleidoscope", "solid", "blur", "picture", "bloom"];
+    state.solidFx = ["kaleidoscope", "bloom"];
     const loaded = createPlayState();
     applyScene(serializeScene(createParams(), state, { image: IMAGE }), createParams(), loaded);
-    expect(loaded.solidKeep).toBe(true);
-    expect(sceneFingerprint(createParams(), loaded, [])).not.toBe(sceneFingerprint(createParams(), createPlayState(), []));
-    const old = JSON.parse(serializeScene(createParams(), createPlayState(), { image: IMAGE }));
-    delete old.state.solidKeep;
-    const fromOld = createPlayState();
-    fromOld.solidKeep = true;
-    applyScene(JSON.stringify(old), createParams(), fromOld);
-    expect(fromOld.solidKeep).toBe(false);
+    expect(loaded.solidFx).toEqual(["kaleidoscope", "bloom"]);
+    expect(sceneFingerprint(createParams(), loaded, [])).not.toBe(sceneFingerprint(createParams(), { ...loaded, solidFx: [] }, []));
+    const old = JSON.parse(serializeScene(createParams(), state, { image: IMAGE }));
+    delete old.state.solidFx;
+    const plain = createPlayState();
+    plain.solidFx = ["blur"];
+    applyScene(JSON.stringify(old), createParams(), plain);
+    expect(plain.solidFx).toEqual([]);
+    old.state.solidKeep = true;
+    const frozen = createPlayState();
+    applyScene(JSON.stringify(old), createParams(), frozen);
+    expect(frozen.solidFx).toEqual(["blur"]);
   });
 
   it("round-trips embedded video handles for both slots without base64", () => {
