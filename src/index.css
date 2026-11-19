@@ -508,7 +508,7 @@ button { border: 0; }
 .panel-title-play + .panel-title-all { margin-left: 0; }
 .panel-title-buttons .panel-button { height: 28px; }
 /* The 3D model's File row: Search, File and Clear as icons in one bordered toolbar, at the right of the name. */
-.panel-file-buttons { flex: 0 0 auto; }
+.panel-file-buttons { flex: 0 0 auto; border-radius: 5px; }
 .panel-file-buttons .panel-button.icon { width: 30px; height: 26px; }
 .midi-remove { color: #c3c7d0; }
 .midi-remove:hover { color: #fff; background: #c83232; }
