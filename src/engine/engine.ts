@@ -1725,7 +1725,8 @@ export class Engine {
       modelY: this.live("modelY"),
       modelBlend: this.state.modelBlend,
       modelMap: this.state.modelMap,
-      modelMapAmount: this.live("modelMapAmount"),
+      /* The slider is how much of the model's own look shows; the renderer takes how much of the Map's picture shows. */
+      modelMapAmount: 1 - this.live("modelMapAmount"),
       modelTiles: this.live("modelTiles"),
       modelBend: this.live("modelBend"),
       modelFrost: this.live("modelFrost"),

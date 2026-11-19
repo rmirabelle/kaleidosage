@@ -211,14 +211,14 @@ describe("scene files", () => {
     expect(params.modelAmount.value).toBe(0.8);
     expect(params.modelSize.value).toBe(0.9);
     expect(params.modelRotateX.value).toBe(45);
-    expect(params.modelMapAmount.value).toBe(0);
-    /* A model that a picture painted opens with that Map at full Map amount. */
+    expect(params.modelMapAmount.value).toBe(1);
+    /* A model that a picture painted opens with that Map at Map amount 0: none of its own look. */
     old.state.solidPaint = 0;
     old.state.solidMap = 1;
     const glass = createParams();
     const glassState = createPlayState();
     applyScene(JSON.stringify(old), glass, glassState);
-    expect(glass.modelMapAmount.value).toBe(1);
+    expect(glass.modelMapAmount.value).toBe(0);
     expect(glassState.modelMap).toBe(1);
   });
 

@@ -667,7 +667,7 @@ export interface FrameValues {
   modelShine: number;
   modelShadow: number;
   modelBlend: LayerBlend;
-  /** Map amount: 0 the model's own colors, 1 the picture behind it, put on by modelMap (Wrap, Project or Mirror); and that map's own settings. */
+  /** How much of the Map's picture shows (1 less the Map amount slider): 0 the model's own colors, 1 the picture behind it, put on by modelMap (Wrap, Project or Mirror); and that map's own settings. */
   modelMap: SolidMap;
   modelMapAmount: number;
   modelTiles: number;

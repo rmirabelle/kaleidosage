@@ -345,13 +345,14 @@ too many things, and a scene could not have a model and a 3D object.
   then all three maps the same day). The Map menu (PlayState.modelMap)
   is the 3D Object's: Wrap (painted on from six sides, with Tiles),
   Project (a glass lens, with Bend, Frost and Repeats) and Mirror
-  (chrome, with Repeats). Map amount (0 to 1) mixes the model's own
-  colors (0) with the map's picture (1), so a look such as half marble,
-  half chrome is possible. The paint code is the 3D Object's, with the
+  (chrome, with Repeats). Map amount (0 to 1) is how much of the model's
+  own look shows: 1 is its own colors, 0 the map's picture, so a look
+  such as half marble, half chrome is possible. (It was the other way
+  around for an hour; the user reads "map" as the model's own maps.) The paint code is the 3D Object's, with the
   model's bump pictures in the lens and the reflection.
 - A picture of the model's own (the Model shape's Source: Slot B, Image
   or Video) is gone: the user does not need it. A model that a picture
-  painted in an older scene opens with its Map at Map amount 1.
+  painted in an older scene opens with its Map at Map amount 0.
 - No Pivot menu (taken out 2026-11-18, the user's wish): the model
   always turns around the middle of its box, which sits at Center X and
   Center Y. The file's own zero point (model.origin) is still read, but

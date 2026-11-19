@@ -20,9 +20,9 @@ function modelFromSolid(savedParams: Record<string, unknown>, saved: Record<stri
   for (const part of ["TurnsX", "TurnsY", "TurnsZ", "Blend"]) {
     if (saved[`solid${part}`] !== undefined) saved[`model${part}`] = saved[`solid${part}`];
   }
-  /* A model that a picture painted (a Source other than Model) opens with that Map at full Map amount, with the map's sliders. */
+  /* A model that a picture painted (a Source other than Model) opens with that Map at Map amount 0 (none of its own look), with the map's sliders. */
   if (saved.solidPaint !== 3) {
-    savedParams.modelMapAmount = { value: 1 };
+    savedParams.modelMapAmount = { value: 0 };
     saved.modelMap = saved.solidMap;
     for (const part of ["Tiles", "Bend", "Frost", "Repeats"]) {
       if (isRecord(savedParams[`solid${part}`])) savedParams[`model${part}`] = savedParams[`solid${part}`];
@@ -369,8 +369,8 @@ export function applyScene(text: string, params: Params, state: PlayState): Scen
   const saved = isRecord(scene.state) ? scene.state : {};
   bubbleFromDome(savedParams, saved);
   modelFromSolid(savedParams, saved);
-  /* Map amount was Chrome for some hours (2026-11-18), with the Mirror map only. */
-  if (isRecord(savedParams.modelChrome) && !isRecord(savedParams.modelMapAmount)) savedParams.modelMapAmount = savedParams.modelChrome;
+  /* Map amount was Chrome for some hours (2026-11-18), with the Mirror map only, and the other way around: 1 was full chrome. */
+  if (isRecord(savedParams.modelChrome) && !isRecord(savedParams.modelMapAmount) && isNumber(savedParams.modelChrome.value)) savedParams.modelMapAmount = { value: 1 - savedParams.modelChrome.value };
   /**
    * Version 1 had a speed and a rate for each range, unless its shared
    * cycle was on. Those ranges open with their own times, in the real

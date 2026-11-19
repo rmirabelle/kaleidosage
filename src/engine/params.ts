@@ -1011,15 +1011,18 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   modelShine: { label: "Shine", min: 0, max: 1, step: 0.01, value: 0.4, drift: "wave", low: 0.1, high: 0.7, on: false },
   modelShadow: { label: "Shadow", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.2, high: 0.8, on: false },
   /**
-   * Map amount: 0 the model's own colors, 1 the picture behind the model,
-   * put on by the Map (PlayState.modelMap); between them the two mix.
+   * Map amount: how much of the model's own colors and pictures (its
+   * maps) shows. 1 is the model's own look; 0 is the picture behind the
+   * model, put on by the Map (PlayState.modelMap); between them the two
+   * mix. (Until 2026-11-18 it was the other way around; the user read
+   * "map" as the model's own, and asked for this.)
    * Tiles (Wrap), Bend and Frost (Project) and Repeats (Project and
    * Mirror) are the map's own sliders, as the 3D Object's are.
    */
   modelTiles: { label: "Tiles", min: 0.25, max: 8, step: 0.01, scale: "log", value: 1, drift: "wave", low: 1, high: 3, on: false },
   modelBend: { label: "Bend", min: 0, max: 1, step: 0.01, value: 0.4, drift: "wave", low: 0.2, high: 0.7, on: false },
   modelFrost: { label: "Frost", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.6, on: false },
-  modelMapAmount: { label: "Map amount", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 1, on: false },
+  modelMapAmount: { label: "Map amount", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0, high: 1, on: false },
   modelRepeats: { label: "Repeats", min: 0.25, max: 16, step: 0.01, scale: "log", value: 1, drift: "wave", low: 1, high: 4, on: false },
   modelX: { label: "Center X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.25, high: 0.25, on: false },
   modelY: { label: "Center Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
@@ -2324,7 +2327,7 @@ function randomizeAll(params: Params, state?: PlayState) {
   set("modelShading", rand(0.3, 0.9), rand(0, 0.2));
   set("modelShine", rand(0, 0.8), rand(0, 0.2));
   set("modelShadow", rand(0.2, 0.8), rand(0, 0.2));
-  set("modelMapAmount", Math.random() < 0.5 ? 0 : rand(0.4, 1), rand(0, 0.3));
+  set("modelMapAmount", Math.random() < 0.5 ? 1 : rand(0, 0.6), rand(0, 0.3));
   set("modelRepeats", Math.random() < 0.4 ? 1 : rand(1, 6), rand(0, 0.5));
   set("modelTiles", rand(0.75, 3), rand(0, 0.5));
   set("modelBend", rand(0.2, 0.8), rand(0, 0.2));
