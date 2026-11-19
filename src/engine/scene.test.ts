@@ -176,13 +176,13 @@ describe("scene files", () => {
 
   it("keep the 3D model effect, its pivot, its turn and its model file", () => {
     const state = createPlayState();
-    Object.assign(state, { fxOrder: ["model"], modelBlend: 2, modelPivot: 1, modelTurnsY: 0.25 });
+    Object.assign(state, { fxOrder: ["model"], modelBlend: 2, modelTurnsY: 0.25 });
     const scene = JSON.parse(serializeScene(createParams(), state, { image: IMAGE }));
     scene.model = { name: "duck.glb", data: "Z2xURg==" };
     const loaded = createPlayState();
     const media = applyScene(JSON.stringify(scene), createParams(), loaded);
-    expect([loaded.fxOrder, loaded.modelBlend, loaded.modelPivot, loaded.modelTurnsY]).toEqual([["model"], 2, 1, 0.25]);
-    expect(sceneFingerprint(createParams(), loaded, [])).not.toBe(sceneFingerprint(createParams(), { ...loaded, modelPivot: 0 }, []));
+    expect([loaded.fxOrder, loaded.modelBlend, loaded.modelTurnsY]).toEqual([["model"], 2, 0.25]);
+    expect(sceneFingerprint(createParams(), loaded, [])).not.toBe(sceneFingerprint(createParams(), { ...loaded, modelBlend: 0 }, []));
     expect(media.model).toEqual({ name: "duck.glb", data: "Z2xURg==" });
   });
 
@@ -206,7 +206,6 @@ describe("scene files", () => {
     expect(loaded.groups.solid).toBe(false);
     expect(loaded.solidShape).toBe(1);
     expect(loaded.solidPaint).toBe(0);
-    expect(loaded.modelPivot).toBe(1);
     expect(loaded.modelFx).toEqual(["bloom"]);
     expect(loaded.solidFx).toEqual([]);
     expect(params.modelAmount.value).toBe(0.8);

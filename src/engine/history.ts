@@ -7,7 +7,7 @@ const LIMIT = 200;
 
 type SavedParam = Pick<Param, "value" | "low" | "high" | "on" | "ease" | "custom" | "seconds" | "startTime">;
 type SavedState = Pick<PlayState, "groups" | "blendMode" | "warpType" | "mapMode" | "foldMode" | "penroseShape" | "sphereShape" | "pinwheelShape" | "tunnelShape" | "blurMask" | "trailMode"
-  | "overlayColor" | "colorBlend" | "trailColor" | "smearShape" | "contourTone" | "contourBlend" | "cameraBlend" | "viewBlend" | "skyColor" | "cameraRepeat" | "cameraHeightSource" | "cameraColors" | "cameraStops" | "videoCrossfade" | "fxOrder" | "layerBlend" | "sound" | "particleStops" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "pathShape" | "pathBlend" | "spiroWheels" | "spiroBlend" | "cyclesPaint" | "cyclesStops" | "solidShape" | "solidMap" | "solidWrap" | "solidPaint" | "solidBlend" | "solidFx" | "modelBlend" | "modelMap" | "modelFx" | "modelPivot" | "mandelPlace" | "particleShape" | "bubbleShape" | "bubbleBlend" | "bubbleShadow" | "outlineShape" | "outlineDraw" | "outlineStops" | "maskMode" | "maskStops" | "colorFill" | "colorStops" | "textContent" | "textFont" | "textBold" | "textItalic" | "textAlign" | "textFill" | "textColor" | "textStops" | "textOutlineColor" | "textGlowColor" | "textShadowColor" | "textMove" | "textBlend" | "coneType" | "coneShape" | "coneColor" | "coneBlend">;
+  | "overlayColor" | "colorBlend" | "trailColor" | "smearShape" | "contourTone" | "contourBlend" | "cameraBlend" | "viewBlend" | "skyColor" | "cameraRepeat" | "cameraHeightSource" | "cameraColors" | "cameraStops" | "videoCrossfade" | "fxOrder" | "layerBlend" | "sound" | "particleStops" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "pathShape" | "pathBlend" | "spiroWheels" | "spiroBlend" | "cyclesPaint" | "cyclesStops" | "solidShape" | "solidMap" | "solidWrap" | "solidPaint" | "solidBlend" | "solidFx" | "modelBlend" | "modelMap" | "modelFx" | "mandelPlace" | "particleShape" | "bubbleShape" | "bubbleBlend" | "bubbleShadow" | "outlineShape" | "outlineDraw" | "outlineStops" | "maskMode" | "maskStops" | "colorFill" | "colorStops" | "textContent" | "textFont" | "textBold" | "textItalic" | "textAlign" | "textFill" | "textColor" | "textStops" | "textOutlineColor" | "textGlowColor" | "textShadowColor" | "textMove" | "textBlend" | "coneType" | "coneShape" | "coneColor" | "coneBlend">;
 
 /** The settings at one step, and their fingerprint, to tell whether two steps differ. */
 interface Snapshot {
@@ -101,7 +101,6 @@ function take(params: Params, state: PlayState): Snapshot {
       modelBlend: state.modelBlend,
       modelMap: state.modelMap,
       modelFx: state.modelFx,
-      modelPivot: state.modelPivot,
       mandelPlace: state.mandelPlace
     }
   };

@@ -357,8 +357,6 @@ export type SolidMap = 0 | 1 | 2;
 export type SolidWrap = 0 | 1 | 2 | 3;
 /** What paints the 3D Object: 0 the picture made so far, 1 its own image or video (see setSolidMedia), 2 Source B (the scene's second image or video), 3 the model's own materials (the Model shape only, see setModel). */
 export type SolidPaint = 0 | 1 | 2 | 3;
-/** The Model shape's pivot, the point it turns around: 0 the middle of its box, 1 the point its maker set (the file's own zero point). */
-export type ModelPivot = 0 | 1;
 /** How the two images fade: 0 = crossfade, 1 = dissolve by brightness (light areas change first). */
 export type BlendMode = 0 | 1;
 /**
@@ -657,8 +655,8 @@ export interface FrameValues {
    */
   /**
    * The 3D model (see drawModel): its opacity, size (a part of the screen
-   * height), place, light and Blend. Its turn is modelAngleX, Y and Z, and
-   * its pivot modelPivot.
+   * height), place, light and Blend. Its turn is modelAngleX, Y and Z.
+   * It turns around the middle of its box.
    */
   model: number;
   modelSize: number;
@@ -709,7 +707,6 @@ export interface FrameValues {
   modelAngleX: number;
   modelAngleY: number;
   modelAngleZ: number;
-  modelPivot: ModelPivot;
   solidTilt: number;
   solidBend: number;
   /** Project's frost: 0 clear glass, 1 frosted (see SOLID_SHADER). */
@@ -2861,9 +2858,8 @@ export class KaleidoRenderer {
       gl.uniform2f(s.uniforms.u_shadeMix, 1, 0);
       gl.uniform1f(s.uniforms.u_fade, 1);
       gl.uniform1f(s.uniforms.u_chrome, v.solidPaint === 3 ? Math.min(1, Math.max(0, v.modelMapAmount)) : 1);
-      /* The point the model turns around, which also sits at Center X and Y: the middle of its box (0, 0, 0), or its maker's point. */
-      const pivot = v.modelPivot === 1 && this.model ? this.model.origin : [0, 0, 0];
-      gl.uniform3f(s.uniforms.u_pivot, pivot[0], pivot[1], pivot[2]);
+      /* The model turns around the middle of its box (0, 0, 0), which also sits at Center X and Y. A Pivot menu could pick the maker's own point (the model's "origin") until 2026-11-18; the user took it out. */
+      gl.uniform3f(s.uniforms.u_pivot, 0, 0, 0);
       const textures: [WebGLTexture, string][] = [[source, "u_tex"], [back, "u_back"], [back, "u_under"], [shadeTexture, "u_shade"]];
       textures.forEach(([texture, name], unit) => {
         gl.activeTexture(gl.TEXTURE0 + unit);

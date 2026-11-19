@@ -1760,7 +1760,6 @@ export class Engine {
       modelAngleX: this.live("modelRotateX") * DEGREES + this.state.modelTurnsX * Math.PI * 2,
       modelAngleY: this.live("modelRotateY") * DEGREES + this.state.modelTurnsY * Math.PI * 2,
       modelAngleZ: this.live("modelRotateZ") * DEGREES + this.state.modelTurnsZ * Math.PI * 2,
-      modelPivot: this.state.modelPivot,
       solidBend: this.live("solidBend"),
       solidFrost: this.live("solidFrost"),
       solidTiles: this.live("solidTiles"),

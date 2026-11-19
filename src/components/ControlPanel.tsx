@@ -12,7 +12,7 @@ import { DEFAULT_LAND_KM, loadTerrain, randomLandPlace } from "../lib/terrain";
 import type { TerrainData } from "../engine/terrain";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
-import { MODEL_MAP_KEYS, MODEL_KEYS, effectName, CONE_SHAPES, CONE_SHAPE_KEYS, CONE_TYPES, CONE_TYPE_KEYS, TEXT_FILL_KEYS, TEXT_MOVES, TEXT_MOVE_KEYS, PATH_SHAPES, BUBBLE_SHAPES, BUBBLE_SHAPE_KEYS, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, PENROSE_SHAPES, SPHERE_SHAPES, PINWHEEL_SHAPES, TUNNEL_SHAPES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_PAINTS, MODEL_PIVOTS, SOLID_WRAPS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote, uniqueTo } from "../engine/submodes";
+import { MODEL_MAP_KEYS, MODEL_KEYS, effectName, CONE_SHAPES, CONE_SHAPE_KEYS, CONE_TYPES, CONE_TYPE_KEYS, TEXT_FILL_KEYS, TEXT_MOVES, TEXT_MOVE_KEYS, PATH_SHAPES, BUBBLE_SHAPES, BUBBLE_SHAPE_KEYS, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, PENROSE_SHAPES, SPHERE_SHAPES, PINWHEEL_SHAPES, TUNNEL_SHAPES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_PAINTS, SOLID_WRAPS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote, uniqueTo } from "../engine/submodes";
 import { canPaintSolid } from "../engine/renderer";
 import type { BlurMask, BubbleShape, ColorFill, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, MaskMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidPaint, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
@@ -955,7 +955,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "penroseShape" | "sphereShape" | "pinwheelShape" | "tunnelShape" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "bubbleShape" | "bubbleBlend" | "bubbleShadow" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "pathShape" | "pathBlend" | "spiroBlend" | "textMove" | "textBlend" | "coneType" | "coneShape" | "coneBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidWrap" | "solidPaint" | "modelBlend" | "modelMap" | "modelPivot" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "penroseShape" | "sphereShape" | "pinwheelShape" | "tunnelShape" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "bubbleShape" | "bubbleBlend" | "bubbleShadow" | "outlineShape" | "outlineDraw" | "maskMode" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "pathShape" | "pathBlend" | "spiroBlend" | "textMove" | "textBlend" | "coneType" | "coneShape" | "coneBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidWrap" | "solidPaint" | "modelBlend" | "modelMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange, child }: {
@@ -1278,8 +1278,8 @@ function SolidSection({ engine, row, fxOrder, mediaName, onPickMedia, onRemoveMe
 /**
  * The 3D model effect (see docs/SOLIDS.md): a model from a file, which
  * shows its own colors. The File row picks it, with icon buttons: Search opens the model
- * browser, File the system's Open dialog for a .glb file, Clear takes the model out. Pivot is the
- * point the model turns around, which sits at Center X and Center Y.
+ * browser, File the system's Open dialog for a .glb file, Clear takes the model out. The model
+ * turns around the middle of its box, which sits at Center X and Center Y.
  */
 function ModelSection({ engine, row, fxOrder, onPickModel, onBrowseModels }: { engine: Engine; row: (key: ParamKey) => ReactNode; fxOrder: readonly FxStep[]; onPickModel: () => void; onBrowseModels: () => void }) {
   const [modelName, setModelName] = useState<string | null>(engine.model?.name ?? null);
@@ -1305,7 +1305,6 @@ function ModelSection({ engine, row, fxOrder, onPickModel, onBrowseModels }: { e
           </button>
         </div>
       </div>
-      <ModeSelect engine={engine} stateKey="modelPivot" options={MODEL_PIVOTS} name="Pivot" />
       {/* Map: how the picture behind the model goes onto it. Map amount mixes it with the model's own colors; then the map's own sliders. */}
       <ModeSelect engine={engine} stateKey="modelMap" options={SOLID_MAPS} name="Map" onChange={setMap} />
       {childRows(["modelMapAmount", ...MODEL_MAP_KEYS[map]], row)}

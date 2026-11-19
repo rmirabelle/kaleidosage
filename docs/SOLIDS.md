@@ -336,7 +336,7 @@ too many things, and a scene could not have a model and a 3D object.
 
 - A new effect, "3D model" (step and group `model`), with its own
   settings: Opacity, Size, Rotate X, Y, Z, Spin X, Y, Z, Light angle,
-  Shading, Shine, Shadow, Center X, Center Y, the Pivot menu, Blend, and
+  Shading, Shine, Shadow, Center X, Center Y, Blend, and
   its own list of effects for the object only (PlayState.modelFx). An
   effect is in the list of one 3D effect only: a check in one takes it
   out of the other.
@@ -352,6 +352,10 @@ too many things, and a scene could not have a model and a 3D object.
 - A picture of the model's own (the Model shape's Source: Slot B, Image
   or Video) is gone: the user does not need it. A model that a picture
   painted in an older scene opens with its Map at Map amount 1.
+- No Pivot menu (taken out 2026-11-18, the user's wish): the model
+  always turns around the middle of its box, which sits at Center X and
+  Center Y. The file's own zero point (model.origin) is still read, but
+  not used.
 - The 3D Object has no Model shape and no Source: Model now.
 - Drawing: the 3D Object's code (drawModel, solidLook), which reads the
   model's settings in the place of the 3D Object's (modelValues in

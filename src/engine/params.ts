@@ -1,4 +1,4 @@
-import type { ConeShape, ConeType, PenroseShape, PinwheelShape, TunnelShape, SphereShape, BlendMode, BlurMask, BubbleShadow, BubbleShape, CameraColors, CameraHeightSource, CameraRepeat, ColorFill, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidPaint, ModelPivot, SolidShape, SolidWrap, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, MaskMode, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
+import type { ConeShape, ConeType, PenroseShape, PinwheelShape, TunnelShape, SphereShape, BlendMode, BlurMask, BubbleShadow, BubbleShape, CameraColors, CameraHeightSource, CameraRepeat, ColorFill, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidPaint, SolidShape, SolidWrap, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, MaskMode, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
 
 import type { PathShape } from "./paths";
 import { MAX_SPIRO_WHEELS, defaultSpiroWheels, randomSpiroWheels, type SpiroWheelSpec } from "./spiro";
@@ -478,8 +478,6 @@ export interface PlayState {
   modelFx: FxStep[];
   /** How the picture behind the 3D model goes onto it, by Map amount: Wrap, Project (glass) or Mirror (chrome), as the 3D Object's Map. */
   modelMap: SolidMap;
-  /** The Model shape's pivot, the point it turns around: 0 the middle of its box, 1 the point its maker set (the file's own zero point, often at the base). */
-  modelPivot: ModelPivot;
   /** The Model shape: how far Spin X, Y and Z have turned it, in turns (0 to 1). */
   modelTurnsX: number;
   modelTurnsY: number;
@@ -1424,7 +1422,7 @@ export function createPlayState(): PlayState {
     /* No effect is in the list at start-up, so every effect group is off. */
     groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, model: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false, cone: false },
     locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, model: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false, cone: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, tunnelTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, penroseShape: 0, sphereShape: 2, pinwheelShape: 1, tunnelShape: 0, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, pathShape: 2, pathBlend: 7, spiroWheels: defaultSpiroWheels(), spiroBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, coneType: 0, coneShape: 0, coneColor: "#8fe6ff", coneBlend: 7, coneFogTime: 0, textContent: DEFAULT_TEXT, textFont: "Segoe UI", textBold: true, textItalic: false, textAlign: 1, textFill: 0, textColor: "#ffffff", textStops: defaultTextStops(), textOutlineColor: "#000000", textGlowColor: "#18e0ff", textShadowColor: "#000000", textMove: 0, textBlend: 0, textTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidFx: [], modelBlend: 0, modelMap: 2, modelFx: [], modelPivot: 0, modelTurnsX: 0, modelTurnsY: 0, modelTurnsZ: 0, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, tunnelTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, penroseShape: 0, sphereShape: 2, pinwheelShape: 1, tunnelShape: 0, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, pathShape: 2, pathBlend: 7, spiroWheels: defaultSpiroWheels(), spiroBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, coneType: 0, coneShape: 0, coneColor: "#8fe6ff", coneBlend: 7, coneFogTime: 0, textContent: DEFAULT_TEXT, textFont: "Segoe UI", textBold: true, textItalic: false, textAlign: 1, textFill: 0, textColor: "#ffffff", textStops: defaultTextStops(), textOutlineColor: "#000000", textGlowColor: "#18e0ff", textShadowColor: "#000000", textMove: 0, textBlend: 0, textTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidFx: [], modelBlend: 0, modelMap: 2, modelFx: [], modelTurnsX: 0, modelTurnsY: 0, modelTurnsZ: 0, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1852,7 +1850,6 @@ const GROUP_MODES: Partial<Record<GroupKey, (state: PlayState, fresh: PlayState)
     state.modelBlend = fresh.modelBlend;
     state.modelMap = fresh.modelMap;
     state.modelFx = fresh.modelFx;
-    state.modelPivot = fresh.modelPivot;
     state.modelTurnsX = 0;
     state.modelTurnsY = 0;
     state.modelTurnsZ = 0;
@@ -2010,7 +2007,7 @@ const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   text: ["textColor", "textStops", "textGlowColor"],
   cone: ["coneType", "coneShape", "coneColor", "coneBlend"],
   solid: ["solidShape", "solidMap", "solidWrap", "solidBlend"],
-  model: ["modelPivot", "modelBlend", "modelMap"],
+  model: ["modelBlend", "modelMap"],
   driver: ["driverSource", "driverMode"],
   color: ["overlayColor", "colorBlend", "colorFill", "colorStops"]
 };
