@@ -184,21 +184,22 @@ const rings: Draw = (context, width, height) => {
 /**
  * Sunburst: sharp rays from the center out past the corners, on black. The
  * widths and the spaces between them are random, from thin lines to wide
- * wedges, so each time is different. The hue goes once around the center,
- * from a random start; some thin rays are white.
+ * wedges, so each time is different. The colors are warm only: the hue goes
+ * from pink (320) through red and orange to yellow (55) and back, two times
+ * around the center, from a random start. Some thin rays are white.
  */
 const sunburst: Draw = (context, width, height) => {
   context.fillStyle = "#000";
   context.fillRect(0, 0, width, height);
   const reach = Math.hypot(width, height) / 2 + 10;
-  const firstHue = rand(0, 360);
+  const firstTurn = Math.random();
   const degree = Math.PI / 180;
   const turn = Math.PI * 2;
   let angle = 0;
   while (angle < turn) {
     const rayWidth = Math.min(pick([0.4, 0.8, 1.5, 3, 6]) * rand(0.7, 1.3) * degree, turn - angle);
     const white = rayWidth < degree && Math.random() < 0.35;
-    context.fillStyle = white ? "#fff" : `hsl(${firstHue + (angle / turn) * 360} 90% 55%)`;
+    context.fillStyle = white ? "#fff" : `hsl(${320 + 95 * (0.5 - 0.5 * Math.cos((angle / turn + firstTurn) * 2 * turn))} 95% 55%)`;
     context.beginPath();
     context.moveTo(width / 2, height / 2);
     context.arc(width / 2, height / 2, reach, angle, angle + rayWidth);
