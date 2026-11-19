@@ -181,6 +181,32 @@ const rings: Draw = (context, width, height) => {
   }
 };
 
+/**
+ * Sunburst: sharp rays from the center out past the corners, on black. The
+ * widths and the spaces between them are random, from thin lines to wide
+ * wedges, so each time is different. The hue goes once around the center,
+ * from a random start; some thin rays are white.
+ */
+const sunburst: Draw = (context, width, height) => {
+  context.fillStyle = "#000";
+  context.fillRect(0, 0, width, height);
+  const reach = Math.hypot(width, height) / 2 + 10;
+  const firstHue = rand(0, 360);
+  const degree = Math.PI / 180;
+  const turn = Math.PI * 2;
+  let angle = 0;
+  while (angle < turn) {
+    const rayWidth = Math.min(pick([0.4, 0.8, 1.5, 3, 6]) * rand(0.7, 1.3) * degree, turn - angle);
+    const white = rayWidth < degree && Math.random() < 0.35;
+    context.fillStyle = white ? "#fff" : `hsl(${firstHue + (angle / turn) * 360} 90% 55%)`;
+    context.beginPath();
+    context.moveTo(width / 2, height / 2);
+    context.arc(width / 2, height / 2, reach, angle, angle + rayWidth);
+    context.fill();
+    angle += rayWidth + pick([0.8, 1.5, 3, 6]) * rand(0.7, 1.3) * degree;
+  }
+};
+
 /** Black, with one white band from top to bottom through the center, "part" of the width wide. */
 function centerLine(part: number): Draw {
   return (context, width, height) => {
@@ -229,6 +255,7 @@ export const PATTERNS: Pattern[] = [
   { id: "truchet", label: "Truchet tiles", group: "Repeating", draw: truchetTiles(240) },
   { id: "center-line", label: "Center line", group: "Not repeating", draw: centerLine(0.25) },
   { id: "rings", label: "Rings", group: "Not repeating", draw: rings },
+  { id: "sunburst", label: "Sunburst", group: "Not repeating", draw: sunburst },
   { id: "clouds", label: "Color clouds", group: "Not repeating", draw: colorClouds },
   { id: "lines", label: "Scattered lines", group: "Not repeating", draw: scatteredLines }
 ];
