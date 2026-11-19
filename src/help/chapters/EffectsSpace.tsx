@@ -5,13 +5,13 @@ export function EffectsSpace() {
     <>
       <h1>Effects that shape space</h1>
       <p className="help-lead">
-        These seven effects change where each part of the picture goes. They mirror it, bend it, put it on
+        These eight effects change where each part of the picture goes. They mirror it, bend it, put it on
         a 3D shape, or fly a camera over it. Most scenes start with one of them.
       </p>
 
       <h2>How to read the effect chapters</h2>
       <p>
-        This chapter and the two after it describe all 29 effects. For each effect you find its function,
+        This chapter and the two after it describe all 30 effects. For each effect you find its function,
         the choices of its menus, and the settings that change the result most. Each picture shows the
         effect in a new scene, with its controls open in the <b>FX</b> card and the result beside them.
       </p>
@@ -184,34 +184,52 @@ export function EffectsSpace() {
       <Shot name="fx-solid" alt="The 3D object effect with a cube that carries the picture" side="block" />
       <p>
         3D object puts the picture on a shape that turns in space. The <b>Shape</b> menu has
-        twelve shapes: Sphere, Cube, Morph, Blobs, Wobbly ball, Spike ball, Octahedron, Icosahedron,
-        Pyramid, Menger sponge, Moravian star, and Model. Some shapes show more settings below the menu, such
+        eleven shapes: Sphere, Cube, Morph, Blobs, Wobbly ball, Spike ball, Octahedron, Icosahedron,
+        Pyramid, Menger sponge, and Moravian star. Some shapes show more settings below the menu, such
         as <b>Spikes</b> for the Spike ball or <b>Points</b> for the Moravian star.
       </p>
       <p>
-        The <b>Map</b> menu sets how the shape uses the picture. <b>Wrap</b> paints the picture on the
-        surface. <b>Project</b> makes the shape a glass lens that bends the picture behind
-        it. <b>Mirror</b> makes it chrome that reflects the picture.
-      </p>
-      <p>
         The <b>Source</b> menu selects the picture for the shape: <b>Slot A</b>, <b>Slot B</b>, or a file
-        of its own with <b>Image or Video</b>. <b>Spin</b> and <b>Tumble</b> turn the shape, <b>Tilt</b> leans
-        it, and <b>Shading</b>, <b>Shine</b> and <b>Shadow</b> set its light. <b>Background</b> sets how much
-        of the picture shows behind the shape.
+        of its own with <b>Image or Video</b>. The <b>Map</b> menu sets how the shape uses that
+        picture. <b>Wrap</b> paints the picture on the surface. <b>Project</b> makes the shape a glass
+        lens that bends the picture behind it. <b>Mirror</b> makes it chrome that reflects the picture.
       </p>
       <p>
-        With <b>Freeze background</b> on, the effects that come after the 3D object in the list change
-        only the picture on the shape. The background stays as it was.
+        <b>Spin</b> and <b>Tumble</b> turn the shape, <b>Tilt</b> leans it,
+        and <b>Shading</b>, <b>Shine</b> and <b>Shadow</b> set its light. <b>Center X</b>, <b>Center
+        Y</b> and <b>Center Z</b> move the shape left and right, up and down, and nearer and farther.
+        The effect draws only the shape. Around the shape you see the picture that the effects above it
+        made.
       </p>
 
-      <h3>A 3D model as the shape</h3>
-      <Shot name="fx-solid-model" alt="The 3D object effect with the Model shape and a model that shows its own colors" side="block" />
+      <h3>Effects for the object only</h3>
+      <Shot name="fx-solid-effects" alt="The list Effects for the object only with the mouse on the check box of Kaleidoscope, and a cube that shows the mirrored picture on a plain background" side="block" />
       <p>
-        The <b>Model</b> shape shows a 3D model from a file. In the <b>File</b> row, <b>Browse…</b> opens
-        the model browser, and <b>File…</b> picks a <b>.glb</b> file on this PC. The scene keeps a copy of
-        the model, so the project opens later with no connection.
+        The list <b>Effects for the object only</b> has a check box for each other effect of the scene.
+        Select a check box, and that effect changes only the picture on the shape. The rest of the
+        picture stays as it was. In the picture above, Kaleidoscope mirrors the picture on the cube, and
+        the background keeps its plain squares.
       </p>
-      <Shot name="fx-solid-model-browser" alt="The model browser with the Poly Haven tab, its search box and menus, and the mouse on a model" side="block" />
+      <p>
+        An effect with no check works by its place in the FX list. Above the 3D object, it changes the
+        picture behind the shape. Below the 3D object, it changes the whole result, the shape
+        included.
+      </p>
+
+      <h2>3D model</h2>
+      <Shot name="fx-model" alt="The 3D model effect with a model that shows its own colors" side="block" />
+      <p>
+        3D model shows a 3D model from a file, which turns in space. A new 3D model effect opens the
+        model browser, so that you can select a model immediately. The scene keeps a copy of the model,
+        so the project opens later with no connection.
+      </p>
+      <Shot name="fx-model-file" alt="The File row of the 3D model effect with the mouse on the Search button, and the Map menu and Map amount below it" />
+      <p>
+        The <b>File</b> row shows the name of the model and has three buttons. <b>Search</b> (the
+        magnifying glass) opens the model browser. <b>Open</b> (the folder) picks a <b>.glb</b> file on
+        this PC. <b>Clear</b> (the trash can) takes the model out of the scene.
+      </p>
+      <Shot name="fx-model-browser" alt="The model browser with the Poly Haven tab, its search box and menus, and the mouse on a model" side="block" />
       <p>
         The model browser has two tabs. <b>Poly Haven</b> has about 520 free models that need no
         account: search, select a <b>Category</b>, an <b>Order</b> and a <b>Textures</b> size, then click
@@ -220,22 +238,36 @@ export function EffectsSpace() {
         Sketchfab account gives you. Put the token in the token row one time.
       </p>
       <p>
-        With <b>Source</b> set to <b>Model</b>, the model shows its own colors and
-        materials. <b>Slot A</b>, <b>Slot B</b> or <b>Image or Video</b> puts your picture on the model
-        instead, with the <b>Map</b> menu as for the other shapes.
+        A model shows its own colors and materials. The <b>Map</b> menu can also put the picture behind
+        the model on its surface: <b>Wrap</b> paints it on, <b>Project</b> makes the model glass,
+        and <b>Mirror</b> makes it chrome. <b>Map amount</b> sets the mix. At 1 you see only the
+        model&apos;s own colors, and at 0 you see only the picture from the <b>Map</b> menu.
       </p>
-      <Shot name="fx-solid-model-file" alt="The File row of the Model shape with the mouse on Browse, and the Pivot menu and the Rotate and Spin settings below it" />
       <p>
-        The Model shape has its own turn settings. <b>Rotate X</b>, <b>Rotate Y</b> and <b>Rotate
-        Z</b> are angles that pose the model. <b>Spin X</b>, <b>Spin Y</b> and <b>Spin Z</b> turn it
-        around each axis at a speed in turns per minute. The <b>Pivot</b> menu sets the point that the
-        model turns around: <b>Center</b> is the middle of the model, and <b>Model's own</b> is the
-        point that its maker set, often at the base.
+        <b>Rotate X</b>, <b>Rotate Y</b> and <b>Rotate Z</b> are angles that pose the
+        model. <b>Spin X</b>, <b>Spin Y</b> and <b>Spin Z</b> turn it around each axis at a speed in
+        turns per minute. The model turns around its center. <b>Center X</b>, <b>Center
+        Y</b> and <b>Center Z</b> move it. The list <b>Effects for the object only</b> does the same as
+        in the 3D object effect: a checked effect changes only the model.
       </p>
       <Tip>
         Most Sketchfab models need a credit to their maker. The app writes the credit into the model
-        file. Point at the model's name in the <b>File</b> row to read it.
+        file. Point at the model&apos;s name in the <b>File</b> row to read it.
       </Tip>
+
+      <h3>A model and a 3D object in one space</h3>
+      <Shot name="fx-model-shared" alt="A 3D model and a cube of the 3D object effect that go through each other" side="block" />
+      <p>
+        When 3D model and 3D object are next to each other in the FX list, they share one space. The
+        nearer one hides the farther one, and they can go through each other. <b>Center Z</b> of each
+        effect moves its shape nearer (above 0) or farther (below 0).
+      </p>
+      <p>
+        With a different effect between them in the list, the two do not share a space: the upper one
+        becomes a flat part of the picture behind the lower one. An effect that has a check
+        in <b>Effects for the object only</b> does not count as an effect between them. One shape does
+        not put a shadow on the other.
+      </p>
     </>
   );
 }

@@ -89,8 +89,8 @@ export function SceneCard() {
       </p>
       <ul>
         <li><b>Templates</b> are dark grounds for the effects that draw their own light: <b>Dark Stage</b> and <b>Solid Black</b>.</li>
-        <li><b>Repeating</b> patterns continue past their edges with no seam.</li>
-        <li><b>Not repeating</b> patterns include <b>Color clouds</b> and <b>Scattered lines</b>, which are different each time you select them.</li>
+        <li><b>Repeating</b> patterns continue past their edges with no seam: <b>Checkerboard</b>, <b>Dot grid</b>, <b>Color grid</b>, <b>Truchet tiles</b> (curved paths) and <b>Honeycomb</b>.</li>
+        <li><b>Not repeating</b> patterns have one picture with edges. <b>Center line</b> is always the same. <b>Rings</b>, <b>Sunburst</b>, <b>Star field</b>, <b>Spiral curves</b>, <b>Contour lines</b>, <b>Color clouds</b> and <b>Scattered lines</b> are different each time you select them. <b>Truchet tiles</b> and <b>Honeycomb</b> also change each time.</li>
       </ul>
       <p>
         When you put a pattern over a photo, Kaleido Sage keeps the photo. The slot then shows the photo

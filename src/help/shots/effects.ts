@@ -115,12 +115,12 @@ const modelTile = (page: Page): HTMLElement => {
 
 export const EFFECTS: Shot[] = [
   /* Effects that shape space */
-  look({ effect: "Kaleidoscope", name: "kaleidoscope", pattern: "Random shapes" }),
-  look({ effect: "Kaleidoscope", name: "kaleidoscope-penrose", pattern: "Random shapes", adjust: (page) => pickMenu(page, "Kaleidoscope", "Type", "Penrose"), wide: true }),
-  look({ effect: "Kaleidoscope", name: "kaleidoscope-sphere", pattern: "Random shapes", adjust: (page) => pickMenu(page, "Kaleidoscope", "Type", "Sphere"), wide: true }),
-  look({ effect: "Kaleidoscope", name: "kaleidoscope-pinwheel", pattern: "Random shapes", adjust: (page) => pickMenu(page, "Kaleidoscope", "Type", "Pinwheel"), wide: true }),
-  look({ effect: "Kaleidoscope", name: "kaleidoscope-tunnel", pattern: "Random shapes", adjust: (page) => pickMenu(page, "Kaleidoscope", "Type", "Mirror tunnel"), wide: true }),
-  look({ effect: "Kaleidoscope", name: "kaleidoscope-fractal", pattern: "Random shapes", adjust: (page) => pickMenu(page, "Kaleidoscope", "Type", "Fractal"), wide: true }),
+  look({ effect: "Kaleidoscope", name: "kaleidoscope", pattern: "Truchet tiles" }),
+  look({ effect: "Kaleidoscope", name: "kaleidoscope-penrose", pattern: "Truchet tiles", adjust: (page) => pickMenu(page, "Kaleidoscope", "Type", "Penrose"), wide: true }),
+  look({ effect: "Kaleidoscope", name: "kaleidoscope-sphere", pattern: "Truchet tiles", adjust: (page) => pickMenu(page, "Kaleidoscope", "Type", "Sphere"), wide: true }),
+  look({ effect: "Kaleidoscope", name: "kaleidoscope-pinwheel", pattern: "Truchet tiles", adjust: (page) => pickMenu(page, "Kaleidoscope", "Type", "Pinwheel"), wide: true }),
+  look({ effect: "Kaleidoscope", name: "kaleidoscope-tunnel", pattern: "Truchet tiles", adjust: (page) => pickMenu(page, "Kaleidoscope", "Type", "Mirror tunnel"), wide: true }),
+  look({ effect: "Kaleidoscope", name: "kaleidoscope-fractal", pattern: "Truchet tiles", adjust: (page) => pickMenu(page, "Kaleidoscope", "Type", "Fractal"), wide: true }),
   look({ effect: "Algorithm", name: "algorithm", pattern: "Color grid", wait: 2500 }),
   look({ effect: "Warp", name: "warp" }),
   look({ effect: "Camera", name: "camera", wait: 2500 }),
@@ -148,19 +148,41 @@ export const EFFECTS: Shot[] = [
   look({ effect: "3D object", name: "solid", pattern: "Color grid", wait: 2500, wide: true }),
   {
     /**
-     * The model browser, which the Model shape opens when it has no model.
-     * It needs the internet. The browser's kept choices are set to a known
-     * start (Poly Haven, no search words, small pictures) and put back by
-     * the last shot of the group.
+     * Effects for the object only: a Kaleidoscope below the 3D object, with
+     * its check box set, mirrors the picture on the cube and not the
+     * background. The 3D object's controls must be open for the picture.
      */
-    name: "fx-solid-model-browser",
+    name: "fx-solid-effects",
     needs: "blank",
-    group: "fx-solid-model",
+    group: "fx-solid",
+    setup: async (page) => {
+      await addEffect(page, "Kaleidoscope");
+      if (!effectGroup(page, "3D object").classList.contains("open")) {
+        effectGroup(page, "3D object").querySelector<HTMLElement>(".panel-group-title")!.click();
+        await page.settle(500);
+      }
+      effectGroup(page, "3D object").querySelector<HTMLInputElement>(".panel-object-effects input")!.click();
+      effectGroup(page, "3D object").scrollIntoView({ block: "start" });
+      await page.settle(2500);
+    },
+    cursor: (page) => effectGroup(page, "3D object").querySelector(".panel-object-effects label")!,
+    cursorAt: [0.1, 0.6],
+    box: besidePicture(true)
+  },
+  {
+    /**
+     * The model browser, which a new 3D model effect opens when the scene
+     * has no model. It needs the internet. The browser's kept choices are
+     * set to a known start (Poly Haven, no search words, small pictures)
+     * and put back by the last shot of the group.
+     */
+    name: "fx-model-browser",
+    needs: "blank",
+    group: "fx-model",
     setup: async (page) => {
       keptBrowser = localStorage.getItem(MODEL_BROWSER_KEY);
       localStorage.setItem(MODEL_BROWSER_KEY, JSON.stringify({ source: "haven", words: "", category: "", order: "used", size: "1k" }));
-      await addEffect(page, "3D object");
-      await pickMenu(page, "3D object", "Shape", "Model");
+      await addEffect(page, "3D model");
       await page.waitFor(".model-browser-dialog");
       /** The list comes from Poly Haven; then the first pictures must load. */
       const end = Date.now() + 60000;
@@ -175,10 +197,10 @@ export const EFFECTS: Shot[] = [
     margin: [2, 20]
   },
   {
-    /** A click on the model downloads it; the picture shows the model with its own colors, beside the Model shape's settings. */
-    name: "fx-solid-model",
+    /** A click on the model downloads it; the picture shows the model with its own colors, beside the effect's settings. */
+    name: "fx-model",
     needs: "blank",
-    group: "fx-solid-model",
+    group: "fx-model",
     setup: async (page) => {
       modelTile(page).click();
       const end = Date.now() + 120000;
@@ -189,19 +211,25 @@ export const EFFECTS: Shot[] = [
     box: besidePicture(true)
   },
   {
-    /** The File row of the Model shape with the mouse on Browse, and the Pivot menu and the turn settings below it. */
-    name: "fx-solid-model-file",
+    /** The File row with the mouse on Search, and the Map menu and Map amount below it. */
+    name: "fx-model-file",
     needs: "blank",
-    group: "fx-solid-model",
-    /** A tall page, so the panel shows all six turn settings at one time. */
-    page: { width: 1280, height: 1250 },
+    group: "fx-model",
+    cursor: (page) => effectGroup(page, "3D model").querySelector('button[aria-label="Search for a 3D model"]')!,
+    target: (page) => [menuRow(page, "3D model", "File"), settingRow(page, "Map amount")],
+    margin: 22
+  },
+  {
+    /** A 3D object next to the 3D model in the list: its cube and the model are in one space, and go through each other. */
+    name: "fx-model-shared",
+    needs: "blank",
+    group: "fx-model",
     setup: async (page) => {
-      menuRow(page, "3D object", "File").scrollIntoView({ block: "start" });
-      await page.settle(300);
+      await addEffect(page, "3D object");
+      await pickMenu(page, "3D object", "Shape", "Cube");
+      await page.settle(3000);
     },
-    cursor: (page) => Array.from(effectGroup(page, "3D object").querySelectorAll<HTMLElement>("button")).find((item) => item.textContent?.trim().startsWith("Browse"))!,
-    target: (page) => [menuRow(page, "3D object", "File"), settingRow(page, "Spin Z")],
-    margin: 22,
+    box: besidePicture(true),
     cleanup: () => {
       if (keptBrowser === null) localStorage.removeItem(MODEL_BROWSER_KEY);
       else localStorage.setItem(MODEL_BROWSER_KEY, keptBrowser);
@@ -224,13 +252,13 @@ export const EFFECTS: Shot[] = [
     wait: 9000,
     wide: true
   }),
-  look({ effect: "Light rays", name: "rays", pattern: "Random shapes" }),
+  look({ effect: "Light rays", name: "rays", pattern: "Star field" }),
   look({ effect: "Lasers", name: "lasers", pattern: "Solid Black", wait: 2500, wide: true }),
-  look({ effect: "Light cone", name: "cone", pattern: "Random shapes", wait: 2500, wide: true }),
+  look({ effect: "Light cone", name: "cone", pattern: "Star field", wait: 2500, wide: true }),
   look({
     effect: "Light cone",
     name: "cone-shell",
-    pattern: "Random shapes",
+    pattern: "Star field",
     adjust: async (page) => {
       await pickMenu(page, "Light cone", "Type", "Laser shell");
       await pickMenu(page, "Light cone", "Shape", "Pyramid");
@@ -252,10 +280,10 @@ export const EFFECTS: Shot[] = [
     margin: 22
   },
   look({ effect: "Particles", name: "particles", pattern: "Color grid", adjust: (page) => setSlider(page, "Background", 0.15), wait: 6000 }),
-  look({ effect: "Bloom", name: "bloom", pattern: "Random shapes" }),
+  look({ effect: "Bloom", name: "bloom", pattern: "Star field" }),
 
   /* Effects for time, texture and color */
-  look({ effect: "Trails", name: "trails", pattern: "Random shapes", under: "Kaleidoscope", wait: 4000 }),
+  look({ effect: "Trails", name: "trails", pattern: "Sunburst", under: "Kaleidoscope", wait: 4000 }),
   look({
     effect: "Time smear",
     name: "smear",
@@ -279,7 +307,7 @@ export const EFFECTS: Shot[] = [
     target: (page) => [page.find(".tone-chips").closest(".panel-row") ?? page.find(".tone-chips")],
     margin: 22
   },
-  look({ effect: "Relief", name: "relief", pattern: "Random shapes", adjust: (page) => setSlider(page, "Relief depth", 0.6) }),
+  look({ effect: "Relief", name: "relief", pattern: "Rings", adjust: (page) => setSlider(page, "Relief depth", 0.6) }),
   look({ effect: "Pixel sort", name: "sort", pattern: "Color clouds" }),
   look({ effect: "Driver", name: "driver", wait: 2500 }),
   {
@@ -292,7 +320,7 @@ export const EFFECTS: Shot[] = [
       await page.settle(600);
     }
   },
-  look({ effect: "Text", name: "text", pattern: "Random shapes", adjust: (page) => setSlider(page, "Glow", 0.5), wide: true }),
+  look({ effect: "Text", name: "text", pattern: "Contour lines", adjust: (page) => setSlider(page, "Glow", 0.5), wide: true }),
   {
     /** The Text effect's Font box with the focus in it and its list open. */
     name: "fx-text-font",
