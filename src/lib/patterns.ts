@@ -199,7 +199,10 @@ const sunburst: Draw = (context, width, height) => {
   let angle = 0;
   while (angle < turn) {
     const rayWidth = Math.min(pick([0.4, 0.8, 1.5, 3, 6]) * rand(0.7, 1.3) * degree, turn - angle);
-    context.fillStyle = `hsl(${320 + 95 * (0.5 - 0.5 * Math.cos((angle / turn + firstTurn) * 2 * turn))} 95% 55%)`;
+    const hue = 320 + 95 * (0.5 - 0.5 * Math.cos((angle / turn + firstTurn) * 2 * turn));
+    /* Pure red (345 to 375) is the darkest color here: half of those rays are a warm near white in its place (user, 2026-11-19). */
+    const nearWhite = hue > 345 && hue < 375 && Math.random() < 0.5;
+    context.fillStyle = nearWhite ? "hsl(40 100% 94%)" : `hsl(${hue} 95% 55%)`;
     context.beginPath();
     context.moveTo(width / 2, height / 2);
     context.arc(width / 2, height / 2, reach, angle, angle + rayWidth);
