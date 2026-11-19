@@ -669,8 +669,12 @@ export interface FrameValues {
   modelShine: number;
   modelShadow: number;
   modelBlend: LayerBlend;
-  /** Chrome: 0 the model's own colors, 1 a mirror of the picture behind; and how many times that picture goes around the reflection. */
-  modelChrome: number;
+  /** Map amount: 0 the model's own colors, 1 the picture behind it, put on by modelMap (Wrap, Project or Mirror); and that map's own settings. */
+  modelMap: SolidMap;
+  modelMapAmount: number;
+  modelTiles: number;
+  modelBend: number;
+  modelFrost: number;
   modelRepeats: number;
   solid: number;
   solidShape: SolidShape;
@@ -1681,7 +1685,7 @@ export class KaleidoRenderer {
     const alone = this.layerTarget("model alone", width, height);
     this.timer.begin("model");
     this.modelPart = "alone";
-    /* Chrome reflects the picture behind ("image"); the model is drawn over the clear picture. */
+    /* The Map puts the picture behind ("image") on the model; the model is drawn over the clear picture. */
     this.drawModel(look, image.texture, alone, width, height, clear.texture);
     this.modelPart = "all";
     this.timer.end();
@@ -1710,7 +1714,8 @@ export class KaleidoRenderer {
     const own: Partial<FrameValues> = {
       solid: v.model, solidShape: 11, solidPaint: 3, solidSize: v.modelSize, solidX: v.modelX, solidY: v.modelY,
       solidLight: v.modelLight, solidShading: v.modelShading, solidShine: v.modelShine, solidShadow: v.modelShadow,
-      solidBlend: v.modelBlend, solidBackground: 1, solidRelief: 0, solidMap: 2, solidRepeats: v.modelRepeats
+      solidBlend: v.modelBlend, solidBackground: 1, solidRelief: 0,
+      solidMap: v.modelMap, solidTiles: v.modelTiles, solidBend: v.modelBend, solidFrost: v.modelFrost, solidRepeats: v.modelRepeats
     };
     return Object.assign(Object.create(v) as FrameValues, own);
   }
@@ -2855,7 +2860,7 @@ export class KaleidoRenderer {
       gl.uniform1f(s.uniforms.u_background, Math.min(1, Math.max(0, v.solidBackground)));
       gl.uniform2f(s.uniforms.u_shadeMix, 1, 0);
       gl.uniform1f(s.uniforms.u_fade, 1);
-      gl.uniform1f(s.uniforms.u_chrome, v.solidPaint === 3 ? Math.min(1, Math.max(0, v.modelChrome)) : 1);
+      gl.uniform1f(s.uniforms.u_chrome, v.solidPaint === 3 ? Math.min(1, Math.max(0, v.modelMapAmount)) : 1);
       /* The point the model turns around, which also sits at Center X and Y: the middle of its box (0, 0, 0), or its maker's point. */
       const pivot = v.modelPivot === 1 && this.model ? this.model.origin : [0, 0, 0];
       gl.uniform3f(s.uniforms.u_pivot, pivot[0], pivot[1], pivot[2]);

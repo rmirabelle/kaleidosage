@@ -179,6 +179,8 @@ export const SOLID_SHAPE_ONLY: readonly ParamKey[] = ["solidRound", "solidMorph"
 export const SOLID_SHAPES = [[0, "Sphere"], [1, "Cube"], [2, "Morph"], [3, "Blobs"], [4, "Wobbly ball"], [5, "Spike ball"], [6, "Octahedron"], [7, "Icosahedron"], [8, "Pyramid"], [9, "Menger sponge"], [10, "Moravian star"]] as const;
 /** Tiles is for Wrap; Bend and Frost for Project; Repeats for Project and Mirror. */
 export const SOLID_MAP_KEYS: Record<SolidMap, ParamKey[]> = { 0: ["solidTiles"], 1: ["solidBend", "solidFrost", "solidRepeats"], 2: ["solidRepeats"] };
+/** The 3D model's Map: the sliders each choice shows under it (see MODEL_KEYS). */
+export const MODEL_MAP_KEYS: Record<SolidMap, ParamKey[]> = { 0: ["modelTiles"], 1: ["modelBend", "modelFrost", "modelRepeats"], 2: ["modelRepeats"] };
 export const SOLID_MAPS = [[0, "Wrap"], [1, "Project"], [2, "Mirror"]] as const;
 /** The Moravian star's Wrap choices (see SolidWrap). */
 export const SOLID_WRAPS = [[0, "Globe"], [1, "Faces"], [2, "Six sides"], [3, "Points"]] as const;
@@ -187,7 +189,7 @@ export const SOLID_PAINTS = [[0, "Slot A"], [2, "Slot B"], [1, "Image or Video"]
 /** The Source menu of the Model shape: first the model's own colors and pictures, then the others. */
 /** The Model shape's Pivot menu (see ModelPivot). */
 /** The 3D model effect's sliders, in panel order (Opacity last, with Blend: see SplitRows). */
-export const MODEL_KEYS: readonly ParamKey[] = ["modelSize", "modelRotateX", "modelRotateY", "modelRotateZ", "modelSpinX", "modelSpinY", "modelSpinZ", "modelLight", "modelShading", "modelShine", "modelShadow", "modelChrome", "modelRepeats", "modelX", "modelY", "modelAmount"];
+export const MODEL_KEYS: readonly ParamKey[] = ["modelSize", "modelRotateX", "modelRotateY", "modelRotateZ", "modelSpinX", "modelSpinY", "modelSpinZ", "modelLight", "modelShading", "modelShine", "modelShadow", "modelMapAmount", "modelTiles", "modelBend", "modelFrost", "modelRepeats", "modelX", "modelY", "modelAmount"];
 export const MODEL_PIVOTS = [[0, "Center"], [1, "Model's own"]] as const;
 export const SOLID_MODEL_PAINTS = [[3, "Model"], ...SOLID_PAINTS] as const;
 
@@ -203,7 +205,7 @@ export const COLOR_FILL_KEYS: Record<ColorFill, ParamKey[]> = {
   2: ["colorSize", "colorStretch", "colorTurn", "colorX", "colorY", "colorShift", "colorRepeat"]
 };
 
-export type SubmodeKey = "bubbleShape" | "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape" | "cyclesMove" | "cyclesPaint" | "solidShape" | "solidMap" | "maskMode" | "colorFill" | "textFill" | "textMove" | "coneType" | "coneShape";
+export type SubmodeKey = "bubbleShape" | "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape" | "cyclesMove" | "cyclesPaint" | "solidShape" | "solidMap" | "modelMap" | "maskMode" | "colorFill" | "textFill" | "textMove" | "coneType" | "coneShape";
 
 /** One submode menu: the play-state setting it sets, its choices (value and name), and the sliders each choice shows. */
 export interface Submode {
@@ -254,6 +256,7 @@ export const SUBMODES: readonly Submode[] = [
   { stateKey: "cyclesPaint", options: CYCLE_PAINTS, keys: CYCLE_PAINT_KEYS },
   { stateKey: "solidShape", options: SOLID_SHAPES, keys: SOLID_SHAPE_KEYS },
   { stateKey: "solidMap", options: SOLID_MAPS, keys: SOLID_MAP_KEYS },
+  { stateKey: "modelMap", options: SOLID_MAPS, keys: MODEL_MAP_KEYS },
   { stateKey: "maskMode", options: MASK_MODES, keys: MASK_KEYS },
   { stateKey: "bubbleShape", options: BUBBLE_SHAPES, keys: BUBBLE_SHAPE_KEYS },
   { stateKey: "colorFill", options: COLOR_FILLS, keys: COLOR_FILL_KEYS },

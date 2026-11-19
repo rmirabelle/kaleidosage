@@ -6404,9 +6404,9 @@ uniform vec3 u_light;
 uniform float u_shading;
 uniform float u_shine;
 /**
- * Chrome: 0 shows the model's own colors, 1 the picture painted on by the
- * Map (for the 3D model effect, Mirror: the surface reflects the picture
- * behind, as chrome does). Between them the two mix.
+ * Map amount: 0 shows the model's own colors, 1 the picture behind the
+ * model, put on by the Map (Wrap, Project as glass, Mirror as chrome).
+ * Between them the two mix.
  */
 uniform float u_chrome;
 uniform vec4 u_color;
@@ -6488,7 +6488,7 @@ void main() {
   vec3 n = normalize(v_normal);
   if (dot(n, rd) > 0.0) n = -n;
   vec3 color = vec3(0.0);
-  /* The material's bump picture also shapes the reflection, so the chrome keeps the model's fine detail. */
+  /* The material's bump picture also shapes the lens and the reflection, so glass and chrome keep the model's fine detail. */
   vec3 facing = u_hasNormal ? detailed(n, bump) : n;
   if (u_chrome < 1.0) {
     float smoothness = 1.0 - clamp(gloss.g * u_rough, 0.0, 1.0);

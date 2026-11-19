@@ -344,7 +344,8 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - A scene saved with Freeze background on (before 2026-11-18) opens with a check on each effect after the 3D Object, up to an Image or Video.
 - The 3D Object's Background slider shows only in a scene that uses it (not 1, or with a range).
 - The 3D model is an effect of its own, not a shape of the 3D Object. It shows the model's own colors.
-- The 3D model's Chrome slider mixes in a mirror of the picture behind the model: 0 is its own colors, 1 is full chrome. Repeats sets how many times that picture goes around the reflection.
+- The 3D model's Map menu (Wrap, Project, Mirror) puts the picture behind the model on it, and Map amount mixes that with the model's own colors: 0 is its own colors, 1 is the map's picture.
+- Each Map shows its own sliders under it: Tiles for Wrap; Bend, Frost and Repeats for Project; Repeats for Mirror.
 - The 3D model has its own list of effects for the object only. An effect is in the list of one 3D effect only: a check in one takes it out of the other.
 - Adding the 3D model effect with no model opens the model browser.
 - A scene saved with the 3D Object's Model shape opens with the 3D model effect in its place.

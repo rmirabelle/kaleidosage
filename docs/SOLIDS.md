@@ -340,15 +340,18 @@ too many things, and a scene could not have a model and a 3D object.
   its own list of effects for the object only (PlayState.modelFx). An
   effect is in the list of one 3D effect only: a check in one takes it
   out of the other.
-- It shows the model's own colors. A custom picture on the model (the
-  Model shape's Source with Wrap or Project) is gone: the user does not
-  need it.
-- Chrome (0 to 1, the user's wish, 2026-11-18): the surface reflects the
-  picture behind the model, as the 3D Object's Mirror map does (the same
-  paint code, with the model's bump pictures in the reflection). 0 is the
-  model's own colors, 1 full chrome; between them the two mix. Repeats is
-  how many times the picture goes around the reflection. A model that
-  Mirror painted in an older scene opens at Chrome 1.
+- It shows the model's own colors, and can mix in the picture behind it
+  (the user's wish, 2026-11-18: first a Chrome slider with Mirror only,
+  then all three maps the same day). The Map menu (PlayState.modelMap)
+  is the 3D Object's: Wrap (painted on from six sides, with Tiles),
+  Project (a glass lens, with Bend, Frost and Repeats) and Mirror
+  (chrome, with Repeats). Map amount (0 to 1) mixes the model's own
+  colors (0) with the map's picture (1), so a look such as half marble,
+  half chrome is possible. The paint code is the 3D Object's, with the
+  model's bump pictures in the lens and the reflection.
+- A picture of the model's own (the Model shape's Source: Slot B, Image
+  or Video) is gone: the user does not need it. A model that a picture
+  painted in an older scene opens with its Map at Map amount 1.
 - The 3D Object has no Model shape and no Source: Model now.
 - Drawing: the 3D Object's code (drawModel, solidLook), which reads the
   model's settings in the place of the 3D Object's (modelValues in

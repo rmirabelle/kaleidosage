@@ -212,13 +212,15 @@ describe("scene files", () => {
     expect(params.modelAmount.value).toBe(0.8);
     expect(params.modelSize.value).toBe(0.9);
     expect(params.modelRotateX.value).toBe(45);
-    expect(params.modelChrome.value).toBe(0);
-    /* A model that Mirror painted with a picture opens as full Chrome. */
+    expect(params.modelMapAmount.value).toBe(0);
+    /* A model that a picture painted opens with that Map at full Map amount. */
     old.state.solidPaint = 0;
-    old.state.solidMap = 2;
-    const chrome = createParams();
-    applyScene(JSON.stringify(old), chrome, createPlayState());
-    expect(chrome.modelChrome.value).toBe(1);
+    old.state.solidMap = 1;
+    const glass = createParams();
+    const glassState = createPlayState();
+    applyScene(JSON.stringify(old), glass, glassState);
+    expect(glass.modelMapAmount.value).toBe(1);
+    expect(glassState.modelMap).toBe(1);
   });
 
   it("keep the effects for the 3D object only, and read Freeze background of an older scene as the effects after it", () => {
