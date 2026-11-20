@@ -39,7 +39,8 @@ export const PARAM_KEYS = [
   "maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY",
   "colorAngle", "colorShift", "colorRepeat", "colorSize", "colorStretch", "colorTurn", "colorX", "colorY",
   "bubbleAmount", "bubbleSize", "bubbleBackground", "bubbleDepth", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments", "bubbleInner", "bubbleShadowStrength", "bubbleShadowWidth", "bubbleShadowSoftness", "bubbleRotation",
-  "pathAmount", "pathArms", "pathSteps", "pathStep", "pathTurn", "pathRadius", "pathWidth", "pathDraw", "pathFade", "pathHue", "pathRainbow", "pathPicture", "pathBackground", "pathRotation", "pathX", "pathY", "pathYaw", "pathTilt",
+  "pathAmount", "pathArms", "pathSteps", "pathStep", "pathTurn", "pathRadius", "pathWidth", "pathDraw", "pathFade", "pathHide", "pathHideFrom", "pathHue", "pathRainbow", "pathPicture", "pathBackground", "pathRotation", "pathX", "pathY", "pathYaw", "pathTilt",
+  "panoramaAmount", "panoramaPanX", "panoramaPanY", "panoramaSpeedX", "panoramaSpeedY",
   "spiroAmount", "spiroRing", "spiroSize", "spiroWidth", "spiroDraw", "spiroPicture", "spiroBackground", "spiroRotation", "spiroYaw", "spiroTilt", "spiroX", "spiroY",
   "spiroHoleX1", "spiroHoleX2", "spiroHoleX3", "spiroHoleX4", "spiroHoleX5", "spiroHoleX6", "spiroHoleY1", "spiroHoleY2", "spiroHoleY3", "spiroHoleY4", "spiroHoleY5", "spiroHoleY6",
   "textAmount", "textSize", "textX", "textY", "textAngle", "textLetterSpacing", "textLineSpacing", "textGradientAngle", "textOutline", "textGlow", "textGlowSize", "textShadow", "textShadowSoftness", "textShadowDistance", "textSpeed", "textHold",
@@ -78,9 +79,13 @@ export interface Param {
   /**
    * "log": the slider and the range move in equal ratios, not equal steps,
    * so small values get as much of the slider as large ones (min must be
-   * above 0). See toSlider and fromSlider.
+   * above 0). "fine": the slider is fine near 0 and coarse at its ends,
+   * for a speed: a value is its place from the slider's 0 point, to the
+   * power FINE_POWER, so the middle half of a slider from -1 to 1 goes
+   * from -0.125 to 0.125. A range on it still moves in equal steps of the
+   * value. See toSlider and fromSlider.
    */
-  scale?: "log";
+  scale?: "log" | "fine";
   drift?: "spin" | "wave";
   low?: number;
   high?: number;
@@ -283,7 +288,7 @@ export type Params = Record<ParamKey, Param>;
 export type ContourTone = "hue" | "black" | "white";
 export const CONTOUR_TONES: readonly ContourTone[] = ["hue", "black", "white"];
 
-export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "model" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "paths" | "spiro" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble" | "text" | "cone";
+export type GroupKey = "animation" | "source" | "warp" | "map" | "kaleidoscope" | "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "model" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "paths" | "spiro" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble" | "text" | "cone" | "panorama";
 
 export interface PlayState {
   /** Which groups are on. A group that is off has no effect, but keeps its settings. */
@@ -305,6 +310,9 @@ export interface PlayState {
   mapTravel: number;
   /** How far the view has flown along the Mirror tunnel, as part of one loop of two cells; it grows with time × its speed. */
   tunnelTravel: number;
+  /** How far the Panorama has moved by its speeds, in screen widths and screen heights, each kept in one repeat of 2; they grow with time × the speeds. */
+  panoramaTravelX: number;
+  panoramaTravelY: number;
   /** Where the camera's aim point is on the land (screen heights); it moves with time × camera speed, the way the camera looks. */
   cameraX: number;
   cameraY: number;
@@ -551,7 +559,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   warpCellRandom: { label: "Cell randomness", min: 0, max: 1, step: 0.01, value: 0.7, drift: "wave", low: 0.2, high: 0.7, on: false },
   warpMarble: { label: "Marbling", min: 0, max: 6, step: 0.01, value: 0, drift: "wave", low: 1, high: 3.5, on: false },
   warpDetail: { label: "Warp detail", min: 1, max: 6, step: 1, value: 4 },
-  warpFlow: { label: "Warp flow", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.05, high: 0.6, on: false },
+  warpFlow: { label: "Warp flow", min: 0, max: 1, step: 0.001, scale: "fine", value: 0, drift: "wave", low: 0.05, high: 0.6, on: false },
   /** Ripple, swirl and bulge: the warp's center, in screen heights from the screen center. */
   warpCenterX: { label: "Warp center X", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.3, high: 0.3, on: false },
   warpCenterY: { label: "Warp center Y", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.3, high: 0.3, on: false },
@@ -574,12 +582,12 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   mandelEnd: { label: "End", min: 0.5, max: 10, step: 0.01, value: 8, drift: "wave", low: 6, high: 10, on: false },
   mandelFade: { label: "Crossfade", min: 0.05, max: 0.5, step: 0.01, value: 0.25, drift: "wave", low: 0.15, high: 0.4, on: false },
   mandelBands: { label: "Band width", min: 2, max: 4, step: 0.001, value: 3, drift: "wave", low: 2.8, high: 3.2, on: false },
-  mandelSpeed: { label: "Speed", min: -4, max: 4, step: 0.001, value: 0.15, drift: "wave", low: 0.05, high: 0.3, on: false },
+  mandelSpeed: { label: "Speed", min: -4, max: 4, step: 0.001, scale: "fine", value: 0.15, drift: "wave", low: 0.05, high: 0.3, on: false },
   mandelSpread: { label: "Palette spread", min: 0.05, max: 4, step: 0.001, scale: "log", value: 0.5, drift: "wave", low: 0.3, high: 1, on: false },
   mandelInvert: { label: "Invert", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 1, on: false },
   mandelEdge: { label: "Edge light", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.6, high: 1, on: false },
   mandelEdgeWidth: { label: "Edge width", min: 0.002, max: 0.3, step: 0.0001, scale: "log", value: 0.03, drift: "wave", low: 0.01, high: 0.08, on: false },
-  mandelFlow: { label: "Band flow", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -0.5, high: 0.5, on: false },
+  mandelFlow: { label: "Band flow", min: -2, max: 2, step: 0.001, scale: "fine", value: 0, drift: "wave", low: -0.5, high: 0.5, on: false },
   mandelTerraces: { label: "Terraces", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.3, high: 0.9, on: false },
   mandelSoftness: { label: "Softness", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.8, on: false },
   mandelLight: { label: "Light", min: 0, max: 1, step: 0.01, value: 0.7, drift: "wave", low: 0.4, high: 1, on: false },
@@ -630,7 +638,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    */
   mapAngle: { label: "Rotation", min: 0, max: 360, step: 1, value: 270, unit: "°", drift: "spin", low: 153, high: 207, on: false, ease: "organic" },
   /** Tunnel, Log spiral and Seamless spiral: forward speed into the far end (backward below 0). */
-  mapSpeed: { label: "Speed", min: -2, max: 2, step: 0.01, value: 0.15, drift: "wave", low: 0.1, high: 0.5, on: false },
+  mapSpeed: { label: "Speed", min: -2, max: 2, step: 0.001, scale: "fine", value: 0.15, drift: "wave", low: 0.1, high: 0.5, on: false },
   /** Tunnel only: how far the wall turns per tube length, so the tube becomes a spiral. Log spiral keeps its own wider twist. */
   tunnelTwist: { label: "Twist", min: -2, max: 2, step: 0.001, value: 0, unit: "°", drift: "wave", low: -0.5, high: 0.5, on: false },
   /**
@@ -695,7 +703,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * in cells a second (below 0 it flies backward), and how dark the far end
    * gets.
    */
-  tunnelSpeed: { label: "Speed", min: -4, max: 4, step: 0.01, value: 0.5, drift: "wave", low: 0.2, high: 1, on: false },
+  tunnelSpeed: { label: "Speed", min: -4, max: 4, step: 0.001, scale: "fine", value: 0.5, drift: "wave", low: 0.2, high: 1, on: false },
   /**
    * Fractal (fold mode 9): how many times the fold repeats (a count between
    * two whole numbers crossfades their patterns), how much each step
@@ -743,7 +751,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   trailZoom: { label: "Zoom", min: 1, max: 1.03, step: 0.001, value: 1, drift: "wave", low: 1.002, high: 1.015, on: false },
   trailTurn: { label: "Trail turn", min: -1, max: 1, step: 0.01, value: 0, unit: "°", drift: "wave", low: -0.3, high: 0.3, on: false },
   /** Flow pushes the old frame along its brightness slopes (swirl 0) or around them (swirl 1). Below 0, the push goes the other way. */
-  trailFlow: { label: "Trail flow", min: -100, max: 100, step: 0.1, value: 0, unit: "px", drift: "wave", low: 2, high: 8, on: false },
+  trailFlow: { label: "Trail flow", min: -100, max: 100, step: 0.01, scale: "fine", value: 0, unit: "px", drift: "wave", low: 2, high: 8, on: false },
   trailSwirl: { label: "Flow swirl", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0.3, high: 1, on: false },
   /**
    * How strongly the old part of the trails is multiplied by the trail color
@@ -812,8 +820,8 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   cameraPan: { label: "Pan", min: 0, max: 360, step: 1, value: 90, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   cameraTilt: { label: "Tilt", min: -90, max: 60, step: 1, value: -40, unit: "°", drift: "wave", low: -60, high: -20, on: false },
   cameraPedestal: { label: "Pedestal", min: 0.02, max: 5, step: 0.01, value: 1, drift: "wave", low: 0.6, high: 1.6, on: false },
-  cameraDolly: { label: "Dolly", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: 0.1, high: 0.5, on: false },
-  cameraTruck: { label: "Truck", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -0.3, high: 0.3, on: false },
+  cameraDolly: { label: "Dolly", min: -2, max: 2, step: 0.001, scale: "fine", value: 0, drift: "wave", low: 0.1, high: 0.5, on: false },
+  cameraTruck: { label: "Truck", min: -2, max: 2, step: 0.001, scale: "fine", value: 0, drift: "wave", low: -0.3, high: 0.3, on: false },
   cameraLens: { label: "Lens", min: 7, max: 300, step: 1, scale: "log", value: 21, unit: "mm", drift: "wave", low: 14, high: 35, on: false },
   cameraLightTurn: { label: "Sun angle", min: 0, max: 360, step: 1, value: 135, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   cameraLightHeight: { label: "Sun height", min: 5, max: 90, step: 1, value: 40, unit: "°", drift: "wave", low: 15, high: 60, on: false },
@@ -871,7 +879,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   particleLevel: { label: "Threshold", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.4, high: 0.8, on: false },
   particleSize: { label: "Size", min: 0.5, max: 40, step: 0.1, scale: "log", value: 4, unit: "px", drift: "wave", low: 2, high: 8, on: false },
   particleLife: { label: "Life", min: 0.2, max: 10, step: 0.1, value: 2.5, unit: " s", drift: "wave", low: 1, high: 4, on: false },
-  particleSpeed: { label: "Speed", min: 0, max: 0.2, step: 0.001, value: 0.15, drift: "wave", low: 0.05, high: 0.2, on: false },
+  particleSpeed: { label: "Speed", min: 0, max: 0.2, step: 0.001, scale: "fine", value: 0.15, drift: "wave", low: 0.05, high: 0.2, on: false },
   particleGravity: { label: "Gravity", min: -1, max: 1, step: 0.01, value: 0.1, drift: "wave", low: -0.2, high: 0.2, on: false },
   particleAngle: { label: "Direction", min: 0, max: 360, step: 1, value: 270, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   particleTurbulence: { label: "Turbulence", min: 0, max: 2, step: 0.01, value: 0.3, drift: "wave", low: 0.1, high: 0.8, on: false },
@@ -919,7 +927,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   cyclesAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
   cyclesBackground: { label: "Background", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0, high: 1, on: false },
   cyclesCount: { label: "Count", min: 1, max: 2000, step: 1, scale: "log", value: 12, drift: "wave", low: 6, high: 40, on: false },
-  cyclesSpeed: { label: "Speed", min: 0, max: 1, step: 0.01, value: 0.3, drift: "wave", low: 0.15, high: 0.5, on: false },
+  cyclesSpeed: { label: "Speed", min: 0, max: 1, step: 0.001, scale: "fine", value: 0.3, drift: "wave", low: 0.15, high: 0.5, on: false },
   cyclesWidth: { label: "Width", min: 0.5, max: 16, step: 0.1, scale: "log", value: 2, unit: "px", drift: "wave", low: 1.5, high: 4, on: false },
   cyclesLength: { label: "Trail Length", min: 0.25, max: 30, step: 0.01, scale: "log", value: 30, unit: " s", drift: "wave", low: 2, high: 10, on: false },
   cyclesTurns: { label: "Turn Rate", min: 0, max: 5, step: 0.01, value: 0.5, drift: "wave", low: 0.2, high: 2, on: false },
@@ -972,8 +980,8 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   solidPoints: { label: "Points", min: 4, max: 32, step: 1, value: 26, drift: "wave", low: 8, high: 26, on: false },
   solidPointLength: { label: "Point length", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.3, high: 0.9, on: false },
   solidHollow: { label: "Hollow", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.3, high: 1, on: false },
-  solidSpin: { label: "Spin", min: -60, max: 60, step: 0.1, value: 6, unit: " rpm", drift: "wave", low: 3, high: 12, on: false },
-  solidTumble: { label: "Tumble", min: -60, max: 60, step: 0.1, value: 0, unit: " rpm", drift: "wave", low: -3, high: 3, on: false },
+  solidSpin: { label: "Spin", min: -60, max: 60, step: 0.01, scale: "fine", value: 6, unit: " rpm", drift: "wave", low: 3, high: 12, on: false },
+  solidTumble: { label: "Tumble", min: -60, max: 60, step: 0.01, scale: "fine", value: 0, unit: " rpm", drift: "wave", low: -3, high: 3, on: false },
   solidTilt: { label: "Tilt", min: -90, max: 90, step: 1, value: 20, unit: "°", drift: "wave", low: -30, high: 30, on: false },
   /**
    * The Model shape's turn (in place of Spin, Tumble and Tilt): Rotate X,
@@ -987,9 +995,9 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   modelRotateX: { label: "Rotate X", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "wave", low: -30, high: 30, on: false },
   modelRotateY: { label: "Rotate Y", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "wave", low: -45, high: 45, on: false },
   modelRotateZ: { label: "Rotate Z", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "wave", low: -20, high: 20, on: false },
-  modelSpinX: { label: "Spin X", min: -60, max: 60, step: 0.1, value: 0, unit: " rpm", drift: "wave", low: -3, high: 3, on: false },
-  modelSpinY: { label: "Spin Y", min: -60, max: 60, step: 0.1, value: 6, unit: " rpm", drift: "wave", low: 3, high: 12, on: false },
-  modelSpinZ: { label: "Spin Z", min: -60, max: 60, step: 0.1, value: 0, unit: " rpm", drift: "wave", low: -3, high: 3, on: false },
+  modelSpinX: { label: "Spin X", min: -60, max: 60, step: 0.01, scale: "fine", value: 0, unit: " rpm", drift: "wave", low: -3, high: 3, on: false },
+  modelSpinY: { label: "Spin Y", min: -60, max: 60, step: 0.01, scale: "fine", value: 6, unit: " rpm", drift: "wave", low: 3, high: 12, on: false },
+  modelSpinZ: { label: "Spin Z", min: -60, max: 60, step: 0.01, scale: "fine", value: 0, unit: " rpm", drift: "wave", low: -3, high: 3, on: false },
   solidBend: { label: "Bend", min: 0, max: 1, step: 0.01, value: 0.4, drift: "wave", low: 0.2, high: 0.7, on: false },
   solidFrost: { label: "Frost", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.6, on: false },
   solidTiles: { label: "Tiles", min: 0.25, max: 8, step: 0.01, scale: "log", value: 1, drift: "wave", low: 1, high: 3, on: false },
@@ -1038,7 +1046,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   driverAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
   driverStrength: { label: "Strength", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.3, high: 0.8, on: false },
   driverScale: { label: "Size", min: 0.25, max: 4, step: 0.01, scale: "log", value: 1, drift: "wave", low: 0.7, high: 1.5, on: false },
-  driverSpeed: { label: "Speed", min: 0, max: 3, step: 0.01, value: 1, drift: "wave", low: 0.5, high: 1.5, on: false },
+  driverSpeed: { label: "Speed", min: 0, max: 3, step: 0.001, scale: "fine", value: 1, drift: "wave", low: 0.5, high: 1.5, on: false },
   driverContrast: { label: "Contrast", min: 0.5, max: 3, step: 0.01, value: 1, drift: "wave", low: 0.8, high: 1.6, on: false },
   /**
    * Light rays (see RAYS_SHADER): the bright parts of the picture shine
@@ -1108,6 +1116,9 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   pathWidth: { label: "Width", min: 0.5, max: 12, step: 0.1, value: 1.5, unit: "px", drift: "wave", low: 1, high: 3, on: false },
   pathDraw: { label: "Draw", min: 0, max: 1, step: 0.01, value: 1, drift: "wave", low: 0.1, high: 1, on: true },
   pathFade: { label: "Fade", min: 0, max: 1, step: 0.01, value: 0.2, drift: "wave", low: 0, high: 0.6, on: false },
+  /** Hide: this many arms in a row do not show. Hide from: where around the center the hidden arms start. */
+  pathHide: { label: "Hide", min: 0, max: 180, step: 1, value: 0, drift: "wave", low: 0, high: 6, on: false },
+  pathHideFrom: { label: "Hide from", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   pathHue: { label: "Color", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   pathRainbow: { label: "Rainbow", min: 0, max: 4, step: 0.01, value: 1, drift: "wave", low: 0, high: 2, on: false },
   pathPicture: { label: "Picture color", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 1, on: false },
@@ -1117,6 +1128,19 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   pathTilt: { label: "Tilt", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "spin", low: -180, high: 180, on: false },
   pathX: { label: "Center X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   pathY: { label: "Center Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
+  /**
+   * Panorama (see PANORAMA_SHADER): the picture made so far moves sideways
+   * and up or down, with mirror copies past its edges. Pan X is in screen
+   * widths and Pan Y in screen heights; the pattern repeats each 2. The
+   * speeds are in screen widths and heights a second, with no end.
+   * Opacity starts at 0, as the other effects' do; adding the effect sets
+   * it to 1.
+   */
+  panoramaAmount: { label: "Opacity", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0.5, high: 1, on: false },
+  panoramaPanX: { label: "Pan X", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -0.5, high: 0.5, on: false },
+  panoramaPanY: { label: "Pan Y", min: -2, max: 2, step: 0.01, value: 0, drift: "wave", low: -0.5, high: 0.5, on: false },
+  panoramaSpeedX: { label: "Speed X", min: -1, max: 1, step: 0.001, scale: "fine", value: 0.1, drift: "wave", low: -0.2, high: 0.2, on: false },
+  panoramaSpeedY: { label: "Speed Y", min: -1, max: 1, step: 0.001, scale: "fine", value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   /**
    * Spirograph (see spiro.ts): wheels roll inside a ring, and each draws a
    * line. Opacity starts at 0, as the other effects' do; adding the effect
@@ -1177,11 +1201,11 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   outlineGlowSize: { label: "Glow size", min: 2, max: 80, step: 0.1, scale: "log", value: 16, unit: "px", drift: "wave", low: 8, high: 30, on: false },
   /** Light shapes: the size of the glowing dot at the head while an outline draws or chases (1 = three line widths and 4 px across, as before; 0 = no dot). */
   outlineEmitter: { label: "Emitter", min: 0, max: 3, step: 0.01, value: 1, drift: "wave", low: 0.5, high: 1.5, on: false },
-  outlineFlow: { label: "Color flow", min: -1, max: 1, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
+  outlineFlow: { label: "Color flow", min: -1, max: 1, step: 0.001, scale: "fine", value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   outlineTurn: { label: "Turn", min: -180, max: 180, step: 1, value: 0, unit: "°", drift: "spin", low: -180, high: 180, on: false },
   /** Light shapes in 3D: Spin turns each outline around its upright line, Tumble around its level line, as speeds (as the 3D object). Each copy turns later by its Delay. */
-  outlineSpin: { label: "Spin", min: -60, max: 60, step: 0.1, value: 0, unit: " rpm", drift: "wave", low: 3, high: 12, on: false },
-  outlineTumble: { label: "Tumble", min: -60, max: 60, step: 0.1, value: 0, unit: " rpm", drift: "wave", low: -3, high: 3, on: false },
+  outlineSpin: { label: "Spin", min: -60, max: 60, step: 0.01, scale: "fine", value: 0, unit: " rpm", drift: "wave", low: 3, high: 12, on: false },
+  outlineTumble: { label: "Tumble", min: -60, max: 60, step: 0.01, scale: "fine", value: 0, unit: " rpm", drift: "wave", low: -3, high: 3, on: false },
   outlineX: { label: "X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   outlineY: { label: "Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   /**
@@ -1250,7 +1274,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   coneEdgeLines: { label: "Corner lines", min: 0, max: 2, step: 0.01, value: 1, drift: "wave", low: 0.5, high: 1.5, on: false },
   coneFog: { label: "Fog", min: 0, max: 1, step: 0.01, value: 0.6, drift: "wave", low: 0.3, high: 0.9, on: false },
   coneFogSize: { label: "Fog size", min: 0.1, max: 4, step: 0.01, scale: "log", value: 1, drift: "wave", low: 0.6, high: 1.5, on: false },
-  coneFogSpeed: { label: "Fog speed", min: -2, max: 2, step: 0.01, value: 0.3, drift: "wave", low: 0.1, high: 0.6, on: false },
+  coneFogSpeed: { label: "Fog speed", min: -2, max: 2, step: 0.001, scale: "fine", value: 0.3, drift: "wave", low: 0.1, high: 0.6, on: false },
   coneFade: { label: "Fade", min: 0, max: 2, step: 0.01, value: 0.25, drift: "wave", low: 0.1, high: 0.5, on: false },
   coneFloor: { label: "Floor light", min: 0, max: 2, step: 0.01, value: 0.8, drift: "wave", low: 0.4, high: 1.2, on: false },
   coneEmitter: { label: "Source glow", min: 0, max: 2, step: 0.01, value: 0.6, drift: "wave", low: 0.3, high: 1, on: false },
@@ -1364,7 +1388,7 @@ export function createParams(): Params {
 
 /** The start-up orders: the fold, then the map bends the folded picture, then the warp; and blur, trails, time smear, contours, relief, driver, camera, 3D object, pixel sort, particles, light cycles, light rays, lasers, bloom, final effects. */
 export const defaultShapeOrder = (): ShapeStep[] => ["kaleidoscope", "map", "warp"];
-export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "model", "sort", "particles", "cycles", "rays", "lasers", "cone", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble", "text"];
+export const defaultPictureOrder = (): PictureStep[] => ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "model", "sort", "particles", "cycles", "rays", "lasers", "cone", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble", "text", "panorama"];
 export const defaultFxOrder = (): FxStep[] => [...defaultShapeOrder(), ...defaultPictureOrder()];
 
 /**
@@ -1417,6 +1441,7 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
     case "outlines": return used("outlineAmount");
     case "mask": return used("maskAmount");
     case "bubble": return used("bubbleAmount");
+    case "panorama": return used("panoramaAmount");
     case "cone": return used("coneAmount");
     case "text": return used("textAmount") && state.textContent.trim().length > 0;
     case "picture": return used("pictureAmount");
@@ -1431,9 +1456,9 @@ export function effectShows(step: FxStep, params: Params, state: PlayState): boo
 export function createPlayState(): PlayState {
   return {
     /* No effect is in the list at start-up, so every effect group is off. */
-    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, model: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false, cone: false },
-    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, model: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false, cone: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, tunnelTravel: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, penroseShape: 0, sphereShape: 2, pinwheelShape: 1, tunnelShape: 0, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, pathShape: 2, pathBlend: 7, spiroWheels: defaultSpiroWheels(), spiroBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, coneType: 0, coneShape: 0, coneColor: "#8fe6ff", coneBlend: 7, coneFogTime: 0, textContent: DEFAULT_TEXT, textFont: "Segoe UI", textBold: true, textItalic: false, textAlign: 1, textFill: 0, textColor: "#ffffff", textStops: defaultTextStops(), textOutlineColor: "#000000", textGlowColor: "#18e0ff", textShadowColor: "#000000", textMove: 0, textBlend: 0, textTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidFx: [], modelBlend: 0, modelMap: 2, modelFx: [], modelTurnsX: 0, modelTurnsY: 0, modelTurnsZ: 0, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, model: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false, cone: false, panorama: false },
+    locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, model: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false, cone: false, panorama: false },
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, tunnelTravel: 0, panoramaTravelX: 0, panoramaTravelY: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, penroseShape: 0, sphereShape: 2, pinwheelShape: 1, tunnelShape: 0, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, pathShape: 2, pathBlend: 7, spiroWheels: defaultSpiroWheels(), spiroBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, coneType: 0, coneShape: 0, coneColor: "#8fe6ff", coneBlend: 7, coneFogTime: 0, textContent: DEFAULT_TEXT, textFont: "Segoe UI", textBold: true, textItalic: false, textAlign: 1, textFill: 0, textColor: "#ffffff", textStops: defaultTextStops(), textOutlineColor: "#000000", textGlowColor: "#18e0ff", textShadowColor: "#000000", textMove: 0, textBlend: 0, textTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidFx: [], modelBlend: 0, modelMap: 2, modelFx: [], modelTurnsX: 0, modelTurnsY: 0, modelTurnsZ: 0, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1509,19 +1534,41 @@ export function rangeAt(param: Param, part: number): number {
   return start + (end - start) * part;
 }
 
-/** The positions of a log slider: it moves in this many equal ratios from min to max. */
+/** The positions of a log or fine slider: a log slider moves in this many equal ratios from min to max. */
 export const SLIDER_STEPS = 1000;
 
-/** Where a value is on its slider: the value itself, or a position from 0 to SLIDER_STEPS on a log slider. */
+/** A fine slider's value is its place from the 0 point to this power (see Param.scale). */
+const FINE_POWER = 3;
+
+/** A fine slider's place for a value: -1 to 1, where 1 is the larger of its two ends. */
+const finePlace = (param: Param, value: number) => {
+  const top = Math.max(Math.abs(param.min), Math.abs(param.max));
+  return Math.sign(value) * (Math.abs(value) / top) ** (1 / FINE_POWER);
+};
+
+/** Where a value is on its slider: the value itself, or a position from 0 to SLIDER_STEPS on a log or fine slider. */
 export function toSlider(param: Param, value: number): number {
+  if (param.scale === "fine") {
+    const from = finePlace(param, param.min);
+    return (finePlace(param, clamp(value, param.min, param.max)) - from) / (finePlace(param, param.max) - from) * SLIDER_STEPS;
+  }
   if (param.scale !== "log") return value;
   return Math.log(clamp(value, param.min, param.max) / param.min) / Math.log(param.max / param.min) * SLIDER_STEPS;
 }
 
+/** The exact value at a slider position (see toSlider), not rounded to steps. */
+export function exactFromSlider(param: Param, position: number): number {
+  if (param.scale === "log") return param.min * (param.max / param.min) ** (position / SLIDER_STEPS);
+  if (param.scale !== "fine") return position;
+  const from = finePlace(param, param.min);
+  const place = from + (finePlace(param, param.max) - from) * position / SLIDER_STEPS;
+  return Math.sign(place) * Math.abs(place) ** FINE_POWER * Math.max(Math.abs(param.min), Math.abs(param.max));
+}
+
 /** The value at a slider position (see toSlider), on the parameter's steps and inside its limits. */
 export function fromSlider(param: Param, position: number): number {
-  if (param.scale !== "log") return position;
-  const value = param.min * (param.max / param.min) ** (clamp(position, 0, SLIDER_STEPS) / SLIDER_STEPS);
+  if (!param.scale) return position;
+  const value = exactFromSlider(param, clamp(position, 0, SLIDER_STEPS));
   const decimals = (String(param.step).split(".")[1] ?? "").length;
   return Number(clamp(Math.round(value / param.step) * param.step, param.min, param.max).toFixed(decimals));
 }
@@ -1673,8 +1720,8 @@ export function nudgeParams(params: Params, state: PlayState, random = Math.rand
       const nudge = (value: number, part: "value" | "low" | "high") => {
         if (value === 0) return 0;
         let way = ways[part] ?? (random() < 0.5 ? -1 : 1);
-        /* A log slider moves the same part of its length. */
-        const log = param.scale === "log";
+        /* A log or fine slider moves the same part of its length. */
+        const log = param.scale !== undefined;
         const from = log ? toSlider(param, value) : value;
         const size = log ? SLIDER_STEPS * NUDGE : (param.max - param.min) * NUDGE;
         const [min, max] = log ? [0, SLIDER_STEPS] : [param.min, param.max];
@@ -1975,7 +2022,8 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   rays: ["raysAmount", "raysThreshold", "raysLength", "raysFade", "raysX", "raysY"],
   picture: ["pictureAmount", "pictureSize", "pictureX", "pictureY", "pictureTurn", "pictureKey"],
   lasers: ["laserAmount", "laserOpacity", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"],
-  paths: ["pathAmount", "pathArms", "pathSteps", "pathStep", "pathTurn", "pathRadius", "pathWidth", "pathDraw", "pathFade", "pathHue", "pathRainbow", "pathPicture", "pathBackground", "pathRotation", "pathX", "pathY", "pathYaw", "pathTilt"],
+  paths: ["pathAmount", "pathArms", "pathSteps", "pathStep", "pathTurn", "pathRadius", "pathWidth", "pathDraw", "pathFade", "pathHide", "pathHideFrom", "pathHue", "pathRainbow", "pathPicture", "pathBackground", "pathRotation", "pathX", "pathY", "pathYaw", "pathTilt"],
+  panorama: ["panoramaAmount", "panoramaPanX", "panoramaPanY", "panoramaSpeedX", "panoramaSpeedY"],
   spiro: ["spiroAmount", "spiroRing", "spiroSize", "spiroWidth", "spiroDraw", "spiroPicture", "spiroBackground", "spiroRotation", "spiroYaw", "spiroTilt", "spiroX", "spiroY",
   "spiroHoleX1", "spiroHoleX2", "spiroHoleX3", "spiroHoleX4", "spiroHoleX5", "spiroHoleX6", "spiroHoleY1", "spiroHoleY2", "spiroHoleY3", "spiroHoleY4", "spiroHoleY5", "spiroHoleY6"],
   outlines: ["outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineInner", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"],
@@ -2071,7 +2119,7 @@ export function removeSpiroWheel(params: Params, state: PlayState, index: number
 }
 
 /** The settings named Opacity: Randomize shows every effect fully. */
-const FULL_OPACITY: readonly ParamKey[] = ["warpOpacity", "mapOpacity", "foldOpacity", "smearAmount", "contourOpacity", "cameraAmount", "viewAmount", "sortAmount", "particleAmount", "cyclesAmount", "solidAmount", "modelAmount", "driverAmount", "laserOpacity", "bubbleAmount", "pictureAmount", "pathAmount", "spiroAmount", "textAmount", "coneOpacity"];
+const FULL_OPACITY: readonly ParamKey[] = ["warpOpacity", "mapOpacity", "foldOpacity", "smearAmount", "contourOpacity", "cameraAmount", "viewAmount", "sortAmount", "particleAmount", "cyclesAmount", "solidAmount", "modelAmount", "driverAmount", "laserOpacity", "bubbleAmount", "panoramaAmount", "pictureAmount", "pathAmount", "spiroAmount", "textAmount", "coneOpacity"];
 
 /**
  * The chance that Randomize puts each effect in the list. Blur looks the
@@ -2088,6 +2136,8 @@ const EFFECT_CHANCE: Record<FxStep, number> = {
   mask: 0,
   /* A bubble leaves black around its rim, which Randomize should not do on its own. */
   bubble: 0,
+  /* A panorama moves the whole picture, which Randomize should not do on its own. */
+  panorama: 0,
   /* Text needs words of the user's own. */
   text: 0,
   cone: 0.15

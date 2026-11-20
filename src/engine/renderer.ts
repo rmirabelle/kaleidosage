@@ -4,7 +4,7 @@ import { pathSegments, writePathInstances, type PathShape } from "./paths";
 import { spiroSegments, writeSpiroInstances, type SpiroWheel } from "./spiro";
 import { SCROLL_RATE, TextPicture, letterCount, type TextLook, type TextMove } from "./textLayer";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, CONE_SHADER, BUBBLE_SHADER, MASK_SHADER, OUTLINE_SHADER, OUTLINE_GLOW_SHADER, OUTLINE_LINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, SOLID_MESH_VERTEX, SOLID_MESH_SHADER, SOLID_MODEL_VERTEX, SOLID_MODEL_SHADER, SOLID_BACK_SHADER, SOLID_SHADE_BLUR_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, CONE_SHADER, BUBBLE_SHADER, MASK_SHADER, OUTLINE_SHADER, OUTLINE_GLOW_SHADER, OUTLINE_LINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, SOLID_MESH_VERTEX, SOLID_MESH_SHADER, SOLID_MODEL_VERTEX, SOLID_MODEL_SHADER, SOLID_BACK_SHADER, SOLID_SHADE_BLUR_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, PANORAMA_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 import { MESH_SHAPES, flatMesh } from "./flatMesh";
 import { MESH_STRIDE, starKinds, starMesh } from "./starMesh";
 import { MODEL_STRIDE, type ModelData, type ModelMaterial } from "./model";
@@ -37,7 +37,7 @@ export type ShapeStep = "warp" | "map" | "kaleidoscope";
 /** The kind of warp: noise, ripple, waves, swirl, bulge and pinch, cells. */
 export type WarpType = 0 | 1 | 2 | 3 | 4 | 5;
 /** The steps that change the drawn picture. The user sets their order. */
-export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "model" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "cone" | "paths" | "spiro" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble" | "text";
+export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "model" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "cone" | "paths" | "spiro" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble" | "text" | "panorama";
 /**
  * Any effect step. The user sets one order for all of them. Shape steps
  * that are next to each other run in one pass; a shape step after a
@@ -45,7 +45,7 @@ export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | 
  */
 export type FxStep = ShapeStep | PictureStep;
 export const SHAPE_STEPS: readonly ShapeStep[] = ["warp", "map", "kaleidoscope"];
-export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "model", "sort", "particles", "cycles", "rays", "lasers", "cone", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble", "text"];
+export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "model", "sort", "particles", "cycles", "rays", "lasers", "cone", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble", "text", "panorama"];
 
 /** Sharpen, Color and Levels, in the order FINISH_SHADER applies them (see drawFinish). */
 type FinishPart = "sharpen" | "color" | "levels";
@@ -588,6 +588,10 @@ export interface FrameValues {
   driverScale: number;
   driverContrast: number;
   driverTime: number;
+  /** Panorama: opacity (0 = off), and how far the view has moved to the right and up, in screen widths and screen heights (the sliders plus the travel by the speeds). */
+  panorama: number;
+  panoramaPanX: number;
+  panoramaPanY: number;
   /** Relief lighting: strength (0 = off), height of the bumps, pixel size, light angle (radians) and gloss. */
   relief: number;
   reliefDepth: number;
@@ -866,6 +870,9 @@ export interface FrameValues {
   pathWidth: number;
   pathDraw: number;
   pathFade: number;
+  /** How many arms in a row do not show, and where they start (0 to 1 around the center). */
+  pathHide: number;
+  pathHideFrom: number;
   pathHue: number;
   pathRainbow: number;
   pathPicture: number;
@@ -1173,6 +1180,7 @@ export class KaleidoRenderer {
   private readonly copy: Program;
   private readonly finish: Program;
   private readonly relief: Program;
+  private readonly panorama: Program;
   private readonly driver: Program;
   /** The Driver effect's own video (driver 5), its texture, and the video time of the frame in it. */
   private driverVideo: HTMLVideoElement | null = null;
@@ -1365,6 +1373,7 @@ export class KaleidoRenderer {
     this.copy = this.createProgram(COPY_SHADER);
     this.finish = this.createProgram(FINISH_SHADER);
     this.relief = this.createProgram(RELIEF_SHADER);
+    this.panorama = this.createProgram(PANORAMA_SHADER);
     this.driver = this.createProgram(DRIVER_SHADER);
     this.camera = this.createProgram(CAMERA_SHADER);
     this.terrainProgram = this.createProgram(TERRAIN_SHADER);
@@ -1776,6 +1785,7 @@ export class KaleidoRenderer {
       outlines: v.outlines > 0,
       mask: v.mask > 0,
       bubble: v.bubble > 0,
+      panorama: v.panorama > 0,
       picture: v.picture > 0 && this.pictureSource !== null,
       text: v.text > 0 && v.textLook.content.trim().length > 0,
       bloom: v.bloom > 0,
@@ -1908,6 +1918,7 @@ export class KaleidoRenderer {
         const target = last ? null : scratchFor(source);
         if (step === "blur") this.drawBlur(v, source, padded, target, true);
         else if (step === "relief") this.drawRelief(v, source, target, width, height);
+        else if (step === "panorama") this.drawPanorama(v, source, target, width, height);
         else if (step === "driver") this.drawDriver(v, source, target, width, height);
         else if (step === "terrain") this.drawTerrain(v, source, target, width, height);
         else if (step === "camera") this.drawCamera(v, source, target, width, height);
@@ -2230,6 +2241,21 @@ export class KaleidoRenderer {
     }
     gl.activeTexture(gl.TEXTURE0);
     return ready;
+  }
+
+  /** Panorama (see PANORAMA_SHADER): the picture moved sideways and up or down, with mirror copies past its edges. */
+  private drawPanorama(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+    const gl = this.gl;
+    const p = this.panorama;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(p.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.uniform1i(p.uniforms.u_tex, 0);
+    gl.uniform2f(p.uniforms.u_pan, v.panoramaPanX, v.panoramaPanY);
+    gl.uniform1f(p.uniforms.u_amount, Math.min(1, Math.max(0, v.panorama)));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
   private drawRelief(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
@@ -2927,8 +2953,16 @@ export class KaleidoRenderer {
         gl.uniform1f(p.uniforms.u_normalScale, material.normalScale);
         gl.uniform1f(p.uniforms.u_rough, material.roughness);
         gl.uniform1f(p.uniforms.u_metal, material.metallic);
+        gl.uniform1i(p.uniforms.u_specGloss, material.specGloss ? 1 : 0);
+        gl.uniform3f(p.uniforms.u_specular, ...material.specular);
+        gl.uniform1i(p.uniforms.u_unlit, material.unlit ? 1 : 0);
         gl.uniform3f(p.uniforms.u_emissive, ...material.emissive);
         gl.uniform1f(p.uniforms.u_cutoff, material.cutoff);
+        gl.uniform4i(p.uniforms.u_uvSet, ...material.uvSets);
+        gl.uniformMatrix3fv(p.uniforms.u_colorUv, false, material.uvTransforms[0]);
+        gl.uniformMatrix3fv(p.uniforms.u_normalUv, false, material.uvTransforms[1]);
+        gl.uniformMatrix3fv(p.uniforms.u_roughUv, false, material.uvTransforms[2]);
+        gl.uniformMatrix3fv(p.uniforms.u_emissiveUv, false, material.uvTransforms[3]);
         gl.bindVertexArray(vertices);
         gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_INT, 0);
       }
@@ -3037,6 +3071,10 @@ export class KaleidoRenderer {
       gl.vertexAttribPointer(1, 3, gl.FLOAT, false, stride, 12);
       gl.enableVertexAttribArray(2);
       gl.vertexAttribPointer(2, 2, gl.FLOAT, false, stride, 24);
+      gl.enableVertexAttribArray(3);
+      gl.vertexAttribPointer(3, 2, gl.FLOAT, false, stride, 32);
+      gl.enableVertexAttribArray(4);
+      gl.vertexAttribPointer(4, 4, gl.FLOAT, false, stride, 40);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, order);
       gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, part.indices, gl.STATIC_DRAW);
       gl.bindVertexArray(null);
@@ -3507,7 +3545,7 @@ export class KaleidoRenderer {
     }
     const count = writePathInstances(this.cycleInstances, capacity, {
       shape: v.pathShape, arms: v.pathArms, steps: v.pathSteps, step: v.pathStep, turn: v.pathTurn, radius: v.pathRadius,
-      width: v.pathWidth / 1080, draw: v.pathDraw, fade: v.pathFade, hue: v.pathHue, rainbow: v.pathRainbow, rotation: v.pathRotation, yaw: v.pathYaw, tilt: v.pathTilt,
+      width: v.pathWidth / 1080, draw: v.pathDraw, fade: v.pathFade, hide: v.pathHide, hideFrom: v.pathHideFrom, hue: v.pathHue, rainbow: v.pathRainbow, rotation: v.pathRotation, yaw: v.pathYaw, tilt: v.pathTilt,
       x: width / height * 0.5 + v.pathX, y: 0.5 + v.pathY
     });
     this.drawLineLayer(count, capacity, width, height, (d) => gl.uniform1f(d.uniforms.u_gradient, 0));

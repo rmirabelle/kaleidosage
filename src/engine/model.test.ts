@@ -118,6 +118,164 @@ describe("parseModel", () => {
     expect(() => parseModel(new Uint8Array(40))).toThrow(/not a \.glb/);
     expect(() => parseModel(glb({ asset: { version: "2.0" } }))).toThrow(/no triangles/);
   });
+
+  it("reads KHR_materials_pbrSpecularGlossiness, unlit, and emissive strength", () => {
+    const png = "data:image/png;base64,iVBORw0KGgo=";
+    const model = parseModel(triangle({
+      extensionsUsed: ["KHR_materials_pbrSpecularGlossiness", "KHR_materials_unlit", "KHR_materials_emissive_strength"],
+      images: [{ uri: png }, { uri: png }],
+      textures: [{ source: 0 }, { source: 1 }],
+      materials: [{
+        emissiveFactor: [0.5, 0.25, 0],
+        extensions: {
+          KHR_materials_pbrSpecularGlossiness: {
+            diffuseFactor: [0.9, 0.8, 0.7, 1],
+            diffuseTexture: { index: 0 },
+            specularFactor: [0.2, 0.3, 0.4],
+            glossinessFactor: 0.75,
+            specularGlossinessTexture: { index: 1 }
+          },
+          KHR_materials_unlit: {},
+          KHR_materials_emissive_strength: { emissiveStrength: 2 }
+        }
+      }]
+    }));
+    const [material] = model.materials;
+    expect(material.specGloss).toBe(true);
+    expect(material.color).toEqual([0.9, 0.8, 0.7, 1]);
+    expect(material.colorTexture).toBe(0);
+    expect(material.roughTexture).toBe(1);
+    expect(material.roughness).toBe(0.75);
+    expect(material.specular).toEqual([0.2, 0.3, 0.4]);
+    expect(material.unlit).toBe(true);
+    expect(material.emissive).toEqual([1, 0.5, 0]);
+  });
+
+  it("reads multiple UV sets (TEXCOORD_1) and KHR_texture_transform", () => {
+    const bin = new Uint8Array(36 + 6 + 24 + 24);
+    const view = new DataView(bin.buffer);
+    [0, 0, 0, 2, 0, 0, 0, 2, 0].forEach((v, i) => view.setFloat32(i * 4, v, true));
+    [0, 1, 2].forEach((v, i) => view.setUint16(36 + i * 2, v, true));
+    [0.1, 0.2, 0.3, 0.4, 0.5, 0.6].forEach((v, i) => view.setFloat32(42 + i * 4, v, true));
+    [0.7, 0.8, 0.9, 1.0, 0.2, 0.3].forEach((v, i) => view.setFloat32(66 + i * 4, v, true));
+    const png = "data:image/png;base64,iVBORw0KGgo=";
+    const model = parseModel(glb({
+      asset: { version: "2.0" },
+      scene: 0,
+      scenes: [{ nodes: [0] }],
+      nodes: [{ mesh: 0 }],
+      meshes: [{ primitives: [{ attributes: { POSITION: 0, TEXCOORD_0: 2, TEXCOORD_1: 3 }, indices: 1, material: 0 }] }],
+      images: [{ uri: png }],
+      textures: [{ source: 0 }],
+      materials: [{
+        pbrMetallicRoughness: {
+          baseColorTexture: {
+            index: 0,
+            texCoord: 0,
+            extensions: { KHR_texture_transform: { offset: [0.25, 0.5], scale: [2, 3], texCoord: 1 } }
+          }
+        },
+        normalTexture: { index: 0, texCoord: 0 }
+      }],
+      accessors: [
+        { bufferView: 0, componentType: 5126, count: 3, type: "VEC3" },
+        { bufferView: 1, componentType: 5123, count: 3, type: "SCALAR" },
+        { bufferView: 2, componentType: 5126, count: 3, type: "VEC2" },
+        { bufferView: 3, componentType: 5126, count: 3, type: "VEC2" }
+      ],
+      bufferViews: [
+        { buffer: 0, byteOffset: 0, byteLength: 36 },
+        { buffer: 0, byteOffset: 36, byteLength: 6 },
+        { buffer: 0, byteOffset: 42, byteLength: 24 },
+        { buffer: 0, byteOffset: 66, byteLength: 24 }
+      ],
+      buffers: [{ byteLength: bin.byteLength }]
+    }, bin));
+    const [material] = model.materials;
+    expect(material.colorTexture).toBe(0);
+    expect(material.normalTexture).toBe(0);
+    /* colorTexture uses TEXCOORD_1 (mapped to uvSet 0), normalTexture uses TEXCOORD_0 (mapped to uvSet 1). */
+    expect(material.uvSets[0]).toBe(0);
+    expect(material.uvSets[1]).toBe(1);
+    expect(material.uvTransforms[0]).toEqual([2, 0, 0, 0, 3, 0, 0.25, 0.5, 1]);
+    const { vertices } = model.parts[0];
+    expect(vertices[6]).toBeCloseTo(0.7);
+    expect(vertices[7]).toBeCloseTo(0.8);
+    expect(vertices[8]).toBeCloseTo(0.1);
+    expect(vertices[9]).toBeCloseTo(0.2);
+  });
+
+  it("reads COLOR_0 vertex colors (normalized VEC3) with alpha 1, and defaults to white without COLOR_0", () => {
+    const plain = parseModel(triangle());
+    expect([plain.parts[0].vertices[10], plain.parts[0].vertices[11], plain.parts[0].vertices[12], plain.parts[0].vertices[13]]).toEqual([1, 1, 1, 1]);
+
+    const bin = new Uint8Array(36 + 6 + 9);
+    const view = new DataView(bin.buffer);
+    [0, 0, 0, 2, 0, 0, 0, 2, 0].forEach((v, i) => view.setFloat32(i * 4, v, true));
+    [0, 1, 2].forEach((v, i) => view.setUint16(36 + i * 2, v, true));
+    /* First corner: red (255, 0, 0), second: mid-gray (55, 55, 55), third: white (255, 255, 255). */
+    bin.set([255, 0, 0, 55, 55, 55, 255, 255, 255], 42);
+    const model = parseModel(glb({
+      asset: { version: "2.0" },
+      scene: 0,
+      scenes: [{ nodes: [0] }],
+      nodes: [{ mesh: 0 }],
+      meshes: [{ primitives: [{ attributes: { POSITION: 0, COLOR_0: 2 }, indices: 1, material: 0 }] }],
+      materials: [{}],
+      accessors: [
+        { bufferView: 0, componentType: 5126, count: 3, type: "VEC3" },
+        { bufferView: 1, componentType: 5123, count: 3, type: "SCALAR" },
+        { bufferView: 2, componentType: 5121, count: 3, type: "VEC3", normalized: true }
+      ],
+      bufferViews: [
+        { buffer: 0, byteOffset: 0, byteLength: 36 },
+        { buffer: 0, byteOffset: 36, byteLength: 6 },
+        { buffer: 0, byteOffset: 42, byteLength: 9 }
+      ],
+      buffers: [{ byteLength: bin.byteLength }]
+    }, bin));
+    const { vertices } = model.parts[0];
+    expect(vertices[10]).toBeCloseTo(1);
+    expect(vertices[11]).toBeCloseTo(0);
+    expect(vertices[12]).toBeCloseTo(0);
+    expect(vertices[13]).toBe(1);
+    /* Linear ~0.2157 encodes to sRGB ~0.50. */
+    expect(vertices[MODEL_STRIDE + 10]).toBeGreaterThan(0.45);
+    expect(vertices[MODEL_STRIDE + 10]).toBeLessThan(0.55);
+    expect(vertices[MODEL_STRIDE + 13]).toBe(1);
+  });
+
+  it("falls back to EXT_texture_webp and sniffs image MIME from bytes", () => {
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16]);
+    const bin = new Uint8Array(36 + 6 + jpeg.byteLength);
+    const view = new DataView(bin.buffer);
+    [0, 0, 0, 2, 0, 0, 0, 2, 0].forEach((v, i) => view.setFloat32(i * 4, v, true));
+    [0, 1, 2].forEach((v, i) => view.setUint16(36 + i * 2, v, true));
+    bin.set(jpeg, 42);
+    const model = parseModel(glb({
+      asset: { version: "2.0" },
+      scene: 0,
+      scenes: [{ nodes: [0] }],
+      nodes: [{ mesh: 0 }],
+      meshes: [{ primitives: [{ attributes: { POSITION: 0 }, indices: 1, material: 0 }] }],
+      images: [{ uri: "missing.png" }, { bufferView: 2, mimeType: "" }],
+      textures: [{ source: 0, extensions: { EXT_texture_webp: { source: 1 } } }],
+      materials: [{ pbrMetallicRoughness: { baseColorTexture: { index: 0 } } }],
+      accessors: [
+        { bufferView: 0, componentType: 5126, count: 3, type: "VEC3" },
+        { bufferView: 1, componentType: 5123, count: 3, type: "SCALAR" }
+      ],
+      bufferViews: [
+        { buffer: 0, byteOffset: 0, byteLength: 36 },
+        { buffer: 0, byteOffset: 36, byteLength: 6 },
+        { buffer: 0, byteOffset: 42, byteLength: jpeg.byteLength }
+      ],
+      buffers: [{ byteLength: bin.byteLength }]
+    }, bin));
+    expect(model.images).toHaveLength(1);
+    expect(model.images[0].type).toBe("image/jpeg");
+    expect(model.materials[0].colorTexture).toBe(0);
+  });
 });
 
 describe("packGlb", () => {

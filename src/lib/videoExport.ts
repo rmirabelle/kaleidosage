@@ -551,6 +551,8 @@ async function openClip(source: Engine, scene: SceneSource, shape: ExportShape, 
   state.warpTime = 0;
   state.driverTime = 0;
   state.mapTravel = 0;
+  state.panoramaTravelX = 0;
+  state.panoramaTravelY = 0;
   state.cameraX = 0;
   state.cameraY = 0;
   if (seamless) {

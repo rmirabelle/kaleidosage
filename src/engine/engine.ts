@@ -1144,6 +1144,8 @@ export class Engine {
     this.state.outlineTumbleTurns = 0;
     this.state.mapTravel = 0;
     this.state.tunnelTravel = 0;
+    this.state.panoramaTravelX = 0;
+    this.state.panoramaTravelY = 0;
     this.state.cameraX = 0;
     this.state.cameraY = 0;
     this.renderer.resetTrails();
@@ -1314,6 +1316,9 @@ export class Engine {
     }
     /* The Mirror tunnel's Speed is in cells a second; one loop is two cells. */
     this.state.tunnelTravel = ((this.state.tunnelTravel + animated * this.live("tunnelSpeed") / 2) % 1 + 1) % 1;
+    /* The Panorama's speeds are in screen widths and screen heights a second; one repeat is 2 of them. */
+    this.state.panoramaTravelX = ((this.state.panoramaTravelX + animated * this.live("panoramaSpeedX")) % 2 + 2) % 2;
+    this.state.panoramaTravelY = ((this.state.panoramaTravelY + animated * this.live("panoramaSpeedY")) % 2 + 2) % 2;
     /* The camera's Dolly (forward, the way it pans) and Truck (to its right) are speeds too: its place on the land moves by them. */
     const heading = this.live("cameraPan") * DEGREES;
     const dolly = animated * this.live("cameraDolly");
@@ -1678,6 +1683,9 @@ export class Engine {
       driverScale: this.live("driverScale"),
       driverContrast: this.live("driverContrast"),
       driverTime: this.state.driverTime,
+      panorama: on.panorama ? this.live("panoramaAmount") : 0,
+      panoramaPanX: this.live("panoramaPanX") + this.state.panoramaTravelX,
+      panoramaPanY: this.live("panoramaPanY") + this.state.panoramaTravelY,
       relief: on.relief ? this.live("reliefAmount") : 0,
       reliefDepth: this.live("reliefDepth"),
       reliefSize: this.live("reliefSize"),
@@ -1861,6 +1869,8 @@ export class Engine {
       pathWidth: this.live("pathWidth"),
       pathDraw: this.live("pathDraw"),
       pathFade: this.live("pathFade"),
+      pathHide: this.live("pathHide"),
+      pathHideFrom: this.live("pathHideFrom") / 360,
       pathHue: this.live("pathHue") / 360,
       pathRainbow: this.live("pathRainbow"),
       pathPicture: this.live("pathPicture"),

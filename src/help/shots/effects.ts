@@ -236,6 +236,29 @@ export const EFFECTS: Shot[] = [
     }
   },
   look({ effect: "Bubble", name: "bubble" }),
+  {
+    /** Panorama over a Bubble, half a screen width to the side and with no speed: the mirror copies of the bubble show at the left and right edges. */
+    ...look({ effect: "Panorama", name: "panorama", under: "Bubble", wide: true }),
+    setup: async (page) => {
+      await addEffect(page, "Bubble");
+      await addEffect(page, "Panorama");
+      /** The Bubble also has a Pan X, so the sliders are found in the Panorama. */
+      const slide = (name: string, part: number) => {
+        const row = Array.from(effectGroup(page, "Panorama").querySelectorAll<HTMLElement>(".panel-row")).find((item) => item.querySelector(".panel-row-name")?.textContent?.trim().toLowerCase() === name.toLowerCase());
+        const input = row?.querySelector<HTMLInputElement>('input[type="range"]');
+        if (!input) throw new Error(`Panorama has no slider ${name}`);
+        const low = Number(input.min);
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, String(low + (Number(input.max) - low) * part));
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      slide("Speed X", 0.5);
+      slide("Pan X", 0.625);
+      /** Stop puts the travel by Speed X back to 0, so only Pan X moves the picture. */
+      page.click('.scene-transport button[aria-label="Stop"]');
+      await page.settle(1500);
+    }
+  },
 
   /* Effects that draw light */
   look({

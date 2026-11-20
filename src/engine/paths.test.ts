@@ -12,6 +12,16 @@ const instances = (settings: Partial<PathSettings>, max = 20000) => {
 const end = (out: Float32Array, line: number) => [out[line * INSTANCE_FLOATS + 2], out[line * INSTANCE_FLOATS + 3]];
 
 describe("Light Paths", () => {
+  it("hides arms in a row and leaves the other arms in place", () => {
+    const all = instances({ arms: 4, steps: 1, radius: 1 });
+    const some = instances({ arms: 4, steps: 1, radius: 1, hide: 2, hideFrom: 0.25 });
+    expect(some.count).toBe(2);
+    /* Arms 1 and 2 are hidden: arms 0 and 3 stay. */
+    expect(Array.from(some.out.slice(0, 4))).toEqual(Array.from(all.out.slice(0, 4)));
+    expect(Array.from(some.out.slice(16, 20))).toEqual(Array.from(all.out.slice(48, 52)));
+    expect(instances({ arms: 4, steps: 1, hide: 9 }).count).toBe(0);
+  });
+
   it("draws one line per step on every arm", () => {
     expect(instances({ arms: 7, steps: 9 }).count).toBe(63);
   });

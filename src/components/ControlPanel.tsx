@@ -96,7 +96,8 @@ const PICTURE_KEYS: ParamKey[] = ["pictureAmount", "pictureSize", "pictureX", "p
 const OUTLINE_KEYS: ParamKey[] = ["outlinePoints", "outlineRadius", "outlineInner", "outlineAmount", "outlineCount", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"];
 const OUTLINE_DRAWS = [[0, "Draw and erase"], [1, "Chase"], [2, "Whole"]] as const;
 const LASER_KEYS: ParamKey[] = ["laserAmount", "laserOpacity", "laserCount", "laserSpread", "laserSweep", "laserSweepDelay", "laserBase", "laserBaseAngle", "laserWidth", "laserGlow", "laserGlowSize", "laserEmitter", "laserFade", "laserHue", "laserRainbow", "laserX", "laserY"];
-const PATH_KEYS: ParamKey[] = ["pathArms", "pathSteps", "pathStep", "pathTurn", "pathRadius", "pathWidth", "pathDraw", "pathFade", "pathYaw", "pathTilt", "pathHue", "pathRainbow", "pathPicture", "pathBackground", "pathX", "pathY", "pathRotation", "pathAmount"];
+const PATH_KEYS: ParamKey[] = ["pathArms", "pathHide", "pathHideFrom", "pathSteps", "pathStep", "pathTurn", "pathRadius", "pathWidth", "pathDraw", "pathFade", "pathYaw", "pathTilt", "pathHue", "pathRainbow", "pathPicture", "pathBackground", "pathX", "pathY", "pathRotation", "pathAmount"];
+const PANORAMA_KEYS: ParamKey[] = ["panoramaPanX", "panoramaPanY", "panoramaSpeedX", "panoramaSpeedY", "panoramaAmount"];
 const SPIRO_KEYS: ParamKey[] = ["spiroRing", "spiroSize", "spiroWidth", "spiroDraw", "spiroYaw", "spiroTilt", "spiroPicture", "spiroBackground", "spiroX", "spiroY", "spiroRotation", "spiroAmount"];
 const BLOOM_KEYS: ParamKey[] = ["bloomAmount", "bloomThreshold", "bloomSoftness", "bloomSize"];
 const SHARPEN_KEYS: ParamKey[] = ["sharpen", "sharpenRadius"];
@@ -335,6 +336,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
       },
       paths: () => start("pathAmount", 1),
       spiro: () => start("spiroAmount", 1),
+      panorama: () => start("panoramaAmount", 1),
       bloom: () => start("bloomAmount", 1),
       outlines: () => start("outlineAmount", 1),
       mask: () => start("maskAmount", 1),
@@ -398,6 +400,11 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
         <Fragment key={contourRevision}>
           <SplitRows keys={["contourHue", ...CONTOUR_KEYS]} row={row} blend={<ContourBlend engine={engine} />} />
         </Fragment>
+      </Group>
+    ),
+    panorama: (grip) => (
+      <Group engine={engine} group="panorama" title="Panorama" grip={grip} {...accordion("panorama")}>
+        {PANORAMA_KEYS.map(row)}
       </Group>
     ),
     relief: (grip) => (

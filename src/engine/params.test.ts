@@ -608,6 +608,23 @@ describe("effect order", () => {
   });
 });
 
+describe("fine sliders", () => {
+  it("give slow speeds most of the slider", () => {
+    const speed = createParams().panoramaSpeedX;
+    expect(toSlider(speed, speed.min)).toBe(0);
+    expect(toSlider(speed, 0)).toBeCloseTo(SLIDER_STEPS / 2);
+    expect(toSlider(speed, speed.max)).toBeCloseTo(SLIDER_STEPS);
+    /* A quarter of the slider from its center is 1/8 of the top speed. */
+    expect(fromSlider(speed, SLIDER_STEPS * 0.75)).toBeCloseTo(0.125, 3);
+    expect(fromSlider(speed, SLIDER_STEPS * 0.25)).toBeCloseTo(-0.125, 3);
+    expect(fromSlider(speed, toSlider(speed, 0.01))).toBe(0.01);
+    /* A slider that starts at 0 has its 0 at the left end. */
+    const cycles = createParams().cyclesSpeed;
+    expect(toSlider(cycles, 0)).toBe(0);
+    expect(fromSlider(cycles, SLIDER_STEPS / 2)).toBeCloseTo(0.125, 3);
+  });
+});
+
 describe("log sliders", () => {
   it("give each ratio the same part of the slider", () => {
     const cell = createParams().warpCellSize;

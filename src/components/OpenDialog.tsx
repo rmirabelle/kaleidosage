@@ -149,6 +149,7 @@ const EFFECT_GROUPS: [GroupKey, string][] = [
   ["cone", "Light cone"],
   ["paths", "Light paths"],
   ["spiro", "Spirograph"],
+  ["panorama", "Panorama"],
   ["outlines", "Light shapes"],
   ["picture", "Image or Video"],
   ["bloom", "Bloom"],

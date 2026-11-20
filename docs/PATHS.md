@@ -30,6 +30,8 @@ for the first version).
 | Width | The line width, in pixels at 1080p. |
 | Draw | How much of each arm shows, from the center. It starts as a range, so the lines grow and go back. |
 | Fade | How much dimmer the far end of each arm is. |
+| Hide | How many arms in a row do not show. The other arms do not move. |
+| Hide from | Where around the center the hidden arms start. |
 | Turn, Tilt | The whole pattern turns in 3D around its upright line, then leans around its level line, seen with perspective from 3 screen heights away. A part nearer than 0.05 to the eye is not drawn. Width stays the same at any depth. |
 | Color | The color at the center. |
 | Rainbow | How many times around the color wheel the color goes along an arm. |

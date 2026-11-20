@@ -246,6 +246,9 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Light shapes Spin and Tumble (rpm) turn each outline in 3D around its upright and its level line, with a little perspective. Each copy turns Delay later than the one before.
 - Only the drawn part of an outline glows, and its ends are round.
 - Random all puts Light shapes at the end of the list when it picks it.
+- Panorama moves the picture made so far sideways and up or down. Mirror copies of the picture join it at its edges, so the pattern repeats each 2 screen widths and each 2 screen heights with no seam.
+- Panorama Pan X is in screen widths and Pan Y in screen heights. Speed X and Speed Y are in screen widths and heights a second and have no end; a positive speed moves the view to the right or up. A new Panorama has Speed X 0.1 and Speed Y 0. Stop puts the travel by the speeds back to 0.
+- Random all does not pick Panorama.
 - Bubble bends the picture inside a closed shape around the screen's center. The Shape menu has Circle, Square and Radial.
 - Bubble Roundness shows only for Square, and rounds its corners from square (0) to a circle (1).
 - Bubble Points shows only for Radial, from 3 to 24. One point goes straight up. Values between two whole numbers crossfade between those two shapes.
@@ -320,6 +323,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Segments, Droste spirals, and Hyperbolic Sides and Per corner snap to whole numbers.
 - A Hyperbolic Sides or Per corner range holds each whole-number pattern, then crossfades to the next one.
 - A log slider has 1000 equal-ratio positions.
+- A speed slider (Speed, Spin, Tumble, Flow, Dolly, Truck) is fine near 0 and coarse at its ends: the value is the handle's distance from 0 to the power 3. The middle half of a slider from -1 to 1 goes from -0.125 to 0.125. A range on it moves in equal steps of the value.
 - A double-click on a setting name sets its default.
 - With a range on, a double-click on the name sets the full range.
 - Ctrl + hold on a setting name holds it at no effect until release.

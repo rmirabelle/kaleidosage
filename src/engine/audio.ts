@@ -7,7 +7,7 @@
  * so tests can feed it made-up signals.
  */
 
-import { PARAM_KEYS, SLIDER_STEPS, toSlider, type Param, type ParamKey, type Params } from "./params";
+import { PARAM_KEYS, exactFromSlider, toSlider, type Param, type ParamKey, type Params } from "./params";
 
 export type AudioBand = "level" | "bass" | "mids" | "highs";
 export const AUDIO_BANDS: readonly AudioBand[] = ["level", "bass", "mids", "highs"];
@@ -86,7 +86,7 @@ export function pushedValue(param: Param, base: number, end: number, push: numbe
   if (!(push > 0)) return base;
   const from = toSlider(param, base);
   const at = from + (toSlider(param, end) - from) * Math.min(1, push);
-  return param.scale === "log" ? param.min * (param.max / param.min) ** (at / SLIDER_STEPS) : at;
+  return exactFromSlider(param, at);
 }
 
 /** Each band's frequencies, in Hz. */

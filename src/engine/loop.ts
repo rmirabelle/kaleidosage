@@ -89,14 +89,15 @@ export function fittedCustomSeconds(params: Params, videoSeconds: number) {
   return fitted;
 }
 
-/** True when something moves on and never comes back: a range on a random or drunk curve, a noise or cell warp that flows, a tunnel or mirror tunnel that flies, or a camera that flies. */
+/** True when something moves on and never comes back: a range on a random or drunk curve, a noise or cell warp that flows, a tunnel or mirror tunnel that flies, a camera that flies, or a panorama that moves. */
 export function needsSeamFade(params: Params, state: PlayState) {
   const wandering = PARAM_KEYS.some((key) => inUse(key, state) && moving(params[key]) && WANDER.has(easeOf(params[key])));
   const warp = state.groups.warp && WARP_PERIODS[state.warpType] === null && everNonZero(params.warpFlow);
   const tunnel = state.groups.map && state.mapMode === 6 && everNonZero(params.mapSpeed);
   const mirrorTunnel = state.groups.kaleidoscope && state.foldMode === 8 && everNonZero(params.tunnelSpeed);
   const camera = (state.groups.camera || state.groups.terrain) && (everNonZero(params.cameraDolly) || everNonZero(params.cameraTruck));
-  return wandering || warp || tunnel || mirrorTunnel || camera;
+  const panorama = state.groups.panorama && (everNonZero(params.panoramaSpeedX) || everNonZero(params.panoramaSpeedY));
+  return wandering || warp || tunnel || mirrorTunnel || camera || panorama;
 }
 
 /**

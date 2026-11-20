@@ -1,5 +1,5 @@
 import type { Engine } from "../engine/engine";
-import { PARAM_KEYS, SLIDER_STEPS, fromSlider, toSlider, type Param, type ParamKey } from "../engine/params";
+import { PARAM_KEYS, SLIDER_STEPS, exactFromSlider, fromSlider, toSlider, type Param, type ParamKey } from "../engine/params";
 import { snapToStep } from "../components/sliderMath";
 import { isShown } from "../engine/submodes";
 
@@ -97,7 +97,7 @@ export function moveValue(param: Param, value: number, move: Move): number {
 
 /** The exact value at a slider position (see toSlider), not rounded to steps. */
 function sliderValue(param: Param, slider: number) {
-  return param.scale === "log" ? param.min * (param.max / param.min) ** (slider / SLIDER_STEPS) : slider;
+  return exactFromSlider(param, slider);
 }
 
 
@@ -111,7 +111,7 @@ export function playheadValue(param: Param, position: number): number {
   const low = toSlider(param, param.low ?? param.min);
   const high = toSlider(param, param.high ?? param.max);
   const at = Math.min(low, high) + position * Math.abs(high - low);
-  return param.scale === "log" ? param.min * (param.max / param.min) ** (at / SLIDER_STEPS) : at;
+  return exactFromSlider(param, at);
 }
 
 /** Where "value" is between a range's handles, from 0 (the lower handle) to 1 (the higher one): the reverse of playheadValue. */
@@ -134,7 +134,7 @@ export function playheadPosition(param: Param, value: number): number {
 export function pushPlayhead(param: Param, value: number, move: Move): { value: number; low: number; high: number } {
   const [min, max, step] = limits(param);
   const at = min + move((toSlider(param, value) - min) / (max - min)) * (max - min);
-  const handleAt = (slider: number) => param.scale === "log" ? fromSlider(param, Math.round(slider)) : snapToStep(slider, step);
+  const handleAt = (slider: number) => param.scale ? fromSlider(param, Math.round(slider)) : snapToStep(slider, step);
   let low = param.low ?? param.min;
   let high = param.high ?? param.max;
   const lowAt = toSlider(param, low);
@@ -150,7 +150,7 @@ export function pushPlayhead(param: Param, value: number, move: Move): { value: 
 
 /** The slider's ends and step, in slider positions (see toSlider). */
 function limits(param: Param): [number, number, number] {
-  return param.scale === "log" ? [0, SLIDER_STEPS, 1] : [param.min, param.max, param.step];
+  return param.scale ? [0, SLIDER_STEPS, 1] : [param.min, param.max, param.step];
 }
 
 function loadRelative(): string[] {

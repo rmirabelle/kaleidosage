@@ -16,20 +16,29 @@ let nextModelId = 1;
  */
 export async function loadModel(file: Uint8Array, name: string): Promise<ModelData> {
   const shape = parseModel(file);
-  const pictures = await Promise.all(shape.images.map(async ({ bytes, type }) => {
-    try {
-      const blob = new Blob([bytes as Uint8Array<ArrayBuffer>], { type });
+  const pictures = await Promise.all(shape.images.map(async ({ bytes, type }, index) => {
+    const decode = async (blob: Blob, useOptions: boolean) => {
       /* The colors as they are in the file, and the cover apart from the color (a cut-out reads it). */
-      const options = { colorSpaceConversion: "none", premultiplyAlpha: "none" } as const;
-      const bitmap = await createImageBitmap(blob, options);
+      const options = useOptions ? ({ colorSpaceConversion: "none", premultiplyAlpha: "none" } as const) : undefined;
+      const bitmap = options ? await createImageBitmap(blob, options) : await createImageBitmap(blob);
       const most = Math.max(bitmap.width, bitmap.height);
       if (most <= MAX_PICTURE) return bitmap;
       const scale = MAX_PICTURE / most;
-      const small = await createImageBitmap(blob, { ...options, resizeWidth: Math.round(bitmap.width * scale), resizeHeight: Math.round(bitmap.height * scale), resizeQuality: "high" });
+      const resize = { ...(options ?? {}), resizeWidth: Math.round(bitmap.width * scale), resizeHeight: Math.round(bitmap.height * scale), resizeQuality: "high" as const };
+      const small = await createImageBitmap(blob, resize);
       bitmap.close();
       return small;
+    };
+    const blob = new Blob([bytes as Uint8Array<ArrayBuffer>], { type });
+    try {
+      return await decode(blob, true);
     } catch {
-      return null;
+      try {
+        return await decode(blob, false);
+      } catch (error) {
+        console.warn(`3D model "${name}": could not decode image #${index} (${type}, ${bytes.byteLength} bytes):`, error);
+        return null;
+      }
     }
   }));
   return { id: nextModelId++, name, file, shape, pictures };

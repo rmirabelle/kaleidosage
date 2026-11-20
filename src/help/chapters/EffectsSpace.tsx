@@ -11,7 +11,7 @@ export function EffectsSpace() {
 
       <h2>How to read the effect chapters</h2>
       <p>
-        This chapter and the two after it describe all 30 effects. For each effect you find its function,
+        This chapter and the two after it describe all 31 effects. For each effect you find its function,
         the choices of its menus, and the settings that change the result most. Each picture shows the
         effect in a new scene, with its controls open in the <b>FX</b> card and the result beside them.
       </p>
@@ -20,6 +20,10 @@ export function EffectsSpace() {
         order, lock and remove effects, and describes <b>Blend</b> and <b>Opacity</b> in
         the <b>Common</b> section at the bottom of many effects. <i>Settings that move</i> tells you how
         to give a slider a range, so that its value moves.
+      </p>
+      <p>
+        A slider that sets a speed, such as <b>Speed</b>, <b>Spin</b> or <b>Flow</b>, is fine near 0:
+        most of its length is for slow speeds, and only its ends are fast.
       </p>
       <Tip>
         An effect that you add starts with values that show. Some effects also start with ranges, so the
@@ -137,6 +141,19 @@ export function EffectsSpace() {
         <b>Depth</b> sets the strength and the direction of the bend. <b>Size</b>, <b>Center X</b> and <b>Center Y</b> place
         the shape. <b>Background</b> sets how much of the picture shows around the shape.
         The <b>Shadow type</b> menu puts a shadow inside or outside the edge of the shape.
+      </p>
+
+      <h2>Panorama</h2>
+      <Shot name="fx-panorama" alt="The Panorama effect with Pan X at 0.5: the two halves of a bubble show at the left and right edges" side="block" />
+      <p>
+        Panorama moves the picture made so far to the left, to the right, up or down, with no end.
+        Mirror copies of the picture join it at its edges, so no seam shows.
+      </p>
+      <p>
+        <b>Speed X</b> and <b>Speed Y</b> move the picture all the time: a positive value moves the
+        view to the right or up, and a negative value moves it to the left or down. <b>Pan X</b> and
+        <b>Pan Y</b> move the picture by hand, in screen widths and screen heights. The pattern
+        repeats each 2 screen widths and each 2 screen heights.
       </p>
 
       <h2>Camera</h2>

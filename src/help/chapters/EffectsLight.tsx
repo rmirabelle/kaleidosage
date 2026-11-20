@@ -99,7 +99,8 @@ export function EffectsLight() {
         <b>Arms</b> sets the number of lines around the point. <b>Steps</b> and <b>Step length</b> set
         the length of each line, and <b>Turn angle</b> sets the angle of each corner. <b>Draw</b> sets
         how much of each line shows. It has a range when the effect starts, so the lines grow and go
-        back. <b>Color</b> and <b>Rainbow</b> set the colors, and <b>Picture color</b> takes the colors
+        back. <b>Hide</b> hides that number of lines side by side, and the other lines do not move.
+        <b>Hide from</b> sets where around the point the hidden lines start. <b>Color</b> and <b>Rainbow</b> set the colors, and <b>Picture color</b> takes the colors
         from the picture.
       </p>
 

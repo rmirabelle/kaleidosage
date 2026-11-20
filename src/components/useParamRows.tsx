@@ -95,7 +95,7 @@ export function useParamRows(engine: Engine) {
 
 /** The slider's ends and step: the parameter's own, or positions for a log slider (see toSlider). */
 function sliderLimits(param: Param): [number, number, number] {
-  return param.scale === "log" ? [0, SLIDER_STEPS, 1] : [param.min, param.max, param.step];
+  return param.scale ? [0, SLIDER_STEPS, 1] : [param.min, param.max, param.step];
 }
 
 /** Hue sliders show the fully saturated colors along their track. */
@@ -274,7 +274,11 @@ function ParamRow({ engine, paramKey, readout, marker, singleMarker, after, badg
      * below zero instead starts its range around 0, 10% of the slider's span
      * on each side.
      */
-    if (on && param.min < 0 && param.max > 0) {
+    if (on && param.scale === "fine" && param.min < 0 && param.max > 0) {
+      /* On a fine slider the 10% is of the slider's length, so the range starts slow. */
+      const center = toSlider(param, 0);
+      setHandles([fromSlider(param, center - SLIDER_STEPS * 0.1), fromSlider(param, center + SLIDER_STEPS * 0.1)]);
+    } else if (on && param.min < 0 && param.max > 0) {
       const decimals = (String(param.step).split(".")[1] ?? "").length;
       const distance = Number((Math.round((param.max - param.min) * 0.1 / param.step) * param.step).toFixed(decimals));
       setHandles([Math.max(param.min, -distance), Math.min(param.max, distance)]);

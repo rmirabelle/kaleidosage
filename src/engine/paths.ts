@@ -76,6 +76,10 @@ export interface PathSettings {
   draw: number;
   /** 0: the same brightness along the arm. 1: nothing at its far end. */
   fade: number;
+  /** How many arms in a row do not show. The other arms stay where they are. */
+  hide?: number;
+  /** Where the hidden arms start, 0 to 1 around the center. */
+  hideFrom?: number;
   /** The color at the center, 0 to 1 around the color wheel. */
   hue: number;
   /** How many times around the color wheel the color goes along the arm. */
@@ -175,8 +179,12 @@ export function writePathInstances(out: Float32Array, max: number, s: PathSettin
   const sinYaw = Math.sin(s.yaw);
   const cosTilt = Math.cos(s.tilt);
   const sinTilt = Math.sin(s.tilt);
+  const hidden = Math.min(arms, Math.max(0, Math.round(s.hide ?? 0)));
+  const hideFrom = s.hideFrom ?? 0;
+  const firstHidden = Math.round((hideFrom - Math.floor(hideFrom)) * arms) % arms;
   let count = 0;
   for (let arm = 0; arm < arms; arm++) {
+    if ((arm - firstHidden + arms) % arms < hidden) continue;
     const angle = s.rotation + (arm / arms) * Math.PI * 2;
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);

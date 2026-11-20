@@ -5,12 +5,15 @@
  *
  * What is read: every mesh of the file's scene, at its place (each node's
  * move, turn and size are worked into the corners), as triangles, with
- * each corner's direction and its place in the material's pictures. Of a
- * material: its color and color picture, its bump picture (the normal
- * map), its roughness and metal values and picture, its own light, and its
- * cut-out level. Not read: bones and motion (the model stands as it was
- * made), morph shapes, colors per corner, second picture layouts, and
- * packed files (Draco, Meshopt, KTX2), which give a clear error.
+ * each corner's direction, its places in the material's pictures (up to two
+ * UV sets per material), and vertex colors (COLOR_0). Of a material: its
+ * color and color picture (both pbrMetallicRoughness and legacy
+ * KHR_materials_pbrSpecularGlossiness), its bump picture (the normal map),
+ * its roughness/metal or specular/glossiness values and picture, its UV
+ * transforms (KHR_texture_transform), its own light (with emissive
+ * strength), unlit flag (KHR_materials_unlit), and its cut-out level. Not
+ * read: bones and motion (the model stands as it was made), morph shapes,
+ * and packed files (Draco, Meshopt, KTX2), which give a clear error.
  *
  * The model is moved and sized to fit a ball of radius 1 around the middle
  * of its box, as the other shapes do.
@@ -23,6 +26,10 @@ export interface ModelTexture {
   wrapT: number;
 }
 
+/** Column-major 3 by 3 UV transform matrix (KHR_texture_transform). */
+export type UvMatrix = readonly [number, number, number, number, number, number, number, number, number];
+const IDENTITY_UV: UvMatrix = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+
 /** A material. A texture is an index in ModelShape.textures, or null for none. */
 export interface ModelMaterial {
   /** The color (red, green, blue, cover), 0 to 1; a color picture is multiplied by it. */
@@ -30,17 +37,28 @@ export interface ModelMaterial {
   colorTexture: number | null;
   normalTexture: number | null;
   normalScale: number;
-  /** Green is the roughness and blue the metal value, each multiplied by its number. */
+  /** For metallic-roughness: green is roughness and blue is metal. For specGloss: RGB is specular and alpha is glossiness. */
   roughTexture: number | null;
+  /** Roughness factor (0 to 1), or glossiness factor when specGloss is true. */
   roughness: number;
   metallic: number;
+  /** True when the material comes from KHR_materials_pbrSpecularGlossiness. */
+  specGloss: boolean;
+  /** Specular color factor (RGB, 0 to 1) when specGloss is true. */
+  specular: [number, number, number];
+  /** True when the material uses KHR_materials_unlit (ignores scene lighting). */
+  unlit: boolean;
   emissive: [number, number, number];
   emissiveTexture: number | null;
   /** A cover below this is not drawn (leaves, fences); 0 draws all. */
   cutoff: number;
+  /** Which vertex UV set (0 or 1) each texture reads: color, normal, rough, emissive. */
+  uvSets: [0 | 1, 0 | 1, 0 | 1, 0 | 1];
+  /** Column-major 3 by 3 UV transform for each texture: color, normal, rough, emissive. */
+  uvTransforms: [UvMatrix, UvMatrix, UvMatrix, UvMatrix];
 }
 
-/** The triangles of one material: 8 numbers per corner (place 3, direction 3, picture place 2), and 3 corner numbers per triangle. */
+/** The triangles of one material: 14 numbers per corner (place 3, direction 3, uv0 2, uv1 2, color 4), and 3 corner numbers per triangle. */
 export interface ModelPart {
   material: number;
   vertices: Float32Array;
@@ -79,8 +97,8 @@ export interface ModelData {
   pictures: (ImageBitmap | null)[];
 }
 
-/** Numbers per corner in ModelPart.vertices. */
-export const MODEL_STRIDE = 8;
+/** Numbers per corner in ModelPart.vertices: pos(3), normal(3), uv0(2), uv1(2), color(4). */
+export const MODEL_STRIDE = 14;
 
 const GLB_MAGIC = 0x46546c67;
 const CHUNK_JSON = 0x4e4f534a;
@@ -88,7 +106,7 @@ const CHUNK_BIN = 0x004e4942;
 const REPEAT = 10497;
 
 /** The extensions a file can require that change nothing here, or only looks that are not read. */
-const KNOWN_EXTENSION = /^(KHR_mesh_quantization|KHR_texture_transform|KHR_lights_punctual|KHR_materials_\w+|EXT_texture_webp|KHR_xmp_json_ld)$/;
+const KNOWN_EXTENSION = /^(KHR_mesh_quantization|KHR_texture_transform|KHR_lights_punctual|KHR_materials_\w+|EXT_texture_webp|EXT_texture_avif|KHR_xmp_json_ld)$/;
 const PACKED: Record<string, string> = {
   KHR_draco_mesh_compression: "Draco",
   EXT_meshopt_compression: "Meshopt",
@@ -203,7 +221,7 @@ class Reader {
    * or null when the file has no such list. A list with no data is all 0,
    * as the format says.
    */
-  read(index: unknown, width: number): { values: Float32Array | Uint32Array; count: number } | null {
+  read(index: unknown, width: number, forceNormalize = false): { values: Float32Array | Uint32Array; count: number; parts: number } | null {
     const accessor = this.accessors[whole(index) ?? -1];
     if (!accessor) return null;
     const count = whole(accessor.count);
@@ -211,7 +229,7 @@ class Reader {
     const parts = COMPONENTS[String(accessor.type)];
     if (count === null || !type || !parts) throw new Error("The model file has a list of numbers of an unknown kind.");
     const values = type.bytes === 4 && type.most !== 1 ? new Uint32Array(count * width) : new Float32Array(count * width);
-    if (accessor.bufferView === undefined) return { values, count };
+    if (accessor.bufferView === undefined) return { values, count, parts };
     const view = this.views[whole(accessor.bufferView) ?? -1];
     const bytes = this.viewBytes(accessor.bufferView);
     if (!view || !bytes) throw new Error("The model file's data is missing or cut short.");
@@ -219,7 +237,7 @@ class Reader {
     const start = whole(accessor.byteOffset ?? 0) ?? 0;
     if (count > 0 && start + (count - 1) * stride + type.bytes * parts > bytes.byteLength) throw new Error("The model file's data is cut short.");
     const data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    const scale = accessor.normalized === true && type.most !== 1 ? 1 / type.most : 1;
+    const scale = (accessor.normalized === true || forceNormalize) && type.most !== 1 ? 1 / type.most : 1;
     const take = Math.min(width, parts);
     for (let i = 0; i < count; i++) {
       for (let k = 0; k < take; k++) {
@@ -227,7 +245,7 @@ class Reader {
         values[i * width + k] = scale === 1 ? value : Math.max(-1, value * scale);
       }
     }
-    return { values, count };
+    return { values, count, parts };
   }
 }
 
@@ -241,41 +259,117 @@ function dataUri(uri: string): ModelImage | null {
   return { bytes, type: match[1] };
 }
 
-/** An image's type from its first bytes, for a file that does not name it. */
-function imageType(bytes: Uint8Array): string {
-  if (bytes[0] === 0x89 && bytes[1] === 0x50) return "image/png";
-  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[8] === 0x57) return "image/webp";
-  return "image/jpeg";
+/** An image's MIME type from its magic bytes, or null when not recognized. */
+function sniffImageType(bytes: Uint8Array): string | null {
+  if (bytes.byteLength >= 4 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "image/png";
+  if (bytes.byteLength >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  if (bytes.byteLength >= 12 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return "image/webp";
+  if (bytes.byteLength >= 12 && bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70 && bytes[8] === 0x61 && bytes[9] === 0x76 && bytes[10] === 0x69 && (bytes[11] === 0x66 || bytes[11] === 0x73)) return "image/avif";
+  if (bytes.byteLength >= 4 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38) return "image/gif";
+  if (bytes.byteLength >= 2 && bytes[0] === 0x42 && bytes[1] === 0x4d) return "image/bmp";
+  return null;
 }
 
-function readMaterial(material: Json, textureCount: number): ModelMaterial {
-  /* A picture the material names, when it is in the list and laid out by the first picture places (the only ones read). */
-  const texture = (info: unknown): number | null => {
-    if (!isRecord(info)) return null;
-    const index = whole(info.index);
-    return index !== null && index < textureCount && (info.texCoord ?? 0) === 0 ? index : null;
-  };
+/** An image's type from its first bytes, for a file that does not name it. */
+function imageType(bytes: Uint8Array): string {
+  return sniffImageType(bytes) ?? "image/jpeg";
+}
+
+function normalizeMime(mime: unknown): string {
+  if (typeof mime !== "string") return "";
+  const trimmed = mime.trim().toLowerCase();
+  return trimmed === "image/jpg" ? "image/jpeg" : trimmed;
+}
+
+/** Linear 0..1 color channel to sRGB 0..1 (glTF stores COLOR_0 in linear light). */
+function linearToSrgb(value: number): number {
+  const c = Math.max(0, Math.min(1, value));
+  return c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+}
+
+interface RawSlot {
+  index: number | null;
+  texCoord: number;
+  transform: UvMatrix;
+}
+
+/** Column-major 3 by 3 matrix from a KHR_texture_transform block (translation * rotation * scale). */
+function uvTransform(ext: Json): UvMatrix {
+  const [ox, oy] = numbers(ext.offset, 2) ?? [0, 0];
+  const [sx, sy] = numbers(ext.scale, 2) ?? [1, 1];
+  const r = number(ext.rotation, 0);
+  if (ox === 0 && oy === 0 && sx === 1 && sy === 1 && r === 0) return IDENTITY_UV;
+  const c = Math.cos(r);
+  const s = Math.sin(r);
+  return [c * sx || 0, s * sx || 0, 0, -s * sy || 0, c * sy || 0, 0, ox, oy, 1];
+}
+
+function readTextureSlot(info: unknown, textureCount: number): RawSlot {
+  if (!isRecord(info)) return { index: null, texCoord: 0, transform: IDENTITY_UV };
+  const index = whole(info.index);
+  if (index === null || index >= textureCount) return { index: null, texCoord: 0, transform: IDENTITY_UV };
+  const tr = isRecord(info.extensions) && isRecord(info.extensions.KHR_texture_transform) ? info.extensions.KHR_texture_transform : null;
+  const texCoord = (tr ? whole(tr.texCoord) : null) ?? whole(info.texCoord) ?? 0;
+  return { index, texCoord, transform: tr ? uvTransform(tr) : IDENTITY_UV };
+}
+
+function readMaterial(material: Json, textureCount: number, placed: (index: number | null) => number | null): { material: ModelMaterial; uvChannels: [number, number] } {
+  const ext = isRecord(material.extensions) ? material.extensions : null;
+  const specGloss = ext && isRecord(ext.KHR_materials_pbrSpecularGlossiness) ? ext.KHR_materials_pbrSpecularGlossiness : null;
+  const unlit = Boolean(ext && isRecord(ext.KHR_materials_unlit));
+  const emissiveStrength = ext && isRecord(ext.KHR_materials_emissive_strength) ? Math.max(0, number(ext.KHR_materials_emissive_strength.emissiveStrength, 1)) : 1;
   const pbr = isRecord(material.pbrMetallicRoughness) ? material.pbrMetallicRoughness : {};
-  const color = numbers(pbr.baseColorFactor, 4) ?? [1, 1, 1, 1];
+  const color = specGloss
+    ? numbers(specGloss.diffuseFactor, 4) ?? [1, 1, 1, 1]
+    : numbers(pbr.baseColorFactor, 4) ?? [1, 1, 1, 1];
+  const specular = specGloss ? numbers(specGloss.specularFactor, 3) ?? [1, 1, 1] : [1, 1, 1];
   const emissive = numbers(material.emissiveFactor, 3) ?? [0, 0, 0];
   const mode = material.alphaMode;
+  const rawSlots: [RawSlot, RawSlot, RawSlot, RawSlot] = [
+    readTextureSlot(specGloss ? specGloss.diffuseTexture : pbr.baseColorTexture, textureCount),
+    readTextureSlot(material.normalTexture, textureCount),
+    readTextureSlot(specGloss ? specGloss.specularGlossinessTexture : pbr.metallicRoughnessTexture, textureCount),
+    readTextureSlot(material.emissiveTexture, textureCount)
+  ];
+  const resolved = rawSlots.map((slot) => ({ ...slot, index: placed(slot.index) }));
+  /* Up to two distinct TEXCOORD_* channels per material go into the vertex buffer (a_place and a_place2). */
+  const distinct: number[] = [];
+  for (const slot of resolved) {
+    if (slot.index !== null && !distinct.includes(slot.texCoord)) distinct.push(slot.texCoord);
+  }
+  const chan0 = distinct[0] ?? 0;
+  const chan1 = distinct[1] ?? chan0;
+  const uvSetOf = (slot: RawSlot): 0 | 1 => (slot.index !== null && slot.texCoord === chan1 && chan1 !== chan0 ? 1 : 0);
   return {
-    color: [color[0], color[1], color[2], color[3]],
-    colorTexture: texture(pbr.baseColorTexture),
-    normalTexture: texture(material.normalTexture),
-    normalScale: isRecord(material.normalTexture) ? number(material.normalTexture.scale, 1) : 1,
-    roughTexture: texture(pbr.metallicRoughnessTexture),
-    roughness: Math.min(1, Math.max(0, number(pbr.roughnessFactor, 1))),
-    metallic: Math.min(1, Math.max(0, number(pbr.metallicFactor, 1))),
-    emissive: [emissive[0], emissive[1], emissive[2]],
-    emissiveTexture: texture(material.emissiveTexture),
-    /* A see-through material is not blended: only its nearly clear parts are left out. */
-    cutoff: mode === "MASK" ? number(material.alphaCutoff, 0.5) : mode === "BLEND" ? 0.05 : 0
+    uvChannels: [chan0, chan1],
+    material: {
+      color: [color[0], color[1], color[2], color[3]],
+      colorTexture: resolved[0].index,
+      normalTexture: resolved[1].index,
+      normalScale: isRecord(material.normalTexture) ? number(material.normalTexture.scale, 1) : 1,
+      roughTexture: resolved[2].index,
+      roughness: Math.min(1, Math.max(0, number(specGloss ? specGloss.glossinessFactor : pbr.roughnessFactor, 1))),
+      metallic: specGloss ? 0 : Math.min(1, Math.max(0, number(pbr.metallicFactor, 1))),
+      specGloss: Boolean(specGloss),
+      specular: [specular[0], specular[1], specular[2]],
+      unlit,
+      emissive: [emissive[0] * emissiveStrength, emissive[1] * emissiveStrength, emissive[2] * emissiveStrength],
+      emissiveTexture: resolved[3].index,
+      /* A see-through material is not blended: only its nearly clear parts are left out. */
+      cutoff: mode === "MASK" ? number(material.alphaCutoff, 0.5) : mode === "BLEND" ? 0.05 : 0,
+      uvSets: [uvSetOf(resolved[0]), uvSetOf(resolved[1]), uvSetOf(resolved[2]), uvSetOf(resolved[3])],
+      uvTransforms: [resolved[0].transform, resolved[1].transform, resolved[2].transform, resolved[3].transform]
+    }
   };
 }
 
 /** The material of a part that names none: plain light gray. */
-const PLAIN: ModelMaterial = { color: [0.8, 0.8, 0.8, 1], colorTexture: null, normalTexture: null, normalScale: 1, roughTexture: null, roughness: 0.6, metallic: 0, emissive: [0, 0, 0], emissiveTexture: null, cutoff: 0 };
+const PLAIN: ModelMaterial = {
+  color: [0.8, 0.8, 0.8, 1], colorTexture: null, normalTexture: null, normalScale: 1, roughTexture: null,
+  roughness: 0.6, metallic: 0, specGloss: false, specular: [1, 1, 1], unlit: false,
+  emissive: [0, 0, 0], emissiveTexture: null, cutoff: 0,
+  uvSets: [0, 0, 0, 0], uvTransforms: [IDENTITY_UV, IDENTITY_UV, IDENTITY_UV, IDENTITY_UV]
+};
 
 /**
  * The credit a model file carries: its copyright text, or (a file from
@@ -306,15 +400,28 @@ export function parseModel(file: Uint8Array): ModelShape {
     const inside = typeof image.uri === "string" ? dataUri(image.uri) : null;
     const bytes = inside?.bytes ?? reader.viewBytes(image.bufferView);
     if (!bytes || bytes.byteLength === 0) return -1;
-    images.push({ bytes, type: typeof image.mimeType === "string" ? image.mimeType : inside?.type || imageType(bytes) });
+    const type = sniffImageType(bytes) ?? (normalizeMime(image.mimeType) || normalizeMime(inside?.type) || "image/jpeg");
+    images.push({ bytes, type });
     return images.length - 1;
   });
   const samplers = list(json.samplers);
   const textures: ModelTexture[] = [];
   /* Each texture of the file to its place in "textures"; -1 for one with no image. */
   const textureAt = list(json.textures).map((texture) => {
-    const webp = isRecord(texture.extensions) && isRecord(texture.extensions.EXT_texture_webp) ? texture.extensions.EXT_texture_webp.source : undefined;
-    const image = imageAt[whole(texture.source ?? webp) ?? -1] ?? -1;
+    const ext = isRecord(texture.extensions) ? texture.extensions : null;
+    const candidates = [
+      texture.source,
+      ext && isRecord(ext.EXT_texture_webp) ? ext.EXT_texture_webp.source : undefined,
+      ext && isRecord(ext.EXT_texture_avif) ? ext.EXT_texture_avif.source : undefined
+    ];
+    let image = -1;
+    for (const candidate of candidates) {
+      const found = imageAt[whole(candidate) ?? -1] ?? -1;
+      if (found >= 0) {
+        image = found;
+        break;
+      }
+    }
     if (image < 0) return -1;
     const sampler = samplers[whole(texture.sampler) ?? -1] ?? {};
     textures.push({ image, wrapS: whole(sampler.wrapS) ?? REPEAT, wrapT: whole(sampler.wrapT) ?? REPEAT });
@@ -322,9 +429,11 @@ export function parseModel(file: Uint8Array): ModelShape {
   });
   const fileTextures = textureAt.length;
   const placed = (index: number | null) => index === null || textureAt[index] < 0 ? null : textureAt[index];
+  const materialUvChannels: [number, number][] = [];
   const materials = list(json.materials).map((material) => {
-    const read = readMaterial(material, fileTextures);
-    return { ...read, colorTexture: placed(read.colorTexture), normalTexture: placed(read.normalTexture), roughTexture: placed(read.roughTexture), emissiveTexture: placed(read.emissiveTexture) };
+    const read = readMaterial(material, fileTextures, placed);
+    materialUvChannels.push(read.uvChannels);
+    return read.material;
   });
   const plain = materials.length;
 
@@ -350,8 +459,13 @@ export function parseModel(file: Uint8Array): ModelShape {
       const places = reader.read(attributes.POSITION, 3);
       if (!places || places.count === 0) continue;
       const count = places.count;
+      const named = whole(primitive.material);
+      const material = named !== null && named < materials.length ? named : plain;
+      const [chan0, chan1] = materialUvChannels[material] ?? [0, 0];
       const directions = reader.read(attributes.NORMAL, 3);
-      const pictures = reader.read(attributes.TEXCOORD_0, 2);
+      const uv0 = reader.read(attributes[`TEXCOORD_${chan0}`], 2) ?? (chan0 !== 0 ? reader.read(attributes.TEXCOORD_0, 2) : null);
+      const uv1 = chan1 !== chan0 ? (reader.read(attributes[`TEXCOORD_${chan1}`], 2) ?? uv0) : uv0;
+      const colors = reader.read(attributes.COLOR_0, 4, true);
       const given = reader.read(primitive.indices, 1);
       let corners: Uint32Array;
       if (given) corners = Uint32Array.from(given.values);
@@ -370,6 +484,7 @@ export function parseModel(file: Uint8Array): ModelShape {
       if (corners.some((corner) => corner >= count)) throw new Error("The model file names a corner that it does not have.");
 
       const vertices = new Float32Array(count * MODEL_STRIDE);
+      const hasColor = colors !== null && colors.count === count;
       for (let i = 0; i < count; i++) {
         const [x, y, z] = [places.values[i * 3], places.values[i * 3 + 1], places.values[i * 3 + 2]];
         const at = i * MODEL_STRIDE;
@@ -383,9 +498,24 @@ export function parseModel(file: Uint8Array): ModelShape {
           const [nx, ny, nz] = [directions.values[i * 3], directions.values[i * 3 + 1], directions.values[i * 3 + 2]];
           for (let axis = 0; axis < 3; axis++) vertices[at + 3 + axis] = turn[axis] * nx + turn[3 + axis] * ny + turn[6 + axis] * nz;
         }
-        if (pictures && pictures.count === count) {
-          vertices[at + 6] = pictures.values[i * 2];
-          vertices[at + 7] = pictures.values[i * 2 + 1];
+        if (uv0 && uv0.count === count) {
+          vertices[at + 6] = uv0.values[i * 2];
+          vertices[at + 7] = uv0.values[i * 2 + 1];
+        }
+        if (uv1 && uv1.count === count) {
+          vertices[at + 8] = uv1.values[i * 2];
+          vertices[at + 9] = uv1.values[i * 2 + 1];
+        }
+        if (hasColor) {
+          vertices[at + 10] = linearToSrgb(colors.values[i * 4]);
+          vertices[at + 11] = linearToSrgb(colors.values[i * 4 + 1]);
+          vertices[at + 12] = linearToSrgb(colors.values[i * 4 + 2]);
+          vertices[at + 13] = colors.parts >= 4 ? Math.max(0, Math.min(1, colors.values[i * 4 + 3])) : 1;
+        } else {
+          vertices[at + 10] = 1;
+          vertices[at + 11] = 1;
+          vertices[at + 12] = 1;
+          vertices[at + 13] = 1;
         }
       }
       if (!directions || directions.count !== count) {
@@ -403,8 +533,6 @@ export function parseModel(file: Uint8Array): ModelShape {
         if (length > 1e-20) for (let axis = 3; axis < 6; axis++) vertices[at + axis] /= length;
         else vertices[at + 4] = 1;
       }
-      const named = whole(primitive.material);
-      const material = named !== null && named < materials.length ? named : plain;
       if (!pieces.has(material)) pieces.set(material, []);
       pieces.get(material)!.push({ vertices, indices: corners });
     }
@@ -485,7 +613,7 @@ export function packGlb(description: unknown, files: ReadonlyMap<string, Uint8Ar
     try {
       name = decodeURIComponent(uri);
     } catch { /* The name as it is written. */ }
-    const bytes = files.get(name) ?? files.get(uri);
+    const bytes = files.get(name) ?? files.get(uri) ?? files.get(name.replace(/^\.\//, ""));
     if (!bytes) throw new Error(`The model's file "${name}" is missing.`);
     return bytes;
   };

@@ -61,7 +61,7 @@ Use Kaleido Sage for:
 
 ### 1. Stack effects
 
-There are 30 effects, from Kaleidoscope and Mandelbrot to Lasers, Light cone, Particles, Spirograph, Text and real Terrain. Add them in any order. The picture goes through the list from top to bottom, so the order changes the result. Press `X` for new random settings, and lock the effects that you want to keep.
+There are 31 effects, from Kaleidoscope and Mandelbrot to Lasers, Light cone, Particles, Spirograph, Text and real Terrain. Add them in any order. The picture goes through the list from top to bottom, so the order changes the result. Press `X` for new random settings, and lock the effects that you want to keep.
 
 <p align="center">
   <img src="docs/readme/first-fx-menu.png" alt="The Add an effect menu with a preview of the Kaleidoscope effect" width="620">
@@ -174,7 +174,7 @@ Add effects in any order. The picture goes through the list from top to bottom.
 | Group | Effects |
 |---|---|
 | **Mirrors and math** | Kaleidoscope (radial, triangle, hexagon, square, hyperbolic, Penrose, sphere, pinwheel, mirror tunnel, fractal), Algorithm (Mandelbrot, Julia, Möbius, Droste spiral, log spiral, seamless spiral, tunnel, sine, power), Bubble (circle, square, radial) |
-| **Motion and time** | Warp, Driver (caustics, smoke, ink, fire, ripples, video), Trails, Time smear, Pixel sort |
+| **Motion and time** | Warp, Driver (caustics, smoke, ink, fire, ripples, video), Panorama, Trails, Time smear, Pixel sort |
 | **3D** | 3D object (sphere, cube, morph, blobs, star, Menger sponge and more), 3D model (from a file, Poly Haven or Sketchfab), Terrain, Camera |
 | **Light** | Bloom, Light rays, Lasers, Light cone (spotlight, laser shell; cone or pyramid), Light paths, Spirograph, Light shapes, Light cycles, Particles |
 | **Line and surface** | Contours, Relief, Sharpen, Blur |

@@ -2005,6 +2005,25 @@ void main() {
   o = u_mode == 2 ? max(current, previous * u_amount) : mix(current, previous, u_amount);
 }`;
 
+/**
+ * Panorama: the picture made so far, moved by u_pan (in screen widths and
+ * screen heights). Past its edges the picture goes on as mirror copies of
+ * itself, so the edges meet with no seam and the pan has no end. The
+ * pattern repeats each 2 screen widths and each 2 screen heights.
+ */
+export const PANORAMA_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform vec2 u_pan;
+uniform float u_amount;
+void main() {
+  vec2 at = 1.0 - abs(mod(v_uv + u_pan, 2.0) - 1.0);
+  /* The picture carries its cover (premultiplied, see COVER_GLSL), so a plain mix is correct. */
+  o = mix(texture(u_tex, v_uv), texture(u_tex, at), u_amount);
+}`;
+
 /** Copies a texture to the screen. */
 export const COPY_SHADER = `#version 300 es
 precision highp float;
@@ -6380,6 +6399,8 @@ export const SOLID_MODEL_VERTEX = `#version 300 es
 layout(location = 0) in vec3 a_pos;
 layout(location = 1) in vec3 a_normal;
 layout(location = 2) in vec2 a_place;
+layout(location = 3) in vec2 a_place2;
+layout(location = 4) in vec4 a_color;
 uniform mat3 u_turn;
 uniform vec2 u_center;
 uniform float u_size;
@@ -6394,6 +6415,8 @@ out vec3 v_world;
 out vec3 v_normal;
 out vec3 v_shape;
 out vec2 v_place;
+out vec2 v_place2;
+out vec4 v_color;
 const float EYE = 3.0;
 const float WALL = 0.9;
 const float NEAR = 0.1;
@@ -6405,6 +6428,8 @@ void main() {
   v_normal = u_turn * a_normal;
   v_shape = a_pos;
   v_place = a_place;
+  v_place2 = a_place2;
+  v_color = a_color;
   if (u_pass == 1) {
     vec3 wall = world - u_light * ((world.z + WALL * scale) / u_light.z);
     gl_Position = vec4(wall.x / (0.5 * u_aspect), wall.y / 0.5, 0.0, 1.0);
@@ -6434,6 +6459,8 @@ in vec3 v_world;
 in vec3 v_normal;
 in vec3 v_shape;
 in vec2 v_place;
+in vec2 v_place2;
+in vec4 v_color;
 out vec4 o;
 uniform sampler2D u_tex;
 uniform vec2 u_view;
@@ -6462,10 +6489,18 @@ uniform float u_normalScale;
 uniform sampler2D u_normalTex;
 uniform float u_rough;
 uniform float u_metal;
+uniform bool u_specGloss;
+uniform vec3 u_specular;
+uniform bool u_unlit;
 uniform sampler2D u_roughTex;
 uniform vec3 u_emissive;
 uniform sampler2D u_emissiveTex;
 uniform float u_cutoff;
+uniform ivec4 u_uvSet;
+uniform mat3 u_colorUv;
+uniform mat3 u_normalUv;
+uniform mat3 u_roughUv;
+uniform mat3 u_emissiveUv;
 ${SOLID_BEHIND_GLSL}
 const float PI = 3.14159265359;
 const float EYE = 3.0;
@@ -6502,14 +6537,22 @@ ${SOLID_PAINT_GLSL}
  * the place in the picture change from pixel to pixel. The picture's green
  * is turned over, because a model file's pictures count rows from the top.
  */
-vec3 detailed(vec3 n, vec3 bump) {
+vec2 mapUv(int setIndex, mat3 transform) {
+  vec2 raw = setIndex == 0 ? v_place : v_place2;
+  return (transform * vec3(raw, 1.0)).xy;
+}
+vec3 linearFactorToSrgb(vec3 c) {
+  vec3 pos = max(c, 0.0);
+  return mix(pos * 12.92, 1.055 * pow(max(pos, vec3(0.0031308)), vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), pos));
+}
+vec3 detailed(vec3 n, vec3 bump, vec2 uv) {
   vec3 map = bump * 2.0 - 1.0;
   map.xy *= u_normalScale;
   map.y = -map.y;
   vec3 dp1 = dFdx(v_world);
   vec3 dp2 = dFdy(v_world);
-  vec2 d1 = dFdx(v_place);
-  vec2 d2 = dFdy(v_place);
+  vec2 d1 = dFdx(uv);
+  vec2 d2 = dFdy(uv);
   vec3 dp2perp = cross(dp2, n);
   vec3 dp1perp = cross(n, dp1);
   vec3 t = dp2perp * d1.x + dp1perp * d2.x;
@@ -6520,10 +6563,14 @@ vec3 detailed(vec3 n, vec3 bump) {
   return normalize(t * (inv * map.x) + b * (inv * map.y) + n * map.z);
 }
 void main() {
-  vec4 tint = texture(u_colorTex, v_place) * u_color;
-  vec3 bump = texture(u_normalTex, v_place).rgb;
-  vec3 gloss = texture(u_roughTex, v_place).rgb;
-  vec3 glow = texture(u_emissiveTex, v_place).rgb * u_emissive;
+  vec2 colorUv = mapUv(u_uvSet.x, u_colorUv);
+  vec2 normalUv = mapUv(u_uvSet.y, u_normalUv);
+  vec2 roughUv = mapUv(u_uvSet.z, u_roughUv);
+  vec2 emissiveUv = mapUv(u_uvSet.w, u_emissiveUv);
+  vec4 tint = texture(u_colorTex, colorUv) * vec4(linearFactorToSrgb(u_color.rgb), u_color.a) * v_color;
+  vec3 bump = texture(u_normalTex, normalUv).rgb;
+  vec4 gloss = texture(u_roughTex, roughUv);
+  vec3 glow = texture(u_emissiveTex, emissiveUv).rgb * linearFactorToSrgb(u_emissive);
   if (tint.a < u_cutoff) discard;
   if (u_pass == 1) {
     o = vec4(1.0);
@@ -6540,13 +6587,17 @@ void main() {
   if (dot(n, rd) > 0.0) n = -n;
   vec3 color = vec3(0.0);
   /* The material's bump picture also shapes the lens and the reflection, so glass and chrome keep the model's fine detail. */
-  vec3 facing = u_hasNormal ? detailed(n, bump) : n;
+  vec3 facing = u_hasNormal ? detailed(n, bump, normalUv) : n;
   if (u_chrome < 1.0) {
-    float smoothness = 1.0 - clamp(gloss.g * u_rough, 0.0, 1.0);
-    float metal = clamp(gloss.b * u_metal, 0.0, 1.0);
-    float lit = mix(1.0, 0.18 + 0.82 * max(dot(facing, u_light), 0.0), u_shading);
-    float shine = pow(max(dot(reflect(-u_light, facing), -rd), 0.0), mix(6.0, 120.0, smoothness * smoothness)) * u_shine * mix(0.12, 1.4, smoothness);
-    color = tint.rgb * lit + mix(vec3(1.0), tint.rgb, metal) * shine + glow;
+    if (u_unlit) {
+      color = tint.rgb + glow;
+    } else {
+      float smoothness = u_specGloss ? clamp(gloss.a * u_rough, 0.0, 1.0) : 1.0 - clamp(gloss.g * u_rough, 0.0, 1.0);
+      vec3 specColor = u_specGloss ? gloss.rgb * linearFactorToSrgb(u_specular) : mix(vec3(1.0), tint.rgb, clamp(gloss.b * u_metal, 0.0, 1.0));
+      float lit = mix(1.0, 0.18 + 0.82 * max(dot(facing, u_light), 0.0), u_shading);
+      float shine = pow(max(dot(reflect(-u_light, facing), -rd), 0.0), mix(6.0, 120.0, smoothness * smoothness)) * u_shine * mix(0.12, 1.4, smoothness);
+      color = tint.rgb * lit + specColor * shine + glow;
+    }
   }
   if (u_chrome > 0.0) color = mix(color, paint(v_shape, facing, rd, uv), u_chrome);
   float cover;
