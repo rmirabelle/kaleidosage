@@ -3159,6 +3159,7 @@ export default function App() {
             const scene = doc.id === activeId ? engine : storedRef.current.get(doc.id);
             return scene ? [baseLoopSeconds(scene.params, scene.state)] : [];
           }) : []}
+          selectedSong={tracks.current?.path}
           onCancel={() => setVideoDialogOpen(false)}
           onExport={(options) => void exportVideo(options, (singleName ?? sceneFileName).replace(/\.ksage$/i, ""))}
         />

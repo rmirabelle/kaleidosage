@@ -66,6 +66,8 @@ interface Props {
   sceneSeconds: number[];
   /** The playlist's songs that have a plan: the dialog offers a video of each. */
   songs: { path: string; name: string; seconds: number }[];
+  /** The path of the song selected in the playlist: the dialog opens with it, when it is one of "songs". */
+  selectedSong?: string;
   onCancel: () => void;
   onExport: (options: VideoOptions) => void;
 }
@@ -75,7 +77,7 @@ interface Props {
  * style. Title shows a title box at the start; Seamless loop makes the last
  * frame lead into the first, so the video can repeat with no jump.
  */
-export function ExportVideoDialog({ engine, screenSize, sceneSeconds, songs, onCancel, onExport }: Props) {
+export function ExportVideoDialog({ engine, screenSize, sceneSeconds, songs, selectedSong, onCancel, onExport }: Props) {
   const stored = readStored();
   const sizeChoices = [{ id: "screen" as VideoSizeId, ratio: "Screen", sites: "Same shape", ...screenSize }, ...VIDEO_SIZES];
   const [sizeId, setSizeId] = useState<VideoSizeId>(sizeChoices.some((choice) => choice.id === stored.size) ? stored.size! : "screen");
@@ -88,7 +90,7 @@ export function ExportVideoDialog({ engine, screenSize, sceneSeconds, songs, onC
   const [fps, setFps] = useState<VideoFps>(stored.fps === 30 ? 30 : 60);
   const [motionBlur, setMotionBlur] = useState(stored.motionBlur !== false);
   const [scope, setScope] = useState<"current" | "all" | "song">(stored.scenes === "song" ? "song" : stored.scenes === "separate" || stored.scenes === "stitched" ? "all" : "current");
-  const [songPick, setSongPick] = useState(stored.song === "all" && songs.length > 1 || songs.some((song) => song.path === stored.song) ? stored.song! : songs[0]?.path ?? "all");
+  const [songPick, setSongPick] = useState(songs.some((song) => song.path === selectedSong) ? selectedSong! : stored.song === "all" && songs.length > 1 || songs.some((song) => song.path === stored.song) ? stored.song! : songs[0]?.path ?? "all");
   const [joining, setJoining] = useState<Exclude<VideoScenes, "current">>(stored.scenes === "stitched" ? "stitched" : "separate");
   const sceneCount = sceneSeconds.length;
   const scenes: VideoScenes = scope === "song" && songs.length > 0 ? "song" : scope === "all" && sceneCount > 1 ? joining : "current";
