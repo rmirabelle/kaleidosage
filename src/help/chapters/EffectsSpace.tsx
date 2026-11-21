@@ -45,6 +45,7 @@ export function EffectsSpace() {
         <li><b>Mirror tunnel</b> shows the view down a long tube of mirrors. See below.</li>
         <li><b>Fractal</b> repeats the fold inside itself, with smaller and smaller copies. See below.</li>
         <li><b>Packed circles</b> fills the screen with circles that touch, with smaller circles in the gaps between them. Each circle shows a whole copy of the picture. See below.</li>
+        <li><b>Nested frames</b> puts a smaller, turned copy of the picture inside the picture, again and again. See below.</li>
       </ul>
       <p>
         Penrose, Sphere, Pinwheel and Mirror tunnel each have a <b>Shape</b> menu under <b>Type</b>.
@@ -87,9 +88,17 @@ export function EffectsSpace() {
         circles show the picture the opposite way around, so they turn in opposite directions.
       </p>
       <p>
+        <b>Nested frames</b>: each frame shows a whole copy of the picture and lies on the frame around
+        it. <b>Sides</b> sets the shape of the frames (4 is a square). <b>Copy size</b> sets the size of each frame
+        as a part of the frame around it, and <b>Turn</b> sets how far each frame turns from the frame
+        around it, so the corners make a spiral. <b>Speed</b> zooms into the center without end (below 0
+        it zooms out). <b>Shadow</b> puts the shadow of each frame on the frame around it, and <b>Size</b> sets
+        the size of the pattern.
+      </p>
+      <p>
         <b>Twirl</b> and <b>Inner twirl</b> twist the pattern. <b>Offset X</b> and <b>Offset Y</b> move the
         center of the mirrors. <b>Mirror fade</b> makes each reflection darker than the one before, as real
-        glass does. Sphere, Pinwheel, Mirror tunnel and Fractal do not have it. In Packed circles, each level of smaller circles is darker.
+        glass does. Sphere, Pinwheel, Mirror tunnel, Fractal and Nested frames do not have it. In Packed circles, each level of smaller circles is darker.
       </p>
       <p>
         A new Kaleidoscope has ranges on <b>Pan X</b> and <b>Pan Y</b>, in its <b>Common</b> section. They

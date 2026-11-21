@@ -261,6 +261,13 @@ uniform float u_packLevels;
 uniform float u_packTravel;
 uniform float u_packTwist;
 uniform float u_packTurn;
+/* Nested frames (fold mode 11): the side count (a whole number), the first frame's size (center to the middle of a side, screen heights), each frame's size as a part of the frame around it, each frame's turn (radians), the zoom's travel (0 to 1, one level) and the shadow's darkness (0 to 1). */
+uniform float u_frameSides;
+uniform float u_frameSize;
+uniform float u_frameScale;
+uniform float u_frameTurn;
+uniform float u_frameTravel;
+uniform float u_frameShadow;
 uniform float u_rotation;
 uniform float u_zoom;
 uniform float u_twirl;
@@ -1557,6 +1564,46 @@ vec2 fold(vec2 p) {
     foldStretch = min(0.5 * grown / PACK_R, 256.0);
     foldBounces = mirrors;
     return inside * 0.5 / u_zoom;
+  }
+  /**
+   * Nested frames (fold mode 11): frames with Sides equal sides (a side
+   * at the bottom), each one inside the frame before it, Copy size times
+   * as large and turned by Turn, without end inward and outward. Each
+   * frame shows a whole copy of the picture, and lies on top of the frame
+   * around it. The pattern is the same after a zoom of one frame, so Speed
+   * zooms into it with no end and no seam (see frameTravel in params.ts).
+   *
+   * In units where frame 0 has its corners at 1, frame n has them at
+   * Copy size^n. The point is in the smallest frame that holds it: the
+   * search starts at the smallest frame whose corners are farther from
+   * the center than the point, and goes to larger frames until one holds
+   * the point (a frame always holds the points nearer than the middle of
+   * its sides, so the search is short). foldShade is the shadow of the
+   * next smaller frame: darkest at that frame's edge, and gone a little
+   * way from it.
+   */
+  if (u_foldMode == 11) {
+    float halfSide = PI / u_frameSides;
+    float middle = cos(halfSide);
+    float smaller = log(u_frameScale);
+    float flow = exp(u_frameTravel * smaller) * middle / u_frameSize;
+    float far = max(r * flow, 1e-9);
+    float around = a + u_frameTravel * u_frameTurn;
+    float frame = floor(log(far) / smaller);
+    float size = 1.0;
+    for (int i = 0; i < 48; i++) {
+      size = exp(frame * smaller);
+      float off = mod(around - frame * u_frameTurn + PI * 0.5 + halfSide, 2.0 * halfSide) - halfSide;
+      if (far * cos(off) <= size * middle) break;
+      frame -= 1.0;
+    }
+    float inFrame = around - frame * u_frameTurn;
+    vec2 local = vec2(cos(inFrame), sin(inFrame)) * far / size;
+    float next = mod(inFrame - u_frameTurn + PI * 0.5 + halfSide, 2.0 * halfSide) - halfSide;
+    float past = length(local) * cos(next) - u_frameScale * middle;
+    foldShade = 1.0 - u_frameShadow * exp(-max(past, 0.0) / (0.1 * u_frameScale));
+    foldStretch = min(0.5 * flow / (size * middle), 256.0);
+    return local * 0.5 / middle / u_zoom;
   }
   /**
    * Mirror tunnel (fold mode 8): the view down a long tube whose walls are

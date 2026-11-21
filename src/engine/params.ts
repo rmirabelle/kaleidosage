@@ -13,7 +13,7 @@ export const PARAM_KEYS = [
   "mandelDepth", "mandelEnd", "mandelSpeed", "mandelFade", "mandelSpread", "mandelInvert", "mandelEdge", "mandelEdgeWidth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle",
   "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
   "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness",
-  "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "sphereSize", "sphereTurn", "sphereTilt", "sphereGlow", "sphereGlowWidth", "tunnelSpeed", "tunnelFog", "fractalSteps", "fractalScale", "fractalAngle", "fractalShift", "packSize", "packLevels", "packSpeed", "packTwist", "packTurn", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl", "mirrorFade", "innerTwirl",
+  "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "sphereSize", "sphereTurn", "sphereTilt", "sphereGlow", "sphereGlowWidth", "tunnelSpeed", "tunnelFog", "fractalSteps", "fractalScale", "fractalAngle", "fractalShift", "packSize", "packLevels", "packSpeed", "packTwist", "packTurn", "frameSides", "frameSize", "frameScale", "frameTurn", "frameSpeed", "frameShadow", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl", "mirrorFade", "innerTwirl",
   "blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel",
   "trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint",
   "smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade",
@@ -312,6 +312,8 @@ export interface PlayState {
   tunnelTravel: number;
   /** How far the Packed circles have zoomed, as part of one level (the zoom from one ring of circles to the next one inside it); it grows with time × their speed. */
   packTravel: number;
+  /** How far the Nested frames have zoomed, as part of one level (the zoom from one frame to the next one inside it); it grows with time × their speed. */
+  frameTravel: number;
   /** How far the Panorama has moved by its speeds, in screen widths and screen heights, each kept in one repeat of 2; they grow with time × the speeds. */
   panoramaTravelX: number;
   panoramaTravelY: number;
@@ -745,6 +747,21 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   packSpeed: { label: "Speed", min: -2, max: 2, step: 0.001, scale: "fine", value: 0.25, drift: "wave", low: 0.1, high: 0.5, on: false },
   packTwist: { label: "Twist", min: -180, max: 180, step: 1, value: 60, unit: "°", drift: "wave", low: 0, high: 60, on: false },
   packTurn: { label: "Picture rotation", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  /**
+   * Nested frames (fold mode 11): how many sides each frame has; the
+   * distance from the center of the first frame to the middle of a side,
+   * in screen heights; the size of each frame as a part of the frame
+   * around it; how far each frame is turned from the frame around it; the
+   * zoom speed toward the center, in doublings of size a second (below 0 it
+   * zooms out); and how dark the shadow of each frame is on the frame
+   * around it.
+   */
+  frameSides: { label: "Sides", min: 3, max: 24, step: 1, value: 4, drift: "wave", low: 3, high: 6, on: false },
+  frameSize: { label: "Size", min: 0.1, max: 2, step: 0.01, value: 0.5, drift: "wave", low: 0.4, high: 0.6, on: false },
+  frameScale: { label: "Copy size", min: 0.3, max: 0.95, step: 0.01, value: 0.82, drift: "wave", low: 0.7, high: 0.9, on: false },
+  frameTurn: { label: "Turn", min: -180, max: 180, step: 1, value: 15, unit: "°", drift: "wave", low: -15, high: 15, on: false },
+  frameSpeed: { label: "Speed", min: -2, max: 2, step: 0.001, scale: "fine", value: 0.25, drift: "wave", low: 0.1, high: 0.5, on: false },
+  frameShadow: { label: "Shadow", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.2, high: 0.8, on: false },
   tunnelFog: { label: "Darkness", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.2, high: 0.8, on: false },
   sphereGlowWidth: { label: "Glow width", min: 0.01, max: 0.5, step: 0.005, value: 0.12, drift: "wave", low: 0.05, high: 0.25, on: false },
   /** The center is a fraction of the screen size: -0.5 and 0.5 are the screen edges. */
@@ -1391,7 +1408,7 @@ const SPECS: Record<ParamKey, ParamSpec> = {
  * handles snap to it, and Ctrl + drag on a range handle mirrors around it.
  */
 export const NO_EFFECT: Partial<Record<ParamKey, number>> = {
-  hyperFlow: 0, packSpeed: 0, packTwist: 0, warpCenterX: 0, warpCenterY: 0, cameraHeight: 0, cameraDolly: 0, cameraTruck: 0,
+  hyperFlow: 0, packSpeed: 0, packTwist: 0, frameTurn: 0, frameSpeed: 0, warpCenterX: 0, warpCenterY: 0, cameraHeight: 0, cameraDolly: 0, cameraTruck: 0,
   mapScale: 1, juliaZoom: 1, mapPower: 1, mapArms: 0, mapTwist: 0, mapSpeed: 0, tunnelTwist: 0, mapPanX: 0, mapPanY: 0,
   mobiusPanX: 0, mobiusPanY: 0,
   centerX: 0, centerY: 0, zoom: 1, panX: 0, panY: 0, twirl: 0, innerTwirl: 0, bubbleDepth: 0, bubbleCenterX: 0, bubbleCenterY: 0, bubblePanX: 0, bubblePanY: 0, bubbleRotation: 0,
@@ -1489,7 +1506,7 @@ export function createPlayState(): PlayState {
     /* No effect is in the list at start-up, so every effect group is off. */
     groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, model: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false, cone: false, panorama: false },
     locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, model: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false, cone: false, panorama: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, tunnelTravel: 0, packTravel: 0, panoramaTravelX: 0, panoramaTravelY: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, penroseShape: 0, sphereShape: 2, pinwheelShape: 1, tunnelShape: 0, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, pathShape: 2, pathBlend: 7, spiroWheels: defaultSpiroWheels(), spiroBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, coneType: 0, coneShape: 0, coneColor: "#8fe6ff", coneBlend: 7, coneFogTime: 0, textContent: DEFAULT_TEXT, textFont: "Segoe UI", textBold: true, textItalic: false, textAlign: 1, textFill: 0, textColor: "#ffffff", textStops: defaultTextStops(), textOutlineColor: "#000000", textGlowColor: "#18e0ff", textShadowColor: "#000000", textMove: 0, textBlend: 0, textTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidFx: [], modelBlend: 0, modelMap: 2, modelFx: [], modelTurnsX: 0, modelTurnsY: 0, modelTurnsZ: 0, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, tunnelTravel: 0, packTravel: 0, frameTravel: 0, panoramaTravelX: 0, panoramaTravelY: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, penroseShape: 0, sphereShape: 2, pinwheelShape: 1, tunnelShape: 0, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, pathShape: 2, pathBlend: 7, spiroWheels: defaultSpiroWheels(), spiroBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, coneType: 0, coneShape: 0, coneColor: "#8fe6ff", coneBlend: 7, coneFogTime: 0, textContent: DEFAULT_TEXT, textFont: "Segoe UI", textBold: true, textItalic: false, textAlign: 1, textFill: 0, textColor: "#ffffff", textStops: defaultTextStops(), textOutlineColor: "#000000", textGlowColor: "#18e0ff", textShadowColor: "#000000", textMove: 0, textBlend: 0, textTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidFx: [], modelBlend: 0, modelMap: 2, modelFx: [], modelTurnsX: 0, modelTurnsY: 0, modelTurnsZ: 0, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -2035,7 +2052,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   warp: ["warpOpacity", "warpAmount", "warpScale", "warpCellSize", "warpCellX", "warpCellY", "warpCellAngle", "warpCellTurn", "warpCellSpin", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle"],
   map: ["mapOpacity", "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl", "mandelDepth", "mandelEnd", "mandelSpeed", "mandelFade", "mandelSpread", "mandelInvert", "mandelEdge", "mandelEdgeWidth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle", "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
     "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness"],
-  kaleidoscope: ["foldOpacity", "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "sphereSize", "sphereTurn", "sphereTilt", "sphereGlow", "sphereGlowWidth", "tunnelSpeed", "tunnelFog", "fractalSteps", "fractalScale", "fractalAngle", "fractalShift", "packSize", "packLevels", "packSpeed", "packTwist", "packTurn", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl", "innerTwirl", "mirrorFade"],
+  kaleidoscope: ["foldOpacity", "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "sphereSize", "sphereTurn", "sphereTilt", "sphereGlow", "sphereGlowWidth", "tunnelSpeed", "tunnelFog", "fractalSteps", "fractalScale", "fractalAngle", "fractalShift", "packSize", "packLevels", "packSpeed", "packTwist", "packTurn", "frameSides", "frameSize", "frameScale", "frameTurn", "frameSpeed", "frameShadow", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl", "innerTwirl", "mirrorFade"],
   blur: ["blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel"],
   trails: ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"],
   smear: ["smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade"],

@@ -228,7 +228,12 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Packed circles Levels (1 to 24) sets how many times smaller circles fill the gaps. A value between two whole numbers fades the smallest circles in. Circles smaller than a pixel do not show.
 - Packed circles Size is the radius of the ring, in screen heights. Picture rotation turns the picture in each circle; neighbor circles turn in opposite directions.
 - Mirror fade makes each level of smaller Packed circles darker.
-- Random all does not pick Packed circles.
+- Random all does not pick Packed circles or Nested frames.
+- Kaleidoscope Nested frames shows frames with Sides equal sides (3 to 24, a whole number; 4 is a square), with one side at the bottom. Each frame is inside the frame around it, lies on top of it, and shows a whole copy of the picture.
+- Nested frames Copy size (0.3 to 0.95) is the size of each frame as a part of the frame around it. Turn is how far each frame is turned from the frame around it. A new scene has square frames, Copy size 0.82 and Turn 15°, so each frame's corners touch the sides of the frame around it.
+- Nested frames Speed zooms into the center with no end and no seam, in doublings of size a second; below 0 it zooms out. A new scene has Speed 0.25. Stop puts the zoom back to its start.
+- Nested frames Shadow (0 to 1) darkens each frame near the edge of the next smaller frame. Size is the distance from the center of the first frame to the middle of a side, in screen heights.
+- Nested frames has no Mirror fade.
 - Light cone shines a beam from one point down to an unseen floor, seen in 3D, through drifting fog. Type: Spotlight fills the beam with soft light and lights a pool on the floor; Laser shell lights only a thin surface, brightest where it is seen edge-on, with bright corner lines and an outline on the floor. Shape: Cone or Pyramid (3 to 8 Sides, turned by Turn). Adding Light cone starts Swing looping, so the beam swings from side to side. The light's color is the swatch on Brightness.
 - Adding Lasers starts Sweep looping, so the fan tilts up and down and looks flat as it passes level.
 - Light paths draws lines out from one point: every arm follows the same path, turned around the center. Turn and Tilt turn the whole pattern in 3D. Adding Light paths starts Draw looping, so the lines grow out and go back.
@@ -1053,7 +1058,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 ## Open questions
 
 - Undo saves a step for tiling, sort order, particle blend and driver changes, but does not restore them.
-- The video export seam fade counts the Tunnel, the Mirror tunnel and Packed circles, not the other traveling maps.
+- The video export seam fade counts the Tunnel, the Mirror tunnel, Packed circles and Nested frames, not the other traveling maps.
 - `docs/AUDIO.md` still names beat sensitivity, an "Off" item and old timings that the code no longer has.
 - `docs/MODULATION.md` describes MIDI pads, but the app reads only Control Change.
 - `docs/SOURCES.md` says photo searches return only JPEG, but the code also takes PNG.

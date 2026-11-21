@@ -22,7 +22,7 @@ export type MandelPlace = 0 | 1 | 2 | 3 | 4 | 5;
 /** 0 = no warp, 1 = warp the screen (breaks the symmetry), 2 = warp the image (keeps it). */
 export type WarpMode = 0 | 1 | 2;
 /** 0 = radial wedges around one center, 1 = triangle tiles, 2 = hexagon tiles, 3 = square tiles, 4 = hyperbolic disk. */
-export type FoldMode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+export type FoldMode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 /** The Penrose type's tiles: rhombs, kites and darts, or rhombs around a five-point star at the center (see PENROSE_SHAPES). */
 export type PenroseShape = 0 | 1 | 2;
 /** The Sphere type's solid: 4, 8 or 20 faces (see SPHERE_SHAPES). */
@@ -417,6 +417,13 @@ export interface FrameValues {
   packTravel: number;
   packTwist: number;
   packTurn: number;
+  /** Nested frames (fold mode 11): the side count, the first frame's size (center to the middle of a side, screen heights), each frame's size as a part of the frame around it, each frame's turn (radians), the zoom's travel (0 to 1, one level) and the shadow's darkness (0 to 1). */
+  frameSides: number;
+  frameSize: number;
+  frameCopySize: number;
+  frameTurn: number;
+  frameTravel: number;
+  frameShadow: number;
   warpMode: WarpMode;
   warpType: WarpType;
   /** Ripple, swirl and bulge: the center, in screen heights. Waves: the direction (radians). */
@@ -2129,6 +2136,12 @@ export class KaleidoRenderer {
     gl.uniform1f(k.uniforms.u_packTravel, v.packTravel);
     gl.uniform1f(k.uniforms.u_packTwist, v.packTwist);
     gl.uniform1f(k.uniforms.u_packTurn, v.packTurn);
+    gl.uniform1f(k.uniforms.u_frameSides, Math.min(24, Math.max(3, Math.round(v.frameSides))));
+    gl.uniform1f(k.uniforms.u_frameSize, Math.max(0.01, v.frameSize));
+    gl.uniform1f(k.uniforms.u_frameScale, Math.min(0.95, Math.max(0.3, v.frameCopySize)));
+    gl.uniform1f(k.uniforms.u_frameTurn, v.frameTurn);
+    gl.uniform1f(k.uniforms.u_frameTravel, v.frameTravel);
+    gl.uniform1f(k.uniforms.u_frameShadow, Math.min(1, Math.max(0, v.frameShadow)));
     gl.uniform1f(k.uniforms.u_rotation, v.rotation);
     gl.uniform1f(k.uniforms.u_zoom, v.zoom);
     gl.uniform1f(k.uniforms.u_twirl, v.twirl);

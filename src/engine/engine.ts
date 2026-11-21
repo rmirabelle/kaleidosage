@@ -1147,6 +1147,7 @@ export class Engine {
     this.state.mapTravel = 0;
     this.state.tunnelTravel = 0;
     this.state.packTravel = 0;
+    this.state.frameTravel = 0;
     this.state.panoramaTravelX = 0;
     this.state.panoramaTravelY = 0;
     this.state.cameraX = 0;
@@ -1321,6 +1322,8 @@ export class Engine {
     this.state.tunnelTravel = ((this.state.tunnelTravel + animated * this.live("tunnelSpeed") / 2) % 1 + 1) % 1;
     /* The Packed circles' Speed is in doublings of size a second; one level is PACK_DOUBLINGS of them. */
     this.state.packTravel = ((this.state.packTravel + animated * this.live("packSpeed") / PACK_DOUBLINGS) % 1 + 1) % 1;
+    /* The Nested frames' Speed is in doublings of size a second; one level is one frame, Copy size times as small. */
+    this.state.frameTravel = ((this.state.frameTravel + animated * this.live("frameSpeed") / -Math.log2(Math.min(0.95, Math.max(0.3, this.live("frameScale"))))) % 1 + 1) % 1;
     /* The Panorama's speeds are in screen widths and screen heights a second; one repeat is 2 of them. */
     this.state.panoramaTravelX = ((this.state.panoramaTravelX + animated * this.live("panoramaSpeedX")) % 2 + 2) % 2;
     this.state.panoramaTravelY = ((this.state.panoramaTravelY + animated * this.live("panoramaSpeedY")) % 2 + 2) % 2;
@@ -1644,6 +1647,12 @@ export class Engine {
       packTravel: this.state.packTravel,
       packTwist: this.live("packTwist") * DEGREES,
       packTurn: this.live("packTurn") * DEGREES,
+      frameSides: this.live("frameSides"),
+      frameSize: this.live("frameSize"),
+      frameCopySize: this.live("frameScale"),
+      frameTurn: this.live("frameTurn") * DEGREES,
+      frameTravel: this.state.frameTravel,
+      frameShadow: this.live("frameShadow"),
       centerX: kaleidoscope("centerX", 0),
       centerY: kaleidoscope("centerY", 0),
       rotation: kaleidoscope("rotation", 0) * DEGREES,
