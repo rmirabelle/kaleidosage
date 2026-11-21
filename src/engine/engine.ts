@@ -1553,6 +1553,7 @@ export class Engine {
       warpCellX: this.live("warpCellX"),
       warpCellY: this.live("warpCellY"),
       warpCellSpin: this.live("warpCellSpin") * DEGREES,
+      warpCellTurn: this.live("warpCellTurn") * DEGREES,
       warpCellSides: this.live("warpCellSides"),
       warpCellRandom: this.live("warpCellRandom"),
       warpMarble: this.live("warpMarble"),

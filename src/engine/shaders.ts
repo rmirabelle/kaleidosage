@@ -307,6 +307,8 @@ uniform float u_warpCellAngle;
 /* Cells warp: the place of the cell pattern, in screen heights, and the turn of the picture in each cell (radians). */
 uniform vec2 u_warpCellPos;
 uniform float u_warpCellSpin;
+/* Cells warp: the turn of the shape of each cell around its cell point (radians). */
+uniform float u_warpCellTurn;
 /* Cells warp: the number of sides (3 to 6), and how far each cell point moves from its grid place, in cells. */
 uniform float u_warpCellSides;
 uniform float u_warpCellRandom;
@@ -392,6 +394,38 @@ vec2 noiseWarp(vec2 p) {
 
 vec2 turn(vec2 v, float a) { return vec2(v.x * cos(a) - v.y * sin(a), v.x * sin(a) + v.y * cos(a)); }
 
+/* Cells warp: the cell point of the cell "id" (column, row), in cells (see warpOffset). */
+vec2 warpCellPoint(vec2 id) {
+  float hexagons = clamp(u_warpCellSides - 4.0, 0.0, 2.0) * 0.5;
+  float rowHeight = mix(1.0, 0.8660254, hexagons);
+  float offset = 0.5 * hexagons * mod(id.y, 2.0);
+  return vec2(id.x + 0.5 + offset, (id.y + 0.5) * rowHeight) + u_warpCellRandom * hash2(id + 17.0) * vec2(1.0, rowHeight);
+}
+/* Cells warp: the cell that holds the point x (in cells): the cell with the nearest cell point. */
+vec2 warpCell(vec2 x, out vec2 cellPoint) {
+  float hexagons = clamp(u_warpCellSides - 4.0, 0.0, 2.0) * 0.5;
+  float rowHeight = mix(1.0, 0.8660254, hexagons);
+  float row = floor(x.y / rowHeight);
+  vec2 nearest = vec2(0.0);
+  float best = 1e9;
+  for (int j = -1; j <= 1; j++) {
+    float r = row + float(j);
+    float column = floor(x.x - 0.5 * hexagons * mod(r, 2.0));
+    for (int i = -1; i <= 1; i++) {
+      vec2 id = vec2(column + float(i), r);
+      vec2 point = warpCellPoint(id);
+      vec2 d = x - point;
+      float dist = dot(d, d);
+      if (dist < best) {
+        best = dist;
+        nearest = id;
+        cellPoint = point;
+      }
+    }
+  }
+  return nearest;
+}
+
 /**
  * The warp: how far the point that is read moves. Size sets how close the
  * waves or whirlpools are (larger is closer); cells have their own cell
@@ -451,36 +485,53 @@ vec2 warpOffset(vec2 p) {
      * The cell pattern turns by u_warpCellAngle: the point is turned back
      * into it, and the shift turned out again. u_warpCellPos moves the
      * pattern. u_warpCellSpin turns the picture in each cell around the
-     * cell point, so the picture breaks at the cell edges.
+     * cell point, so the picture breaks at the cell edges. u_warpCellTurn
+     * turns the shape of each cell around its cell point; the same value
+     * in both turns each cell with its picture, as one piece.
      */
     vec2 x = turn(p - u_warpCellPos, -u_warpCellAngle) * 10.0 / u_warpCellSize;
-    float hexagons = clamp(u_warpCellSides - 4.0, 0.0, 2.0) * 0.5;
     float triangles = clamp(4.0 - u_warpCellSides, 0.0, 1.0);
-    float slide = 0.5 * hexagons;
-    float rowHeight = mix(1.0, 0.8660254, hexagons);
-    float row = floor(x.y / rowHeight);
-    vec2 nearest = vec2(0.0);
     vec2 nearestPoint = vec2(0.0);
-    float best = 1e9;
-    for (int j = -1; j <= 1; j++) {
-      float r = row + float(j);
-      float offset = slide * mod(r, 2.0);
-      float column = floor(x.x - offset);
-      for (int i = -1; i <= 1; i++) {
-        vec2 id = vec2(column + float(i), r);
-        vec2 point = vec2(id.x + 0.5 + offset, (r + 0.5) * rowHeight) + u_warpCellRandom * hash2(id + 17.0) * vec2(1.0, rowHeight);
-        vec2 d = x - point;
-        float dist = dot(d, d);
-        if (dist < best) {
+    vec2 nearest = warpCell(x, nearestPoint);
+    /* The point's place in its cell, before the cell's shape turned. */
+    vec2 inCell = x - nearestPoint;
+    if (u_warpCellTurn != 0.0) {
+      /**
+       * Each cell's shape turns around its cell point. The point is in a
+       * turned cell when, turned back around that cell's point, it lands
+       * in that cell. Turned cells go over each other: the cell whose
+       * point is nearest wins. Between the turned cells, the picture
+       * shows with no change.
+       */
+      float hexagons = clamp(u_warpCellSides - 4.0, 0.0, 2.0) * 0.5;
+      float rowHeight = mix(1.0, 0.8660254, hexagons);
+      float row = floor(x.y / rowHeight);
+      bool found = false;
+      float best = 1e9;
+      for (int j = -1; j <= 1; j++) {
+        float r = row + float(j);
+        float column = floor(x.x - 0.5 * hexagons * mod(r, 2.0));
+        for (int i = -1; i <= 1; i++) {
+          vec2 id = vec2(column + float(i), r);
+          vec2 point = warpCellPoint(id);
+          vec2 back = turn(x - point, -u_warpCellTurn);
+          float dist = dot(back, back);
+          if (dist >= best) continue;
+          vec2 ownerPoint = vec2(0.0);
+          vec2 owner = warpCell(point + back, ownerPoint);
+          if (distance(owner, id) > 0.5) continue;
+          found = true;
           best = dist;
           nearest = id;
           nearestPoint = point;
+          inCell = back;
         }
       }
+      if (!found) return vec2(0.0);
     }
     vec2 h = hash2(nearest);
     vec2 fromPoint = x - nearestPoint;
-    if (triangles > 0.0 && fromPoint.x > fromPoint.y) h = mix(h, hash2(nearest + 31.7), triangles);
+    if (triangles > 0.0 && inCell.x > inCell.y) h = mix(h, hash2(nearest + 31.7), triangles);
     vec2 fromPointOnScreen = turn(fromPoint, u_warpCellAngle) * u_warpCellSize / 10.0;
     vec2 spin = turn(fromPointOnScreen, -u_warpCellSpin) - fromPointOnScreen;
     return spin + turn(amount * 0.25 * vec2(cos(h.x * TAU + t), sin(h.y * TAU + t * 0.7)), u_warpCellAngle);

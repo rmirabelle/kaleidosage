@@ -8,7 +8,7 @@ export const PARAM_KEYS = [
   "cycle",
   "imageBlend",
   "warpOpacity", "mapOpacity", "foldOpacity",
-  "warpAmount", "warpScale", "warpCellSize", "warpCellX", "warpCellY", "warpCellAngle", "warpCellSpin", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle",
+  "warpAmount", "warpScale", "warpCellSize", "warpCellX", "warpCellY", "warpCellAngle", "warpCellTurn", "warpCellSpin", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle",
   "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl",
   "mandelDepth", "mandelEnd", "mandelSpeed", "mandelFade", "mandelSpread", "mandelInvert", "mandelEdge", "mandelEdgeWidth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle",
   "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
@@ -552,11 +552,18 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   /** Cells warp: turns the whole cell pattern, with each cell's shift, around its X and Y. The image does not turn. */
   warpCellAngle: { label: "Rotation", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   /**
+   * Cells warp: turns the shape of each cell around that cell's point. The
+   * turned cells go over each other, and the plain picture shows between
+   * them. The same value in Cell image rotation turns each cell with its
+   * picture, as one piece.
+   */
+  warpCellTurn: { label: "Cell rotation", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  /**
    * Cells warp: turns the part of the picture in each cell around that
    * cell's point. The picture breaks at the cell edges, like shattered
    * glass. It does not need Warp strength.
    */
-  warpCellSpin: { label: "Cell rotation", min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
+  warpCellSpin: { label: "Cell image rotation",min: 0, max: 360, step: 1, value: 0, unit: "°", drift: "spin", low: 0, high: 360, on: false },
   /**
    * Cells warp: the cell shape, by its number of sides. 4 gives squares;
    * from 4 to 6 the squares change step by step into hexagons; from 4 to 3
@@ -2010,7 +2017,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   animation: ["cycle"],
   /** The images are the user's choice; Randomize does not change the blend. */
   source: ["imageBlend"],
-  warp: ["warpOpacity", "warpAmount", "warpScale", "warpCellSize", "warpCellX", "warpCellY", "warpCellAngle", "warpCellSpin", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle"],
+  warp: ["warpOpacity", "warpAmount", "warpScale", "warpCellSize", "warpCellX", "warpCellY", "warpCellAngle", "warpCellTurn", "warpCellSpin", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle"],
   map: ["mapOpacity", "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl", "mandelDepth", "mandelEnd", "mandelSpeed", "mandelFade", "mandelSpread", "mandelInvert", "mandelEdge", "mandelEdgeWidth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle", "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
     "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness"],
   kaleidoscope: ["foldOpacity", "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "sphereSize", "sphereTurn", "sphereTilt", "sphereGlow", "sphereGlowWidth", "tunnelSpeed", "tunnelFog", "fractalSteps", "fractalScale", "fractalAngle", "fractalShift", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl", "innerTwirl", "mirrorFade"],
