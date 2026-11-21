@@ -101,10 +101,11 @@ function sliderLimits(param: Param): [number, number, number] {
 /** Hue sliders show the fully saturated colors along their track. */
 /**
  * Counts that crossfade between whole numbers (the Droste spirals, the
- * Kaleidoscope and Bubble segments): each whole number has a tick mark, and the
- * handles snap to it. The values between still work.
+ * Kaleidoscope and Bubble segments, the sides of the warp's cells): each
+ * whole number has a tick mark, and the handles snap to it. The values
+ * between still work.
  */
-const WHOLE_SNAP_KEYS: ParamKey[] = ["drosteSpirals", "segments", "bubbleSegments", "outlinePoints"];
+const WHOLE_SNAP_KEYS: ParamKey[] = ["drosteSpirals", "segments", "bubbleSegments", "outlinePoints", "warpCellSides"];
 
 /**
  * Settings with well-known values the handles snap to, each with a tick
