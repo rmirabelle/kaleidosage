@@ -72,7 +72,7 @@ export const WARP_KEYS: Record<WarpType, ParamKey[]> = {
   2: ["warpAmount", "warpScale", "warpAngle", "warpFlow"],
   3: ["warpAmount", "warpScale", "warpFlow", "warpCenterX", "warpCenterY"],
   4: ["warpAmount", "warpScale", "warpFlow", "warpCenterX", "warpCenterY"],
-  5: ["warpAmount", "warpCellSize", "warpCellAngle", "warpCellSides", "warpCellRandom", "warpFlow"]
+  5: ["warpAmount", "warpCellSize", "warpCellX", "warpCellY", "warpCellAngle", "warpCellSpin", "warpCellSides", "warpCellRandom", "warpFlow"]
 };
 export const WARP_TYPES = [[0, "Noise"], [1, "Ripple"], [2, "Waves"], [3, "Swirl"], [4, "Bulge and pinch"], [5, "Cells"]] as const;
 

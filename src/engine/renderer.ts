@@ -423,6 +423,10 @@ export interface FrameValues {
   /** Cells warp: the cell size, in tenths of the screen height, and the turn of the cell pattern (radians). */
   warpCellSize: number;
   warpCellAngle: number;
+  /** Cells warp: the place of the cell pattern, in screen heights, and the turn of the picture in each cell (radians). */
+  warpCellX: number;
+  warpCellY: number;
+  warpCellSpin: number;
   /** Cells warp: the number of sides, 3 to 6, and how far each cell point moves from its grid place, 0 to 1 (see params.ts). */
   warpCellSides: number;
   warpCellRandom: number;
@@ -2001,6 +2005,8 @@ export class KaleidoRenderer {
     gl.uniform1f(k.uniforms.u_warpScale, v.warpScale);
     gl.uniform1f(k.uniforms.u_warpCellSize, Math.max(0.01, v.warpCellSize));
     gl.uniform1f(k.uniforms.u_warpCellAngle, v.warpCellAngle);
+    gl.uniform2f(k.uniforms.u_warpCellPos, v.warpCellX, v.warpCellY);
+    gl.uniform1f(k.uniforms.u_warpCellSpin, v.warpCellSpin);
     gl.uniform1f(k.uniforms.u_warpCellSides, Math.min(6, Math.max(3, v.warpCellSides)));
     /* At most half a cell, so the nearest point is always in the 3 by 3 cells the shader looks at. */
     gl.uniform1f(k.uniforms.u_warpCellRandom, 0.5 * Math.min(1, Math.max(0, v.warpCellRandom)));

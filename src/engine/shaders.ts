@@ -304,6 +304,9 @@ uniform float u_warpScale;
 /* Cells warp: the cell size, in tenths of the screen height, and the turn of the whole cell pattern (radians). */
 uniform float u_warpCellSize;
 uniform float u_warpCellAngle;
+/* Cells warp: the place of the cell pattern, in screen heights, and the turn of the picture in each cell (radians). */
+uniform vec2 u_warpCellPos;
+uniform float u_warpCellSpin;
 /* Cells warp: the number of sides (3 to 6), and how far each cell point moves from its grid place, in cells. */
 uniform float u_warpCellSides;
 uniform float u_warpCellRandom;
@@ -446,9 +449,11 @@ vec2 warpOffset(vec2 p) {
      * first half's, so the cut fades in and each square becomes two
      * triangles. u_warpCellRandom moves each point from its grid place.
      * The cell pattern turns by u_warpCellAngle: the point is turned back
-     * into it, and the shift turned out again.
+     * into it, and the shift turned out again. u_warpCellPos moves the
+     * pattern. u_warpCellSpin turns the picture in each cell around the
+     * cell point, so the picture breaks at the cell edges.
      */
-    vec2 x = turn(p, -u_warpCellAngle) * 10.0 / u_warpCellSize;
+    vec2 x = turn(p - u_warpCellPos, -u_warpCellAngle) * 10.0 / u_warpCellSize;
     float hexagons = clamp(u_warpCellSides - 4.0, 0.0, 2.0) * 0.5;
     float triangles = clamp(4.0 - u_warpCellSides, 0.0, 1.0);
     float slide = 0.5 * hexagons;
@@ -476,7 +481,9 @@ vec2 warpOffset(vec2 p) {
     vec2 h = hash2(nearest);
     vec2 fromPoint = x - nearestPoint;
     if (triangles > 0.0 && fromPoint.x > fromPoint.y) h = mix(h, hash2(nearest + 31.7), triangles);
-    return turn(amount * 0.25 * vec2(cos(h.x * TAU + t), sin(h.y * TAU + t * 0.7)), u_warpCellAngle);
+    vec2 fromPointOnScreen = turn(fromPoint, u_warpCellAngle) * u_warpCellSize / 10.0;
+    vec2 spin = turn(fromPointOnScreen, -u_warpCellSpin) - fromPointOnScreen;
+    return spin + turn(amount * 0.25 * vec2(cos(h.x * TAU + t), sin(h.y * TAU + t * 0.7)), u_warpCellAngle);
   }
   return noiseWarp(p);
 }
