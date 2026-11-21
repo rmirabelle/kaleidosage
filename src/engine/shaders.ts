@@ -255,6 +255,12 @@ uniform float u_fractalSteps;
 uniform float u_fractalScale;
 uniform float u_fractalAngle;
 uniform float u_fractalShift;
+/* Packed circles (fold mode 10): the outer ring's radius in screen heights, the level count, the zoom's travel (0 to 1, one level), each level's turn (radians) and the picture's turn in each circle (radians). */
+uniform float u_packSize;
+uniform float u_packLevels;
+uniform float u_packTravel;
+uniform float u_packTwist;
+uniform float u_packTurn;
 uniform float u_rotation;
 uniform float u_zoom;
 uniform float u_twirl;
@@ -1475,6 +1481,82 @@ vec2 fold(vec2 p) {
       foldShares = vec4(1.0 - t, t, 0.0, 0.0);
     }
     return first * 0.5 / u_zoom;
+  }
+  /**
+   * Packed circles (fold mode 10): circles that touch, with smaller circles
+   * in the gaps between them without end, and a whole copy of the picture
+   * in each circle. One level is a ring of radius 1 with three equal
+   * circles in it, each touching the ring and the other two (radius
+   * PACK_R). The same level, PACK_T2 times as large and turned by Twist,
+   * sits at the center, and so on inward and outward, so the pattern is
+   * the same after a zoom of one level: Speed zooms into it with no end
+   * and no seam (see packTravel in params.ts).
+   *
+   * Each pass first scales the point into the ring of one level and turns
+   * it into the third of the ring around the top circle. A point in that
+   * circle is done. If not, it is in a gap between three circles that
+   * touch, and it is mirrored in the circle through the gap's three
+   * touching points (center 0 with radius^2 PACK_T2 for the gap at the
+   * center, or center (+-sqrt(3), 1) with radius^2 3 for a gap at the
+   * ring). The mirror keeps the gap's three circles and swaps the gap for
+   * the rest of the level, so the point lands in a circle or in a gap
+   * again. Each mirror is one level of smaller circles, and it bends and
+   * flips the picture: neighbor circles show it the opposite way around.
+   * foldShade makes the gaps black, gives each circle a smooth edge, and
+   * fades out circles smaller than a pixel.
+   */
+  if (u_foldMode == 10) {
+    const float PACK_R = 0.46410162;
+    const float PACK_T2 = 0.07179677;
+    const float PACK_L = 2.63391579;
+    float flow = exp(-u_packTravel * PACK_L);
+    float grown = flow / u_packSize;
+    float turned = a - u_packTravel * u_packTwist;
+    vec2 z = vec2(cos(turned), sin(turned)) * r * grown;
+    float mirrors = 0.0;
+    bool inCircle = false;
+    vec2 v = vec2(0.0);
+    for (int i = 0; i < 40; i++) {
+      float d = max(dot(z, z), 1e-20);
+      if (d > 1.0 || d <= PACK_T2 * PACK_T2) {
+        float level = ceil(0.5 * log(d) / PACK_L);
+        float scale = exp(-level * PACK_L);
+        z = turn(z, -level * u_packTwist) * scale;
+        grown *= scale;
+        d *= scale * scale;
+      }
+      float third = floor((atan(z.y, z.x) - PI / 6.0) / (TAU / 3.0));
+      z = turn(z, -third * TAU / 3.0);
+      v = z - vec2(0.0, 1.0 - PACK_R);
+      if (dot(v, v) < PACK_R * PACK_R) {
+        inCircle = true;
+        break;
+      }
+      if (mirrors >= u_packLevels) break;
+      vec2 center = vec2(0.0);
+      float radius2 = PACK_T2;
+      if (d >= PACK_T2) {
+        center = vec2(z.x > 0.0 ? sqrt(3.0) : -sqrt(3.0), 1.0);
+        radius2 = 3.0;
+      }
+      vec2 q = z - center;
+      float k = radius2 / max(dot(q, q), 1e-12);
+      z = center + q * k;
+      grown *= k;
+      mirrors += 1.0;
+    }
+    if (!inCircle) {
+      foldShade = 0.0;
+      return vec2(0.0);
+    }
+    vec2 inside = turn(v / PACK_R, u_packTurn);
+    /* How much of the circle's radius one screen pixel covers. */
+    float pixel = grown / PACK_R / u_res.y;
+    float edge = clamp((1.0 - length(inside)) / max(pixel, 1e-6), 0.0, 1.0);
+    foldShade = edge * (1.0 - smoothstep(0.25, 1.0, pixel)) * clamp(u_packLevels - mirrors, 0.0, 1.0);
+    foldStretch = min(0.5 * grown / PACK_R, 256.0);
+    foldBounces = mirrors;
+    return inside * 0.5 / u_zoom;
   }
   /**
    * Mirror tunnel (fold mode 8): the view down a long tube whose walls are

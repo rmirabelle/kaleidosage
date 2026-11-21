@@ -222,6 +222,13 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 - Adding Algorithm sets Mix and Opacity to full.
 - Adding Algorithm changes a Power map at power 1 to power 2.
 - Adding the Kaleidoscope starts Pan X and Pan Y looping.
+- Kaleidoscope Packed circles shows circles that touch, with smaller circles in the gaps between them, and a whole copy of the picture in each circle. The gaps are black. Neighbor circles show the picture the opposite way around.
+- A Packed circles ring holds three equal circles. The center of the ring holds the same ring again, about 13.9 times as small and turned by Twist, and so on inward and outward.
+- Packed circles Speed zooms into the center with no end and no seam, in doublings of size a second; below 0 it zooms out. A new scene has Speed 0.25. Stop puts the zoom back to its start.
+- Packed circles Levels (1 to 24) sets how many times smaller circles fill the gaps. A value between two whole numbers fades the smallest circles in. Circles smaller than a pixel do not show.
+- Packed circles Size is the radius of the ring, in screen heights. Picture rotation turns the picture in each circle; neighbor circles turn in opposite directions.
+- Mirror fade makes each level of smaller Packed circles darker.
+- Random all does not pick Packed circles.
 - Light cone shines a beam from one point down to an unseen floor, seen in 3D, through drifting fog. Type: Spotlight fills the beam with soft light and lights a pool on the floor; Laser shell lights only a thin surface, brightest where it is seen edge-on, with bright corner lines and an outline on the floor. Shape: Cone or Pyramid (3 to 8 Sides, turned by Turn). Adding Light cone starts Swing looping, so the beam swings from side to side. The light's color is the swatch on Brightness.
 - Adding Lasers starts Sweep looping, so the fan tilts up and down and looks flat as it passes level.
 - Light paths draws lines out from one point: every arm follows the same path, turned around the center. Turn and Tilt turn the whole pattern in 3D. Adding Light paths starts Draw looping, so the lines grow out and go back.
@@ -1046,7 +1053,7 @@ Where a doc in `docs/` and the code disagree, the rule follows the code.
 ## Open questions
 
 - Undo saves a step for tiling, sort order, particle blend and driver changes, but does not restore them.
-- The video export seam fade counts only the Tunnel, not the other traveling maps.
+- The video export seam fade counts the Tunnel, the Mirror tunnel and Packed circles, not the other traveling maps.
 - `docs/AUDIO.md` still names beat sensitivity, an "Off" item and old timings that the code no longer has.
 - `docs/MODULATION.md` describes MIDI pads, but the app reads only Control Change.
 - `docs/SOURCES.md` says photo searches return only JPEG, but the code also takes PNG.

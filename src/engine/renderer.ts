@@ -22,7 +22,7 @@ export type MandelPlace = 0 | 1 | 2 | 3 | 4 | 5;
 /** 0 = no warp, 1 = warp the screen (breaks the symmetry), 2 = warp the image (keeps it). */
 export type WarpMode = 0 | 1 | 2;
 /** 0 = radial wedges around one center, 1 = triangle tiles, 2 = hexagon tiles, 3 = square tiles, 4 = hyperbolic disk. */
-export type FoldMode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+export type FoldMode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 /** The Penrose type's tiles: rhombs, kites and darts, or rhombs around a five-point star at the center (see PENROSE_SHAPES). */
 export type PenroseShape = 0 | 1 | 2;
 /** The Sphere type's solid: 4, 8 or 20 faces (see SPHERE_SHAPES). */
@@ -411,6 +411,12 @@ export interface FrameValues {
   fractalScale: number;
   fractalAngle: number;
   fractalShift: number;
+  /** Packed circles (fold mode 10): the outer ring's radius (screen heights), the level count (may be between whole numbers), the zoom's travel (0 to 1, one level), each level's turn (radians) and the picture's turn in each circle (radians). */
+  packSize: number;
+  packLevels: number;
+  packTravel: number;
+  packTwist: number;
+  packTurn: number;
   warpMode: WarpMode;
   warpType: WarpType;
   /** Ripple, swirl and bulge: the center, in screen heights. Waves: the direction (radians). */
@@ -2118,6 +2124,11 @@ export class KaleidoRenderer {
     gl.uniform1f(k.uniforms.u_fractalScale, Math.max(0.1, v.fractalScale));
     gl.uniform1f(k.uniforms.u_fractalAngle, v.fractalAngle);
     gl.uniform1f(k.uniforms.u_fractalShift, v.fractalShift);
+    gl.uniform1f(k.uniforms.u_packSize, Math.max(0.01, v.packSize));
+    gl.uniform1f(k.uniforms.u_packLevels, Math.min(24, Math.max(1, v.packLevels)));
+    gl.uniform1f(k.uniforms.u_packTravel, v.packTravel);
+    gl.uniform1f(k.uniforms.u_packTwist, v.packTwist);
+    gl.uniform1f(k.uniforms.u_packTurn, v.packTurn);
     gl.uniform1f(k.uniforms.u_rotation, v.rotation);
     gl.uniform1f(k.uniforms.u_zoom, v.zoom);
     gl.uniform1f(k.uniforms.u_twirl, v.twirl);

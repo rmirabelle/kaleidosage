@@ -124,6 +124,8 @@ export interface SongSource {
 const GROUP_OF = new Map((Object.entries(GROUP_PARAMS) as [GroupKey, ParamKey[]][]).flatMap(([group, keys]) => keys.map((key) => [key, group] as const)));
 
 /** The Droste spiral's length of one copy in the shader's log space: log(1 / size). */
+/** Packed circles: each level is 7 + 4 sqrt(3) (about 13.9) times as small as the one around it; this is that size step in doublings. */
+const PACK_DOUBLINGS = Math.log2(7 + 4 * Math.sqrt(3));
 const drosteCopy = (size: number) => -Math.log(Math.min(0.95, Math.max(0.05, size)));
 
 /**
@@ -1144,6 +1146,7 @@ export class Engine {
     this.state.outlineTumbleTurns = 0;
     this.state.mapTravel = 0;
     this.state.tunnelTravel = 0;
+    this.state.packTravel = 0;
     this.state.panoramaTravelX = 0;
     this.state.panoramaTravelY = 0;
     this.state.cameraX = 0;
@@ -1316,6 +1319,8 @@ export class Engine {
     }
     /* The Mirror tunnel's Speed is in cells a second; one loop is two cells. */
     this.state.tunnelTravel = ((this.state.tunnelTravel + animated * this.live("tunnelSpeed") / 2) % 1 + 1) % 1;
+    /* The Packed circles' Speed is in doublings of size a second; one level is PACK_DOUBLINGS of them. */
+    this.state.packTravel = ((this.state.packTravel + animated * this.live("packSpeed") / PACK_DOUBLINGS) % 1 + 1) % 1;
     /* The Panorama's speeds are in screen widths and screen heights a second; one repeat is 2 of them. */
     this.state.panoramaTravelX = ((this.state.panoramaTravelX + animated * this.live("panoramaSpeedX")) % 2 + 2) % 2;
     this.state.panoramaTravelY = ((this.state.panoramaTravelY + animated * this.live("panoramaSpeedY")) % 2 + 2) % 2;
@@ -1634,6 +1639,11 @@ export class Engine {
       fractalScale: this.live("fractalScale"),
       fractalAngle: this.live("fractalAngle") * DEGREES,
       fractalShift: this.live("fractalShift"),
+      packSize: this.live("packSize"),
+      packLevels: this.live("packLevels"),
+      packTravel: this.state.packTravel,
+      packTwist: this.live("packTwist") * DEGREES,
+      packTurn: this.live("packTurn") * DEGREES,
       centerX: kaleidoscope("centerX", 0),
       centerY: kaleidoscope("centerY", 0),
       rotation: kaleidoscope("rotation", 0) * DEGREES,

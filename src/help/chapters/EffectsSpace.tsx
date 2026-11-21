@@ -44,6 +44,7 @@ export function EffectsSpace() {
         <li><b>Pinwheel</b> turns the picture in each cell instead of mirroring it. See below.</li>
         <li><b>Mirror tunnel</b> shows the view down a long tube of mirrors. See below.</li>
         <li><b>Fractal</b> repeats the fold inside itself, with smaller and smaller copies. See below.</li>
+        <li><b>Packed circles</b> fills the screen with circles that touch, with smaller circles in the gaps between them. Each circle shows a whole copy of the picture. See below.</li>
       </ul>
       <p>
         Penrose, Sphere, Pinwheel and Mirror tunnel each have a <b>Shape</b> menu under <b>Type</b>.
@@ -78,9 +79,17 @@ export function EffectsSpace() {
         changes give large results, so try small ranges on them.
       </p>
       <p>
+        <b>Packed circles</b>: a ring holds three circles, the gaps between them hold smaller circles,
+        and the center holds the same ring again, much smaller. <b>Speed</b> zooms into the center
+        without end (below 0 it zooms out). <b>Twist</b> turns each ring from the ring around it, so
+        the zoom also turns. <b>Levels</b> sets how many times smaller circles fill the gaps, <b>Size</b> sets
+        the size of the pattern, and <b>Picture rotation</b> turns the picture in each circle. Neighbor
+        circles show the picture the opposite way around, so they turn in opposite directions.
+      </p>
+      <p>
         <b>Twirl</b> and <b>Inner twirl</b> twist the pattern. <b>Offset X</b> and <b>Offset Y</b> move the
         center of the mirrors. <b>Mirror fade</b> makes each reflection darker than the one before, as real
-        glass does. Sphere, Pinwheel, Mirror tunnel and Fractal do not have it.
+        glass does. Sphere, Pinwheel, Mirror tunnel and Fractal do not have it. In Packed circles, each level of smaller circles is darker.
       </p>
       <p>
         A new Kaleidoscope has ranges on <b>Pan X</b> and <b>Pan Y</b>, in its <b>Common</b> section. They
