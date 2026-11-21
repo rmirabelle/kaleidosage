@@ -1653,6 +1653,7 @@ export class Engine {
       frameTurn: this.live("frameTurn") * DEGREES,
       frameTravel: this.state.frameTravel,
       frameShadow: this.live("frameShadow"),
+      frameSoftness: this.live("frameSoftness"),
       centerX: kaleidoscope("centerX", 0),
       centerY: kaleidoscope("centerY", 0),
       rotation: kaleidoscope("rotation", 0) * DEGREES,

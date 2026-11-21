@@ -92,7 +92,8 @@ export function EffectsSpace() {
         it. <b>Sides</b> sets the shape of the frames (4 is a square). <b>Copy size</b> sets the size of each frame
         as a part of the frame around it, and <b>Turn</b> sets how far each frame turns from the frame
         around it, so the corners make a spiral. <b>Speed</b> zooms into the center without end (below 0
-        it zooms out). <b>Shadow</b> puts the shadow of each frame on the frame around it, and <b>Size</b> sets
+        it zooms out). <b>Shadow</b> puts the shadow of each frame on the frame around it, <b>Edge softness</b> fades each frame
+        into the frame around it, and <b>Size</b> sets
         the size of the pattern.
       </p>
       <p>

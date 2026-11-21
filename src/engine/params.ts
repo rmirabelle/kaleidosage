@@ -13,7 +13,7 @@ export const PARAM_KEYS = [
   "mandelDepth", "mandelEnd", "mandelSpeed", "mandelFade", "mandelSpread", "mandelInvert", "mandelEdge", "mandelEdgeWidth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle",
   "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
   "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness",
-  "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "sphereSize", "sphereTurn", "sphereTilt", "sphereGlow", "sphereGlowWidth", "tunnelSpeed", "tunnelFog", "fractalSteps", "fractalScale", "fractalAngle", "fractalShift", "packSize", "packLevels", "packSpeed", "packTwist", "packTurn", "frameSides", "frameSize", "frameScale", "frameTurn", "frameSpeed", "frameShadow", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl", "mirrorFade", "innerTwirl",
+  "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "sphereSize", "sphereTurn", "sphereTilt", "sphereGlow", "sphereGlowWidth", "tunnelSpeed", "tunnelFog", "fractalSteps", "fractalScale", "fractalAngle", "fractalShift", "packSize", "packLevels", "packSpeed", "packTwist", "packTurn", "frameSides", "frameSize", "frameScale", "frameTurn", "frameSpeed", "frameShadow", "frameSoftness", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl", "mirrorFade", "innerTwirl",
   "blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel",
   "trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint",
   "smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade",
@@ -762,6 +762,8 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   frameTurn: { label: "Turn", min: -180, max: 180, step: 1, value: 15, unit: "°", drift: "wave", low: -15, high: 15, on: false },
   frameSpeed: { label: "Speed", min: -2, max: 2, step: 0.001, scale: "fine", value: 0.25, drift: "wave", low: 0.1, high: 0.5, on: false },
   frameShadow: { label: "Shadow", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.2, high: 0.8, on: false },
+  /** Nested frames: how far each frame fades into the frame around it, as a share of the space between two frames; 0 is a hard edge. */
+  frameSoftness: { label: "Edge softness", min: 0, max: 1, step: 0.01, value: 0, drift: "wave", low: 0, high: 0.6, on: false },
   tunnelFog: { label: "Darkness", min: 0, max: 1, step: 0.01, value: 0.5, drift: "wave", low: 0.2, high: 0.8, on: false },
   sphereGlowWidth: { label: "Glow width", min: 0.01, max: 0.5, step: 0.005, value: 0.12, drift: "wave", low: 0.05, high: 0.25, on: false },
   /** The center is a fraction of the screen size: -0.5 and 0.5 are the screen edges. */
@@ -2052,7 +2054,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   warp: ["warpOpacity", "warpAmount", "warpScale", "warpCellSize", "warpCellX", "warpCellY", "warpCellAngle", "warpCellTurn", "warpCellSpin", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle"],
   map: ["mapOpacity", "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl", "mandelDepth", "mandelEnd", "mandelSpeed", "mandelFade", "mandelSpread", "mandelInvert", "mandelEdge", "mandelEdgeWidth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle", "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
     "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness"],
-  kaleidoscope: ["foldOpacity", "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "sphereSize", "sphereTurn", "sphereTilt", "sphereGlow", "sphereGlowWidth", "tunnelSpeed", "tunnelFog", "fractalSteps", "fractalScale", "fractalAngle", "fractalShift", "packSize", "packLevels", "packSpeed", "packTwist", "packTurn", "frameSides", "frameSize", "frameScale", "frameTurn", "frameSpeed", "frameShadow", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl", "innerTwirl", "mirrorFade"],
+  kaleidoscope: ["foldOpacity", "segments", "tileSize", "hyperSides", "hyperCorners", "hyperSize", "hyperFlow", "sphereSize", "sphereTurn", "sphereTilt", "sphereGlow", "sphereGlowWidth", "tunnelSpeed", "tunnelFog", "fractalSteps", "fractalScale", "fractalAngle", "fractalShift", "packSize", "packLevels", "packSpeed", "packTwist", "packTurn", "frameSides", "frameSize", "frameScale", "frameTurn", "frameSpeed", "frameShadow", "frameSoftness", "centerX", "centerY", "rotation", "zoom", "panX", "panY", "twirl", "innerTwirl", "mirrorFade"],
   blur: ["blurAmount", "blurMaskSize", "blurMaskSoft", "blurMaskX", "blurMaskY", "blurMaskAngle", "blurMaskLevel"],
   trails: ["trailAmount", "trailZoom", "trailTurn", "trailHue", "trailFlow", "trailSwirl", "trailTint"],
   smear: ["smearAmount", "smearDelay", "smearAngle", "smearBands", "smearRestart", "smearFade"],

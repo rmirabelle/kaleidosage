@@ -268,6 +268,8 @@ uniform float u_frameScale;
 uniform float u_frameTurn;
 uniform float u_frameTravel;
 uniform float u_frameShadow;
+/* Nested frames: how far each frame fades into the frame around it (0 to 1). */
+uniform float u_frameSoftness;
 uniform float u_rotation;
 uniform float u_zoom;
 uniform float u_twirl;
@@ -1597,13 +1599,53 @@ vec2 fold(vec2 p) {
       if (far * cos(off) <= size * middle) break;
       frame -= 1.0;
     }
-    float inFrame = around - frame * u_frameTurn;
-    vec2 local = vec2(cos(inFrame), sin(inFrame)) * far / size;
-    float next = mod(inFrame - u_frameTurn + PI * 0.5 + halfSide, 2.0 * halfSide) - halfSide;
-    float past = length(local) * cos(next) - u_frameScale * middle;
-    foldShade = 1.0 - u_frameShadow * exp(-max(past, 0.0) / (0.1 * u_frameScale));
-    foldStretch = min(0.5 * flow / (size * middle), 256.0);
-    return local * 0.5 / middle / u_zoom;
+    /**
+     * Edge softness: near its edge, a frame fades into the frame around
+     * it, as the Droste spiral's copies do. The fade starts Edge softness
+     * of the way from the frame's edge to the next smaller frame's size
+     * (in log steps). The frame around it can be near its own edge at the
+     * same point (or the point can be past it), so that one fades into
+     * the frame around it too: three frames in all (j = 0, 1, 2), each
+     * with its picture point, its share (foldShares) and its shadow.
+     * Under a frame, the shadow on the frame around it is full, so the
+     * shade has no jump at a soft edge.
+     */
+    float band = u_frameSoftness * -smaller;
+    int layers = band > 0.0 ? 3 : 1;
+    vec2 first = vec2(0.0);
+    vec3 fades = vec3(0.0);
+    vec3 shades = vec3(1.0);
+    float offNext = mod(around - (frame + 1.0) * u_frameTurn + PI * 0.5 + halfSide, 2.0 * halfSide) - halfSide;
+    for (int j = 0; j < layers; j++) {
+      float index = frame - float(j);
+      float layerSize = exp(index * smaller);
+      float inFrame = around - index * u_frameTurn;
+      float off = mod(inFrame + PI * 0.5 + halfSide, 2.0 * halfSide) - halfSide;
+      vec2 local = vec2(cos(inFrame), sin(inFrame)) * far / layerSize * 0.5 / middle / u_zoom;
+      float grown = min(0.5 * flow / (layerSize * middle), 256.0);
+      /* How far the point is past the edge of the next smaller frame, in this frame's units. */
+      float past = far * cos(offNext) / layerSize - u_frameScale * middle;
+      shades[j] = 1.0 - u_frameShadow * exp(-max(past, 0.0) / (0.1 * u_frameScale));
+      /* The point's place in this frame: 1 at its edge. */
+      float place = far * cos(off) / (layerSize * middle);
+      fades[j] = band > 0.0 ? smoothstep(-band, 0.0, log(max(place, 1e-12))) : 0.0;
+      if (j == 0) {
+        first = local;
+        foldStretch = grown;
+      } else {
+        foldAltPoint[j - 1] = local;
+        foldAltStretch[j - 1] = grown;
+        foldAltBounces[j - 1] = 0.0;
+      }
+      offNext = off;
+    }
+    foldShade = shades.x;
+    if (layers > 1) {
+      foldAlts = 2;
+      foldShares = vec4(1.0 - fades.x, fades.x * (1.0 - fades.y), fades.x * fades.y, 0.0);
+      foldShade = dot(foldShares.xyz, shades);
+    }
+    return first;
   }
   /**
    * Mirror tunnel (fold mode 8): the view down a long tube whose walls are

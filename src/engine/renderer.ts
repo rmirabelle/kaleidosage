@@ -424,6 +424,8 @@ export interface FrameValues {
   frameTurn: number;
   frameTravel: number;
   frameShadow: number;
+  /** Nested frames: how far each frame fades into the frame around it (0 to 1). */
+  frameSoftness: number;
   warpMode: WarpMode;
   warpType: WarpType;
   /** Ripple, swirl and bulge: the center, in screen heights. Waves: the direction (radians). */
@@ -2142,6 +2144,7 @@ export class KaleidoRenderer {
     gl.uniform1f(k.uniforms.u_frameTurn, v.frameTurn);
     gl.uniform1f(k.uniforms.u_frameTravel, v.frameTravel);
     gl.uniform1f(k.uniforms.u_frameShadow, Math.min(1, Math.max(0, v.frameShadow)));
+    gl.uniform1f(k.uniforms.u_frameSoftness, Math.min(1, Math.max(0, v.frameSoftness)));
     gl.uniform1f(k.uniforms.u_rotation, v.rotation);
     gl.uniform1f(k.uniforms.u_zoom, v.zoom);
     gl.uniform1f(k.uniforms.u_twirl, v.twirl);
