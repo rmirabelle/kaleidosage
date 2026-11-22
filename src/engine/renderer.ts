@@ -4683,9 +4683,11 @@ export class KaleidoRenderer {
    * Video export: starts copying the picture now on the canvas, without
    * waiting for the GPU. The copy is turned upright on the GPU. The returned
    * function waits until the copy is done and writes the pixels (RGBA, top
-   * row first) into "into".
+   * row first) into "into". "pause" is the short wait between two checks of
+   * the GPU; the network cast gives one that also works in a page that is
+   * not on the screen, where setTimeout is slow.
    */
-  startRead(): (into: Uint8Array) => Promise<void> {
+  startRead(pause?: () => Promise<void>): (into: Uint8Array) => Promise<void> {
     const gl = this.gl;
     const [width, height] = this.frameSize;
     const target = this.takeReadTarget(width, height);
@@ -4693,7 +4695,7 @@ export class KaleidoRenderer {
     gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
     gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, target.framebuffer);
     gl.blitFramebuffer(0, 0, width, height, 0, height, width, 0, gl.COLOR_BUFFER_BIT, gl.NEAREST);
-    return this.readBack(target, width, height);
+    return this.readBack(target, width, height, pause);
   }
 
   /**
@@ -4768,7 +4770,7 @@ export class KaleidoRenderer {
    * 4K as a read through a pixel buffer and getBufferSubData (6.6 ms against
    * 15), and the GPU still works ahead on the next frames.
    */
-  private readBack(target: ExportTarget, width: number, height: number): (into: Uint8Array) => Promise<void> {
+  private readBack(target: ExportTarget, width: number, height: number, pause: () => Promise<void> = () => new Promise((resolve) => setTimeout(resolve, 1))): (into: Uint8Array) => Promise<void> {
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     const fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0)!;
@@ -4778,7 +4780,7 @@ export class KaleidoRenderer {
         const status = gl.clientWaitSync(fence, 0, 0);
         if (status === gl.ALREADY_SIGNALED || status === gl.CONDITION_SATISFIED) break;
         if (status === gl.WAIT_FAILED) throw new Error("The GPU could not read the video frame.");
-        await new Promise((resolve) => setTimeout(resolve, 1));
+        await pause();
       }
       gl.deleteSync(fence);
       gl.bindFramebuffer(gl.READ_FRAMEBUFFER, target.framebuffer);

@@ -52,7 +52,7 @@ unsafe impl Send for ComBuffer {}
  * it and only says that a frame is ready.
  */
 #[cfg(all(windows, not(test)))]
-struct SharedFrame {
+pub(crate) struct SharedFrame {
     app: tauri::AppHandle,
     buffer: Option<ComBuffer>,
     data: *const u8,
@@ -71,16 +71,23 @@ impl Drop for SharedFrame {
 }
 
 #[cfg(any(not(windows), test))]
-struct SharedFrame {
+pub(crate) struct SharedFrame {
     data: *const u8,
     bytes: usize,
 }
 #[cfg(any(not(windows), test))]
 unsafe impl Send for SharedFrame {}
 
+impl SharedFrame {
+    /** The frame's pixels. The page writes them, so the caller reads them only while the page waits. */
+    pub(crate) fn pixels(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.data, self.bytes) }
+    }
+}
+
 /** Makes a shared frame and gives it to the page, which gets a "sharedbufferreceived" event. None when this webview cannot do it: the frames then go the slow way. */
 #[cfg(all(windows, not(test)))]
-fn share_frame(window: &WebviewWindow, bytes: usize) -> Option<SharedFrame> {
+pub(crate) fn share_frame(window: &WebviewWindow, bytes: usize) -> Option<SharedFrame> {
     use webview2_com::Microsoft::Web::WebView2::Win32::{ICoreWebView2Environment12, ICoreWebView2_17, COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_WRITE};
     use windows_core::{Interface, PCWSTR};
     let (sender, receiver) = std::sync::mpsc::channel();
@@ -110,7 +117,7 @@ fn share_frame(window: &WebviewWindow, bytes: usize) -> Option<SharedFrame> {
 }
 
 #[cfg(any(not(windows), test))]
-fn share_frame(_window: &WebviewWindow, _bytes: usize) -> Option<SharedFrame> {
+pub(crate) fn share_frame(_window: &WebviewWindow, _bytes: usize) -> Option<SharedFrame> {
     None
 }
 

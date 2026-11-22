@@ -1,11 +1,13 @@
 mod browse;
 mod cast;
+mod cast_stream;
 mod export_stream;
 mod files;
 mod fonts;
 mod help;
 mod file_archive;
 mod output_choice;
+mod receiver;
 mod sound_capture;
 mod screen;
 pub mod song_analysis;
@@ -86,6 +88,8 @@ pub fn run() {
         .manage(export_stream::Exports::default())
         .manage(sound_capture::SoundCapture::default())
         .manage(cast::CastTarget::default())
+        .manage(cast_stream::CastStreams::default())
+        .manage(receiver::Receiver::default())
         .manage(song_models::ModelDownload::default())
         .on_page_load(|webview, payload| sound_capture::stop_on_page_load(webview, payload))
         .register_asynchronous_uri_scheme_protocol("video", |ctx, request, responder| {
@@ -101,10 +105,15 @@ pub fn run() {
             // The splash window is always centered, so its state is not saved.
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(window_state_flags)
-                .with_denylist(&["splash", cast::SHOW_LABEL])
+                .with_denylist(&["splash", cast::SHOW_LABEL, receiver::WINDOW])
                 .build(),
         )
         .setup(|app| {
+            /* Receiver mode (see receiver.rs) has only the receiver window. */
+            if receiver::wanted() {
+                receiver::open_window(app.handle())?;
+                return Ok(());
+            }
             build_main_window(app.handle())?;
             end_splash_after_time_limit(app.handle().clone());
             file_archive::clean_at_start();
@@ -162,6 +171,11 @@ pub fn run() {
             cast::cast_target,
             cast::cast_place,
             cast::cast_close,
+            cast_stream::cast_stream_begin,
+            cast_stream::cast_stream_frame,
+            cast_stream::cast_stream_end,
+            receiver::receiver_listen,
+            receiver::receiver_send,
             files::log_frontend_error,
             updater::check_for_update,
             updater::download_and_run_installer,

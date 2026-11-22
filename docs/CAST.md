@@ -37,3 +37,55 @@ streams to a projector in another room (the CastSage project).
 
 - `C`, the View menu (one item per other screen when there are several),
   and the Cast button over the picture.
+
+## Network cast (started 2026-11-22, in work)
+
+The goal: the picture and the sound go to a screen in another room with no
+other program (no Sunshine, Moonlight or virtual screen) and no setup.
+Kaleido Sage is both ends: the sender, and, started with `--receiver`,
+the receiver (one installer, one version).
+
+- Sender, page: `src/lib/castStream.ts`. `Engine.streamTo` draws at the
+  receiver's size (at most 1080 pixels of height for now) with the clock
+  of `src/engine/frameTicker.ts`: a worker's timer at the stream's 60
+  frames a second. It does not need the window on the screen, so the cast
+  goes on while the main window is minimized or behind other windows.
+  Each frame that draws is read from the GPU into memory shared with the
+  app (as a video export does); up to 3 frames are on their way at a time.
+- Sender, Rust: `src-tauri/src/cast_stream.rs`. FFmpeg encodes the frames
+  to AV1 with the NVIDIA encoder at its lowest delay (`av1_nvenc`, `-tune
+  ull`, constant 30 Mbit/s) and writes IVF, which gives one frame at a
+  time. Each frame goes to the receiver over one TCP connection (port
+  14530). The file's first comment has the message layout.
+- Receiver, Rust: `src-tauri/src/receiver.rs`. One full-screen window. It
+  takes one sender at a time and passes the messages to its page through
+  a WebSocket on the PC itself.
+- Receiver, page: `src/lib/receiver.ts`, `src/components/ReceiverView.tsx`.
+  The web view's decoder (the graphics chip) decodes the frames. Each frame
+  shows a fixed delay after the sender took it; the delay follows the
+  network (see the file's first comment).
+
+Measured 2026-11-22, RTX 5090 to a MINIX N300 mini PC over Wi-Fi, a busy
+scene at 1080p: 60 frames a second sent with none skipped, about 8 ms from
+the draw to the encoder, 60 to 77 ms from the picture in the app to the
+receiver's screen, no lost frames. About every 5 to 10 seconds one frame
+takes 150 ms (Wi-Fi), which shows as a short stutter.
+
+Findings that decided the design:
+
+- The web view's own video encoder (WebCodecs) did not use the NVIDIA card
+  on the test PC: 18 to 30 frames a second with a busy scene. FFmpeg with
+  NVENC does.
+- A page behind other windows gets no animation frames, and its timers
+  slow down; a worker's timer keeps its rate.
+- Tauri's channel to the page makes one more call for each large message:
+  about 200 ms more delay on the mini PC. A local WebSocket does not.
+- Windows Firewall on the receiver PC asks one time to allow Kaleido Sage,
+  and blocks the receiver until the user allows it.
+
+Not done yet: sound; a receiver that is found by itself and shows in the
+Cast menu; the "Use this PC as a receiver" choice with a start with
+Windows; H.264 or HEVC for graphics cards with no AV1 encoder, and the
+processor's encoder for PCs with no NVIDIA card; a stream quality setting.
+Until the Cast menu has it, `src/dev/castProbe.ts` starts and stops the
+network cast in the dev app.

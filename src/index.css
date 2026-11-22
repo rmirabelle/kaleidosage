@@ -1802,6 +1802,12 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .crash-screen { height: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 32px; color: #e4e4e7; background: #22252f; }
 .crash-screen h1 { margin: 0; font-size: 18px; }
 .crash-screen pre { max-width: 100%; overflow: auto; color: #fecaca; font-size: 12px; white-space: pre-wrap; }
+.receiver { position: fixed; inset: 0; background: #000; cursor: none; overflow: hidden; }
+.receiver canvas { display: block; width: 100%; height: 100%; object-fit: contain; }
+.receiver-idle { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: #8b90a0; background: #000; }
+.receiver-idle h1 { margin: 0; font-size: 22px; font-weight: 500; color: #c9ccd6; }
+.receiver-idle p { margin: 0; font-size: 15px; }
+.receiver-idle .receiver-error { color: #fecaca; max-width: 70%; text-align: center; }
 
 /* Source: the two images, A and B, with a swap button between them. */
 /* Images A and B side by side, with the swap button between them. */

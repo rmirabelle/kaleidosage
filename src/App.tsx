@@ -75,6 +75,9 @@ import { CROSSFADE_SECONDS, encodeVideo, videoDimensions, videoSize, type SongJo
 import { attachCameraDrag } from "./lib/cameraDrag";
 import { cast, screenLabel, type CastScreen } from "./lib/cast";
 
+/** Dev only: the network cast test (see src/dev/castProbe.ts). */
+if (import.meta.env.DEV) void import("./dev/castProbe");
+
 const MIDI_PANEL_HEIGHT_KEY = "kaleidosage.midi-panel-height";
 /** The MIDI panel's height limits, in pixels; it opens at its last height, or DEFAULT. */
 const MIDI_PANEL_MIN = 120;

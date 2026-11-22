@@ -4,6 +4,7 @@ import { Component, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { HelpWindow } from "./components/HelpWindow";
+import { ReceiverView } from "./components/ReceiverView";
 import { revealMainWindow } from "./lib/splash";
 import "./index.css";
 
@@ -103,7 +104,7 @@ class CrashScreen extends Component<{ children: ReactNode }, { error: Error | nu
   }
 }
 
-/** The help window loads the same page as the main window; the window label tells them apart. */
+/** The help window and the receiver window (receiver mode) load the same page as the main window; the window label tells them apart. */
 const windowLabel = isTauri() ? getCurrentWindow().label : "main";
 
-createRoot(document.getElementById("root")!).render(<CrashScreen>{windowLabel === "help" ? <HelpWindow /> : <App />}</CrashScreen>);
+createRoot(document.getElementById("root")!).render(<CrashScreen>{windowLabel === "help" ? <HelpWindow /> : windowLabel === "receiver" ? <ReceiverView /> : <App />}</CrashScreen>);

@@ -9,6 +9,7 @@ import { copyVideo, cueVideo, releaseVideo, seekVideo, syncVideo, videoLoopPlan,
 import { familyOf, intensityAt, positionAt, speedAt, travelAt, type Family, type SongScript } from "./songScript";
 import { LiveSound } from "./liveSound";
 import { isShown } from "./submodes";
+import { FrameTicker } from "./frameTicker";
 import { DEFAULT_VR_SCREEN, VR_HEIGHT, moveVrScreen, readVrControls, startVrSession, vrEyes, vrPictureSize, type VrControls, type VrScreen, type XrFrame, type XrLayer, type XrSession, type XrSpace } from "./vr";
 
 /** While paused, how long the same frame values must last before the picture counts as still and frames stop (see needsDraw). */
@@ -387,6 +388,35 @@ export class Engine {
   }
 
   /**
+   * Network cast (see src/lib/castStream.ts): the clock that times the
+   * frames while the picture goes to a receiver on the network. It does not
+   * need a window on the screen, and it has the stream's frame rate, so
+   * each frame of the stream is one frame of the engine.
+   */
+  private stream: FrameTicker | null = null;
+
+  get streaming() {
+    return this.stream !== null;
+  }
+
+  /**
+   * Starts the picture for a network cast, at the receiver's size in pixels
+   * and the stream's frame rate, or stops it (null). The canvas in the main
+   * window is then a preview, as in a cast to a screen.
+   */
+  streamTo(target: { size: [number, number]; fps: number } | null) {
+    const screenHeight = this.renderer.castSize ? 0 : this.renderer.canvasSize[1];
+    const old = this.stream;
+    this.switchFrames(() => {
+      this.stream = target ? new FrameTicker(target.fps) : null;
+      this.renderer.castSize = target?.size ?? null;
+      if (!target) this.renderer.texelScale = 1;
+      else if (screenHeight > 0) this.renderer.texelScale = target.size[1] / screenHeight;
+    });
+    old?.dispose();
+  }
+
+  /**
    * Starts a cast to "target", the Show window, at its size in pixels, or
    * stops it (null). Effects that work in pixels keep their look, as in VR.
    */
@@ -400,15 +430,17 @@ export class Engine {
     });
   }
 
-  /** The next frame, from the headset in VR, else from the Show window while casting, else from the main window. */
+  /** The next frame, from the headset in VR, else from the stream's clock, else from the Show window while casting, else from the main window. */
   private requestFrame() {
     if (this.vr) return this.vr.session.requestAnimationFrame(this.frame);
+    if (this.stream) return this.stream.request(this.frame);
     this.frameWindow = this.cast?.window ?? window;
     return this.frameWindow.requestAnimationFrame(this.frame);
   }
 
   private cancelFrame() {
     if (this.vr) this.vr.session.cancelAnimationFrame(this.frameId);
+    else if (this.stream) this.stream.cancel();
     /* A Show window that has closed has no frame to cancel. */
     else try { this.frameWindow.cancelAnimationFrame(this.frameId); } catch { /* Nothing waits. */ }
     this.frameId = 0;
@@ -1242,7 +1274,11 @@ export class Engine {
   addBlurSample(index: number) { this.renderer.addBlurSample(index); }
   drawBlurResult() { this.renderer.drawBlurResult(); }
   drawOverlay(alpha: number) { this.renderer.drawOverlay(alpha); }
-  startRead() { return this.renderer.startRead(); }
+  /** See KaleidoRenderer.startRead. In a network cast, the wait for the GPU uses the stream's clock, which also runs when the window is not on the screen. */
+  startRead() {
+    const stream = this.stream;
+    return this.renderer.startRead(stream ? () => stream.sleep(1) : undefined);
+  }
   startSphereRead(width: number, height: number) { return this.renderer.startSphereRead(width, height); }
 
   /** Calls the listener after each frame. Returns a function that removes it. */
