@@ -31,10 +31,14 @@ const BIT_RATE = 30_000_000;
 const MAX_HEIGHT = 1080;
 /** Frames that can be on their way (GPU read, then FFmpeg) at one time; with more, a frame is skipped. */
 const MAX_IN_FLIGHT = 3;
-/** A block of music that comes this much later than the audio clock says starts the clock comparison again (the music paused), in ms. */
+/** A reading of the sound system's clock this far from the kept one moves it at once (the music paused), in ms. */
 const SOUND_CLOCK_JUMP_MS = 50;
-/** The clock comparison follows the earliest blocks, and moves this much later with each block, to follow a clock that drifts, in ms. */
-const SOUND_CLOCK_LEAK_MS = 0.005;
+/** With each block, the audio clock's place moves this part of the way to the sound system's reading. */
+const SOUND_CLOCK_LEAN = 0.05;
+/** The timing test (see StreamCast.testPattern): the flash and the beep last this long, and the beep's blocks have this size and rate. */
+const TEST_FLASH_MS = 50;
+const TEST_SOUND_FRAMES = 2048;
+const TEST_SOUND_RATE = 48000;
 /** How long to wait for the app's shared memory, in ms. */
 const SHARED_WAIT_MS = 3000;
 
@@ -95,8 +99,10 @@ class StreamCast {
   /** The frames go to the encoder in the order they were drawn. */
   private chain: Promise<void> = Promise.resolve();
   private counts = { sent: 0, skipped: 0, sumMs: 0, maxMs: 0 };
-  /** The time on this PC's clock (ms since 1970) at which the audio context's time was 0. */
+  /** The time on this PC's clock (ms since 1970) at which the sound of the audio context's time 0 was heard. */
   private soundClock = Infinity;
+  /** Dev: how much later (ms) a stamp from the blocks' arrival times is than the stamp from the sound system's clock. */
+  soundStampDifference = 0;
   /** Moves the sound at the receiver, in ms: positive is later. For a screen or speakers with a delay of their own, which no PC can measure. */
   soundOffsetMs = 0;
   /**
@@ -106,6 +112,15 @@ class StreamCast {
    * longer by their length.
    */
   soundBlocks = 4;
+  /**
+   * A timing test: in place of the scene and the music, the stream carries
+   * a white flash and a beep, both for the first 50 ms of each second of
+   * this PC's clock, with the same time stamps. A receiver that shows them
+   * together plays picture and sound in time.
+   */
+  testPattern = false;
+  /** The time stamp of the next block of the test's beep; 0 before the first. */
+  private testSoundAt = 0;
   /** The blocks that wait for the next call, and the time stamp of the first one. */
   private soundWaiting: Float32Array[] = [];
   private soundWaitingAt = 0;
@@ -159,7 +174,9 @@ class StreamCast {
       this.unlisten.push(await listen("cast-stream-gone", () => this.fail(new Error(`${info.name} closed the connection.`))));
       this.engine = engine;
       engine.streamTo({ size: [info.width, info.height], fps: FPS });
+      this.testSoundAt = 0;
       this.stopFrames = engine.onFrame(() => {
+        if (this.testPattern) return this.sendTestPattern(pixels);
         /* A still picture sends nothing: the receiver keeps the last frame. */
         if (!engine.stats.drawing || engine.canvas.width !== info.width || engine.canvas.height !== info.height) return;
         if (this.inFlight >= MAX_IN_FLIGHT) {
@@ -185,7 +202,7 @@ class StreamCast {
       });
       this.soundClock = Infinity;
       this.soundWaiting = [];
-      tracks.castTap(this.onSound);
+      if (!this.testPattern) tracks.castTap(this.onSound);
       this.status = { state: "on", ...info };
     } catch (error) {
       await this.end();
@@ -209,13 +226,56 @@ class StreamCast {
     });
   }
 
+  /** The timing test's frame and sound for now (see testPattern). */
+  private sendTestPattern(pixels: Uint8Array) {
+    const taken = performance.timeOrigin + performance.now();
+    if (this.inFlight < MAX_IN_FLIGHT) {
+      this.inFlight++;
+      const white = taken % 1000 < TEST_FLASH_MS;
+      this.chain = this.chain
+        .then(async () => {
+          pixels.fill(white ? 255 : 0);
+          await invoke("cast_stream_frame", { taken });
+          this.counts.sent++;
+        })
+        .catch((error) => this.fail(error))
+        .finally(() => { this.inFlight--; });
+    }
+    /* The sound goes out in blocks that have ended, as the music's blocks do. */
+    const blockMs = TEST_SOUND_FRAMES / TEST_SOUND_RATE * 1000;
+    if (this.testSoundAt === 0) this.testSoundAt = taken;
+    while (this.testSoundAt + blockMs <= taken) {
+      const content = new ArrayBuffer(12 + TEST_SOUND_FRAMES * 4);
+      const view = new DataView(content);
+      view.setFloat64(0, this.testSoundAt + this.soundOffsetMs);
+      view.setUint32(8, TEST_SOUND_RATE);
+      const whole = new Int16Array(content, 12);
+      for (let frame = 0; frame < TEST_SOUND_FRAMES; frame++) {
+        const time = this.testSoundAt + frame / TEST_SOUND_RATE * 1000;
+        const value = time % 1000 < TEST_FLASH_MS ? Math.sin(2 * Math.PI * time) * 0.6 * 32767 : 0;
+        whole[frame * 2] = value;
+        whole[frame * 2 + 1] = value;
+      }
+      invoke("cast_stream_audio", new Uint8Array(content)).catch(() => { /* The stream ended. */ });
+      this.testSoundAt += blockMs;
+    }
+  }
+
   /** One block of the music that plays (see TrackList.castTap): it goes to the receiver with the time it played here. */
   private readonly onSound = (samples: Float32Array, time: number, context: AudioContext) => {
-    /* The block has just ended, so its end is now; the blocks that come with the least wait give the audio clock's place on this PC's clock. */
+    /*
+     * The moment the block is heard here comes from the sound system: it
+     * names a time on the audio clock and the moment that time is heard.
+     * The readings jump a little, so the clock's place moves only a part of
+     * the way to each reading; a pause in the music moves it at once.
+     */
+    const output = context.getOutputTimestamp();
     const blockMs = samples.length / 2 / context.sampleRate * 1000;
-    const clock = performance.timeOrigin + performance.now() - time * 1000 - blockMs;
-    this.soundClock = clock < this.soundClock || clock - this.soundClock > SOUND_CLOCK_JUMP_MS ? clock : this.soundClock + SOUND_CLOCK_LEAK_MS;
-    if (this.soundWaiting.length === 0) this.soundWaitingAt = this.soundClock + time * 1000 + tracks.latency * 1000 + this.soundOffsetMs;
+    const estimate = performance.timeOrigin + performance.now() - time * 1000 - blockMs + tracks.latency * 1000;
+    const reading = output.performanceTime ? performance.timeOrigin + output.performanceTime - (output.contextTime ?? 0) * 1000 : estimate;
+    this.soundClock = Math.abs(reading - this.soundClock) > SOUND_CLOCK_JUMP_MS ? reading : this.soundClock + (reading - this.soundClock) * SOUND_CLOCK_LEAN;
+    this.soundStampDifference += (estimate - this.soundClock - this.soundStampDifference) * 0.05;
+    if (this.soundWaiting.length === 0) this.soundWaitingAt = this.soundClock + time * 1000 + this.soundOffsetMs;
     this.soundWaiting.push(samples);
     if (this.soundWaiting.length < this.soundBlocks) return;
     const blocks = this.soundWaiting;

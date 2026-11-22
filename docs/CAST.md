@@ -97,7 +97,8 @@ each block made the frames wait.
   the moment it is processed: `songClock.ts` draws each picture for the
   heard moment, which is later by the speakers' delay
   (`TrackList.latency`). So the stream has the same relation of picture
-  and sound as the sender's own screen and speakers.
+  and sound as the sender's own screen and speakers. The heard moment
+  comes from the sound system's own clock (`getOutputTimestamp`).
 - The receiver plays the music with a worklet (`SOUND_SOURCE` in
   `receiver.ts`) at the same delay as the picture, corrected for the
   sound output delay that the web view reports (about 40 ms on the mini
@@ -105,21 +106,36 @@ each block made the frames wait.
 - While music comes, the delay covers the slowest frame or block of the
   last 5 seconds, not 19 of 20, and comes down at 2.5 ms a second: a late
   block of music is a gap that the ear hears.
-- A screen or speakers can add a delay of their own that no PC can
-  measure. `StreamCast.soundOffsetMs` moves the sound (negative is
-  earlier). The JMGO projector with its own speakers through HDMI needed
-  -135 ms, found by ear. Earlier sound has a longer trip, so the picture's
-  delay grows by the same time.
+- The user gets no sound timing setting (the user's decision): the app
+  calculates the timing. `StreamCast.soundOffsetMs` stays 0; it is only
+  for tests. The music's trip counts for the delay as a frame's trip
+  does, so music always arrives before its time.
 
-Measured with music: about 280 ms from the picture in the app to the
-projector (180 ms of it for the Wi-Fi's slow moments of up to 300 ms and
-for the sound offset), no gaps in the music.
+How the timing was proven (2026-11-22), with no listening by ear to a
+scene, which misled: a first tuning by ear ended at -135 ms, and was wrong.
+
+- A plain video with a white flash and a beep at the same moment, played
+  by the browser on the mini PC: flash and beep together on the JMGO
+  projector. So the projector adds no difference of its own.
+- The same flash and beep through the stream, with the same time stamp
+  (`StreamCast.testPattern`): together. So the receiver plays by the
+  time stamps correctly.
+- On the sender, the newest samples in the player's graph were found in a
+  second decoding of the song file (`measure` in `src/dev/castProbe.ts`):
+  the audio element's `currentTime` is 2 ms ahead of them. So the song
+  clock's picture and the block's heard moment have the relation that the
+  code assumes.
+- A stamp from the blocks' arrival times was 6 ms later than the stamp
+  from the sound system's clock, which the code now uses.
+
+Measured with music: about 200 ms from the picture in the app to the
+projector (most of it for the Wi-Fi's slow moments of up to 300 ms), no
+gaps in the music.
 
 Not done yet: a receiver that is found by itself and shows in the Cast
-menu; the "Use this PC as a receiver" choice with a start with Windows; a
-"Sound timing" setting for each receiver in place of the fixed offset;
+menu; the "Use this PC as a receiver" choice with a start with Windows;
 H.264 or HEVC for graphics cards with no AV1 encoder, and the processor's
 encoder for PCs with no NVIDIA card; a stream quality setting; a transport
 that hides the Wi-Fi's slow moments (the delay could then be much
 shorter). Until the Cast menu has it, `src/dev/castProbe.ts` starts and
-stops the network cast in the dev app, and has the sound offset.
+stops the network cast in the dev app, and has the timing tests.
