@@ -105,6 +105,7 @@ class CrashScreen extends Component<{ children: ReactNode }, { error: Error | nu
 }
 
 /** The help window and the receiver window (receiver mode) load the same page as the main window; the window label tells them apart. */
-const windowLabel = isTauri() ? getCurrentWindow().label : "main";
+/** In a plain browser in dev, "?receiver" in the address shows the receiver view, to look at its layout. */
+const windowLabel = isTauri() ? getCurrentWindow().label : import.meta.env.DEV && new URLSearchParams(window.location.search).has("receiver") ? "receiver" : "main";
 
 createRoot(document.getElementById("root")!).render(<CrashScreen>{windowLabel === "help" ? <HelpWindow /> : windowLabel === "receiver" ? <ReceiverView /> : <App />}</CrashScreen>);

@@ -1804,10 +1804,27 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .crash-screen pre { max-width: 100%; overflow: auto; color: #fecaca; font-size: 12px; white-space: pre-wrap; }
 .receiver { position: fixed; inset: 0; background: #000; cursor: none; overflow: hidden; }
 .receiver canvas { display: block; width: 100%; height: 100%; object-fit: contain; }
-.receiver-idle { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: #8b90a0; background: #000; }
-.receiver-idle h1 { margin: 0; font-size: 22px; font-weight: 500; color: #c9ccd6; }
-.receiver-idle p { margin: 0; font-size: 15px; }
-.receiver-idle .receiver-error, .receiver-options .receiver-error { color: #fecaca; max-width: 70%; text-align: center; }
+/* The receiver's screen with no cast: sizes follow the screen (vmin), so a 4K projector and a small monitor show the same picture. */
+.receiver-idle { position: absolute; inset: 0; display: grid; place-items: center; color: #8b90a0; background: #000; font-family: "Inter", "Segoe UI", system-ui, sans-serif; user-select: none; }
+.receiver-brand { display: flex; flex-direction: column; align-items: center; margin-top: -3vmin; animation: receiver-drift 300s ease-in-out infinite; }
+.receiver-logo { position: relative; width: 20vmin; height: 20vmin; display: grid; place-items: center; }
+.receiver-logo img { position: relative; width: 20vmin; height: 20vmin; display: block; }
+.receiver-glow { position: absolute; left: 50%; top: 50%; width: 72vmin; height: 58vmin; transform: translate(-50%, -50%); background: radial-gradient(closest-side, rgba(75,118,247,.30), rgba(75,118,247,.14) 40%, rgba(75,118,247,.05) 68%, rgba(75,118,247,0)); animation: receiver-breathe 9s ease-in-out infinite; }
+.receiver-name { position: relative; margin-top: 2.6vmin; color: #a9ddf8; font-size: 4.6vmin; font-weight: 700; line-height: 1; letter-spacing: -.035em; }
+.receiver-role { position: relative; margin-top: 1.1vmin; padding-left: .32em; color: #5d6272; font-size: 1.7vmin; font-weight: 600; letter-spacing: .32em; text-transform: uppercase; }
+.receiver-idle .receiver-status { position: relative; margin: 4.4vmin 0 0; color: #8b90a0; font-size: 2vmin; }
+.receiver-status b { color: #dfe2ea; font-weight: 600; }
+.receiver-corner { position: absolute; left: 0; right: 0; bottom: 2.4vmin; margin: 0; text-align: center; color: #3f4350; font-size: 1.4vmin; }
+.receiver-idle .receiver-error, .receiver-options .receiver-error { color: #fecaca; max-width: 70vmin; text-align: center; }
+@keyframes receiver-breathe { 0%, 100% { opacity: .75; } 50% { opacity: 1; } }
+/* A slow walk around the middle of the screen, for televisions that keep a mark of a still picture. */
+@keyframes receiver-drift {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(5vmin, -3vmin); }
+  40% { transform: translate(-4vmin, -4vmin); }
+  60% { transform: translate(-6vmin, 3vmin); }
+  80% { transform: translate(4vmin, 4vmin); }
+}
 .receiver-hint { font-size: 13px !important; color: #6b7080; max-width: 620px; text-align: center; }
 .receiver.with-options { cursor: default; }
 .receiver-options { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: #c9ccd6; background: rgba(10, 11, 15, .88); }

@@ -5,8 +5,11 @@ import { ReceiverPlayer, type ReceiverStatus } from "../lib/receiver";
 /**
  * The receiver window (see src-tauri/src/receiver.rs): the picture that a
  * Kaleido Sage on another PC sends, over the whole screen. While no
- * picture comes, it shows that this PC is ready, and its name. Esc, or a
- * click, opens the options: close the receiver, or use this PC as before.
+ * picture comes, it shows the app's logo and name on black, and says that
+ * this PC is ready, with its name. The screen is black so that a projector
+ * leaves the room dark, and the logo moves slowly so that a television
+ * does not show one still picture for hours. Esc, or a click, opens the
+ * options: close the receiver, or use this PC as before.
  */
 export function ReceiverView() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -44,11 +47,17 @@ export function ReceiverView() {
       <canvas ref={canvasRef} />
       {status.state !== "playing" && (
         <div className="receiver-idle">
-          <h1>Kaleido Sage Receiver</h1>
-          {status.state === "error"
-            ? <p className="receiver-error selectable">{status.message}</p>
-            : <p>{name ? `${name} is ready for a cast.` : "Starting…"}</p>}
-          {!options && <p className="receiver-hint">Press Esc for options.</p>}
+          <div className="receiver-brand">
+            <div className="receiver-logo"><div className="receiver-glow" /><img src="/kaleido-sage-logo.png" alt="" /></div>
+            <div className="receiver-name">Kaleido Sage</div>
+            <div className="receiver-role">Receiver</div>
+            {status.state === "error"
+              ? <p className="receiver-status receiver-error selectable">{status.message}</p>
+              : status.state === "connected"
+                ? <p className="receiver-status">A cast starts…</p>
+                : <p className="receiver-status">{name ? <><b>{name}</b> is ready for a cast</> : "Starting…"}</p>}
+          </div>
+          {!options && <p className="receiver-corner">Press Esc for options</p>}
         </div>
       )}
       {options && (
