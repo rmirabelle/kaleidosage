@@ -19,6 +19,26 @@ const menuBarItem = (page: Page, label: string): HTMLElement => {
   return item;
 };
 
+/** The first item of the open menu whose label passes "test"; for the Cast items, whose labels have the names of this PC's screens and receivers. */
+const menuBarItemWhere = (page: Page, what: string, test: (label: string) => boolean): HTMLElement => {
+  const item = page.findAll(".menubar-dropdown button").find((entry) => test(entry.querySelector(".menubar-item-label")?.textContent?.trim() ?? ""));
+  if (!item) throw new Error(`The open menu has no item ${what}`);
+  return item;
+};
+
+/** The open View menu with the mouse on the first item whose label passes "test". */
+const viewMenuShot = (name: string, what: string, test: (label: string) => boolean): Shot => ({
+  name,
+  group: "cast",
+  needs: "blank",
+  setup: (page) => page.openMenu("View"),
+  cursor: (page) => menuBarItemWhere(page, what, test),
+  cursorAt: [0.55, 0.6],
+  target: (page) => [page.find(".menubar-dropdown"), ...page.findAll(".menubar-root > button.active")],
+  margin: [20, 60],
+  cleanup: (page) => page.closeMenu()
+});
+
 /** The open menu of the menu bar with its name in the bar, and the mouse on one item. */
 const menuShot = (name: string, group: string, menu: string, item: string, needs: Shot["needs"] = "blank"): Shot => ({
   name,
@@ -223,7 +243,11 @@ export const SHOW: Shot[] = [
   },
 
   /* "Cast and VR": only the buttons and the menu items; a cast or a VR session never starts. */
-  menuShot("cast-menu", "cast", "View", "Cast"),
+  /* The Cast item is "Cast" with no place to cast to, else "Cast to" with a screen's or a receiver's name. */
+  viewMenuShot("cast-menu", "Cast", (label) => label === "Cast" || label.startsWith("Cast to ")),
+  /* These two need a receiver on the network while the pictures are made. */
+  viewMenuShot("cast-network-menu", "Cast to a receiver", (label) => label.startsWith("Cast to ") && label.endsWith("(network)")),
+  viewMenuShot("receiver-menu", "Use This PC as a Receiver", (label) => label.startsWith("Use This PC as a Receiver")),
   {
     /** The Cast button over the picture; it is there only while another screen is connected. */
     name: "cast-button",

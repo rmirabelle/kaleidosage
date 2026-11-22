@@ -357,9 +357,10 @@ files in it is "Tracks" (part 7), so one word means one thing.
 
 The Output menu, under Input in the Playlist's toolbar, picks the speaker
 that plays the files (`src/lib/audioOutput.ts`). Default output follows
-Windows. The reason: a stream to another room (CastSage, with Sunshine)
-sends one device, a virtual cable, while the PC's other sounds stay on
-the desktop speakers at their own volume.
+Windows. The first reason was a stream to another room with Sunshine,
+which sent one device, a virtual cable. The network cast (docs/CAST.md,
+2026-11-22) carries the music itself and does not need this menu; the
+menu stays for a second sound card.
 
 - The files' AudioContext plays to the pick with `setSinkId`. The audio
   element's own `setSinkId` does nothing here, because

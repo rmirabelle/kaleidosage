@@ -3,9 +3,8 @@ import type { Engine } from "../engine/engine";
 
 /**
  * Cast: the picture full screen on another screen, in the Show window, while
- * the main window stays free for work (see src-tauri/src/cast.rs). The
- * other screen is often a virtual screen that a stream sends to a
- * projector. The Show window opens with window.open, so it shares this
+ * the main window stays free for work (see src-tauri/src/cast.rs). A cast
+ * to a screen of another PC is castStream.ts. The Show window opens with window.open, so it shares this
  * page's scripts: the engine draws in the main window's canvas at the Show
  * screen's size, the Show window times the frames (see Engine.castTo), and
  * after each frame that draws, the picture is copied into the Show

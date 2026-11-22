@@ -2,9 +2,9 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 
 /**
  * Where the app plays its audio files (the tracks, see tracks.ts): the
- * Windows default device, or one speaker. For a stream to another room,
- * the files play to a virtual cable that the stream sends on, and the PC's
- * other sounds stay on the default device. The webview names its speakers
+ * Windows default device, or one speaker, while the PC's other sounds stay
+ * on the default device. (A cast to another PC carries the music itself,
+ * see castStream.ts, and needs no pick here.) The webview names its speakers
  * only while the page may use the microphone, so the list first asks Rust
  * for that permission (see output_choice.rs); the page still records
  * nothing. The pick is kept by its name in localStorage, because the

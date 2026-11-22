@@ -63,7 +63,7 @@ export function Playlist() {
       <p>
         The <b>Output</b> list selects the speaker that plays the audio files. The other sounds of your PC
         stay on the default speaker of Windows. Use this to send the music of the show to a different sound
-        card, or to a virtual cable for a stream.
+        card. For a show in another room, see <i>Cast and VR</i>: a cast to another PC carries the music.
       </p>
       <p>
         If the selected speaker is not connected, the files play on the default device, and a message below

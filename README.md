@@ -85,7 +85,7 @@ Link a setting to the sound with one click. The app can listen to the sound of y
 
 ### 4. Show it
 
-Play full screen, cast to a projector or a second screen while the controls stay on your own screen, or see the picture on a large virtual screen in a Quest headset. Turn any setting with the knobs and faders of a MIDI controller. Export a scene as a seamless loop, or a song as a full music video.
+Play full screen, cast to a projector, a second screen or another PC on your network while the controls stay on your own screen, or see the picture on a large virtual screen in a Quest headset. Turn any setting with the knobs and faders of a MIDI controller. Export a scene as a seamless loop, or a song as a full music video.
 
 ## More than mirrors
 
@@ -118,7 +118,7 @@ These items are optional:
 | Random photos, photo search, Terrain, update checks, the first use of Song Follow | An internet connection |
 | Live sound | Sound from your PC, a microphone or a line input |
 | MIDI control | A MIDI controller |
-| Cast | A second screen, a projector or a virtual display |
+| Cast | A second screen or a projector; or a second PC with Kaleido Sage on your network (the sender needs an NVIDIA RTX 40 series card or later) |
 | Live VR | A Meta Quest with the Meta Quest Link app on the PC |
 
 Kaleido Sage is for Windows only at this time.
@@ -193,7 +193,7 @@ Add effects in any order. The picture goes through the list from top to bottom.
 - **Audio files:** MP3, WAV, FLAC, OGG, Opus, M4A and AAC
 - **Sound and beats:** Brightness and size follow the loudness and pulse on each beat. Sparkle follows the high sounds. Other settings move one step through their range on each beat. The app finds the beats by itself.
 - **Master Gain and Master Threshold** set how much the sound moves the picture.
-- **Output** sends the audio files to the speaker that you pick, for example a virtual cable for a stream.
+- **Output** sends the audio files to the speaker that you pick, for example a second sound card.
 
 Windows cannot capture the sound of one app only. The PC input hears all sound on that output device.
 
@@ -214,6 +214,7 @@ The first time the app analyzes a song, it downloads the song analysis files, ab
 - **Full screen:** Press `F` or `F11`, or double-click the picture.
 - **Scene changes:** Keys `1` to `9` select a scene with a crossfade, also in full screen.
 - **Cast:** Press `C` to show the picture full screen on another screen. The main window stays free, and you can even minimize it. Cast and VR do not run at the same time.
+- **Cast to another PC:** On a PC at a projector or a television, open Kaleido Sage and go to **View > Use This PC as a Receiver**. It then shows in the **View** menu of your own PC as **Cast to** with its name. The picture and the music of the Playlist go to it through your network; you need no other program.
 - **Live VR:** Go to **View > Enter VR** to see the picture on a large virtual screen. Set the shape, width, distance and curve with the controllers. For setup, see [Set up live VR](#set-up-live-vr).
 
 ### Export
@@ -265,7 +266,7 @@ To exit, press `Esc` or use the headset's menu.
 | `Shift+Space` | Stop the scene and go back to its start |
 | `F` or `F11` | Full screen |
 | `Esc` | Leave full screen |
-| `C` | Cast to another screen, or stop |
+| `C` | Cast to another screen or another PC, or stop |
 | `1` to `9` | Select a scene tab, with a crossfade |
 | `X` | Random settings for all unlocked effects |
 | `H` | Hide or show the panels |

@@ -5,8 +5,9 @@ export function CastVr() {
     <>
       <h1>Cast and VR</h1>
       <p className="help-lead">
-        Kaleido Sage can show the picture in two more places while you work in the window: on a second
-        screen or a projector, and on a large screen in a VR headset.
+        Kaleido Sage can show the picture in three more places while you work in the window: on a second
+        screen or a projector, on the screen of another PC on your network, and on a large screen in a VR
+        headset.
       </p>
 
       <h2>Cast to a second screen</h2>
@@ -26,7 +27,10 @@ export function CastVr() {
           select <Shot name="cast-icon" alt="The Cast button" side="inline" /> <b>Cast</b> at its top right.
           The button is there only while a second screen is connected.
         </li>
-        <li>Select <MenuPath path="View > Cast" />.</li>
+        <li>
+          Select <b>Cast to</b> and the name of the screen in the <b>View</b> menu. With only one place
+          to cast to, <Keys k="C" /> and the button go there directly.
+        </li>
       </ul>
       <Shot name="cast-menu" alt="The View menu with the mouse on Cast" side="left" />
       <p>
@@ -39,12 +43,12 @@ export function CastVr() {
         the other screen. You can make the main window smaller, or minimize it. The show continues.
       </p>
 
-      <h3>More than one other screen</h3>
+      <h3>More than one place to cast to</h3>
       <p>
-        With several other screens, the <b>View</b> menu has one <b>Cast to</b> command for each screen,
-        with the name and the size of the screen. Kaleido Sage keeps the screen that you select, and
-        uses it the next time. To move a cast to a different screen, select that screen's command while
-        the cast is on.
+        The <b>View</b> menu has one <b>Cast to</b> command for each other screen, with the name and the
+        size of the screen, and one for each receiver on your network (see <i>Cast to another PC</i>,
+        below). Kaleido Sage keeps the place that you select: <Keys k="C" /> and the <b>Cast</b> button
+        use it the next time.
       </p>
 
       <h3>Stop the cast</h3>
@@ -54,9 +58,83 @@ export function CastVr() {
         closes, for example when the other screen is disconnected.
       </p>
       <Tip>
-        If Cast cannot start, Kaleido Sage tells you why. With only one screen, connect a second screen
-        first. If the app is on the screen that you selected, move the app window to the other screen.
+        If Cast cannot start, Kaleido Sage tells you why. With only one screen and no receiver, connect a
+        second screen first, or make another PC a receiver. If the app is on the screen that you selected,
+        move the app window to the other screen.
       </Tip>
+
+      <h2>Cast to another PC</h2>
+      <Shot name="cast-network-menu" alt="The View menu with the mouse on the Cast to command of a receiver on the network" />
+      <p>
+        The other screen can be in a different room. Kaleido Sage on a second PC, the receiver, shows
+        the picture and plays the music that your PC sends to it through your network. A small PC that
+        stays connected to a projector or a television is a good receiver. You need no other program,
+        and there is nothing to set up on the network.
+      </p>
+
+      <h3>Make a PC a receiver</h3>
+      <Shot name="receiver-menu" alt="The View menu with the mouse on Use This PC as a Receiver" side="left" />
+      <p>
+        Do these steps one time, on the PC at the projector or the television:
+      </p>
+      <ol>
+        <li>Install Kaleido Sage on that PC, and open it.</li>
+        <li>Select <MenuPath path="View > Use This PC as a Receiver" />, then <b>Make This PC a Receiver</b>.</li>
+        <li>
+          Windows asks one time if Kaleido Sage can use the network. Select <b>Allow</b>. Without this,
+          your other PC cannot find the receiver.
+        </li>
+      </ol>
+      <p>
+        Kaleido Sage then closes and opens again as the receiver: a black screen that shows the name of
+        the PC and that it is ready for a cast. From now on, the receiver starts each time Windows
+        starts, and it keeps the screen on. Thus you only turn the PC on.
+      </p>
+
+      <h3>Cast to the receiver</h3>
+      <p>
+        On your own PC, the receiver shows in the <b>View</b> menu a moment after it starts,
+        as <b>Cast to</b> with the name of the receiver PC and <b>(network)</b>. Select that
+        command. <Keys k="C" /> and the <b>Cast</b> button also start the cast, as for a second screen.
+      </p>
+      <ul>
+        <li>
+          The picture has the shape of the receiver's screen. The picture in the main window is a
+          preview of the show. You can make the main window smaller, or minimize it. The show
+          continues.
+        </li>
+        <li>
+          The music of the Playlist plays on the receiver, in time with the picture, and is silent on
+          your own PC while the cast is on. The other sounds of your PC stay on your PC.
+        </li>
+        <li>
+          The receiver shows each picture about a quarter of a second after your PC makes it. For a
+          show that plays, you do not see this. When you turn a knob, the picture on the receiver
+          follows that much later.
+        </li>
+      </ul>
+      <p>
+        To stop, press <Keys k="C" /> again or select <MenuPath path="View > Stop Cast" />. The music then
+        plays on your own PC again.
+      </p>
+      <Tip>
+        A cast to another PC needs an NVIDIA graphics card of the RTX 40 series or later in the PC that
+        sends, and both PCs on the same network. The two PCs must have the same version of Kaleido
+        Sage; if they do not, Kaleido Sage tells you to update both.
+      </Tip>
+
+      <h3>Use the receiver PC as before</h3>
+      <p>
+        On the receiver, press <Keys k="Esc" />, or click the screen. The options show:
+      </p>
+      <ul>
+        <li><b>Back to the Receiver</b>: closes the options.</li>
+        <li><b>Close the Receiver</b>: closes Kaleido Sage. The receiver starts again with Windows.</li>
+        <li>
+          <b>Use This PC as Before</b>: opens Kaleido Sage as the normal app. The receiver does not start
+          with Windows after this.
+        </li>
+      </ul>
 
       <h2>See the picture in VR</h2>
       <Shot name="vr-menu" alt="The View menu with the mouse on Enter VR" />
@@ -113,7 +191,7 @@ export function CastVr() {
       </ul>
       <Tip>
         Cast and VR do not operate at the same time. While a cast is on, <b>Enter VR</b> is off, and while VR
-        is on, <b>Cast</b> is off. For a video that goes all around the viewer in a headset, with no PC,
+        is on, <b>Cast</b> is off. This is also true for a cast to another PC. For a video that goes all around the viewer in a headset, with no PC,
         see the 360° size in <i>Save PNG and Export Video</i>.
       </Tip>
     </>

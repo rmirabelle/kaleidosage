@@ -2,9 +2,11 @@
 
 Written 2026-10-29. Cast shows the picture full screen on another screen,
 in a second window, the Show window, while the main window stays free:
-the user can resize, use or minimize it, and the show plays on. The usual
-other screen is a virtual screen (Virtual Display Driver) that Sunshine
-streams to a projector in another room (the CastSage project).
+the user can resize, use or minimize it, and the show plays on. At first,
+the usual other screen was a virtual screen (Virtual Display Driver) that
+Sunshine streamed to a projector in another room (the CastSage project).
+Since 2026-11-22 the app sends the picture and the music to another PC
+itself: see "Network cast" below.
 
 ## How it works
 
@@ -143,9 +145,20 @@ scene, which misled: a first tuning by ear ended at -135 ms, and was wrong.
 The user saw scenes out of time with their music in the cast, and never
 on the sender's own screen. After the two corrections above (the stamp
 from the sound system's clock, and the sound that follows each step of the
-delay at once), the user found the cast close enough. No test has shown
-which correction made the difference; if casts look out of time again,
-run the click test first.
+delay at once), the user found the cast close enough for a short time.
+
+**Open fault (2026-11-22, to revisit):** more tests by the user show that
+real scenes are still out of time with their music in the cast, and only
+in the cast; on the sender's own screen they are in perfect time. The
+sound now seems early, not late, but the user cannot be sure. The click
+test and the measurements above do not show this fault, so they do not
+cover its cause. Not yet examined: the picture's way through the engine
+in a cast (the stream's own frame clock gives the engine evenly spaced
+times, not the real time; `rangeAhead` and the trails draw for a moment
+ahead), the time from the receiver's draw to light on the screen, and
+the 43 ms that the music waits in blocks. A test for it needs a real
+scene's motion in the measurement, for example a setting that the song's
+beat moves, read back from the frames on the receiver.
 
 Measured with music: about 200 ms from the picture in the app to the
 projector (most of it for the Wi-Fi's slow moments of up to 300 ms), no
@@ -180,7 +193,8 @@ Not done yet: H.264 or HEVC for graphics cards with no AV1 encoder, and
 the processor's encoder for PCs with no NVIDIA card; a stream quality
 setting; a transport that hides the Wi-Fi's slow moments (the delay could
 then be much shorter); app updates on a PC in receiver mode (the update
-question is in the normal app only); the help chapter, which still
-describes the cast with Sunshine. `src/dev/castProbe.ts` has the timing
+question is in the normal app only); a help picture of the receiver
+screen (the picture tool photographs only the main window).
+`src/dev/castProbe.ts` has the timing
 tests, and can start a cast with a line of numbers each second in the dev
 log.

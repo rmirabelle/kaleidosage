@@ -40,7 +40,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
       { keys: ["Space"], does: "Play or pause the scene (the music has its own controls)" },
       { keys: ["Shift+Space"], does: "Stop the scene: pause and go back to its start" },
       { keys: ["F", "F11", "Double-click the picture"], does: "Full screen" },
-      { keys: ["C"], does: "Cast: show the picture on the other screen, or stop" },
+      { keys: ["C"], does: "Cast: show the picture on another screen or another PC, or stop" },
       { keys: ["Esc"], does: "Leave full screen, or play the ranges that MIDI stopped" }
     ]
   },
