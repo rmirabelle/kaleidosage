@@ -127,6 +127,17 @@ scene, which misled: a first tuning by ear ended at -135 ms, and was wrong.
   code assumes.
 - A stamp from the blocks' arrival times was 6 ms later than the stamp
   from the sound system's clock, which the code now uses.
+- In the real show with a song (`measureShow`): for the same moment of
+  the song, the music's time stamp is 6 ms after the picture's.
+- The click test (`StreamCast.flashEvery`): a click track plays as a song,
+  and each frame whose song time is at a click goes out white. Flash and
+  click came together on the projector. Make the click track with FFmpeg
+  (a 30 ms tone each half second); it is not kept in Git.
+- The receiver's sound player follows each step up of the delay at once
+  (`jump`), and stays within 4 ms of its time.
+
+So a scene that looks out of time with its music in a cast has that look
+from its own motion, not from the stream.
 
 Measured with music: about 200 ms from the picture in the app to the
 projector (most of it for the Wi-Fi's slow moments of up to 300 ms), no

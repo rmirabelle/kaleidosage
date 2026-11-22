@@ -36,3 +36,6 @@ Thumbs.db
 # Copies of projects that were open when a help capture run started (src/help/capture.ts)
 /help-stash/
 /test-models/
+
+# The click track for the cast timing test (see docs/CAST.md)
+/tools/cast-sync/*.wav

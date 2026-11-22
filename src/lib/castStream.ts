@@ -35,6 +35,8 @@ const MAX_IN_FLIGHT = 3;
 const SOUND_CLOCK_JUMP_MS = 50;
 /** With each block, the audio clock's place moves this part of the way to the sound system's reading. */
 const SOUND_CLOCK_LEAN = 0.05;
+/** The click test's flash lasts this long, in seconds (see StreamCast.flashEvery). */
+const FLASH_SECONDS = 0.04;
 /** The timing test (see StreamCast.testPattern): the flash and the beep last this long, and the beep's blocks have this size and rate. */
 const TEST_FLASH_MS = 50;
 const TEST_SOUND_FRAMES = 2048;
@@ -101,6 +103,8 @@ class StreamCast {
   private counts = { sent: 0, skipped: 0, sumMs: 0, maxMs: 0 };
   /** The time on this PC's clock (ms since 1970) at which the sound of the audio context's time 0 was heard. */
   private soundClock = Infinity;
+  /** Dev: called with each block of music and the time stamp of its first sample (see measureShow in src/dev/castProbe.ts). */
+  onSoundBlock: ((samples: Float32Array, stamp: number) => void) | null = null;
   /** Dev: how much later (ms) a stamp from the blocks' arrival times is than the stamp from the sound system's clock. */
   soundStampDifference = 0;
   /** Moves the sound at the receiver, in ms: positive is later. For a screen or speakers with a delay of their own, which no PC can measure. */
@@ -119,6 +123,15 @@ class StreamCast {
    * together plays picture and sound in time.
    */
   testPattern = false;
+  /**
+   * A second timing test, for the real show's path: with a number of
+   * seconds here and a clock that gives the song's time for the picture,
+   * each frame whose song time is in the first 40 ms of such a period goes
+   * out white. With a song that has a click at each period, the receiver
+   * shows a flash with each click when picture and sound are in time.
+   */
+  flashEvery = 0;
+  flashClock: (() => number) | null = null;
   /** The time stamp of the next block of the test's beep; 0 before the first. */
   private testSoundAt = 0;
   /** The blocks that wait for the next call, and the time stamp of the first one. */
@@ -186,11 +199,13 @@ class StreamCast {
         this.inFlight++;
         const drawn = performance.now();
         const taken = performance.timeOrigin + drawn;
+        const flash = this.flashEvery > 0 && this.flashClock !== null && tracks.playing && this.flashClock() % this.flashEvery < FLASH_SECONDS;
         /* The read starts now, while the canvas holds the frame; it ends in the frame's turn. */
         const read = engine.startRead();
         this.chain = this.chain
           .then(async () => {
             await read(pixels);
+            if (flash) pixels.fill(255);
             await invoke("cast_stream_frame", { taken });
             const ms = performance.now() - drawn;
             this.counts.sent++;
@@ -275,6 +290,7 @@ class StreamCast {
     const reading = output.performanceTime ? performance.timeOrigin + output.performanceTime - (output.contextTime ?? 0) * 1000 : estimate;
     this.soundClock = Math.abs(reading - this.soundClock) > SOUND_CLOCK_JUMP_MS ? reading : this.soundClock + (reading - this.soundClock) * SOUND_CLOCK_LEAN;
     this.soundStampDifference += (estimate - this.soundClock - this.soundStampDifference) * 0.05;
+    this.onSoundBlock?.(samples, this.soundClock + time * 1000);
     if (this.soundWaiting.length === 0) this.soundWaitingAt = this.soundClock + time * 1000 + this.soundOffsetMs;
     this.soundWaiting.push(samples);
     if (this.soundWaiting.length < this.soundBlocks) return;

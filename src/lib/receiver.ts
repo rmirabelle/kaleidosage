@@ -75,9 +75,12 @@ const wall = () => performance.timeOrigin + performance.now();
  * samples) and "when" (the audio context's time at which that sample must
  * play). The samples wait in a ring of 4 seconds. The player keeps a place
  * in the music and moves it one sample for each sample it plays, a little
- * more or less to stay at the wanted time; a difference of more than 60 ms
- * moves the place at once. Each second it posts the samples of silence it
- * played for want of music, and the times it moved its place.
+ * more or less to stay at the wanted time; a difference of more than 60 ms,
+ * or a message with "jump" (the picture's delay went up at once, and the
+ * sound must go with it), moves the place at once. Each second it posts
+ * the samples of silence it played for want of music, the times it moved
+ * its place, and the largest difference between its place and the wanted
+ * time, in ms.
  */
 const SOUND_SOURCE = `
 class KaleidoReceiverOut extends AudioWorkletProcessor {
@@ -93,6 +96,7 @@ class KaleidoReceiverOut extends AudioWorkletProcessor {
     this.jump = false;
     this.gap = 0;
     this.jumps = 0;
+    this.error = 0;
     this.sinceReport = 0;
     this.port.onmessage = (event) => {
       const message = event.data;
@@ -112,7 +116,7 @@ class KaleidoReceiverOut extends AudioWorkletProcessor {
       this.written = message.index + frames;
       if (this.written - this.first > this.size) this.first = this.written - this.size;
       const base = message.when - message.index / sampleRate;
-      if (this.base === null || Math.abs(base - this.base) > 0.06) {
+      if (this.base === null || message.jump || Math.abs(base - this.base) > 0.06) {
         this.base = base;
         this.jump = true;
       } else {
@@ -130,6 +134,7 @@ class KaleidoReceiverOut extends AudioWorkletProcessor {
         this.jump = false;
         this.jumps++;
       }
+      this.error = Math.max(this.error, Math.abs(wanted - this.place) / sampleRate * 1000);
       const step = 1 + Math.max(-0.003, Math.min(0.003, (wanted - this.place) / sampleRate * 0.5));
       for (let frame = 0; frame < left.length; frame++) {
         const index = Math.floor(this.place);
@@ -147,10 +152,11 @@ class KaleidoReceiverOut extends AudioWorkletProcessor {
     }
     this.sinceReport += left.length;
     if (this.sinceReport >= sampleRate) {
-      this.port.postMessage({ gap: this.gap, jumps: this.jumps });
+      this.port.postMessage({ gap: this.gap, jumps: this.jumps, error: this.error });
       this.sinceReport = 0;
       this.gap = 0;
       this.jumps = 0;
+      this.error = 0;
     }
     return true;
   }
@@ -194,7 +200,9 @@ export class ReceiverPlayer {
   private soundIndex = 0;
   private lastSoundAt = -Infinity;
   /** The worklet's numbers since the last report: samples of silence for want of music, and moves of its place. */
-  private soundStats = { gap: 0, jumps: 0 };
+  private soundStats = { gap: 0, jumps: 0, error: 0 };
+  /** The delay that the last block of music was sent to the player with. */
+  private lastSoundDelay = 0;
   private disposed = false;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
@@ -373,9 +381,10 @@ export class ReceiverPlayer {
       .then(() => {
         if (this.sound !== sound) return;
         const node = new AudioWorkletNode(context, "kaleido-receiver-out", { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
-        node.port.onmessage = (event: MessageEvent<{ gap: number; jumps: number }>) => {
+        node.port.onmessage = (event: MessageEvent<{ gap: number; jumps: number; error: number }>) => {
           this.soundStats.gap += event.data.gap;
           this.soundStats.jumps += event.data.jumps;
+          this.soundStats.error = Math.max(this.soundStats.error, event.data.error);
         };
         node.connect(context.destination);
         sound.node = node;
@@ -418,7 +427,10 @@ export class ReceiverPlayer {
     const when = output.performanceTime && output.contextTime !== undefined
       ? output.contextTime + (due - output.performanceTime) / 1000
       : context.currentTime + (due - now) / 1000;
-    node.port.postMessage({ samples, index: this.soundIndex, when }, [samples.buffer]);
+    /* The picture's delay goes up at once when the network is slow; the sound must make the same step at once, or it plays before its picture until the player has slowly moved there. */
+    const jump = this.delay - this.lastSoundDelay > 3;
+    this.lastSoundDelay = this.delay;
+    node.port.postMessage({ samples, index: this.soundIndex, when, jump }, [samples.buffer]);
     this.soundIndex += whole.length / 2;
   }
 
@@ -460,9 +472,10 @@ export class ReceiverPlayer {
       waiting: this.queue.length,
       soundGapMs: this.sound ? Math.round(this.soundStats.gap / this.sound.rate * 1000) : 0,
       soundJumps: this.soundStats.jumps,
+      soundError: Math.round(this.soundStats.error),
       soundOutput: this.soundOutput()
     });
-    this.soundStats = { gap: 0, jumps: 0 };
+    this.soundStats = { gap: 0, jumps: 0, error: 0 };
     this.stats = { shown: 0, delaySum: 0, dropped: 0, lost: 0, bytes: 0 };
     this.tripMax = 0;
   }
