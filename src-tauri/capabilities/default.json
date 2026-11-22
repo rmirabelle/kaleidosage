@@ -18,6 +18,7 @@
     "core:window:allow-is-focused",
     "core:window:allow-is-maximized",
     "core:window:allow-is-fullscreen",
+    "dialog:allow-ask",
     "dialog:allow-open",
     "dialog:allow-save"
   ]

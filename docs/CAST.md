@@ -35,10 +35,14 @@ streams to a projector in another room (the CastSage project).
 
 ## Controls
 
-- `C`, the View menu (one item per other screen when there are several),
-  and the Cast button over the picture.
+- `C`, the View menu (one item for each other screen and each network
+  receiver when there are several), and the Cast button over the picture.
+  With no pick, Cast goes where the last cast went: to the remembered
+  receiver, else to a screen, else to the first receiver.
+- View > Use This PC as a Receiver makes the PC a network receiver (see
+  below).
 
-## Network cast (started 2026-11-22, in work)
+## Network cast (2026-11-22)
 
 The goal: the picture and the sound go to a screen in another room with no
 other program (no Sunshine, Moonlight or virtual screen) and no setup.
@@ -136,17 +140,47 @@ scene, which misled: a first tuning by ear ended at -135 ms, and was wrong.
 - The receiver's sound player follows each step up of the delay at once
   (`jump`), and stays within 4 ms of its time.
 
-So a scene that looks out of time with its music in a cast has that look
-from its own motion, not from the stream.
+The user saw scenes out of time with their music in the cast, and never
+on the sender's own screen. After the two corrections above (the stamp
+from the sound system's clock, and the sound that follows each step of the
+delay at once), the user found the cast close enough. No test has shown
+which correction made the difference; if casts look out of time again,
+run the click test first.
 
 Measured with music: about 200 ms from the picture in the app to the
 projector (most of it for the Wi-Fi's slow moments of up to 300 ms), no
 gaps in the music.
 
-Not done yet: a receiver that is found by itself and shows in the Cast
-menu; the "Use this PC as a receiver" choice with a start with Windows;
-H.264 or HEVC for graphics cards with no AV1 encoder, and the processor's
-encoder for PCs with no NVIDIA card; a stream quality setting; a transport
-that hides the Wi-Fi's slow moments (the delay could then be much
-shorter). Until the Cast menu has it, `src/dev/castProbe.ts` starts and
-stops the network cast in the dev app, and has the timing tests.
+### The Cast menu and receiver mode (2026-11-22)
+
+- Search: the sender sends `KALEIDOSAGE-FIND 1` (UDP, port 14530) from
+  each of its network addresses to all PCs on that network
+  (`cast_receivers`); each receiver answers with its name and screen
+  size. Windows Firewall lets the answers in with no question on the
+  sender, because they answer a message the app sent a moment before. The
+  app searches at its start, when its window gets the focus, and each 15
+  seconds while it has the focus.
+- The receivers show in the View menu as "Cast to NAME (network)", after
+  the screens. `StreamCast.pick` keeps the last receiver by name
+  (localStorage `kaleidosage.cast-receiver`).
+- A sender and a receiver with different `PROTOCOL` numbers do not work
+  together; the sender says to update both.
+- Receiver mode: View > Use This PC as a Receiver (`receiver_mode_set`)
+  adds a value to the user's Run key in the registry, so Windows starts
+  `kaleidosage.exe --receiver` at each sign-in, then the app closes (with
+  its usual question about changes) and starts again as a receiver. Only
+  the installed app can do this, not the dev build. The uninstaller does
+  not remove the Run value; Windows ignores a value whose program is gone.
+- On the receiver screen, Esc or a click opens the options: back, Close
+  the Receiver (it comes back with Windows), or Use This PC as Before
+  (removes the Run value and opens the normal app).
+- The receiver keeps the screen and the PC on (`keep_awake`).
+
+Not done yet: H.264 or HEVC for graphics cards with no AV1 encoder, and
+the processor's encoder for PCs with no NVIDIA card; a stream quality
+setting; a transport that hides the Wi-Fi's slow moments (the delay could
+then be much shorter); app updates on a PC in receiver mode (the update
+question is in the normal app only); the help chapter, which still
+describes the cast with Sunshine. `src/dev/castProbe.ts` has the timing
+tests, and can start a cast with a line of numbers each second in the dev
+log.

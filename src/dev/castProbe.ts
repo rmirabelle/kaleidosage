@@ -29,7 +29,7 @@ const TEST_PATTERN = false;
  * receiver sees a flash with each click when the show's timing is right.
  */
 const FLASH_EVERY_SECONDS = 0;
-const RUN = 26;
+const RUN = 27;
 /** A new number here runs the measurement of the player's clock (see measure). */
 const MEASURE = 4;
 
@@ -291,7 +291,7 @@ if (import.meta.hot) {
     streamCast.soundOffsetMs = SOUND_OFFSET_MS;
     streamCast.soundBlocks = SOUND_BLOCKS;
     streamCast.flashEvery = FLASH_EVERY_SECONDS;
-    log(`sound offset ${SOUND_OFFSET_MS} ms, ${SOUND_BLOCKS} blocks a message; this PC's speaker delay ${(tracks.latency * 1000).toFixed(0)} ms, output device ${audioOutput.device ?? "Windows default"}`);
+    log(`sound offset ${SOUND_OFFSET_MS} ms, ${SOUND_BLOCKS} blocks a message; this PC's speaker delay ${(tracks.latency * 1000).toFixed(0)} ms, output device ${audioOutput.device ?? "Windows default"}; receivers found: ${streamCast.receivers.map((receiver) => `${receiver.name} at ${receiver.address}`).join(", ") || "none"}`);
   }
   hot.data.armed = true;
   hot.data.run = RUN;

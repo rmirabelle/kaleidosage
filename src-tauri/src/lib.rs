@@ -77,6 +77,10 @@ fn build_main_window(app: &tauri::AppHandle) -> tauri::Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    /* After a change between the normal app and receiver mode (see receiver.rs), the instance that started this one must end first: only one instance can run. */
+    if std::env::args().any(|argument| argument == receiver::AFTER_SWITCH) {
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+    }
     // Full screen is not restored: the app always starts in a window.
     let window_state_flags = tauri_plugin_window_state::StateFlags::SIZE
         | tauri_plugin_window_state::StateFlags::POSITION
@@ -90,6 +94,7 @@ pub fn run() {
         .manage(cast::CastTarget::default())
         .manage(cast_stream::CastStreams::default())
         .manage(receiver::Receiver::default())
+        .manage(receiver::SwitchToReceiver::default())
         .manage(song_models::ModelDownload::default())
         .on_page_load(|webview, payload| sound_capture::stop_on_page_load(webview, payload))
         .register_asynchronous_uri_scheme_protocol("video", |ctx, request, responder| {
@@ -123,6 +128,7 @@ pub fn run() {
             /* The Show window (see cast.rs) and the help window close with the main window, so the app can end. */
             if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
                 help::main_window_closed(window.app_handle());
+                receiver::main_window_closed(window.app_handle());
                 if let Some(show) = window.app_handle().get_webview_window(cast::SHOW_LABEL) {
                     let _ = show.destroy();
                 }
@@ -177,6 +183,10 @@ pub fn run() {
             cast_stream::cast_stream_audio,
             receiver::receiver_listen,
             receiver::receiver_send,
+            receiver::receiver_mode,
+            receiver::receiver_mode_set,
+            receiver::receiver_exit,
+            cast_stream::cast_receivers,
             files::log_frontend_error,
             updater::check_for_update,
             updater::download_and_run_installer,

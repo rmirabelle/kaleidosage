@@ -1,7 +1,11 @@
-use crate::cast_stream::{read_message, write_message, Hello, PORT, TEXT};
+use crate::cast_stream::{read_message, write_message, Hello, PORT, PROTOCOL, SEARCH, TEXT};
 use std::{
-    net::{Shutdown, TcpListener, TcpStream},
-    sync::{Arc, Mutex},
+    net::{Shutdown, TcpListener, TcpStream, UdpSocket},
+    process::Command,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
 };
 use tauri::{window::Color, AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tungstenite::{Message, WebSocket};
@@ -15,6 +19,14 @@ use tungstenite::{Message, WebSocket};
  * (src/components/ReceiverView.tsx). This side listens on PORT, takes one
  * sender at a time, and gives each of its messages to the page, which
  * decodes the video and shows it (src/lib/receiver.ts).
+ *
+ * A PC becomes a receiver with View > Use This PC as a Receiver in the
+ * app (receiver_mode_set): Windows then starts the app with `--receiver`
+ * at each sign-in (a value in the user's Run key in the registry), and the
+ * app starts again as a receiver at once. The receiver screen's options
+ * (Esc) undo it. The receiver answers the senders' searches (see
+ * cast_receivers in cast_stream.rs), so it shows in their Cast menu with
+ * no setup, and it keeps the screen on.
  *
  * The messages go to the page through a WebSocket on this PC only: the
  * page connects to a port that this side opens for it. The app's normal
@@ -30,6 +42,109 @@ const GONE: u8 = 3;
 /** True when the app was started as a receiver. */
 pub fn wanted() -> bool {
     std::env::args().any(|argument| argument == "--receiver")
+}
+
+/** The app starts with this argument right after a change of mode: it then waits a moment, so the instance that started it has ended (only one instance can run). */
+pub const AFTER_SWITCH: &str = "--after-switch";
+
+/** Set when the main window's close must be followed by a start as a receiver (see receiver_mode_set). */
+#[derive(Default)]
+pub struct SwitchToReceiver(pub AtomicBool);
+
+/** The user's Run key in the registry, and the name of this app's value there. */
+const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
+const RUN_VALUE: &str = "Kaleido Sage Receiver";
+
+/** Runs reg.exe with no console window. */
+fn registry(arguments: &[&str]) -> Result<std::process::Output, String> {
+    let mut command = Command::new("reg.exe");
+    command.args(arguments);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000);
+    }
+    command.output().map_err(|error| format!("Could not change the Windows start list: {error}"))
+}
+
+/** Starts this program again, as a receiver or as the normal app; the new instance waits until this one has ended. */
+fn start_again(receiver: bool) -> Result<(), String> {
+    let program = std::env::current_exe().map_err(|error| format!("Could not find the app's program: {error}"))?;
+    let mut command = Command::new(program);
+    if receiver {
+        command.arg("--receiver");
+    }
+    command.arg(AFTER_SWITCH).spawn().map(|_| ()).map_err(|error| format!("Could not start Kaleido Sage again: {error}"))
+}
+
+/** Starts the app as a receiver after the main window has closed, when receiver_mode_set asked for it. */
+pub fn main_window_closed(app: &AppHandle) {
+    if app.state::<SwitchToReceiver>().0.swap(false, Ordering::Relaxed) {
+        let _ = start_again(true);
+    }
+}
+
+/** True when Windows starts this app as a receiver at each sign-in. */
+#[tauri::command]
+pub fn receiver_mode() -> bool {
+    registry(&["query", RUN_KEY, "/v", RUN_VALUE]).is_ok_and(|output| output.status.success())
+}
+
+/**
+ * Makes this PC a receiver, or a normal PC again. On: Windows starts the
+ * app as a receiver at each sign-in, and the app starts as a receiver when
+ * the main window has closed (the page closes it, so the user gets the
+ * question about changes that are not saved). Off, from the receiver
+ * window: the start with Windows is removed, and the normal app starts.
+ */
+#[tauri::command]
+pub fn receiver_mode_set(app: AppHandle, on: bool) -> Result<(), String> {
+    if on {
+        if cfg!(debug_assertions) {
+            return Err("Only the installed Kaleido Sage can be a receiver, not the development build.".into());
+        }
+        let program = std::env::current_exe().map_err(|error| format!("Could not find the app's program: {error}"))?;
+        let start = format!("\"{}\" --receiver", program.display());
+        let added = registry(&["add", RUN_KEY, "/v", RUN_VALUE, "/t", "REG_SZ", "/d", &start, "/f"])?;
+        if !added.status.success() {
+            return Err(format!("Could not add Kaleido Sage to the Windows start list: {}", String::from_utf8_lossy(&added.stderr).trim()));
+        }
+        app.state::<SwitchToReceiver>().0.store(true, Ordering::Relaxed);
+        return Ok(());
+    }
+    let _ = registry(&["delete", RUN_KEY, "/v", RUN_VALUE, "/f"])?;
+    start_again(false)?;
+    app.exit(0);
+    Ok(())
+}
+
+/** Closes the receiver. With the start with Windows on, it comes back at the next sign-in. */
+#[tauri::command]
+pub fn receiver_exit(app: AppHandle) {
+    app.exit(0);
+}
+
+/** Answers each sender's search with this receiver's name and screen size (see cast_receivers in cast_stream.rs). */
+fn answer_searches(app: AppHandle) {
+    let Ok(socket) = UdpSocket::bind(("0.0.0.0", PORT)) else { return };
+    let mut message = [0u8; 64];
+    loop {
+        let Ok((length, from)) = socket.recv_from(&mut message) else { continue };
+        if &message[..length] == SEARCH {
+            if let Ok(answer) = serde_json::to_vec(&hello(&app)) {
+                let _ = socket.send_to(&answer, from);
+            }
+        }
+    }
+}
+
+/** Keeps the screen and the PC on while the receiver runs: no screen saver, no sleep. The call is for the thread that makes it, which must stay alive: the app's main thread. */
+fn keep_awake() {
+    #[cfg(windows)]
+    unsafe {
+        use windows::Win32::System::Power::{SetThreadExecutionState, ES_CONTINUOUS, ES_DISPLAY_REQUIRED, ES_SYSTEM_REQUIRED};
+        SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED);
+    }
 }
 
 #[derive(Default)]
@@ -60,6 +175,9 @@ pub fn open_window(app: &AppHandle) -> tauri::Result<()> {
     if let Some(splash) = app.get_webview_window("splash") {
         let _ = splash.destroy();
     }
+    keep_awake();
+    let app = app.clone();
+    std::thread::spawn(move || answer_searches(app));
     Ok(())
 }
 
@@ -96,6 +214,7 @@ fn hello(app: &AppHandle) -> Hello {
         name: std::env::var("COMPUTERNAME").unwrap_or_else(|_| "Receiver".into()),
         width: size.map_or(1920, |size| size.width),
         height: size.map_or(1080, |size| size.height),
+        protocol: PROTOCOL,
     }
 }
 

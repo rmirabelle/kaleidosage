@@ -1,6 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { open as openFileDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { ask, open as openFileDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { ArrowClockwise, ArrowCounterClockwise, ArrowsIn, ArrowsOut, Camera, Export, Screencast, FilePlus, FilmStrip, FloppyDisk, FolderOpen, Gauge, HandPointing, Info, Playlist, Keyboard, Plus, Question, SignOut, SlidersHorizontal, SpeakerSimpleHigh, Trash, VirtualReality, X } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { AboutDialog } from "./components/AboutDialog";
@@ -74,6 +74,7 @@ import { checkForUpdate, getAppVersion, type UpdateInfo } from "./lib/updater";
 import { CROSSFADE_SECONDS, encodeVideo, videoDimensions, videoSize, type SongJob, type VideoOptions } from "./lib/videoExport";
 import { attachCameraDrag } from "./lib/cameraDrag";
 import { cast, screenLabel, type CastScreen } from "./lib/cast";
+import { streamCast, type CastReceiver } from "./lib/castStream";
 
 /** Dev only: the network cast test (see src/dev/castProbe.ts). */
 if (import.meta.env.DEV) void import("./dev/castProbe");
@@ -1780,30 +1781,98 @@ export default function App() {
   }, [engine, showError]);
 
   /**
-   * Cast (see cast.ts): the picture full screen on another screen, in the
-   * Show window, while this window stays free. "screen" picks the screen
-   * first (the View menu lists them when there are several).
+   * Cast: the picture full screen on another screen of this PC, in the
+   * Show window (see cast.ts), or on a Kaleido Sage receiver on another PC,
+   * with the music (see castStream.ts), while this window stays free.
+   * "target" picks the screen or the receiver first (the View menu lists
+   * them when there are several). With no pick, Cast goes where the last
+   * cast went: to the remembered receiver, else to a screen, else to the
+   * first receiver.
    */
-  const casting = useSyncExternalStore((listener) => cast.subscribe(listener), () => cast.on);
+  const screenCasting = useSyncExternalStore((listener) => cast.subscribe(listener), () => cast.on);
+  const streaming = useSyncExternalStore((listener) => streamCast.subscribe(listener), () => streamCast.on);
+  const casting = screenCasting || streaming;
   const castScreens = useSyncExternalStore((listener) => cast.subscribe(listener), () => cast.screens);
-  const toggleCast = useCallback(async (screen?: CastScreen) => {
+  const castReceivers = useSyncExternalStore((listener) => streamCast.subscribe(listener), () => streamCast.receivers);
+  const toggleCast = useCallback(async (target?: CastScreen | CastReceiver) => {
     if (!engine || engine.inVr) return;
-    if (screen) {
-      cast.pick(screen);
+    if (streamCast.on) {
+      await streamCast.stop();
+      return;
+    }
+    let receiver: CastReceiver | null = null;
+    if (target && "address" in target) {
+      receiver = target;
+    } else if (!target && !cast.on) {
+      const remembered = streamCast.receivers.find((found) => found.name === streamCast.pick.receiver) ?? null;
+      if (streamCast.pick.prefer && remembered) receiver = remembered;
+      else if (!cast.screens.some((screen) => !screen.current)) receiver = remembered ?? streamCast.receivers[0] ?? null;
+    }
+    if (receiver) {
+      if (cast.on) cast.stop();
+      await streamCast.start(engine, receiver);
+      if (streamCast.status.state === "error") showError(`Could not cast to ${receiver.name}. ${streamCast.status.message}`);
+      return;
+    }
+    if (target) {
+      streamCast.setPick({ ...streamCast.pick, prefer: false });
+      cast.pick(target as CastScreen);
       if (cast.on) return;
     }
     await cast.toggle(engine);
     if (cast.status.state === "error") showError(`Could not cast. ${cast.status.message}`);
   }, [engine, showError]);
   useEffect(() => {
-    void cast.refreshScreens();
-    /* Screens come and go while the app runs (a projector, a virtual screen). */
-    const refresh = () => void cast.refreshScreens();
+    /* Screens and receivers come and go while the app runs (a projector, a PC that starts). */
+    const refresh = () => {
+      void cast.refreshScreens();
+      void streamCast.refreshReceivers();
+    };
+    refresh();
     window.addEventListener("focus", refresh);
-    return () => window.removeEventListener("focus", refresh);
+    const timer = window.setInterval(() => { if (document.hasFocus() && !streamCast.on) void streamCast.refreshReceivers(); }, 15000);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      window.clearInterval(timer);
+    };
   }, []);
+  /* A network cast that ends by itself (the receiver closed, the network failed) says why. */
+  useEffect(() => {
+    let before = streamCast.status.state;
+    return streamCast.subscribe(() => {
+      const now = streamCast.status;
+      if (now.state === "error" && before === "on") showError(`The cast stopped. ${now.message}`);
+      before = now.state;
+    });
+  }, [showError]);
   /* A new engine (or none) ends the cast of the old one. */
-  useEffect(() => () => cast.stop(), [engine]);
+  useEffect(() => () => {
+    cast.stop();
+    void streamCast.stop();
+  }, [engine]);
+  /**
+   * Makes this PC a receiver (see src-tauri/src/receiver.rs): after the
+   * question, the app closes, with its usual question about changes that
+   * are not saved, and starts again as a full-screen receiver.
+   */
+  const becomeReceiver = useCallback(async () => {
+    const yes = await ask(
+      "This PC then shows the picture and plays the music that Kaleido Sage on another PC casts to it.\n\nKaleido Sage closes now and starts again as a full-screen receiver. It also starts as a receiver each time Windows starts.\n\nWindows asks one time if Kaleido Sage can use the network: choose Allow.\n\nTo use this PC as before, press Esc on the receiver screen.",
+      { title: "Use This PC as a Receiver", kind: "info", okLabel: "Make This PC a Receiver", cancelLabel: "Cancel" }
+    );
+    if (!yes) return;
+    try {
+      await invoke("receiver_mode_set", { on: true });
+      await getCurrentWindow().close();
+    } catch (error) {
+      showError(String(error instanceof Error ? error.message : error));
+    }
+  }, [showError]);
+  /** Each place a cast can go to: the other screens of this PC, then the receivers on the network. */
+  const castTargets = useMemo(() => [
+    ...castScreens.filter((screen) => !screen.current).map((screen) => ({ label: screenLabel(screen), target: screen as CastScreen | CastReceiver })),
+    ...castReceivers.map((receiver) => ({ label: `${receiver.name} (network)`, target: receiver as CastScreen | CastReceiver }))
+  ], [castScreens, castReceivers]);
 
   /** Puts a new, untitled scene in the engine: the large checkerboard, with every effect off. */
   const blankScene = useCallback(() => {
@@ -2830,12 +2899,13 @@ export default function App() {
         { label: "Full Screen", icon: <ArrowsOut size={15} />, shortcut: "F", disabled: startScreen, run: () => void toggleFullscreen() },
         /* With no headset ready, Enter VR says how to make one ready (see toggleVr). */
         { label: inVr ? "Exit VR" : "Enter VR", icon: <VirtualReality size={15} />, disabled: startScreen || casting || !vrSupported(), run: () => void toggleVr() },
-        /* Cast goes to the other screen; with several other screens, each has its own item. */
+        /* Cast goes to the other screen or to the receiver; with several of them, each has its own item. */
         ...(casting
           ? [{ label: "Stop Cast", icon: <Screencast size={15} />, shortcut: "C", run: () => void toggleCast() }]
-          : castScreens.filter((screen) => !screen.current).length > 1
-            ? castScreens.filter((screen) => !screen.current).map((screen) => ({ label: `Cast to ${screenLabel(screen)}`, icon: <Screencast size={15} />, disabled: startScreen || inVr, run: () => void toggleCast(screen) }))
-            : [{ label: "Cast", icon: <Screencast size={15} />, shortcut: "C", disabled: startScreen || inVr, run: () => void toggleCast() }])
+          : castTargets.length > 1
+            ? castTargets.map(({ label, target }) => ({ label: `Cast to ${label}`, icon: <Screencast size={15} />, disabled: startScreen || inVr, run: () => void toggleCast(target) }))
+            : [{ label: castTargets.length === 1 ? `Cast to ${castTargets[0].label}` : "Cast", icon: <Screencast size={15} />, shortcut: "C", disabled: startScreen || inVr, run: () => void toggleCast() }]),
+        { label: "Use This PC as a Receiver…", icon: <Screencast size={15} />, disabled: casting || inVr, run: () => void becomeReceiver() }
       ]
     },
     {
@@ -2983,7 +3053,7 @@ export default function App() {
             {engine && statsOpen && <StatsOverlay engine={engine} />}
             {engine && inVr && <VrScreenCard engine={engine} />}
             {engine && !startScreen && !fullscreen && (
-              <StageControls onFullscreen={() => void toggleFullscreen()} onVr={(vrUsed || inVr) && !casting ? () => void toggleVr() : null} inVr={inVr} onCast={!inVr && (casting || castScreens.some((screen) => !screen.current)) ? () => void toggleCast() : null} casting={casting} />
+              <StageControls onFullscreen={() => void toggleFullscreen()} onVr={(vrUsed || inVr) && !casting ? () => void toggleVr() : null} inVr={inVr} onCast={!inVr && (casting || castTargets.length > 0) ? () => void toggleCast() : null} casting={casting} />
             )}
             {fullscreen && (
               /* In full screen the title bar and toolbar are gone; these buttons show while the mouse moves. */

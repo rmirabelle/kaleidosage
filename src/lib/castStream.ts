@@ -54,6 +54,28 @@ interface WebViewHost {
   releaseBuffer(buffer: ArrayBuffer): void;
 }
 
+/** A receiver that the search found (see cast_receivers in cast_stream.rs). */
+export interface CastReceiver {
+  name: string;
+  /** Its network address. */
+  address: string;
+  /** Its screen, in pixels. */
+  width: number;
+  height: number;
+}
+
+const STORE_KEY = "kaleidosage.cast-receiver";
+
+/** The receiver that the last network cast went to, and whether a Cast with no pick goes to it and not to a screen. */
+function loadPick(): { receiver: string | null; prefer: boolean } {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY) ?? "{}") as { receiver?: unknown; prefer?: unknown };
+    return { receiver: typeof saved.receiver === "string" ? saved.receiver : null, prefer: saved.prefer === true };
+  } catch {
+    return { receiver: null, prefer: false };
+  }
+}
+
 export type StreamStatus =
   | { state: "off" }
   | { state: "starting"; target: string }
@@ -90,6 +112,11 @@ class StreamCast {
   status: StreamStatus = { state: "off" };
   /** The receiver's last report. */
   report: ReceiverReport | null = null;
+  /** The receivers on the network, by name; refreshReceivers reads them again. */
+  receivers: CastReceiver[] = [];
+  /** See loadPick. */
+  pick = loadPick();
+  private searching: Promise<void> | null = null;
   /** Goes up with each change, for useSyncExternalStore. */
   version = 0;
   private readonly listeners = new Set<() => void>();
@@ -159,9 +186,30 @@ class StreamCast {
     return { sent, skipped, meanMs: sent ? sumMs / sent : 0, maxMs };
   }
 
-  /** Starts a cast to the receiver at "target" (a PC's name or address). */
-  async start(engine: Engine, target: string) {
+  /** Searches the network for receivers. The list changes only when the receivers did. */
+  refreshReceivers() {
+    if (!isTauri()) return Promise.resolve();
+    this.searching ??= invoke<CastReceiver[]>("cast_receivers")
+      .then((found) => {
+        if (JSON.stringify(found) === JSON.stringify(this.receivers)) return;
+        this.receivers = found;
+        this.changed();
+      })
+      .catch(() => { /* The list stays as it is. */ })
+      .finally(() => { this.searching = null; });
+    return this.searching;
+  }
+
+  /** Keeps what a Cast with no pick does: "prefer" sends it to the remembered receiver, not to a screen. */
+  setPick(pick: { receiver: string | null; prefer: boolean }) {
+    this.pick = pick;
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(pick)); } catch { /* The pick is gone at the next start. */ }
+  }
+
+  /** Starts a cast to a receiver from the list, or to the receiver at an address or with a PC name. */
+  async start(engine: Engine, to: CastReceiver | string) {
     if (this.on) return;
+    const target = typeof to === "string" ? to : to.address;
     this.status = { state: "starting", target };
     this.report = null;
     this.changed();
@@ -219,6 +267,7 @@ class StreamCast {
       this.soundWaiting = [];
       if (!this.testPattern) tracks.castTap(this.onSound);
       this.status = { state: "on", ...info };
+      if (typeof to !== "string") this.setPick({ receiver: to.name, prefer: true });
     } catch (error) {
       await this.end();
       this.status = { state: "error", message: error instanceof Error ? error.message : String(error) };

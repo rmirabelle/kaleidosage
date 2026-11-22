@@ -41,8 +41,14 @@ pub const TEXT: u8 = 0;
 pub const FRAME: u8 = 1;
 /** Kinds 2 and 3 are the receiver's own notes to its page (see receiver.rs). */
 pub const AUDIO: u8 = 4;
-/** The receiver listens on this TCP port. */
+/** The receiver listens on this TCP port for a sender, and on the same UDP port for a search (see cast_receivers). */
 pub const PORT: u16 = 14530;
+/** The number of this message layout. A sender and a receiver with different numbers do not work together. */
+pub const PROTOCOL: u32 = 1;
+/** What a sender sends to all PCs on the network to find the receivers; a receiver answers with its Hello. */
+pub const SEARCH: &[u8] = b"KALEIDOSAGE-FIND 1";
+/** How long a search waits for answers. */
+const SEARCH_WAIT: Duration = Duration::from_millis(400);
 /** The longest wait for the receiver's answer when a stream starts. */
 const CONNECT_WAIT: Duration = Duration::from_secs(3);
 /** The largest message that is read; a longer one means a broken stream. */
@@ -79,6 +85,57 @@ pub struct Hello {
     /** The receiver's screen, in pixels. */
     pub width: u32,
     pub height: u32,
+    #[serde(default)]
+    pub protocol: u32,
+}
+
+/** A receiver that a search found: its name, its network address, and its screen's size. */
+#[derive(Serialize)]
+pub struct FoundReceiver {
+    name: String,
+    address: String,
+    width: u32,
+    height: u32,
+}
+
+/**
+ * Finds the receivers on the network. A search message goes from each of
+ * this PC's network addresses to all PCs on that network, and each
+ * receiver answers to the address it came from. Windows Firewall lets the
+ * answers in with no question to the user, because they answer a message
+ * that this app sent a moment before.
+ */
+#[tauri::command(async)]
+pub fn cast_receivers() -> Vec<FoundReceiver> {
+    let mut sockets = Vec::new();
+    for interface in if_addrs::get_if_addrs().unwrap_or_default() {
+        let if_addrs::IfAddr::V4(address) = &interface.addr else { continue };
+        if address.ip.is_loopback() {
+            continue;
+        }
+        let Ok(socket) = std::net::UdpSocket::bind((address.ip, 0)) else { continue };
+        let _ = socket.set_broadcast(true);
+        let _ = socket.set_read_timeout(Some(Duration::from_millis(40)));
+        if let Some(broadcast) = address.broadcast {
+            let _ = socket.send_to(SEARCH, (broadcast, PORT));
+        }
+        let _ = socket.send_to(SEARCH, (std::net::Ipv4Addr::BROADCAST, PORT));
+        sockets.push(socket);
+    }
+    let mut found: Vec<FoundReceiver> = Vec::new();
+    let started = std::time::Instant::now();
+    let mut answer = [0u8; 2048];
+    while started.elapsed() < SEARCH_WAIT {
+        for socket in &sockets {
+            let Ok((length, from)) = socket.recv_from(&mut answer) else { continue };
+            let Ok(hello) = serde_json::from_slice::<Hello>(&answer[..length]) else { continue };
+            if !found.iter().any(|receiver| receiver.name == hello.name) {
+                found.push(FoundReceiver { name: hello.name, address: from.ip().to_string(), width: hello.width, height: hello.height });
+            }
+        }
+    }
+    found.sort_by(|a, b| a.name.cmp(&b.name));
+    found
 }
 
 /** What a started stream gives the page: the receiver's name, and the size of the frames to send. */
@@ -226,6 +283,9 @@ pub fn cast_stream_begin(window: WebviewWindow, streams: State<'_, CastStreams>,
         _ => return Err(format!("{target} did not answer as a Kaleido Sage receiver")),
     };
     let _ = receiver.set_read_timeout(None);
+    if hello.protocol != PROTOCOL {
+        return Err(format!("{} has another version of Kaleido Sage. Update Kaleido Sage on both PCs.", hello.name));
+    }
     /* The encoder needs even sizes. */
     let (screen_width, screen_height) = (hello.width.clamp(320, 7680), hello.height.clamp(240, 4320));
     let height = screen_height.min(max_height.clamp(240, 2160));

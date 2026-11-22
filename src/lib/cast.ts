@@ -125,7 +125,7 @@ class Cast {
       if (!isTauri()) throw new Error("Cast needs the Kaleido Sage app.");
       await this.refreshScreens();
       const screen = this.target;
-      if (!screen) throw new Error("Connect a second screen first. Cast shows the picture on a screen that the app is not on.");
+      if (!screen) throw new Error("Cast needs a second screen on this PC, or a Kaleido Sage receiver on another PC. To make a PC a receiver, open Kaleido Sage on it and choose View > Use This PC as a Receiver.");
       if (screen.current) throw new Error(`The app is on ${screenLabel(screen)}. Move it to another screen, or pick another screen for Cast.`);
       await this.closing;
       /* A Show window that a reload left behind would take the label. */

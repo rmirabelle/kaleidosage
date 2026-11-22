@@ -1807,7 +1807,13 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .receiver-idle { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: #8b90a0; background: #000; }
 .receiver-idle h1 { margin: 0; font-size: 22px; font-weight: 500; color: #c9ccd6; }
 .receiver-idle p { margin: 0; font-size: 15px; }
-.receiver-idle .receiver-error { color: #fecaca; max-width: 70%; text-align: center; }
+.receiver-idle .receiver-error, .receiver-options .receiver-error { color: #fecaca; max-width: 70%; text-align: center; }
+.receiver-hint { font-size: 13px !important; color: #6b7080; max-width: 620px; text-align: center; }
+.receiver.with-options { cursor: default; }
+.receiver-options { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: #c9ccd6; background: rgba(10, 11, 15, .88); }
+.receiver-options h1 { margin: 0; font-size: 22px; font-weight: 500; }
+.receiver-options p { margin: 0; font-size: 15px; }
+.receiver-buttons { display: flex; gap: 10px; }
 
 /* Source: the two images, A and B, with a swap button between them. */
 /* Images A and B side by side, with the swap button between them. */
