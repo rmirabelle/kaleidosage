@@ -31,9 +31,16 @@ use tauri::{path::BaseDirectory, Emitter, Manager, State, WebviewWindow};
  * - FRAME: 16 bytes, then one encoded frame. Byte 0 is 1 for a key frame,
  *   else 2; bytes 4 to 7 are the frame's number; bytes 8 to 15 are the
  *   time the page took the picture, in ms since 1970 (a 64-bit float).
+ * - AUDIO: one block of the app's music, not compressed (48 kHz stereo is
+ *   1.5 Mbit/s, little next to the video). Bytes 0 to 7 are the time the
+ *   block played in the app, as in FRAME; bytes 8 to 11 are the sample
+ *   rate; then the samples, 16 bits each (little-endian), left and right
+ *   in turn. The page makes the whole content (see castStream.ts).
  */
 pub const TEXT: u8 = 0;
 pub const FRAME: u8 = 1;
+/** Kinds 2 and 3 are the receiver's own notes to its page (see receiver.rs). */
+pub const AUDIO: u8 = 4;
 /** The receiver listens on this TCP port. */
 pub const PORT: u16 = 14530;
 /** The longest wait for the receiver's answer when a stream starts. */
@@ -113,6 +120,8 @@ impl OpenStream {
 #[derive(Default)]
 pub struct CastStreams {
     open: Mutex<Option<OpenStream>>,
+    /** The connection of the open stream, for the sound: a frame that waits for FFmpeg keeps "open" locked, and the sound must not wait for it. */
+    sound: Mutex<Option<Arc<Mutex<TcpStream>>>>,
 }
 
 /** Windows process flag: no console window. */
@@ -198,6 +207,9 @@ fn listen(mut from: TcpStream, to: Arc<Mutex<TcpStream>>, gone: Arc<AtomicBool>,
 pub fn cast_stream_begin(window: WebviewWindow, streams: State<'_, CastStreams>, target: String, fps: u32, bit_rate: u32, max_height: u32) -> Result<StreamInfo, String> {
     let mut open = streams.open.lock().map_err(|_| "The stream is unavailable")?;
     if let Some(old) = open.take() {
+        if let Ok(mut sound) = streams.sound.lock() {
+            *sound = None;
+        }
         old.close();
     }
     if fps == 0 || fps > 240 {
@@ -246,6 +258,7 @@ pub fn cast_stream_begin(window: WebviewWindow, streams: State<'_, CastStreams>,
         return Err("Could not use the connection to the receiver".into());
     };
     let writing = Arc::new(Mutex::new(writing));
+    let for_sound = writing.clone();
     let mut threads = Vec::new();
     if let Some(output) = child.stdout.take() {
         let (writing, times, gone) = (writing.clone(), times.clone(), gone.clone());
@@ -268,6 +281,9 @@ pub fn cast_stream_begin(window: WebviewWindow, streams: State<'_, CastStreams>,
         return Err("This web view cannot share memory with the app".into());
     };
     *open = Some(OpenStream { shared, child, stdin, times, gone, receiver, threads, errors });
+    if let Ok(mut sound) = streams.sound.lock() {
+        *sound = Some(for_sound);
+    }
     Ok(StreamInfo { name: hello.name, width, height })
 }
 
@@ -286,9 +302,27 @@ pub fn cast_stream_frame(streams: State<'_, CastStreams>, taken: f64) -> Result<
     stdin.write_all(stream.shared.pixels()).map_err(|error| format!("The video encoder stopped: {error}"))
 }
 
+/** Sends one block of the app's music to the receiver: the raw request body is the content of an AUDIO message. With no stream, it does nothing. */
+#[tauri::command(async)]
+pub fn cast_stream_audio(streams: State<'_, CastStreams>, request: tauri::ipc::Request<'_>) -> Result<(), String> {
+    let tauri::ipc::InvokeBody::Raw(content) = request.body() else {
+        return Err("The sound data is missing".into());
+    };
+    let receiver = streams.sound.lock().map_err(|_| "The stream is unavailable")?.clone();
+    if let Some(receiver) = receiver {
+        if let Ok(mut receiver) = receiver.lock() {
+            let _ = write_message(&mut *receiver, AUDIO, content);
+        }
+    }
+    Ok(())
+}
+
 /** Ends the stream. Returns FFmpeg's error text, empty when all went well. */
 #[tauri::command(async)]
 pub fn cast_stream_end(streams: State<'_, CastStreams>) -> Result<String, String> {
+    if let Ok(mut sound) = streams.sound.lock() {
+        *sound = None;
+    }
     let stream = streams.open.lock().map_err(|_| "The stream is unavailable")?.take();
     Ok(stream.map(OpenStream::close).unwrap_or_default())
 }

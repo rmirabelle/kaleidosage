@@ -27,9 +27,10 @@ const OLD_STORE_KEYS = ["kaleidosage.tracks", "kaleidosage.playlist"];
 const TAP_BLOCK = 512;
 
 /**
- * The tap, as an AudioWorklet module from a Blob, so it needs no build
- * step: it mixes each block of the input to mono and posts it. Its output
- * is silent; it only keeps the node in the audio graph.
+ * The taps, as an AudioWorklet module from a Blob, so it needs no build
+ * step. The tap mixes each block of the input to mono and posts it. The
+ * cast tap posts each block in stereo, for the network cast. Their outputs
+ * are silent; they only keep the nodes in the audio graph.
  */
 const TAP_SOURCE = `
 class KaleidoTap extends AudioWorkletProcessor {
@@ -58,7 +59,42 @@ class KaleidoTap extends AudioWorkletProcessor {
   }
 }
 registerProcessor("kaleido-tap", KaleidoTap);
+
+class KaleidoCastTap extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.block = new Float32Array(${TAP_BLOCK * 2});
+    this.at = 0;
+    this.start = 0;
+  }
+  process(inputs) {
+    const input = inputs[0];
+    if (input && input.length) {
+      const left = input[0];
+      const right = input[1] || input[0];
+      for (let frame = 0; frame < left.length; frame++) {
+        if (this.at === 0) this.start = currentTime + frame / sampleRate;
+        this.block[this.at++] = left[frame];
+        this.block[this.at++] = right[frame];
+        if (this.at === this.block.length) {
+          this.port.postMessage({ samples: this.block, time: this.start }, [this.block.buffer]);
+          this.block = new Float32Array(${TAP_BLOCK * 2});
+          this.at = 0;
+        }
+      }
+    }
+    return true;
+  }
+}
+registerProcessor("kaleido-cast-tap", KaleidoCastTap);
 `;
+
+/**
+ * The network cast's listener (see castStream.ts): each block of the music
+ * that plays, in stereo (left and right samples in turn), with the audio
+ * context's time at the block's start.
+ */
+export type CastTapListener = (samples: Float32Array, time: number, context: AudioContext) => void;
 
 /**
  * Dev only: a hot update would make a second player next to the first,
@@ -120,6 +156,11 @@ class TrackList {
   private context: AudioContext | null = null;
   private audio: HTMLAudioElement | null = null;
   private ready: Promise<void> | null = null;
+  /** The music's way to the speakers; the network cast closes it (see castTap). */
+  private speaker: GainNode | null = null;
+  private source: MediaElementAudioSourceNode | null = null;
+  private castListener: CastTapListener | null = null;
+  private castNode: AudioWorkletNode | null = null;
   /** The track the audio element holds, so Play goes on from where it paused. */
   private loaded: string | null = null;
   /** Each track's length in seconds, by path, once read (NaN for a file that cannot be read); see measure. */
@@ -229,6 +270,38 @@ class TrackList {
     for (const listener of this.listeners) listener();
   }
 
+  /**
+   * Network cast: gives the music that plays to "listener", and keeps it
+   * from this PC's speakers, because the receiver plays it (two rooms hear
+   * no echo, and one room hears it one time). Null gives the music back
+   * to the speakers.
+   */
+  castTap(listener: CastTapListener | null) {
+    this.castListener = listener;
+    this.applyCastTap();
+  }
+
+  /** Makes the graph agree with castTap; setup calls it too, for a cast that started before the first Play. */
+  private applyCastTap() {
+    const { context, source, speaker } = this;
+    if (!context || !source || !speaker) return;
+    speaker.gain.value = this.castListener ? 0 : 1;
+    if (this.castListener && !this.castNode) {
+      const node = new AudioWorkletNode(context, "kaleido-cast-tap", { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 2, channelCountMode: "explicit" });
+      node.port.onmessage = (event: MessageEvent<{ samples: Float32Array; time: number }>) => this.castListener?.(event.data.samples, event.data.time, context);
+      const silent = context.createGain();
+      silent.gain.value = 0;
+      source.connect(node);
+      node.connect(silent);
+      silent.connect(context.destination);
+      this.castNode = node;
+    } else if (!this.castListener && this.castNode) {
+      source.disconnect(this.castNode);
+      this.castNode.disconnect();
+      this.castNode = null;
+    }
+  }
+
   /** The audio element and the graph: element to the speakers, and to the tap. Made once, on the first Play (a user action, so the audio context may start). */
   private setup() {
     this.ready ??= (async () => {
@@ -259,12 +332,17 @@ class TrackList {
       tap.port.onmessage = (event: MessageEvent<Float32Array>) => this.onSamples?.(event.data);
       const silent = context.createGain();
       silent.gain.value = 0;
-      source.connect(context.destination);
+      const speaker = context.createGain();
+      source.connect(speaker);
+      speaker.connect(context.destination);
       source.connect(tap);
       tap.connect(silent);
       silent.connect(context.destination);
       this.context = context;
       this.audio = audio;
+      this.source = source;
+      this.speaker = speaker;
+      this.applyCastTap();
       /* The Output menu's speaker (see audioOutput.ts), before the first sound. */
       await audioOutput.attach(context);
     })();

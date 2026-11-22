@@ -79,13 +79,47 @@ Findings that decided the design:
 - A page behind other windows gets no animation frames, and its timers
   slow down; a worker's timer keeps its rate.
 - Tauri's channel to the page makes one more call for each large message:
-  about 200 ms more delay on the mini PC. A local WebSocket does not.
+  about 40 ms more trip time on the mini PC, with an uneven rhythm. A
+  local WebSocket does not.
 - Windows Firewall on the receiver PC asks one time to allow Kaleido Sage,
   and blocks the receiver until the user allows it.
 
-Not done yet: sound; a receiver that is found by itself and shows in the
-Cast menu; the "Use this PC as a receiver" choice with a start with
-Windows; H.264 or HEVC for graphics cards with no AV1 encoder, and the
-processor's encoder for PCs with no NVIDIA card; a stream quality setting.
-Until the Cast menu has it, `src/dev/castProbe.ts` starts and stops the
-network cast in the dev app.
+### Sound (2026-11-22)
+
+The stream carries the app's own music (the tracks), not the PC's other
+sounds (the user's decision). `TrackList.castTap` gives each block of the
+music in stereo and closes the music's way to this PC's speakers, so only
+the receiver plays it. The blocks are not compressed (16 bits, about
+1.5 Mbit/s), four blocks (43 ms) in each call to the app: one call for
+each block made the frames wait.
+
+- The time stamp of a block is the moment it is heard on the sender, not
+  the moment it is processed: `songClock.ts` draws each picture for the
+  heard moment, which is later by the speakers' delay
+  (`TrackList.latency`). So the stream has the same relation of picture
+  and sound as the sender's own screen and speakers.
+- The receiver plays the music with a worklet (`SOUND_SOURCE` in
+  `receiver.ts`) at the same delay as the picture, corrected for the
+  sound output delay that the web view reports (about 40 ms on the mini
+  PC). The worklet plays up to 0.3 % faster or slower to hold the time.
+- While music comes, the delay covers the slowest frame or block of the
+  last 5 seconds, not 19 of 20, and comes down at 2.5 ms a second: a late
+  block of music is a gap that the ear hears.
+- A screen or speakers can add a delay of their own that no PC can
+  measure. `StreamCast.soundOffsetMs` moves the sound (negative is
+  earlier). The JMGO projector with its own speakers through HDMI needed
+  -135 ms, found by ear. Earlier sound has a longer trip, so the picture's
+  delay grows by the same time.
+
+Measured with music: about 280 ms from the picture in the app to the
+projector (180 ms of it for the Wi-Fi's slow moments of up to 300 ms and
+for the sound offset), no gaps in the music.
+
+Not done yet: a receiver that is found by itself and shows in the Cast
+menu; the "Use this PC as a receiver" choice with a start with Windows; a
+"Sound timing" setting for each receiver in place of the fixed offset;
+H.264 or HEVC for graphics cards with no AV1 encoder, and the processor's
+encoder for PCs with no NVIDIA card; a stream quality setting; a transport
+that hides the Wi-Fi's slow moments (the delay could then be much
+shorter). Until the Cast menu has it, `src/dev/castProbe.ts` starts and
+stops the network cast in the dev app, and has the sound offset.

@@ -24,7 +24,7 @@
         "shadow": true,
         "skipTaskbar": true,
         "dragDropEnabled": false,
-        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --enable-features=WebXR,OpenXR",
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --enable-features=WebXR,OpenXR --autoplay-policy=no-user-gesture-required",
         "backgroundColor": "#262a34"
       },
       {
@@ -40,7 +40,7 @@
         "transparent": false,
         "shadow": true,
         "dragDropEnabled": false,
-        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --enable-features=WebXR,OpenXR",
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --enable-features=WebXR,OpenXR --autoplay-policy=no-user-gesture-required",
         "backgroundColor": "#000000"
       }
     ],

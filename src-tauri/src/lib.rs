@@ -174,6 +174,7 @@ pub fn run() {
             cast_stream::cast_stream_begin,
             cast_stream::cast_stream_frame,
             cast_stream::cast_stream_end,
+            cast_stream::cast_stream_audio,
             receiver::receiver_listen,
             receiver::receiver_send,
             files::log_frontend_error,
