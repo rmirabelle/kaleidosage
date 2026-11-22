@@ -59,10 +59,14 @@ the receiver (one installer, one version).
   Each frame that draws is read from the GPU into memory shared with the
   app (as a video export does); up to 3 frames are on their way at a time.
 - Sender, Rust: `src-tauri/src/cast_stream.rs`. FFmpeg encodes the frames
-  to AV1 with the NVIDIA encoder at its lowest delay (`av1_nvenc`, `-tune
-  ull`, constant 30 Mbit/s) and writes IVF, which gives one frame at a
-  time. Each frame goes to the receiver over one TCP connection (port
-  14530). The file's first comment has the message layout.
+  to H.264 at its lowest delay, constant 30 Mbit/s, with the first encoder
+  of `ENCODERS` that works on the PC: NVIDIA (`h264_nvenc`), AMD
+  (`h264_amf`), Intel (`h264_qsv`), then the processor (`libx264`,
+  ultrafast). It writes FLV, which gives one frame at a time with its
+  length. Each frame goes to the receiver over one TCP connection (port
+  14530). The file's first comment has the message layout. (Until
+  2026-11-22 the stream was AV1 with `av1_nvenc`, which only RTX 40 cards
+  and later have; the user rejected that limit.)
 - Receiver, Rust: `src-tauri/src/receiver.rs`. One full-screen window. It
   takes one sender at a time and passes the messages to its page through
   a WebSocket on the PC itself.
@@ -189,8 +193,7 @@ gaps in the music.
   (removes the Run value and opens the normal app).
 - The receiver keeps the screen and the PC on (`keep_awake`).
 
-Not done yet: H.264 or HEVC for graphics cards with no AV1 encoder, and
-the processor's encoder for PCs with no NVIDIA card; a stream quality
+Not done yet: a stream quality
 setting; a transport that hides the Wi-Fi's slow moments (the delay could
 then be much shorter); app updates on a PC in receiver mode (the update
 question is in the normal app only); a help picture of the receiver

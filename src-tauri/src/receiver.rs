@@ -181,13 +181,33 @@ pub fn open_window(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/**
+ * Adds a line to the receiver's log, "kaleidosage-receiver.log" in the
+ * user's temporary folder. A receiver has no window for errors and no
+ * console, so this file is where a fault on the receiver PC can be read:
+ * each connection, and why each one ended. The file starts again when it
+ * is larger than 1 MB.
+ */
+pub fn note(text: &str) {
+    use std::io::Write;
+    let path = std::env::temp_dir().join("kaleidosage-receiver.log");
+    if std::fs::metadata(&path).is_ok_and(|file| file.len() > 1_000_000) {
+        let _ = std::fs::remove_file(&path);
+    }
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+        let seconds = crate::cast_stream::clock_ms() / 1000.0;
+        let _ = writeln!(file, "{seconds:.3} {text}");
+    }
+}
+
 fn to_page(link: &Arc<Mutex<Link>>, kind: u8, content: &[u8]) {
     let mut message = Vec::with_capacity(content.len() + 1);
     message.push(kind);
     message.extend_from_slice(content);
     if let Ok(mut link) = link.lock() {
-        let failed = link.page.as_mut().is_some_and(|page| page.send(Message::Binary(message.into())).is_err());
-        if failed {
+        let failed = link.page.as_mut().and_then(|page| page.send(Message::Binary(message.into())).err());
+        if let Some(error) = failed {
+            note(&format!("the page's connection failed: {error}"));
             link.page = None;
         }
     }
@@ -201,7 +221,9 @@ fn accept_page(listener: TcpListener, link: Arc<Mutex<Link>>) {
         let Ok(page) = tungstenite::accept(page) else { continue };
         let Ok(mut link) = link.lock() else { return };
         link.page = Some(page);
+        note("the page connected");
         if let Some((_, old)) = link.sender.take() {
+            note("the sender's connection closes, because the page connected again");
             let _ = old.shutdown(Shutdown::Both);
         }
     }
@@ -237,12 +259,21 @@ fn accept(listener: TcpListener, link: Arc<Mutex<Link>>, app: AppHandle) {
             link.sender = Some((link.senders, kept));
             link.senders
         };
+        note(&format!("sender {number} connected from {}", address.ip()));
         to_page(&link, CONNECTED, address.ip().to_string().as_bytes());
         let link = link.clone();
         std::thread::spawn(move || {
-            while let Ok((kind, content)) = read_message(&mut sender) {
-                to_page(&link, kind, &content);
-            }
+            let mut messages = 0u64;
+            let ended = loop {
+                match read_message(&mut sender) {
+                    Ok((kind, content)) => {
+                        messages += 1;
+                        to_page(&link, kind, &content);
+                    }
+                    Err(error) => break error,
+                }
+            };
+            note(&format!("sender {number} ended after {messages} messages: {ended}"));
             /* Only the sender that is still the current one leaves the page with no sender. */
             let current = link.lock().map(|mut link| {
                 let current = link.sender.as_ref().is_some_and(|(sender, _)| *sender == number);

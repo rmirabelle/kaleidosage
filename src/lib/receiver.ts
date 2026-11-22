@@ -276,9 +276,9 @@ export class ReceiverPlayer {
       this.context.fillRect(0, 0, this.canvas.width, this.canvas.height);
       this.setStatus({ state: "waiting" });
     } else if (kind === TEXT) {
-      const content = JSON.parse(text) as { type: string; sent?: number; time?: number; codec?: string; width?: number; height?: number };
+      const content = JSON.parse(text) as { type: string; sent?: number; time?: number; codec?: string; width?: number; height?: number; description?: string };
       if (content.type === "pong" && content.sent !== undefined && content.time !== undefined) this.onPong(content.sent, content.time);
-      else if (content.type === "config" && content.codec && content.width && content.height) void this.configure(content.codec, content.width, content.height);
+      else if (content.type === "config" && content.codec && content.width && content.height) void this.configure(content.codec, content.width, content.height, content.description);
     }
   }
 
@@ -292,12 +292,14 @@ export class ReceiverPlayer {
     }
   }
 
-  private async configure(codec: string, width: number, height: number) {
+  /** Starts the decoder for the sender's video; "description" has the decoder's settings (base64), which H.264 needs. */
+  private async configure(codec: string, width: number, height: number, description?: string) {
     this.endStream();
     this.canvas.width = width;
     this.canvas.height = height;
     if (typeof VideoDecoder === "undefined") return this.setStatus({ state: "error", message: "This PC's web view cannot decode video." });
-    const base = { codec, codedWidth: width, codedHeight: height, optimizeForLatency: true };
+    const base: VideoDecoderConfig = { codec, codedWidth: width, codedHeight: height, optimizeForLatency: true };
+    if (description) base.description = Uint8Array.from(atob(description), (letter) => letter.charCodeAt(0));
     let config: VideoDecoderConfig | null = null;
     for (const hardwareAcceleration of ["prefer-hardware", "no-preference"] as const) {
       const support = await VideoDecoder.isConfigSupported({ ...base, hardwareAcceleration }).catch(() => ({ supported: false }));
@@ -306,7 +308,7 @@ export class ReceiverPlayer {
         break;
       }
     }
-    if (!config) return this.setStatus({ state: "error", message: "This PC cannot decode the sender's video (AV1)." });
+    if (!config) return this.setStatus({ state: "error", message: `This PC cannot decode the sender's video (${codec}).` });
     const decoder = new VideoDecoder({
       output: (frame) => {
         const taken = this.taken.get(frame.timestamp);

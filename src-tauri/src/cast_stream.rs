@@ -1,9 +1,11 @@
 use crate::export_stream::{share_frame, SharedFrame};
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::VecDeque,
     io::{Read, Write},
     net::{Shutdown, TcpStream, ToSocketAddrs},
+    path::Path,
     process::{Child, ChildStdin, Command, Stdio},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -17,18 +19,25 @@ use tauri::{path::BaseDirectory, Emitter, Manager, State, WebviewWindow};
 /**
  * Network cast, the sender (see src/lib/castStream.ts; the receiver is
  * receiver.rs). The page gives each frame as plain pixels in shared memory
- * (as a video export does), FFmpeg encodes them to AV1 with the graphics
- * card's encoder at its lowest delay, and each encoded frame goes to the
- * receiver over one TCP connection.
+ * (as a video export does), FFmpeg encodes them to H.264 at its lowest
+ * delay, and each encoded frame goes to the receiver over one TCP
+ * connection. H.264 is the format that every PC can make and show: the
+ * graphics chips of NVIDIA, AMD and Intel all encode it (see ENCODERS), a
+ * processor can too, and every receiver's graphics chip decodes it. (The
+ * first version used AV1, which only the newest NVIDIA cards encode.)
+ * FFmpeg writes FLV, because that container gives one frame at a time with
+ * its length, with no wait for the next frame.
  *
  * A message, in both directions: 1 byte for its kind, the length in 4
  * bytes (big-endian), then the content.
  * - TEXT: JSON with a "type". The receiver starts with "hello" (its name
  *   and its screen's size), the sender answers with "config" (the video
- *   format). The receiver sends "ping" (the sender answers "pong" with its
+ *   format, with the decoder's settings in "description", in base64). The
+ *   receiver sends "ping" (the sender answers "pong" with its
  *   clock, so the receiver can compare the two clocks) and "report" (its
  *   numbers, which go to the page as a "cast-stream-report" event).
- * - FRAME: 16 bytes, then one encoded frame. Byte 0 is 1 for a key frame,
+ * - FRAME: 16 bytes, then one encoded frame (H.264, each part with its
+ *   length before it, as the "description" says). Byte 0 is 1 for a key frame,
  *   else 2; bytes 4 to 7 are the frame's number; bytes 8 to 15 are the
  *   time the page took the picture, in ms since 1970 (a 64-bit float).
  * - AUDIO: one block of the app's music, not compressed (48 kHz stereo is
@@ -44,7 +53,7 @@ pub const AUDIO: u8 = 4;
 /** The receiver listens on this TCP port for a sender, and on the same UDP port for a search (see cast_receivers). */
 pub const PORT: u16 = 14530;
 /** The number of this message layout. A sender and a receiver with different numbers do not work together. */
-pub const PROTOCOL: u32 = 1;
+pub const PROTOCOL: u32 = 2;
 /** What a sender sends to all PCs on the network to find the receivers; a receiver answers with its Hello. */
 pub const SEARCH: &[u8] = b"KALEIDOSAGE-FIND 1";
 /** How long a search waits for answers. */
@@ -138,12 +147,69 @@ pub fn cast_receivers() -> Vec<FoundReceiver> {
     found
 }
 
-/** What a started stream gives the page: the receiver's name, and the size of the frames to send. */
+/** What a started stream gives the page: the receiver's name, the size of the frames to send, and what encodes them. */
 #[derive(Serialize)]
 pub struct StreamInfo {
     name: String,
     width: u32,
     height: u32,
+    encoder: &'static str,
+}
+
+/** A video encoder of FFmpeg for the stream: its name, what it runs on (for the user), its options for the lowest delay, and whether it takes the page's RGB pixels as they are. */
+struct Encoder {
+    name: &'static str,
+    runs_on: &'static str,
+    options: &'static [&'static str],
+    takes_rgb: bool,
+}
+
+/**
+ * The encoders, in the order they are tried: the graphics chips first,
+ * because they leave the processor to the picture, then the processor,
+ * which every PC has. The first one that can encode two test frames at the
+ * stream's size is used (see can_encode), and kept for the app's run.
+ */
+const ENCODERS: [Encoder; 4] = [
+    Encoder { name: "h264_nvenc", runs_on: "the NVIDIA graphics card", options: &["-preset", "p4", "-tune", "ull", "-zerolatency", "1", "-rc", "cbr", "-delay", "0"], takes_rgb: true },
+    Encoder { name: "h264_amf", runs_on: "the AMD graphics chip", options: &["-usage", "ultralowlatency", "-rc", "cbr"], takes_rgb: false },
+    Encoder { name: "h264_qsv", runs_on: "the Intel graphics chip", options: &["-preset", "veryfast", "-async_depth", "1"], takes_rgb: false },
+    Encoder { name: "libx264", runs_on: "the processor", options: &["-preset", "ultrafast", "-tune", "zerolatency"], takes_rgb: false },
+];
+
+/** For an encoder that does not take RGB: the conversion, with the BT.709 colors that players expect at this size. */
+const TO_YUV: &str = "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p";
+
+/** FFmpeg's options after the input for "encoder": constant bit rate, a key frame each 2 seconds, and no frames that wait for later frames. */
+fn encoder_args(encoder: &Encoder, fps: u32, bit_rate: u32) -> Vec<String> {
+    let mut args: Vec<String> = Vec::new();
+    if !encoder.takes_rgb {
+        args.extend(["-vf", TO_YUV, "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv"].map(String::from));
+    }
+    args.extend(["-c:v", encoder.name].map(String::from));
+    args.extend(encoder.options.iter().map(|option| option.to_string()));
+    let (bits, buffer, key_frames) = (bit_rate.to_string(), (bit_rate / 4).to_string(), (fps * 2).to_string());
+    args.extend(["-b:v", &bits, "-maxrate", &bits, "-bufsize", &buffer, "-g", &key_frames, "-bf", "0", "-fps_mode", "passthrough"].map(String::from));
+    args
+}
+
+/** Whether this PC can encode with "encoder" at this size: FFmpeg encodes two black frames, and the result is thrown away. */
+fn can_encode(ffmpeg: &Path, encoder: &Encoder, width: u32, height: u32, fps: u32, bit_rate: u32) -> bool {
+    let source = format!("color=black:size={width}x{height}:rate={fps},format=rgb0");
+    let mut command = Command::new(ffmpeg);
+    command
+        .args(["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", &source, "-frames:v", "2"])
+        .args(encoder_args(encoder, fps, bit_rate))
+        .args(["-f", "null", "-"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(NO_WINDOW);
+    }
+    command.status().is_ok_and(|status| status.success())
 }
 
 struct OpenStream {
@@ -179,51 +245,76 @@ pub struct CastStreams {
     open: Mutex<Option<OpenStream>>,
     /** The connection of the open stream, for the sound: a frame that waits for FFmpeg keeps "open" locked, and the sound must not wait for it. */
     sound: Mutex<Option<Arc<Mutex<TcpStream>>>>,
+    /** The encoder that worked (its place in ENCODERS), found at the first stream. */
+    encoder: Mutex<Option<usize>>,
 }
 
 /** Windows process flag: no console window. */
 #[cfg(windows)]
 const NO_WINDOW: u32 = 0x0800_0000;
 
-/** Whether an AV1 frame starts a new picture sequence: after the delimiter, its first part is a sequence header. */
-fn is_key_frame(data: &[u8]) -> bool {
-    let mut at = 0;
-    while at + 2 <= data.len() {
-        let kind = (data[at] >> 3) & 0x0f;
-        if kind == 1 {
-            return true;
-        }
-        if kind != 2 {
-            return false;
-        }
-        /* The delimiter has a size byte of 0. */
-        at += 2 + data[at + 1] as usize;
-    }
-    false
+/** The size of the stream's frames, and their rate, for the "config" message. */
+#[derive(Clone, Copy)]
+struct Picture {
+    width: u32,
+    height: u32,
+    fps: u32,
 }
 
-/** Reads FFmpeg's IVF output and sends each frame to the receiver. Ends when FFmpeg or the receiver closes. */
-fn forward(mut output: impl Read, receiver: Arc<Mutex<TcpStream>>, times: Arc<Mutex<VecDeque<f64>>>, gone: Arc<AtomicBool>) {
-    let mut file_head = [0u8; 32];
+/**
+ * Reads FFmpeg's FLV output and sends each frame to the receiver. Ends
+ * when FFmpeg or the receiver closes. FLV is a file head of 13 bytes, then
+ * tags: 11 bytes (the kind, 9 for video, and the length of the data in
+ * bytes 1 to 3), the data, and 4 bytes that repeat the length. Video data
+ * starts with 5 bytes: byte 0 has 1 in its high half for a key frame and 7
+ * in its low half for H.264; byte 1 is 0 for the decoder's settings (they
+ * come one time, before the first frame, and go to the receiver in the
+ * "config" message) and 1 for a frame.
+ */
+fn forward(mut output: impl Read, receiver: Arc<Mutex<TcpStream>>, times: Arc<Mutex<VecDeque<f64>>>, gone: Arc<AtomicBool>, picture: Picture) {
+    let mut file_head = [0u8; 13];
     if output.read_exact(&mut file_head).is_err() {
         return;
     }
     let mut number: u32 = 0;
-    let mut head = [0u8; 12];
+    let mut head = [0u8; 11];
+    let mut data = Vec::new();
     let mut content = Vec::new();
     while output.read_exact(&mut head).is_ok() {
-        let size = u32::from_le_bytes(head[..4].try_into().unwrap()) as usize;
-        content.resize(16 + size, 0);
-        if output.read_exact(&mut content[16..]).is_err() {
+        let size = u32::from_be_bytes([0, head[1], head[2], head[3]]) as usize;
+        data.resize(size + 4, 0);
+        if output.read_exact(&mut data).is_err() {
             return;
         }
-        let taken = times.lock().ok().and_then(|mut times| times.pop_front()).unwrap_or(0.0);
-        content[..16].fill(0);
-        content[0] = if is_key_frame(&content[16..]) { 1 } else { 2 };
-        content[4..8].copy_from_slice(&number.to_be_bytes());
-        content[8..16].copy_from_slice(&taken.to_be_bytes());
-        number = number.wrapping_add(1);
-        let sent = receiver.lock().map(|mut receiver| write_message(&mut *receiver, FRAME, &content));
+        if head[0] & 0x1f != 9 || size < 5 || data[0] & 0x0f != 7 {
+            continue;
+        }
+        let payload = &data[5..size];
+        let sent = match data[1] {
+            0 if payload.len() >= 4 => {
+                let Picture { width, height, fps } = picture;
+                let config = format!(
+                    r#"{{"type":"config","codec":"avc1.{:02x}{:02x}{:02x}","width":{width},"height":{height},"fps":{fps},"description":"{}"}}"#,
+                    payload[1],
+                    payload[2],
+                    payload[3],
+                    base64::engine::general_purpose::STANDARD.encode(payload)
+                );
+                receiver.lock().map(|mut receiver| write_message(&mut *receiver, TEXT, config.as_bytes()))
+            }
+            1 => {
+                let taken = times.lock().ok().and_then(|mut times| times.pop_front()).unwrap_or(0.0);
+                content.clear();
+                content.resize(16, 0);
+                content[0] = if data[0] >> 4 == 1 { 1 } else { 2 };
+                content[4..8].copy_from_slice(&number.to_be_bytes());
+                content[8..16].copy_from_slice(&taken.to_be_bytes());
+                content.extend_from_slice(payload);
+                number = number.wrapping_add(1);
+                receiver.lock().map(|mut receiver| write_message(&mut *receiver, FRAME, &content))
+            }
+            _ => continue,
+        };
         if !matches!(sent, Ok(Ok(()))) {
             gone.store(true, Ordering::Relaxed);
             return;
@@ -259,9 +350,10 @@ fn listen(mut from: TcpStream, to: Arc<Mutex<TcpStream>>, gone: Arc<AtomicBool>,
  * projector can take a 4K signal and show 1080p; a larger stream than the
  * screen shows only costs speed). The page gets the shared frame memory in a
  * "sharedbufferreceived" event. A stream that is open already ends first.
+ * "encoder" is for tests: the name of one of ENCODERS to use, with no trial.
  */
 #[tauri::command(async)]
-pub fn cast_stream_begin(window: WebviewWindow, streams: State<'_, CastStreams>, target: String, fps: u32, bit_rate: u32, max_height: u32) -> Result<StreamInfo, String> {
+pub fn cast_stream_begin(window: WebviewWindow, streams: State<'_, CastStreams>, target: String, fps: u32, bit_rate: u32, max_height: u32, encoder: Option<String>) -> Result<StreamInfo, String> {
     let mut open = streams.open.lock().map_err(|_| "The stream is unavailable")?;
     if let Some(old) = open.take() {
         if let Ok(mut sound) = streams.sound.lock() {
@@ -291,16 +383,29 @@ pub fn cast_stream_begin(window: WebviewWindow, streams: State<'_, CastStreams>,
     let height = screen_height.min(max_height.clamp(240, 2160));
     let width = ((screen_width as u64 * height as u64 + screen_height as u64 / 2) / screen_height as u64) as u32;
     let (width, height) = (width.clamp(320, 3840) & !1, height & !1);
-    let config = format!(r#"{{"type":"config","codec":"av01.0.09M.08","width":{width},"height":{height},"fps":{fps}}}"#);
-    write_message(&mut receiver, TEXT, config.as_bytes()).map_err(|error| format!("Could not send to the receiver: {error}"))?;
+    /* The encoder: the one a test names, else the one that worked before, else the first that can encode at this size. */
+    let chosen = match &encoder {
+        Some(name) => ENCODERS.iter().position(|encoder| encoder.name == name).ok_or(format!("There is no encoder {name}"))?,
+        None => {
+            let mut kept = streams.encoder.lock().map_err(|_| "The stream is unavailable")?;
+            match *kept {
+                Some(chosen) => chosen,
+                None => {
+                    let found = ENCODERS.iter().position(|encoder| can_encode(&ffmpeg, encoder, width, height, fps, bit_rate)).ok_or("No video encoder works on this PC, also not the processor's.")?;
+                    *kept = Some(found);
+                    found
+                }
+            }
+        }
+    };
+    let chosen = &ENCODERS[chosen];
 
-    let (size, rate, bits, buffer, key_frames) = (format!("{width}x{height}"), fps.to_string(), bit_rate.to_string(), (bit_rate / 4).to_string(), (fps * 2).to_string());
+    let (size, rate) = (format!("{width}x{height}"), fps.to_string());
     let mut command = Command::new(ffmpeg);
     command
         .args(["-hide_banner", "-loglevel", "error", "-fflags", "nobuffer", "-f", "rawvideo", "-pixel_format", "rgb0", "-video_size", &size, "-framerate", &rate, "-i", "pipe:0"])
-        .args(["-c:v", "av1_nvenc", "-preset", "p4", "-tune", "ull", "-rc", "cbr", "-b:v", &bits, "-maxrate", &bits, "-bufsize", &buffer])
-        .args(["-g", &key_frames, "-bf", "0", "-delay", "0", "-zerolatency", "1", "-fps_mode", "passthrough"])
-        .args(["-f", "ivf", "-flush_packets", "1", "pipe:1"])
+        .args(encoder_args(chosen, fps, bit_rate))
+        .args(["-f", "flv", "-flvflags", "no_duration_filesize", "-flush_packets", "1", "pipe:1"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -322,7 +427,8 @@ pub fn cast_stream_begin(window: WebviewWindow, streams: State<'_, CastStreams>,
     let mut threads = Vec::new();
     if let Some(output) = child.stdout.take() {
         let (writing, times, gone) = (writing.clone(), times.clone(), gone.clone());
-        threads.push(std::thread::spawn(move || forward(output, writing, times, gone)));
+        let picture = Picture { width, height, fps };
+        threads.push(std::thread::spawn(move || forward(output, writing, times, gone, picture)));
     }
     {
         let (gone, window) = (gone.clone(), window.clone());
@@ -344,7 +450,7 @@ pub fn cast_stream_begin(window: WebviewWindow, streams: State<'_, CastStreams>,
     if let Ok(mut sound) = streams.sound.lock() {
         *sound = Some(for_sound);
     }
-    Ok(StreamInfo { name: hello.name, width, height })
+    Ok(StreamInfo { name: hello.name, width, height, encoder: chosen.runs_on })
 }
 
 /** Gives FFmpeg the frame in the shared memory; "taken" is the time the page took the picture. It waits while FFmpeg is busy, and the page waits for it before it writes the next frame. */

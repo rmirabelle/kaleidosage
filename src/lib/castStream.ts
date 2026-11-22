@@ -10,7 +10,8 @@ import { tracks } from "./tracks";
  * size, with a clock that has the stream's frame rate and does not need
  * the window on the screen (Engine.streamTo). Each frame that draws is
  * read from the GPU into memory that the page shares with the app, and
- * the app's FFmpeg encodes it with the graphics card.
+ * the app's FFmpeg encodes it to H.264, with the graphics chip when the PC
+ * has one that can, else with the processor.
  *
  * Some frames can be on their way at the same time: the GPU read of a
  * frame takes longer than one frame's time when the GPU is busy, and with
@@ -79,7 +80,7 @@ function loadPick(): { receiver: string | null; prefer: boolean } {
 export type StreamStatus =
   | { state: "off" }
   | { state: "starting"; target: string }
-  | { state: "on"; name: string; width: number; height: number }
+  | { state: "on"; name: string; width: number; height: number; encoder: string }
   | { state: "error"; message: string };
 
 /** One second at the receiver: frames shown, the delay from the picture here to its screen (ms), the trip time that sets the delay and the longest trip (ms), frames dropped and lost, the data rate, and the frames that wait. */
@@ -117,6 +118,16 @@ class StreamCast {
   /** See loadPick. */
   pick = loadPick();
   private searching: Promise<void> | null = null;
+  /**
+   * Goes up with each start and each end. A start waits for the app
+   * several times; when the number changed in such a wait, the cast was
+   * stopped in that time, and the start gives up. Without this, the rest
+   * of the start would run after the stop, and leave a frame listener that
+   * sends each later frame a second time.
+   */
+  private run = 0;
+  /** True while a failure ends the cast, so a second failure in that time (the closed connection that follows) does not take its message. */
+  private failing = false;
   /** Goes up with each change, for useSyncExternalStore. */
   version = 0;
   private readonly listeners = new Set<() => void>();
@@ -134,6 +145,8 @@ class StreamCast {
   onSoundBlock: ((samples: Float32Array, stamp: number) => void) | null = null;
   /** Dev: how much later (ms) a stamp from the blocks' arrival times is than the stamp from the sound system's clock. */
   soundStampDifference = 0;
+  /** For tests: the name of the FFmpeg encoder to use (see ENCODERS in cast_stream.rs); null lets the app pick. */
+  testEncoder: string | null = null;
   /** Moves the sound at the receiver, in ms: positive is later. For a screen or speakers with a delay of their own, which no PC can measure. */
   soundOffsetMs = 0;
   /**
@@ -210,21 +223,29 @@ class StreamCast {
   async start(engine: Engine, to: CastReceiver | string) {
     if (this.on) return;
     const target = typeof to === "string" ? to : to.address;
+    const run = ++this.run;
     this.status = { state: "starting", target };
     this.report = null;
     this.changed();
+    const host = (window as unknown as { chrome?: { webview?: WebViewHost } }).chrome?.webview;
+    let buffer: ArrayBuffer | null = null;
+    const offs: UnlistenFn[] = [];
+    /** What a start that gives up took, given back. */
+    const giveBack = () => {
+      for (const off of offs) off();
+      if (buffer) host?.releaseBuffer(buffer);
+    };
     try {
       if (!isTauri()) throw new Error("Cast needs the Kaleido Sage app.");
       if (engine.casting || engine.inVr) throw new Error("Stop the other show first.");
-      const host = (window as unknown as { chrome?: { webview?: WebViewHost } }).chrome?.webview;
       if (!host) throw new Error("This web view cannot share memory with the app.");
       const shared = nextSharedBuffer(host);
-      const info = await invoke<{ name: string; width: number; height: number }>("cast_stream_begin", { target, fps: FPS, bitRate: BIT_RATE, maxHeight: MAX_HEIGHT });
-      const buffer = await shared;
+      const info = await invoke<{ name: string; width: number; height: number; encoder: string }>("cast_stream_begin", { target, fps: FPS, bitRate: BIT_RATE, maxHeight: MAX_HEIGHT, encoder: this.testEncoder });
+      buffer = await shared;
+      if (run !== this.run) return giveBack();
       if (!buffer) throw new Error("The app did not share its frame memory.");
-      this.buffer = buffer;
       const pixels = new Uint8Array(buffer);
-      this.unlisten.push(await listen<string>("cast-stream-report", (event) => {
+      offs.push(await listen<string>("cast-stream-report", (event) => {
         try {
           const report = JSON.parse(event.payload) as ReceiverReport & { type?: string };
           if (report.type !== "report") return;
@@ -232,7 +253,11 @@ class StreamCast {
           this.changed();
         } catch { /* Not a report. */ }
       }));
-      this.unlisten.push(await listen("cast-stream-gone", () => this.fail(new Error(`${info.name} closed the connection.`))));
+      offs.push(await listen("cast-stream-gone", () => this.fail(new Error(`${info.name} closed the connection.`))));
+      if (run !== this.run) return giveBack();
+      /* From here to the end of the start, nothing waits: the cast is whole, or not started. */
+      this.buffer = buffer;
+      this.unlisten.push(...offs);
       this.engine = engine;
       engine.streamTo({ size: [info.width, info.height], fps: FPS });
       this.testSoundAt = 0;
@@ -269,6 +294,8 @@ class StreamCast {
       this.status = { state: "on", ...info };
       if (typeof to !== "string") this.setPick({ receiver: to.name, prefer: true });
     } catch (error) {
+      if (run !== this.run) return giveBack();
+      giveBack();
       await this.end();
       this.status = { state: "error", message: error instanceof Error ? error.message : String(error) };
     }
@@ -283,9 +310,12 @@ class StreamCast {
   }
 
   private fail(error: unknown) {
-    if (!this.on) return;
-    void this.end().then(() => {
-      this.status = { state: "error", message: error instanceof Error ? error.message : String(error) };
+    if (!this.on || this.failing) return;
+    this.failing = true;
+    void this.end().then((encoderSaid) => {
+      this.failing = false;
+      const message = error instanceof Error ? error.message : String(error);
+      this.status = { state: "error", message: encoderSaid ? `${message} The video encoder said: ${encoderSaid}` : message };
       this.changed();
     });
   }
@@ -357,8 +387,9 @@ class StreamCast {
     invoke("cast_stream_audio", new Uint8Array(content)).catch(() => { /* The stream ended. */ });
   };
 
-  /** Stops the frames, gives the engine back its own clock and size, and ends the stream in the app. */
+  /** Stops the frames, gives the engine back its own clock and size, and ends the stream in the app. Returns the video encoder's error text, empty when it had none. */
   private async end() {
+    this.run++;
     tracks.castTap(null);
     this.stopFrames?.();
     this.stopFrames = null;
@@ -367,10 +398,11 @@ class StreamCast {
     this.engine = null;
     /* The frames that are on their way end first: FFmpeg reads the shared memory. */
     await this.chain.catch(() => {});
-    if (isTauri()) await invoke("cast_stream_end").catch(() => { /* The stream ends with the app. */ });
+    const encoderSaid = isTauri() ? await invoke<string>("cast_stream_end").catch(() => "") : "";
     const host = (window as unknown as { chrome?: { webview?: WebViewHost } }).chrome?.webview;
     if (this.buffer) host?.releaseBuffer(this.buffer);
     this.buffer = null;
+    return encoderSaid;
   }
 }
 

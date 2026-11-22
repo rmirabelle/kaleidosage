@@ -14,13 +14,15 @@ import { songFollow } from "../lib/songFollow";
 /** The receiver PC's name or address. */
 const TARGET = "StudioMini";
 /** The cast stops by itself after this time; 0 keeps it on until the next save. */
-const RUN_SECONDS = 0;
+const RUN_SECONDS = 60;
 /** Moves the sound at the receiver: a positive number of ms makes it later, a negative one earlier. */
 const SOUND_OFFSET_MS = 0;
 /** How many blocks of music go in one message (see StreamCast.soundBlocks). */
 const SOUND_BLOCKS = 4;
 /** Sends a white flash and a beep at the same moment each second, in place of the scene and the music (see StreamCast.testPattern). */
 const TEST_PATTERN = false;
+/** For tests: one of "h264_nvenc", "h264_amf", "h264_qsv" or "libx264"; null lets the app pick. */
+const TEST_ENCODER: string | null = null;
 /**
  * The click test: with a number of seconds here (0.5 for tools/cast-sync/click-track.wav),
  * each frame of the stream whose song time is in the first 40 ms after a
@@ -29,7 +31,7 @@ const TEST_PATTERN = false;
  * receiver sees a flash with each click when the show's timing is right.
  */
 const FLASH_EVERY_SECONDS = 0;
-const RUN = 27;
+const RUN = 44;
 /** A new number here runs the measurement of the player's clock (see measure). */
 const MEASURE = 4;
 
@@ -244,6 +246,7 @@ async function toggle(log: (message: string) => void) {
   streamCast.soundOffsetMs = SOUND_OFFSET_MS;
   streamCast.soundBlocks = SOUND_BLOCKS;
   streamCast.testPattern = TEST_PATTERN;
+  streamCast.testEncoder = TEST_ENCODER;
   streamCast.flashEvery = FLASH_EVERY_SECONDS;
   streamCast.flashClock = () => songFollow.clock.time();
   await streamCast.start(engine, TARGET);
@@ -251,7 +254,7 @@ async function toggle(log: (message: string) => void) {
   if (!TEST_PATTERN && !tracks.playing) await tracks.play();
   const status = streamCast.status;
   if (status.state !== "on") return log(`run ${RUN}: not started: ${status.state === "error" ? status.message : status.state}`);
-  log(`run ${RUN}: on, to ${status.name} at ${status.width}x${status.height}, sound offset ${SOUND_OFFSET_MS} ms`);
+  log(`run ${RUN}: on, to ${status.name} at ${status.width}x${status.height}, encoded by ${status.encoder}, sound offset ${SOUND_OFFSET_MS} ms`);
   let seconds = 0;
   /* The receiver's report comes each second, also when this window is not on the screen (page timers are slow there). */
   const off = streamCast.subscribe(() => {
@@ -275,7 +278,7 @@ async function toggle(log: (message: string) => void) {
 if (import.meta.hot) {
   const hot = import.meta.hot;
   const log = (message: string) => hot.send("kaleidosage:log", { message: `cast probe: ${message}` });
-  hot.accept();
+  import.meta.hot.accept();
   /**
    * The first load only arms the switch. A later save with a new RUN number
    * switches the cast; a save with the same RUN number only gives the cast

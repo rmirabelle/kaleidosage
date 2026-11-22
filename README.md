@@ -118,7 +118,7 @@ These items are optional:
 | Random photos, photo search, Terrain, update checks, the first use of Song Follow | An internet connection |
 | Live sound | Sound from your PC, a microphone or a line input |
 | MIDI control | A MIDI controller |
-| Cast | A second screen or a projector; or a second PC with Kaleido Sage on your network (the sender needs an NVIDIA RTX 40 series card or later) |
+| Cast | A second screen or a projector; or a second PC with Kaleido Sage on your network |
 | Live VR | A Meta Quest with the Meta Quest Link app on the PC |
 
 Kaleido Sage is for Windows only at this time.

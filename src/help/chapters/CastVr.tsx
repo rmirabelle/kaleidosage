@@ -118,9 +118,10 @@ export function CastVr() {
         plays on your own PC again.
       </p>
       <Tip>
-        A cast to another PC needs an NVIDIA graphics card of the RTX 40 series or later in the PC that
-        sends, and both PCs on the same network. The two PCs must have the same version of Kaleido
-        Sage; if they do not, Kaleido Sage tells you to update both.
+        A cast to another PC needs both PCs on the same network. The two PCs must have the same version
+        of Kaleido Sage; if they do not, Kaleido Sage tells you to update both. Your PC makes the video
+        with its graphics chip (NVIDIA, AMD or Intel). A PC with no such chip uses its processor, which
+        leaves less power for the picture.
       </Tip>
 
       <h3>Use the receiver PC as before</h3>
