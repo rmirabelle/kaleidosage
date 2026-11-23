@@ -3240,6 +3240,7 @@ export default function App() {
           }) : []}
           selectedSong={tracks.current?.path}
           canThumbnail={isTauri()}
+          sceneName={(singleName ?? sceneFileName).replace(/\.ksage$/i, "")}
           onCancel={() => setVideoDialogOpen(false)}
           onExport={(options) => void exportVideo(options, (singleName ?? sceneFileName).replace(/\.ksage$/i, ""))}
         />

@@ -70,6 +70,8 @@ interface Props {
   selectedSong?: string;
   /** The app saves thumbnails; a plain browser cannot. */
   canThumbnail: boolean;
+  /** The name of the scene's file, without ".ksage": the title starts as it. */
+  sceneName: string;
   onCancel: () => void;
   onExport: (options: VideoOptions) => void;
 }
@@ -79,7 +81,7 @@ interface Props {
  * style. Title shows a title box at the start; Seamless loop makes the last
  * frame lead into the first, so the video can repeat with no jump.
  */
-export function ExportVideoDialog({ engine, screenSize, sceneSeconds, songs, selectedSong, canThumbnail, onCancel, onExport }: Props) {
+export function ExportVideoDialog({ engine, screenSize, sceneSeconds, songs, selectedSong, canThumbnail, sceneName, onCancel, onExport }: Props) {
   const stored = readStored();
   const sizeChoices = [{ id: "screen" as VideoSizeId, ratio: "Screen", sites: "Same shape", ...screenSize }, ...VIDEO_SIZES];
   const [sizeId, setSizeId] = useState<VideoSizeId>(sizeChoices.some((choice) => choice.id === stored.size) ? stored.size! : "screen");
@@ -98,7 +100,8 @@ export function ExportVideoDialog({ engine, screenSize, sceneSeconds, songs, sel
   const sceneCount = sceneSeconds.length;
   const scenes: VideoScenes = scope === "song" && songs.length > 0 ? "song" : scope === "all" && sceneCount > 1 ? joining : "current";
   const picked = songs.filter((song) => songPick === "all" || song.path === songPick);
-  const [title, setTitle] = useState(typeof stored.title === "string" ? stored.title : "");
+  /* The title starts as the scene's name, each word with a capital first letter; the last video's title is not kept. */
+  const [title, setTitle] = useState(() => sceneName.replace(/(^|\s)(\S)/g, (_, space: string, letter: string) => space + letter.toUpperCase()));
   /** The fade-out box's text; empty keeps the title for the whole video. */
   const [fadeOut, setFadeOut] = useState(stored.fadeOutMs === null ? "" : String(stored.fadeOutMs ?? 1000));
   const loop = loopSeconds(engine);
