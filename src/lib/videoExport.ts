@@ -65,6 +65,8 @@ export interface VideoOptions {
   fps: VideoFps;
   /** Blends the second half of each frame's time into the frame, as a film camera does. */
   motionBlur: boolean;
+  /** After the export, the thumbnail editor opens with a frame of each video (see STILL_SECONDS). */
+  thumbnail?: boolean;
 }
 
 /** The longest crossfade between two scenes on the screen, in seconds. */
@@ -81,6 +83,8 @@ const MAX_SONG_CLIPS = 10;
 export const STITCH_FADE = 2;
 /** Seconds the title box shows fully before it fades out. */
 export const TITLE_HOLD = 4;
+/** Where in the video the still for a thumbnail comes from, in seconds. */
+export const STILL_SECONDS = 5;
 /** The longest seam crossfade, in seconds; a short video gets a shorter one. */
 const SEAM_FADE = 1;
 const MAX_WIDTH = 1920;
@@ -616,10 +620,12 @@ async function openClip(source: Engine, scene: SceneSource, shape: ExportShape, 
       }
     },
     /** Draws the next frame and starts reading it. The WebGL canvas holds the frame only until the next task, so the read starts at once. */
-    async next(titleShows: number, songTime = 0) {
+    async next(titleShows: number, songTime = 0, still?: (read: (into: Uint8Array) => Promise<void>, width: number, height: number) => void) {
       const shown = await step(songTime);
       const into = fadeFrames ? shown - (frames - fadeFrames) : -1;
       if (into >= 0) engine.drawFrameOver(tail[into], smoothstep(into / (fadeFrames - 1)));
+      /* The still for a thumbnail is read before the title box covers it. */
+      if (still) still(engine.startRead(), frameWidth, height);
       if (titleShows > 0) engine.drawOverlay(titleShows);
       return sphere ? engine.startSphereRead(width, height) : engine.startRead();
     },
@@ -641,6 +647,8 @@ async function openClip(source: Engine, scene: SceneSource, shape: ExportShape, 
  * them. "onProgress" gets 0 to 1; an aborted "signal" stops it with an
  * AbortError. With "file" (in the app) FFmpeg makes the video, and the result
  * is null; with none (a plain browser) the result is the video.
+ * "onStill" gets the frame at STILL_SECONDS (or the last frame of a shorter
+ * video) without the title box, for a thumbnail.
  */
 export async function encodeVideo(
   source: Engine,
@@ -650,7 +658,8 @@ export async function encodeVideo(
   onProgress: (fraction: number) => void,
   signal: AbortSignal,
   file: ExportFile | null = null,
-  song: SongJob | null = null
+  song: SongJob | null = null,
+  onStill: ((still: ImageData) => void) | null = null
 ): Promise<Blob | null> {
   /* A 360 video draws a square picture as tall as the video, then wraps it around the viewer. */
   const sphere = options.size === "sphere";
@@ -725,6 +734,13 @@ export async function encodeVideo(
     sendMs += performance.now() - sendStart;
   };
   let out = 0;
+  const stillFrame = Math.min(Math.round(STILL_SECONDS * fps), total - 1);
+  /** The read of the still; the export waits for it before it ends. */
+  let stillDone: Promise<void> | null = null;
+  const takeStill = (read: Read, stillWidth: number, stillHeight: number) => {
+    const into = new Uint8Array(stillWidth * stillHeight * 4);
+    stillDone = read(into).then(() => onStill?.(new ImageData(new Uint8ClampedArray(into.buffer), stillWidth, stillHeight)));
+  };
   /** Milliseconds spent drawing frames, for the line in the log at the end. */
   let drawMs = 0;
   const startedAt = performance.now();
@@ -733,7 +749,7 @@ export async function encodeVideo(
     stopIfAsked();
     const titleShows = overlay ? titleAlpha(out / fps, seconds, options.fadeOutMs) : 0;
     const drawStart = performance.now();
-    const read = await clip.next(titleShows, songTime);
+    const read = await clip.next(titleShows, songTime, onStill && out === stillFrame ? takeStill : undefined);
     const other = over ? await over.next(titleShows) : null;
     drawMs += performance.now() - drawStart;
     reads.push({ read, other, blend, hold, shown: out });
@@ -810,6 +826,7 @@ export async function encodeVideo(
       clip = next;
     }
     while (reads.length) await encodeOldest();
+    await stillDone;
     const video = await sink.finish();
     const elapsed = (performance.now() - startedAt) / 1000;
     console.warn(`video export: ${out} frames in ${elapsed.toFixed(1)} s (${(out / elapsed).toFixed(1)} a second); draw ${(drawMs / 1000).toFixed(1)} s, read ${(readMs / 1000).toFixed(1)} s, send ${(sendMs / 1000).toFixed(1)} s`);

@@ -1,7 +1,7 @@
 import { FilmStrip, X } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import type { Engine } from "../engine/engine";
-import { STITCH_FADE, TITLE_HOLD, VIDEO_SIZES, atResolution, formatLength, loopSeconds, seamlessChanges, stitchPlan, type VideoFps, type VideoOptions, type VideoQuality, type VideoResolution, type VideoScenes, type VideoSizeId, type VideoStyle } from "../lib/videoExport";
+import { STILL_SECONDS, STITCH_FADE, TITLE_HOLD, VIDEO_SIZES, atResolution, formatLength, loopSeconds, seamlessChanges, stitchPlan, type VideoFps, type VideoOptions, type VideoQuality, type VideoResolution, type VideoScenes, type VideoSizeId, type VideoStyle } from "../lib/videoExport";
 import { help } from "../help/topics";
 
 /** The choices made last time, so the dialog opens with them. */
@@ -68,6 +68,8 @@ interface Props {
   songs: { path: string; name: string; seconds: number }[];
   /** The path of the song selected in the playlist: the dialog opens with it, when it is one of "songs". */
   selectedSong?: string;
+  /** The app saves thumbnails; a plain browser cannot. */
+  canThumbnail: boolean;
   onCancel: () => void;
   onExport: (options: VideoOptions) => void;
 }
@@ -77,7 +79,7 @@ interface Props {
  * style. Title shows a title box at the start; Seamless loop makes the last
  * frame lead into the first, so the video can repeat with no jump.
  */
-export function ExportVideoDialog({ engine, screenSize, sceneSeconds, songs, selectedSong, onCancel, onExport }: Props) {
+export function ExportVideoDialog({ engine, screenSize, sceneSeconds, songs, selectedSong, canThumbnail, onCancel, onExport }: Props) {
   const stored = readStored();
   const sizeChoices = [{ id: "screen" as VideoSizeId, ratio: "Screen", sites: "Same shape", ...screenSize }, ...VIDEO_SIZES];
   const [sizeId, setSizeId] = useState<VideoSizeId>(sizeChoices.some((choice) => choice.id === stored.size) ? stored.size! : "screen");
@@ -89,6 +91,7 @@ export function ExportVideoDialog({ engine, screenSize, sceneSeconds, songs, sel
   const [quality, setQuality] = useState<VideoQuality>(QUALITY_CHOICES.some((choice) => choice.value === stored.quality) ? stored.quality! : "high");
   const [fps, setFps] = useState<VideoFps>(stored.fps === 30 ? 30 : 60);
   const [motionBlur, setMotionBlur] = useState(stored.motionBlur !== false);
+  const [thumbnail, setThumbnail] = useState(stored.thumbnail === true);
   const [scope, setScope] = useState<"current" | "all" | "song">(stored.scenes === "song" ? "song" : stored.scenes === "separate" || stored.scenes === "stitched" ? "all" : "current");
   const [songPick, setSongPick] = useState(songs.some((song) => song.path === selectedSong) ? selectedSong! : stored.song === "all" && songs.length > 1 || songs.some((song) => song.path === stored.song) ? stored.song! : songs[0]?.path ?? "all");
   const [joining, setJoining] = useState<Exclude<VideoScenes, "current">>(stored.scenes === "stitched" ? "stitched" : "separate");
@@ -112,7 +115,7 @@ export function ExportVideoDialog({ engine, screenSize, sceneSeconds, songs, sel
   const submit = () => {
     const typed = Number(fadeOut);
     const fadeOutMs = fadeOut.trim() && Number.isFinite(typed) ? Math.max(0, Math.round(typed)) : null;
-    const options: VideoOptions = { scenes, song: songPick, size: sizeId, resolution, style, title, fadeOutMs, loops, quality, fps, motionBlur };
+    const options: VideoOptions = { scenes, song: songPick, size: sizeId, resolution, style, title, fadeOutMs, loops, quality, fps, motionBlur, thumbnail };
     try { localStorage.setItem(STORE_KEY, JSON.stringify(options)); } catch { /* Remembering is a convenience only. */ }
     onExport(options);
   };
@@ -253,6 +256,17 @@ export function ExportVideoDialog({ engine, screenSize, sceneSeconds, songs, sel
               { value: "off", label: "None", note: "Sharpest, can be faster" }
             ]}
           />
+          {canThumbnail && (
+            <ChoiceRow
+              label="Thumbnail"
+              value={thumbnail ? "youtube" : "none"}
+              onChange={(value) => setThumbnail(value === "youtube")}
+              choices={[
+                { value: "youtube", label: "YouTube", note: `Edit one after, from ${STILL_SECONDS} s in` },
+                { value: "none", label: "None", note: "Only the video" }
+              ]}
+            />
+          )}
           <div className="video-row">
             <span className="video-label">Style</span>
             <div className="video-styles" role="radiogroup" aria-label="Style">

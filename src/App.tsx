@@ -9,6 +9,7 @@ import { HelpLine } from "./components/HelpLine";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ControlPanel } from "./components/ControlPanel";
 import { ExportVideoDialog } from "./components/ExportVideoDialog";
+import { ThumbnailDialog, type ThumbnailJob } from "./components/ThumbnailDialog";
 import { ImageSearchDialog } from "./components/ImageSearchDialog";
 import { ModelBrowserDialog } from "./components/ModelBrowserDialog";
 import { MidiIcon } from "./components/MidiIcon";
@@ -884,6 +885,8 @@ export default function App() {
    * With several videos, Stop or a failure ends the export, and the videos
    * already made stay.
    */
+  /** The videos whose thumbnails the editor shows next (see ThumbnailDialog). */
+  const [thumbnailJobs, setThumbnailJobs] = useState<ThumbnailJob[] | null>(null);
   const exportVideo = useCallback(async (options: VideoOptions, sceneName: string) => {
     setVideoDialogOpen(false);
     if (!engine || videoJobRef.current) return;
@@ -931,6 +934,7 @@ export default function App() {
     const controller = new AbortController();
     const size = videoDimensions(options.size, screenAspect(), options.resolution);
     const saved: string[] = [];
+    const thumbnails: ThumbnailJob[] = [];
     engine.holdScreen(true);
     try {
       for (const [index, job] of jobs.entries()) {
@@ -945,10 +949,14 @@ export default function App() {
         /* In the app FFmpeg makes the video (see openExportFile); a stopped or failed export removes the file. */
         const file = isTauri() ? await openExportFile(job.path, { ...size, fps: options.fps, quality: options.quality, spherical: sphere, audio: job.song?.audio }) : null;
         try {
-          const blob = await encodeVideo(engine, job.scenes, size, job.options, progress, controller.signal, file, job.song);
+          const taken: { still: ImageData | null } = { still: null };
+          const takeStill = file && options.thumbnail ? (image: ImageData) => { taken.still = image; } : null;
+          const blob = await encodeVideo(engine, job.scenes, size, job.options, progress, controller.signal, file, job.song, takeStill);
           if (file) {
             await file.finish();
             saved.push(job.path);
+            /* The thumbnail's title is the video's file name, as the user typed or kept it. */
+            if (taken.still) thumbnails.push({ videoPath: job.path, title: fileNameOf(job.path).replace(/(_360)?\.mp4$/i, ""), still: taken.still });
           } else if (blob) {
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
@@ -973,6 +981,8 @@ export default function App() {
     } finally {
       engine.holdScreen(false);
       setVideoJob((current) => current?.controller === controller ? null : current);
+      /* The videos already made get their thumbnails, also after Stop. */
+      if (thumbnails.length) setThumbnailJobs(thumbnails);
     }
   }, [engine, openSceneSources, showError, showSaved, showStatus]);
 
@@ -3229,8 +3239,17 @@ export default function App() {
             return scene ? [baseLoopSeconds(scene.params, scene.state)] : [];
           }) : []}
           selectedSong={tracks.current?.path}
+          canThumbnail={isTauri()}
           onCancel={() => setVideoDialogOpen(false)}
           onExport={(options) => void exportVideo(options, (singleName ?? sceneFileName).replace(/\.ksage$/i, ""))}
+        />
+      )}
+      {thumbnailJobs && (
+        <ThumbnailDialog
+          jobs={thumbnailJobs}
+          onSaved={(path) => showSaved(path, 8000)}
+          onError={showError}
+          onClose={() => setThumbnailJobs(null)}
         />
       )}
       {/* The welcome card, over the whole window: the app waits for one of its two buttons. */}
