@@ -1,6 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { ask, open as openFileDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { open as openFileDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { ArrowClockwise, ArrowCounterClockwise, ArrowsIn, ArrowsOut, Camera, Export, Screencast, FilePlus, FilmStrip, FloppyDisk, FolderOpen, Gauge, HandPointing, Info, Playlist, Keyboard, Plus, Question, SignOut, SlidersHorizontal, SpeakerSimpleHigh, Trash, VirtualReality, X } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { AboutDialog } from "./components/AboutDialog";
@@ -1855,12 +1855,9 @@ export default function App() {
    * question, the app closes, with its usual question about changes that
    * are not saved, and starts again as a full-screen receiver.
    */
+  const [receiverQuestion, setReceiverQuestion] = useState(false);
   const becomeReceiver = useCallback(async () => {
-    const yes = await ask(
-      "This PC then shows the picture and plays the music that Kaleido Sage on another PC casts to it.\n\nKaleido Sage closes now and starts again as a full-screen receiver. It also starts as a receiver each time Windows starts.\n\nWindows asks one time if Kaleido Sage can use the network: choose Allow.\n\nTo use this PC as before, press Esc on the receiver screen.",
-      { title: "Use This PC as a Receiver", kind: "info", okLabel: "Make This PC a Receiver", cancelLabel: "Cancel" }
-    );
-    if (!yes) return;
+    setReceiverQuestion(false);
     try {
       await invoke("receiver_mode_set", { on: true });
       await getCurrentWindow().close();
@@ -2905,7 +2902,7 @@ export default function App() {
           : castTargets.length > 1
             ? castTargets.map(({ label, target }) => ({ label: `Cast to ${label}`, icon: <Screencast size={15} />, disabled: startScreen || inVr, run: () => void toggleCast(target) }))
             : [{ label: castTargets.length === 1 ? `Cast to ${castTargets[0].label}` : "Cast", icon: <Screencast size={15} />, shortcut: "C", disabled: startScreen || inVr, run: () => void toggleCast() }]),
-        { label: "Use This PC as a Receiver…", icon: <Screencast size={15} />, disabled: casting || inVr, run: () => void becomeReceiver() }
+        { label: "Use This PC as a Receiver…", icon: <Screencast size={15} />, disabled: casting || inVr, run: () => setReceiverQuestion(true) }
       ]
     },
     {
@@ -3319,6 +3316,21 @@ export default function App() {
             saveQuestion.answer(false);
             setSaveQuestion(null);
           }}
+        />
+      )}
+      {receiverQuestion && (
+        <ConfirmDialog
+          title="Use This PC as a Receiver"
+          message="This PC then shows the picture and plays the music that Kaleido Sage on another PC casts to it."
+          details={<>
+            <p>Kaleido Sage closes now and starts again as a full-screen receiver. It also starts as a receiver each time Windows starts.</p>
+            <p>Windows asks one time if Kaleido Sage can use the network: choose Allow.</p>
+            <p>To use this PC as before, press Esc on the receiver screen.</p>
+          </>}
+          confirmLabel="Make This PC a Receiver"
+          confirmIcon={<Screencast size={16} weight="bold" />}
+          onConfirm={() => void becomeReceiver()}
+          onCancel={() => setReceiverQuestion(false)}
         />
       )}
       {dropTracksQuestion && (

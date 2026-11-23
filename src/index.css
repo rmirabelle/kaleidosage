@@ -1708,6 +1708,7 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 /* With a close button in the corner (closeButton), the title keeps clear of it. */
 .about-dialog-close + .confirm-dialog-content h2 { padding-right: 28px; }
 .confirm-dialog-content p { margin: 0; color: #b9bdc8; font-size: 13px; line-height: 1.45; }
+.confirm-dialog-content p + p { margin-top: 10px; }
 /* A setting or MIDI control named in a question, in the MIDI orange. */
 .confirm-dialog-content .midi-name { color: var(--midi-on); }
 .confirm-dialog-actions { gap: 8px; }
