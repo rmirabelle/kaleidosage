@@ -8,7 +8,7 @@ import { SHOTS, type Shot } from "./shots";
  * part to show, and asks Rust (`help_capture`) to photograph that rectangle
  * into `public/help/<name>.png`. Run it again after the UI changes.
  *
- * Start it from Help, Capture Help Pictures, or from a terminal with
+ * Start it from a terminal with `tools/help-capture.sh`, or with
  * `curl http://localhost:14510/__help-shots` (see vite.config.ts).
  */
 

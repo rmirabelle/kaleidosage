@@ -2913,8 +2913,7 @@ export default function App() {
         { label: "Keyboard Shortcuts", icon: <Keyboard size={15} />, shortcut: "?", run: () => setShortcutsOpen(true) },
         { label: pointersOn ? "Disable Pointers" : "Enable Pointers", icon: <HandPointing size={15} />, run: () => helpSettings.set({ pointers: !pointersOn }) },
         "separator",
-        { label: "About Kaleido Sage", icon: <Info size={15} />, run: () => setAboutOpen(true) },
-        ...(import.meta.env.DEV ? ["separator" as const, { label: "Capture Help Pictures", icon: <Camera size={15} />, disabled: !startScreen, run: () => void captureHelp() }] : [])
+        { label: "About Kaleido Sage", icon: <Info size={15} />, run: () => setAboutOpen(true) }
       ]
     }
   ];
