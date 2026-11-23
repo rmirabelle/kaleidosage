@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openFileDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { ArrowClockwise, ArrowCounterClockwise, ArrowsIn, ArrowsOut, Camera, Export, Screencast, FilePlus, FilmStrip, FloppyDisk, FolderOpen, Gauge, HandPointing, Info, Playlist, Keyboard, Plus, Question, SignOut, SlidersHorizontal, SpeakerSimpleHigh, Trash, VirtualReality, X } from "@phosphor-icons/react";
+import { ArrowClockwise, ArrowCounterClockwise, ArrowsIn, ArrowsOut, Camera, Export, Screencast, FilePlus, FilmStrip, FloppyDisk, FolderOpen, Gauge, HandPointing, Info, Playlist, Keyboard, Plus, Question, SignOut, SlidersHorizontal, SpeakerSimpleHigh, Trash, VirtualReality, X, YoutubeLogo } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { AboutDialog } from "./components/AboutDialog";
 import { ShortcutsDialog } from "./components/ShortcutsDialog";
@@ -10,6 +10,8 @@ import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ControlPanel } from "./components/ControlPanel";
 import { ExportVideoDialog } from "./components/ExportVideoDialog";
 import { ThumbnailDialog, type ThumbnailJob } from "./components/ThumbnailDialog";
+import { UploadDialog } from "./components/UploadDialog";
+import { lastVideo, rememberThumbnail, rememberVideo, studioUrl, youtubeOpen } from "./lib/youtube";
 import { ImageSearchDialog } from "./components/ImageSearchDialog";
 import { ModelBrowserDialog } from "./components/ModelBrowserDialog";
 import { MidiIcon } from "./components/MidiIcon";
@@ -887,6 +889,8 @@ export default function App() {
    */
   /** The videos whose thumbnails the editor shows next (see ThumbnailDialog). */
   const [thumbnailJobs, setThumbnailJobs] = useState<ThumbnailJob[] | null>(null);
+  /** Upload to YouTube: the video the dialog opens with, or undefined while it is closed. */
+  const [uploadVideo, setUploadVideo] = useState<string | null | undefined>(undefined);
   const exportVideo = useCallback(async (options: VideoOptions, sceneName: string) => {
     setVideoDialogOpen(false);
     if (!engine || videoJobRef.current) return;
@@ -955,6 +959,7 @@ export default function App() {
           if (file) {
             await file.finish();
             saved.push(job.path);
+            rememberVideo(job.path);
             /* The thumbnail's title is the video's file name, as the user typed or kept it. */
             if (taken.still) thumbnails.push({ videoPath: job.path, title: fileNameOf(job.path).replace(/(_360)?\.mp4$/i, ""), still: taken.still });
           } else if (blob) {
@@ -2880,6 +2885,7 @@ export default function App() {
         "separator",
         { label: "Save PNG", disabled: startScreen, icon: <Camera size={15} />, run: () => void savePng() },
         { label: "Export Video…", icon: <FilmStrip size={15} />, run: openVideoDialog },
+        ...(isTauri() ? [{ label: "Upload to YouTube…", icon: <YoutubeLogo size={15} />, run: () => setUploadVideo(lastVideo()) }] : []),
         "separator",
         { label: "Exit", icon: <SignOut size={15} />, shortcut: "Alt+F4", run: () => void (isTauri() ? getCurrentWindow().close() : window.close()) }
       ]
@@ -3248,9 +3254,30 @@ export default function App() {
       {thumbnailJobs && (
         <ThumbnailDialog
           jobs={thumbnailJobs}
-          onSaved={(path) => showSaved(path, 8000)}
+          onSaved={(videoPath, path) => {
+            rememberThumbnail(videoPath, path);
+            showSaved(path, 8000);
+          }}
+          onUpload={(videoPath) => {
+            setThumbnailJobs(null);
+            setUploadVideo(videoPath);
+          }}
           onError={showError}
           onClose={() => setThumbnailJobs(null)}
+        />
+      )}
+      {uploadVideo !== undefined && (
+        <UploadDialog
+          initialVideo={uploadVideo}
+          onUploaded={(id, title) => {
+            setUploadVideo(undefined);
+            showStatus(`Uploaded ${title} to YouTube`, 12000, {
+              label: "Open",
+              run: () => void youtubeOpen(studioUrl(id)).catch((error) => showError(String(error)))
+            });
+          }}
+          onError={showError}
+          onClose={() => setUploadVideo(undefined)}
         />
       )}
       {/* The welcome card, over the whole window: the app waits for one of its two buttons. */}

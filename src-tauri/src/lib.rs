@@ -17,6 +17,7 @@ mod updater;
 mod video_import;
 mod video_stream;
 mod scene_archive;
+mod youtube;
 
 use std::time::Duration;
 use tauri::Manager;
@@ -90,6 +91,7 @@ pub fn run() {
         .manage(video_stream::Videos::default())
         .manage(video_stream::Uploads::default())
         .manage(export_stream::Exports::default())
+        .manage(youtube::YouTube::default())
         .manage(sound_capture::SoundCapture::default())
         .manage(cast::CastTarget::default())
         .manage(cast_stream::CastStreams::default())
@@ -135,6 +137,13 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            youtube::youtube_status,
+            youtube::youtube_sign_in,
+            youtube::youtube_sign_out,
+            youtube::youtube_cancel,
+            youtube::youtube_upload,
+            youtube::youtube_set_thumbnail,
+            youtube::youtube_open,
             browse::list_browse_directory,
             browse::browse_places,
             browse::rename_browse_entry,

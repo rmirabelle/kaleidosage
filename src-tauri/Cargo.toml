@@ -11,6 +11,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+serde_json = "1"
 
 [dependencies]
 tauri = { version = "2", features = [] }
@@ -23,7 +24,7 @@ anyhow = "1"
 futures-util = "0.3"
 zip = { version = "9.0.3", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 tempfile = "3"
-tokio = { version = "1", features = ["fs", "io-util"] }
+tokio = { version = "1", features = ["fs", "io-util", "time"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
 beat-this = { version = "1.1", default-features = false }
 ebur128 = "0.1"
@@ -31,6 +32,9 @@ realfft = "3"
 sha2 = "0.10"
 tungstenite = { version = "0.30.0", default-features = false, features = ["handshake"] }
 if-addrs = "0.15.0"
+# YouTube upload (youtube.rs): the hidden sign-in key, and the random sign-in codes.
+obfstr = "0.4"
+getrandom = "0.3"
 
 [dev-dependencies]
 beat-this = { version = "1.1", default-features = false, features = ["decode"] }
@@ -45,6 +49,7 @@ windows = { version = "0.61.3", features = [
   "Win32_Devices_FunctionDiscovery",
   "Win32_Media_Audio",
   "Win32_Security",
+  "Win32_Security_Credentials",
   "Win32_System_Threading",
   "Win32_System_Com_StructuredStorage",
   "Win32_System_Variant",

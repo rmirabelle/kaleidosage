@@ -162,6 +162,24 @@ if ((Get-PeSubsystem $releaseExe) -ne 2) {
   throw "The release executable is not a Windows GUI-subsystem application; it would open a console window."
 }
 
+<#
+  The Google key for YouTube uploads must stay hidden in the program (obfstr,
+  see src-tauri/build.rs): a plain key in an unsigned .exe makes Windows
+  Defender and Chrome flag the download. Neither file may hold it as text.
+#>
+function Assert-NoPlainText([string]$path, [string[]]$texts) {
+  $content = [System.Text.Encoding]::GetEncoding(28591).GetString([System.IO.File]::ReadAllBytes((Resolve-Path $path)))
+  foreach ($text in $texts) {
+    if ($text -and $content.Contains($text)) { throw "$path holds the Google key as plain text. Keep it inside obfstr!()." }
+  }
+}
+$googleTexts = @("GOCSPX-")
+if (Test-Path "youtube-client.json") {
+  $googleClient = (Get-Content "youtube-client.json" -Raw | ConvertFrom-Json).installed
+  if ($googleClient) { $googleTexts += @($googleClient.client_secret, $googleClient.client_id) }
+}
+Assert-NoPlainText $releaseExe $googleTexts
+
 $generatedNsis = "src-tauri/target/release/nsis/x64/installer.nsi"
 Assert-FileContains $generatedNsis @(
   '!define INSTALLMODE "currentUser"',
@@ -177,6 +195,7 @@ $bundleDir = "src-tauri/target/release/bundle/nsis"
 $installer = Get-ChildItem $bundleDir -Filter "*_${version}_x64-setup.exe" -File -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $installer) { throw "Expected NSIS installer not found in $bundleDir for version $version" }
 if ($installer.Length -le 0) { throw "The generated NSIS installer is empty: $($installer.FullName)" }
+Assert-NoPlainText $installer.FullName $googleTexts
 New-Item -ItemType Directory -Force -Path "dist" | Out-Null
 Copy-Item $installer.FullName $assetPath -Force
 

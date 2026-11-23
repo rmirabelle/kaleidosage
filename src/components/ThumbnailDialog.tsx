@@ -1,4 +1,4 @@
-import { FloppyDisk, Image as ImageIcon, X } from "@phosphor-icons/react";
+import { FloppyDisk, Image as ImageIcon, X, YoutubeLogo } from "@phosphor-icons/react";
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { writeExport } from "../lib/exports";
@@ -34,9 +34,11 @@ const baseName = (path: string) => path.replace(/^.*[\\/]/, "").replace(/\.mp4$/
  * Save writes "<video name> on Kaleido Sage.png" next to the video, with a
  * number added when that file is already there.
  */
-export function ThumbnailDialog({ jobs, onSaved, onError, onClose }: {
+export function ThumbnailDialog({ jobs, onSaved, onUpload, onError, onClose }: {
   jobs: ThumbnailJob[];
-  onSaved: (path: string) => void;
+  onSaved: (videoPath: string, path: string) => void;
+  /** Save and Upload: the thumbnail is saved, then the upload dialog opens with its video. */
+  onUpload: (videoPath: string) => void;
   onError: (message: string) => void;
   onClose: () => void;
 }) {
@@ -92,7 +94,7 @@ export function ThumbnailDialog({ jobs, onSaved, onError, onClose }: {
     else onClose();
   };
 
-  const save = async () => {
+  const save = async (upload = false) => {
     const canvas = canvasRef.current;
     if (!canvas || saving) return;
     setSaving(true);
@@ -102,8 +104,9 @@ export function ThumbnailDialog({ jobs, onSaved, onError, onClose }: {
       if (!blob) throw new Error("The thumbnail could not be made.");
       const [path] = await invoke<string[]>("free_export_paths", { folder: folderOf(job.videoPath), names: [`${baseName(job.videoPath)} on Kaleido Sage.png`] });
       await writeExport(path, blob);
-      onSaved(path);
-      next();
+      onSaved(job.videoPath, path);
+      if (upload) onUpload(job.videoPath);
+      else next();
     } catch (error) {
       onError(`Could not save the thumbnail. ${error instanceof Error ? error.message : String(error)}`);
     } finally {
@@ -173,6 +176,7 @@ export function ThumbnailDialog({ jobs, onSaved, onError, onClose }: {
         </div>
         <footer className="about-dialog-actions video-dialog-actions">
           <button className="button secondary" onClick={next}>{index + 1 < jobs.length ? "Skip" : "Cancel"}</button>
+          {jobs.length === 1 && <button className="button secondary" disabled={!picture || saving} onClick={() => void save(true)}><YoutubeLogo size={16} weight="bold" /> Save and Upload…</button>}
           <button className="button primary" disabled={!picture || saving} onClick={() => void save()}><FloppyDisk size={16} weight="bold" /> Save Thumbnail</button>
         </footer>
       </div>

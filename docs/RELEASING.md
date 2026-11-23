@@ -37,6 +37,13 @@ and the other XSage desktop applications:
   it is not in the repository. Run `.\tools\get-ffmpeg.ps1` in a new checkout,
   and update the build line in `SOURCE.txt` when you get a newer build.
 
+- Upload to YouTube needs the Google key in `youtube-client.json` (git-ignored;
+  the "Desktop app" client of the `kaleido-sage` Google Cloud project). The
+  build hides it with `obfstr` (see `src-tauri/build.rs`); without the file the
+  app builds, and the upload dialog says it cannot upload. `publish.ps1`
+  stops if the exe or the installer holds the key as plain text. The project
+  is in Testing mode, so a sign-in lasts 7 days and only test users can sign in.
+
 `publish.ps1` validates these rules before it creates a tag and validates the
 generated executable and NSIS script again after the release build.
 
