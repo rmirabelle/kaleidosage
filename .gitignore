@@ -39,3 +39,6 @@ Thumbs.db
 
 # The click track for the cast timing test (see docs/CAST.md)
 /tools/cast-sync/*.wav
+
+# The Google sign-in key for YouTube uploads; the build hides it in the program (never commit it)
+/youtube-client.json
