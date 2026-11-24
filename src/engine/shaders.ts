@@ -3829,6 +3829,29 @@ void main() {
  * The beams are added light (see addLight).
  */
 /**
+ * The mask shapes of Opacity mask and Image or Video. polygonDistance is
+ * the distance from p to the outline of a regular polygon with n sides
+ * and corners r from its center, below 0 inside. A corner points up;
+ * sideUp turns it by half a side, so a side is at the top. shapeDistance
+ * is the same for shape 0 Circle, 1 Triangle, 2 Square, 3 Hexagon or 4 a
+ * polygon with "sides" sides.
+ */
+const SHAPE_GLSL = `
+float polygonDistance(vec2 p, float n, float r, bool sideUp) {
+  float halfSide = 3.14159265 / n;
+  float a = atan(p.x, p.y) + (sideUp ? halfSide : 0.0);
+  float side = mod(a, 2.0 * halfSide) - halfSide;
+  return length(p) * cos(side) - r * cos(halfSide);
+}
+float shapeDistance(int shape, vec2 p, float r, float sides) {
+  if (shape == 0) return length(p) - r;
+  if (shape == 1) return polygonDistance(p, 3.0, r, false);
+  if (shape == 2) return polygonDistance(p, 4.0, r, true);
+  if (shape == 3) return polygonDistance(p, 6.0, r, false);
+  return polygonDistance(p, sides, r, false);
+}`;
+
+/**
  * Image or Video: the effect's image or video (u_layer, premultiplied, with
  * its clear parts) over the picture made so far. Size 1 covers the screen
  * and keeps the layer's shape; u_offset moves its center (a part of the
@@ -3839,7 +3862,10 @@ void main() {
  * color (see COVER_GLSL), so it shows over what is under a clear layer.
  * u_key (0 = off) is the black key: parts darker than u_key become clear,
  * with a soft edge from half of u_key, so a video's black border goes away
- * and the rest stays opaque.
+ * and the rest stays opaque. u_mask (0 = off) shows the layer only inside
+ * a shape (see SHAPE_GLSL: u_mask - 1), u_maskSize of the layer's height
+ * from its center to its corners, moved by u_maskOffset (parts of the
+ * layer's width and height), with a soft edge u_maskSoft of the size wide.
  */
 export const PICTURE_SHADER = `#version 300 es
 precision highp float;
@@ -3855,7 +3881,12 @@ uniform float u_size;
 uniform vec2 u_offset;
 uniform float u_turn;
 uniform float u_key;
+uniform int u_mask;
+uniform float u_maskSize;
+uniform float u_maskSoft;
+uniform vec2 u_maskOffset;
 ${COVER_GLSL}
+${SHAPE_GLSL}
 void main() {
   vec4 base = texture(u_tex, v_uv);
   float aspect = u_res.x / u_res.y;
@@ -3872,6 +3903,14 @@ void main() {
   if (u_key > 0.0) {
     float bright = max(layer.r, max(layer.g, layer.b)) / max(layer.a, 1e-4);
     layer *= smoothstep(u_key * 0.5, u_key, bright);
+  }
+  if (u_mask > 0) {
+    /* In parts of the layer's height from the mask's center, which moves with the layer. */
+    vec2 q = (uv - 0.5 - u_maskOffset) * vec2(u_layerAspect, 1.0);
+    float d = shapeDistance(u_mask - 1, q, u_maskSize, 3.0);
+    /* Half the soft edge, and at least about a pixel so a sharp edge is smooth. */
+    float edge = max(0.5 * u_maskSoft * u_maskSize, 1.0 / (h * u_res.y));
+    layer *= 1.0 - smoothstep(-edge, edge, d);
   }
   layer *= u_opacity;
   if (u_blend == 0) {
@@ -4569,17 +4608,7 @@ uniform float u_stopAt[8];
 uniform float u_stopGray[8];
 ${COVER_GLSL}
 
-/**
- * The distance in pixels from p to the outline of a regular polygon with n
- * sides and corners r from its center, below 0 inside. A corner points up;
- * sideUp turns it by half a side, so a side is at the top.
- */
-float polygonDistance(vec2 p, float n, float r, bool sideUp) {
-  float halfSide = 3.14159265 / n;
-  float a = atan(p.x, p.y) + (sideUp ? halfSide : 0.0);
-  float side = mod(a, 2.0 * halfSide) - halfSide;
-  return length(p) * cos(side) - r * cos(halfSide);
-}
+${SHAPE_GLSL}
 
 /* The gray at place t, as gradientColorAt in params.ts. */
 float stopGray(float t) {
@@ -4609,11 +4638,7 @@ void main() {
     if (u_mode == 1) {
       gray = stopGray(length(p) / u_radius);
     } else {
-      float d = u_mode == 2 ? length(p) - u_radius
-        : u_mode == 3 ? polygonDistance(p, 3.0, u_radius, false)
-        : u_mode == 4 ? polygonDistance(p, 4.0, u_radius, true)
-        : u_mode == 5 ? polygonDistance(p, 6.0, u_radius, false)
-        : polygonDistance(p, u_sides, u_radius, false);
+      float d = shapeDistance(u_mode - 2, p, u_radius, u_sides);
       /* Half the soft edge, and at least a pixel so a sharp edge is smooth. */
       float edge = max(0.5 * u_soft * u_radius, 1.0);
       gray = 1.0 - smoothstep(-edge, edge, d);

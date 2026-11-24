@@ -127,6 +127,12 @@ export function EffectsTexture() {
         has <b>Normal</b>, <b>Screen</b> and <b>Add</b>; with Screen and Add, the black areas of the file
         do not show. <b>Black key</b> also makes the dark areas transparent, for the Normal blend.
       </p>
+      <p>
+        The <b>Mask</b> menu shows the file only inside a shape: <b>Circle</b>, <b>Triangle</b>,
+        <b>Square</b> or <b>Hexagon</b>. <b>Mask size</b> sets the size of the shape, <b>Mask softness</b> sets
+        the width of its soft edge, and <b>Mask X</b> and <b>Mask Y</b> move it on the file. The mask moves
+        and turns with the file.
+      </p>
       <Tip>
         The effects below Image or Video in the list also change the file. To keep a logo
         unchanged, make this effect the last one in the list.

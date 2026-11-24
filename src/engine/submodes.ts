@@ -202,6 +202,10 @@ export const MASK_KEYS: Record<MaskMode, ParamKey[]> = {
   2: MASK_SHAPE_KEYS, 3: MASK_SHAPE_KEYS, 4: MASK_SHAPE_KEYS, 5: MASK_SHAPE_KEYS,
   6: ["maskSides", ...MASK_SHAPE_KEYS]
 };
+/** Image or Video's Mask menu (see PictureMask), and the sliders each shows. */
+export const PICTURE_MASKS = [[0, "None"], [1, "Circle"], [2, "Triangle"], [3, "Square"], [4, "Hexagon"]] as const;
+const PICTURE_MASK_SLIDERS: ParamKey[] = ["pictureMaskSize", "pictureMaskSoft", "pictureMaskX", "pictureMaskY"];
+export const PICTURE_MASK_KEYS: Record<number, ParamKey[]> = { 0: [], 1: PICTURE_MASK_SLIDERS, 2: PICTURE_MASK_SLIDERS, 3: PICTURE_MASK_SLIDERS, 4: PICTURE_MASK_SLIDERS };
 /** The Opacity mask's Keep menu, for the shape types (see MaskKeep). */
 export const MASK_KEEPS = [[0, "Inside"], [1, "Outside"]] as const;
 
@@ -213,7 +217,7 @@ export const COLOR_FILL_KEYS: Record<ColorFill, ParamKey[]> = {
   2: ["colorSize", "colorStretch", "colorTurn", "colorX", "colorY", "colorShift", "colorRepeat"]
 };
 
-export type SubmodeKey = "bubbleShape" | "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape" | "cyclesMove" | "cyclesPaint" | "solidShape" | "solidMap" | "modelMap" | "maskMode" | "colorFill" | "textFill" | "textMove" | "coneType" | "coneShape";
+export type SubmodeKey = "bubbleShape" | "foldMode" | "warpType" | "mapMode" | "blurMask" | "smearShape" | "cyclesMove" | "cyclesPaint" | "solidShape" | "solidMap" | "modelMap" | "maskMode" | "pictureMask" | "colorFill" | "textFill" | "textMove" | "coneType" | "coneShape";
 
 /** One submode menu: the play-state setting it sets, its choices (value and name), and the sliders each choice shows. */
 export interface Submode {
@@ -266,6 +270,7 @@ export const SUBMODES: readonly Submode[] = [
   { stateKey: "solidMap", options: SOLID_MAPS, keys: SOLID_MAP_KEYS },
   { stateKey: "modelMap", options: SOLID_MAPS, keys: MODEL_MAP_KEYS },
   { stateKey: "maskMode", options: MASK_MODES, keys: MASK_KEYS },
+  { stateKey: "pictureMask", options: PICTURE_MASKS, keys: PICTURE_MASK_KEYS },
   { stateKey: "bubbleShape", options: BUBBLE_SHAPES, keys: BUBBLE_SHAPE_KEYS },
   { stateKey: "colorFill", options: COLOR_FILLS, keys: COLOR_FILL_KEYS },
   { stateKey: "textFill", options: TEXT_FILLS, keys: TEXT_FILL_KEYS },

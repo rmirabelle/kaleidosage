@@ -348,6 +348,8 @@ export type ColorFill = 0 | 1 | 2;
 export type ParticleShape = 0 | 1 | 2;
 /** How the Image or Video effect's image or video goes over the picture: 0 normal (over, by its own cover), 1 screen, 2 add. */
 export type PictureBlend = 0 | 1 | 2;
+/** Image or Video's mask: 0 none, 1 Circle, 2 Triangle, 3 Square, 4 Hexagon (see PICTURE_SHADER). */
+export type PictureMask = 0 | 1 | 2 | 3 | 4;
 /** How the light cycles move: 0 on grid lanes with right-angle turns, 1 in free curves. */
 export type CycleMove = 0 | 1;
 /**
@@ -1024,6 +1026,11 @@ export interface FrameValues {
   pictureTurn: number;
   /** The black key (0 = off): parts darker than this become clear. */
   pictureKey: number;
+  pictureMask: PictureMask;
+  pictureMaskSize: number;
+  pictureMaskSoft: number;
+  pictureMaskX: number;
+  pictureMaskY: number;
   /**
    * Light cone (see CONE_SHADER): brightness (0 = off), opacity, blend, type
    * and shape, the sides of a pyramid, then the beam: Spread (its half
@@ -4071,6 +4078,10 @@ export class KaleidoRenderer {
     gl.uniform2f(p.uniforms.u_offset, v.pictureX, v.pictureY);
     gl.uniform1f(p.uniforms.u_turn, v.pictureTurn);
     gl.uniform1f(p.uniforms.u_key, Math.max(0, v.pictureKey ?? 0));
+    gl.uniform1i(p.uniforms.u_mask, v.pictureMask);
+    gl.uniform1f(p.uniforms.u_maskSize, Math.max(0.005, v.pictureMaskSize));
+    gl.uniform1f(p.uniforms.u_maskSoft, Math.max(0, v.pictureMaskSoft));
+    gl.uniform2f(p.uniforms.u_maskOffset, v.pictureMaskX, v.pictureMaskY);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
