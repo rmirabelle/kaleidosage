@@ -194,8 +194,16 @@ export const MODEL_KEYS: readonly ParamKey[] = ["modelSize", "modelRotateX", "mo
 export const SOLID_MODEL_PAINTS = [[3, "Model"], ...SOLID_PAINTS] as const;
 
 /** The Opacity mask's types, and the sliders each shows under the gradient (Strength always shows, above it). */
-export const MASK_MODES = [[0, "Brightness"], [1, "Radial"]] as const;
-export const MASK_KEYS: Record<MaskMode, ParamKey[]> = { 0: [], 1: ["maskSize", "maskStretch", "maskTurn", "maskX", "maskY"] };
+export const MASK_MODES = [[0, "Brightness"], [1, "Radial"], [2, "Circle"], [3, "Triangle"], [4, "Square"], [5, "Hexagon"], [6, "Polygon"]] as const;
+const MASK_SHAPE_KEYS: ParamKey[] = ["maskSize", "maskSoft", "maskStretch", "maskTurn", "maskX", "maskY"];
+export const MASK_KEYS: Record<MaskMode, ParamKey[]> = {
+  0: [],
+  1: ["maskSize", "maskStretch", "maskTurn", "maskX", "maskY"],
+  2: MASK_SHAPE_KEYS, 3: MASK_SHAPE_KEYS, 4: MASK_SHAPE_KEYS, 5: MASK_SHAPE_KEYS,
+  6: ["maskSides", ...MASK_SHAPE_KEYS]
+};
+/** The Opacity mask's Keep menu, for the shape types (see MaskKeep). */
+export const MASK_KEEPS = [[0, "Inside"], [1, "Outside"]] as const;
 
 /** The Color effect's fills, and the gradient sliders each shows (Color overlay always shows, under Common). */
 export const COLOR_FILLS = [[0, "Solid"], [1, "Linear"], [2, "Radial"]] as const;

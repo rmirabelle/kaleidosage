@@ -132,10 +132,11 @@ describe("scene files", () => {
   it("keep the Opacity mask's type and grays, and a changed gray changes the fingerprint", () => {
     const state = createPlayState();
     state.maskStops = [{ at: 0, color: "#000000" }, { at: 0.4, color: "#808080" }, { at: 1, color: "#ffffff" }];
-    state.maskMode = 1;
+    state.maskMode = 5;
+    state.maskKeep = 1;
     const loaded = createPlayState();
     applyScene(serializeScene(createParams(), state, { image: IMAGE }), createParams(), loaded);
-    expect([loaded.maskMode, loaded.maskStops]).toEqual([1, state.maskStops]);
+    expect([loaded.maskMode, loaded.maskKeep, loaded.maskStops]).toEqual([5, 1, state.maskStops]);
     expect(sceneFingerprint(createParams(), loaded, [])).toBe(sceneFingerprint(createParams(), state, []));
     loaded.maskStops = [{ at: 0, color: "#000000" }, { at: 1, color: "#ffffff" }];
     expect(sceneFingerprint(createParams(), loaded, [])).not.toBe(sceneFingerprint(createParams(), state, []));

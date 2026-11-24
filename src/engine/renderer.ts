@@ -325,8 +325,13 @@ export type ParticleBlend = 0 | 1;
 /** Light shapes (see OUTLINE_SHADER): the outline, 0 ring, 1 square, 2 triangle, 3 Radial, 4 snake; and how it draws, 0 draw and erase, 1 chase, 2 whole. */
 export type OutlineShape = 0 | 1 | 2 | 3 | 4;
 export type OutlineDraw = 0 | 1 | 2;
-/** Opacity mask (see MASK_SHADER): 0 by the picture's brightness, 1 a radial gradient. */
-export type MaskMode = 0 | 1;
+/**
+ * Opacity mask (see MASK_SHADER): 0 by the picture's brightness, 1 a radial
+ * gradient, 2 to 6 a shape (Circle, Triangle, Square, Hexagon, Polygon).
+ */
+export type MaskMode = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+/** The Opacity mask's shapes keep the picture inside (0) or outside (1) the shape. */
+export type MaskKeep = 0 | 1;
 /** The Light cone's look: 0 Spotlight (a filled beam), 1 Laser shell (only its surface). */
 export type ConeType = 0 | 1;
 /** The Light cone's shape: 0 a round cone, 1 a pyramid with Sides sides. */
@@ -994,6 +999,9 @@ export interface FrameValues {
   bubblePanX: number;
   bubblePanY: number;
   maskMode: MaskMode;
+  maskKeep: MaskKeep;
+  maskSoft: number;
+  maskSides: number;
   maskSize: number;
   maskStretch: number;
   maskTurn: number;
@@ -4267,6 +4275,9 @@ export class KaleidoRenderer {
     gl.uniform1f(m.uniforms.u_turn, v.maskTurn);
     gl.uniform1f(m.uniforms.u_amount, Math.min(1, Math.max(0, v.mask)));
     gl.uniform1i(m.uniforms.u_mode, v.maskMode);
+    gl.uniform1i(m.uniforms.u_keep, v.maskKeep);
+    gl.uniform1f(m.uniforms.u_soft, Math.max(0, v.maskSoft));
+    gl.uniform1f(m.uniforms.u_sides, Math.min(12, Math.max(3, Math.round(v.maskSides))));
     gl.uniform1i(m.uniforms.u_stopCount, v.maskStopAt.length);
     gl.uniform1fv(m.uniforms["u_stopAt[0]"], v.maskStopAt);
     gl.uniform1fv(m.uniforms["u_stopGray[0]"], v.maskStopGray);

@@ -33,7 +33,7 @@ const EFFECT_NOTES: Record<FxStep, string> = {
   sharpen: "Makes edges and fine detail crisper.",
   color: "Tints the whole picture with one color, or with a linear or radial gradient of colors.",
   levels: "Sets the exposure and the black level.",
-  mask: "A radial gradient of grays fades parts of the picture out.",
+  mask: "A shape or a gradient of grays hides parts of the picture.",
   bubble: "Bends the picture inside a circle, a square or a shape of 3 to 24 corners, so its center looks smaller or larger.",
   panorama: "Moves the picture left, right, up or down with no end. Mirror copies of the picture join it at its edges.",
   text: "Writes words over the picture in any installed font, with an outline, a glow and a shadow. It can scroll or type itself on."

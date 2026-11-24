@@ -1,4 +1,4 @@
-import type { ConeShape, ConeType, PenroseShape, PinwheelShape, TunnelShape, SphereShape, BlendMode, BlurMask, BubbleShadow, BubbleShape, CameraColors, CameraHeightSource, CameraRepeat, ColorFill, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidPaint, SolidShape, SolidWrap, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, MaskMode, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
+import type { ConeShape, ConeType, PenroseShape, PinwheelShape, TunnelShape, SphereShape, BlendMode, BlurMask, BubbleShadow, BubbleShape, CameraColors, MaskKeep, CameraHeightSource, CameraRepeat, ColorFill, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidPaint, SolidShape, SolidWrap, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, MaskMode, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
 
 import type { PathShape } from "./paths";
 import { MAX_SPIRO_WHEELS, defaultSpiroWheels, randomSpiroWheels, type SpiroWheelSpec } from "./spiro";
@@ -44,7 +44,8 @@ export const PARAM_KEYS = [
   "spiroAmount", "spiroRing", "spiroSize", "spiroWidth", "spiroDraw", "spiroPicture", "spiroBackground", "spiroRotation", "spiroYaw", "spiroTilt", "spiroX", "spiroY",
   "spiroHoleX1", "spiroHoleX2", "spiroHoleX3", "spiroHoleX4", "spiroHoleX5", "spiroHoleX6", "spiroHoleY1", "spiroHoleY2", "spiroHoleY3", "spiroHoleY4", "spiroHoleY5", "spiroHoleY6",
   "textAmount", "textSize", "textX", "textY", "textAngle", "textLetterSpacing", "textLineSpacing", "textGradientAngle", "textOutline", "textGlow", "textGlowSize", "textShadow", "textShadowSoftness", "textShadowDistance", "textSpeed", "textHold",
-  "coneAmount", "coneOpacity", "coneSpread", "coneSides", "coneTurn", "coneSwing", "coneTilt", "coneX", "coneHeight", "coneDepth", "coneSoftness", "coneEdge", "coneEdgeLines", "coneFog", "coneFogSize", "coneFogSpeed", "coneFade", "coneFloor", "coneEmitter"
+  "coneAmount", "coneOpacity", "coneSpread", "coneSides", "coneTurn", "coneSwing", "coneTilt", "coneX", "coneHeight", "coneDepth", "coneSoftness", "coneEdge", "coneEdgeLines", "coneFog", "coneFogSize", "coneFogSpeed", "coneFade", "coneFloor", "coneEmitter",
+  "maskSoft", "maskSides"
 ] as const;
 export type ParamKey = typeof PARAM_KEYS[number];
 
@@ -430,6 +431,8 @@ export interface PlayState {
    * center out to Size). White keeps the picture, black clears it.
    */
   maskMode: MaskMode;
+  /** Shape types only: 0 keeps the picture inside the shape, 1 outside it. */
+  maskKeep: MaskKeep;
   maskStops: GradientStop[];
   /** Bubble (see BUBBLE_SHADER): the closed shape the picture bends inside, how the bent picture combines with the flat picture, and the shadow's type. */
   bubbleShape: BubbleShape;
@@ -1274,6 +1277,12 @@ const SPECS: Record<ParamKey, ParamSpec> = {
   maskX: { label: "X", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   maskY: { label: "Y", min: -0.5, max: 0.5, step: 0.01, value: 0, drift: "wave", low: -0.2, high: 0.2, on: false },
   /**
+   * Shape types only: Softness is the width of the soft edge, as a part of
+   * Size (0 a sharp edge). Sides is the Polygon's number of sides.
+   */
+  maskSoft: { label: "Softness", min: 0, max: 1, step: 0.01, value: 0.1, drift: "wave", low: 0.05, high: 0.4, on: false },
+  maskSides: { label: "Sides", min: 3, max: 12, step: 1, value: 5, drift: "wave", low: 3, high: 8, on: false },
+  /**
    * Bubble (see BUBBLE_SHADER): Roundness rounds the Square's corners, from square
    * to a circle. Segments is the Radial shape's number of corners. Rotation turns
    * the Square or the Radial shape and its bend, and not the picture. Size is the
@@ -1508,7 +1517,7 @@ export function createPlayState(): PlayState {
     /* No effect is in the list at start-up, so every effect group is off. */
     groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, model: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false, cone: false, panorama: false },
     locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, model: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false, cone: false, panorama: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, tunnelTravel: 0, packTravel: 0, frameTravel: 0, panoramaTravelX: 0, panoramaTravelY: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, penroseShape: 0, sphereShape: 2, pinwheelShape: 1, tunnelShape: 0, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, pathShape: 2, pathBlend: 7, spiroWheels: defaultSpiroWheels(), spiroBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, coneType: 0, coneShape: 0, coneColor: "#8fe6ff", coneBlend: 7, coneFogTime: 0, textContent: DEFAULT_TEXT, textFont: "Segoe UI", textBold: true, textItalic: false, textAlign: 1, textFill: 0, textColor: "#ffffff", textStops: defaultTextStops(), textOutlineColor: "#000000", textGlowColor: "#18e0ff", textShadowColor: "#000000", textMove: 0, textBlend: 0, textTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidFx: [], modelBlend: 0, modelMap: 2, modelFx: [], modelTurnsX: 0, modelTurnsY: 0, modelTurnsZ: 0, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, tunnelTravel: 0, packTravel: 0, frameTravel: 0, panoramaTravelX: 0, panoramaTravelY: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, penroseShape: 0, sphereShape: 2, pinwheelShape: 1, tunnelShape: 0, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, pathShape: 2, pathBlend: 7, spiroWheels: defaultSpiroWheels(), spiroBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskKeep: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, coneType: 0, coneShape: 0, coneColor: "#8fe6ff", coneBlend: 7, coneFogTime: 0, textContent: DEFAULT_TEXT, textFont: "Segoe UI", textBold: true, textItalic: false, textAlign: 1, textFill: 0, textColor: "#ffffff", textStops: defaultTextStops(), textOutlineColor: "#000000", textGlowColor: "#18e0ff", textShadowColor: "#000000", textMove: 0, textBlend: 0, textTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidFx: [], modelBlend: 0, modelMap: 2, modelFx: [], modelTurnsX: 0, modelTurnsY: 0, modelTurnsZ: 0, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -1977,6 +1986,7 @@ const GROUP_MODES: Partial<Record<GroupKey, (state: PlayState, fresh: PlayState)
   },
   mask: (state, fresh) => {
     state.maskMode = fresh.maskMode;
+    state.maskKeep = fresh.maskKeep;
     state.maskStops = fresh.maskStops;
   },
   bubble: (state, fresh) => {
@@ -2077,7 +2087,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   spiro: ["spiroAmount", "spiroRing", "spiroSize", "spiroWidth", "spiroDraw", "spiroPicture", "spiroBackground", "spiroRotation", "spiroYaw", "spiroTilt", "spiroX", "spiroY",
   "spiroHoleX1", "spiroHoleX2", "spiroHoleX3", "spiroHoleX4", "spiroHoleX5", "spiroHoleX6", "spiroHoleY1", "spiroHoleY2", "spiroHoleY3", "spiroHoleY4", "spiroHoleY5", "spiroHoleY6"],
   outlines: ["outlineAmount", "outlineCount", "outlineRadius", "outlineSpacing", "outlineCopyFade", "outlineDelay", "outlineDrawTime", "outlineLength", "outlinePoints", "outlineInner", "outlineWidth", "outlineGlow", "outlineGlowSize", "outlineEmitter", "outlineFlow", "outlineTurn", "outlineSpin", "outlineTumble", "outlineX", "outlineY"],
-  mask: ["maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY"],
+  mask: ["maskAmount", "maskSize", "maskStretch", "maskTurn", "maskX", "maskY", "maskSoft", "maskSides"],
   bubble: ["bubbleAmount", "bubbleBackground", "bubbleDepth", "bubbleSize", "bubbleCenterX", "bubbleCenterY", "bubblePanX", "bubblePanY", "bubbleRoundness", "bubbleSegments", "bubbleInner", "bubbleShadowStrength", "bubbleShadowWidth", "bubbleShadowSoftness", "bubbleRotation"],
   cone: ["coneAmount", "coneOpacity", "coneSpread", "coneSides", "coneTurn", "coneSwing", "coneTilt", "coneX", "coneHeight", "coneDepth", "coneSoftness", "coneEdge", "coneEdgeLines", "coneFog", "coneFogSize", "coneFogSpeed", "coneFade", "coneFloor", "coneEmitter"],
   text: ["textAmount", "textSize", "textX", "textY", "textAngle", "textLetterSpacing", "textLineSpacing", "textGradientAngle", "textOutline", "textGlow", "textGlowSize", "textShadow", "textShadowSoftness", "textShadowDistance", "textSpeed", "textHold"],
@@ -2106,7 +2116,7 @@ const GROUP_STATE: Partial<Record<GroupKey, (keyof PlayState)[]>> = {
   sort: ["sortOrder"],
   particles: ["particleBlend", "particleShape"],
   outlines: ["outlineShape", "outlineDraw"],
-  mask: ["maskMode"],
+  mask: ["maskMode", "maskKeep"],
   bubble: ["bubbleShape", "bubbleBlend", "bubbleShadow"],
   picture: ["pictureBlend"],
   cycles: ["cyclesMove", "cyclesBlend", "cyclesPaint"],

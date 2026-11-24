@@ -208,6 +208,13 @@ export function EffectsTexture() {
         <b>Strength</b> sets how much the mask hides. The gradient below it has gray stops in place
         of colors: select a stop to set its gray level.
       </p>
+      <p>
+        The shape types (<b>Circle</b>, <b>Triangle</b>, <b>Square</b>, <b>Hexagon</b>
+        and <b>Polygon</b>) have no gradient. The picture stays inside the shape and goes away outside
+        it. Set <b>Keep</b> to <b>Outside</b> to do the opposite. <b>Softness</b> sets the width of the
+        soft edge, and <b>Sides</b> sets the number of sides of the Polygon. <b>Size</b>, <b>Stretch</b>,
+        <b>Turn</b>, <b>X</b> and <b>Y</b> change the shape as they do for Radial.
+      </p>
     </>
   );
 }

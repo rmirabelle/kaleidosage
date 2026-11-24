@@ -4542,7 +4542,12 @@ void main() {
  * follows the picture as it moves. u_mode 1 (Radial): the place runs from
  * the center (0) to u_radius pixels away (1), and keeps the last stop past
  * that; u_stretch makes the circle u_stretch times as wide as it is tall,
- * turned by u_turn. u_amount mixes from no mask (0) to the whole mask (1).
+ * turned by u_turn. u_mode 2 to 6 (Circle, Triangle, Square, Hexagon,
+ * Polygon with u_sides sides): no gradient; the picture stays inside a
+ * shape of u_radius pixels from its center to its corners (Circle: its
+ * edge), stretched and turned as Radial, and clears outside it (u_keep 1
+ * the other way). The soft edge is u_soft times u_radius wide, centered on
+ * the outline. u_amount mixes from no mask (0) to the whole mask (1).
  */
 export const MASK_SHADER = `#version 300 es
 precision highp float;
@@ -4556,10 +4561,25 @@ uniform float u_stretch;
 uniform float u_turn;
 uniform float u_amount;
 uniform int u_mode;
+uniform int u_keep;
+uniform float u_soft;
+uniform float u_sides;
 uniform int u_stopCount;
 uniform float u_stopAt[8];
 uniform float u_stopGray[8];
 ${COVER_GLSL}
+
+/**
+ * The distance in pixels from p to the outline of a regular polygon with n
+ * sides and corners r from its center, below 0 inside. A corner points up;
+ * sideUp turns it by half a side, so a side is at the top.
+ */
+float polygonDistance(vec2 p, float n, float r, bool sideUp) {
+  float halfSide = 3.14159265 / n;
+  float a = atan(p.x, p.y) + (sideUp ? halfSide : 0.0);
+  float side = mod(a, 2.0 * halfSide) - halfSide;
+  return length(p) * cos(side) - r * cos(halfSide);
+}
 
 /* The gray at place t, as gradientColorAt in params.ts. */
 float stopGray(float t) {
@@ -4576,19 +4596,31 @@ float stopGray(float t) {
 
 void main() {
   vec4 picture = texture(u_picture, v_uv);
-  float place;
+  float gray;
   if (u_mode == 0) {
     /* The brightness of the color without its cover. */
-    place = dot(clamp(straight(picture), 0.0, 1.0), vec3(0.2126, 0.7152, 0.0722));
+    gray = stopGray(dot(clamp(straight(picture), 0.0, 1.0), vec3(0.2126, 0.7152, 0.0722)));
   } else {
     vec2 p = (v_uv - 0.5) * u_res - u_center;
     float c = cos(u_turn);
     float s = sin(u_turn);
     p = mat2(c, -s, s, c) * p;
     p.x /= u_stretch;
-    place = length(p) / u_radius;
+    if (u_mode == 1) {
+      gray = stopGray(length(p) / u_radius);
+    } else {
+      float d = u_mode == 2 ? length(p) - u_radius
+        : u_mode == 3 ? polygonDistance(p, 3.0, u_radius, false)
+        : u_mode == 4 ? polygonDistance(p, 4.0, u_radius, true)
+        : u_mode == 5 ? polygonDistance(p, 6.0, u_radius, false)
+        : polygonDistance(p, u_sides, u_radius, false);
+      /* Half the soft edge, and at least a pixel so a sharp edge is smooth. */
+      float edge = max(0.5 * u_soft * u_radius, 1.0);
+      gray = 1.0 - smoothstep(-edge, edge, d);
+      if (u_keep == 1) gray = 1.0 - gray;
+    }
   }
-  float keep = mix(1.0, clamp(stopGray(place), 0.0, 1.0), u_amount);
+  float keep = mix(1.0, clamp(gray, 0.0, 1.0), u_amount);
   o = picture * keep;
 }`;
 
