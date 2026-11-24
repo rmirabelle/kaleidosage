@@ -52,6 +52,21 @@ export function videoLoopPlan(time: number, loopSeconds: number, duration: numbe
   return { round, main: fade + at, fadeIn: into, mix: smoothstep(into / fade) };
 }
 
+/**
+ * Where two copies of a video are at "seconds" of a clock that runs on
+ * (not tied to the scene's loop), with a crossfade of "fadeSeconds": as
+ * videoLoopPlan, but each repeat is the video less the fade.
+ */
+export function videoFadePlan(seconds: number, duration: number, fadeSeconds: number): VideoPlan {
+  const fade = Math.max(0.05, Math.min(fadeSeconds, duration / 2));
+  const repeat = duration - fade;
+  const round = Math.floor(seconds / repeat);
+  const at = seconds - round * repeat;
+  if (at < repeat - fade) return { round, main: fade + at, fadeIn: null, mix: 0 };
+  const into = at - (repeat - fade);
+  return { round, main: fade + at, fadeIn: into, mix: smoothstep(into / fade) };
+}
+
 /** Real seconds into the current loop at animation time "time", for a loop of "loopSeconds" real seconds. */
 export function videoLoopTime(time: number, loopSeconds: number) {
   const cycle = Math.floor(time / REFERENCE_CYCLE);

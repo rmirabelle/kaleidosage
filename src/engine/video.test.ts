@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { REFERENCE_CYCLE } from "./params";
-import { videoLoopPlan } from "./video";
+import { videoFadePlan, videoLoopPlan } from "./video";
 
 /** Animation time for "seconds" real seconds into a loop of "loop" seconds. */
 const timeAt = (seconds: number, loop: number) => (seconds / loop) * REFERENCE_CYCLE;
@@ -41,5 +41,20 @@ describe("videoLoopPlan", () => {
     const plan = videoLoopPlan(timeAt(-0.25, 20), 20, 30);
     expect(plan.fadeIn).toBeCloseTo(0.75);
     expect(plan.round).toBe(-1);
+  });
+});
+
+describe("videoFadePlan", () => {
+  it("moves each copy smoothly, and the copy that fades in takes over where it is", () => {
+    const duration = 6;
+    const fade = 2;
+    let previous = videoFadePlan(0, duration, fade);
+    for (let seconds = 0.05; seconds < 40; seconds += 0.05) {
+      const plan = videoFadePlan(seconds, duration, fade);
+      expect(plan.main).toBeLessThanOrEqual(duration + 1e-9);
+      if (plan.round === previous.round) expect(plan.main - previous.main).toBeCloseTo(0.05, 6);
+      else expect(plan.main).toBeCloseTo((previous.fadeIn ?? 0) + 0.05, 6);
+      previous = plan;
+    }
   });
 });

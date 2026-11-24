@@ -5,7 +5,7 @@ import type { ModelData } from "./model";
 import { MANDEL_CENTERS } from "./submodes";
 import { TYPE_RATE, letterCount } from "./textLayer";
 import { audioLinkable, pushRange, pushedValue, type AudioSignal } from "./audio";
-import { copyVideo, cueVideo, releaseVideo, seekVideo, syncVideo, videoLoopPlan, videoLoopTime } from "./video";
+import { copyVideo, cueVideo, releaseVideo, seekVideo, syncVideo, videoFadePlan, videoLoopPlan, videoLoopTime } from "./video";
 import { familyOf, intensityAt, positionAt, speedAt, travelAt, type Family, type SongScript } from "./songScript";
 import { LiveSound } from "./liveSound";
 import { isShown } from "./submodes";
@@ -252,6 +252,7 @@ export class Engine {
         const video = await copyVideo(scene.picture);
         copy.ownVideos.push(video);
         copy.setPicture(video);
+        await copy.pictureReady;
       } else if (scene.picture) {
         copy.setPicture(scene.picture);
       }
@@ -478,7 +479,7 @@ export class Engine {
     /* No frame comes to start a crossfade from; the callers go on with no crossfade. */
     for (const { resolve } of this.fadeWaiters) resolve();
     this.fadeWaiters = [];
-    for (const video of [...this.videos, ...this.partners, ...this.bounces]) video?.pause();
+    for (const video of [...this.videos, ...this.partners, ...this.bounces, this.picturePartner, this.pictureBounce]) video?.pause();
   }
 
   /** True when a second image is loaded; only then does the image blend have an effect. */
@@ -534,6 +535,81 @@ export class Engine {
     if (this.pictureSource instanceof HTMLVideoElement && this.pictureSource !== source) this.pictureSource.pause();
     this.pictureSource = source;
     this.renderer.setPicture(source);
+    for (const copy of [this.picturePartner, this.pictureBounce]) if (copy) releaseVideo(copy);
+    this.picturePartner = null;
+    this.pictureBounce = null;
+    this.pictureCopiesFor = null;
+    this.pictureReady = Promise.resolve();
+    this.requestPictureCopies();
+  }
+
+  /** The overlay video's crossfade partner and forward-and-back copy (see the Loop menu), the video they are for, and when they settle. */
+  private picturePartner: HTMLVideoElement | null = null;
+  private pictureBounce: HTMLVideoElement | null = null;
+  private pictureCopiesFor: { video: HTMLVideoElement; partner: boolean; bounce: boolean } | null = null;
+  private pictureReady: Promise<void> = Promise.resolve();
+
+  /** Asks for the copies the overlay video's Loop needs, once each: a partner for Crossfade, a forward-and-back copy for Forward and back. */
+  private requestPictureCopies() {
+    const video = this.pictureSource;
+    if (!(video instanceof HTMLVideoElement)) return;
+    if (this.pictureCopiesFor?.video !== video) this.pictureCopiesFor = { video, partner: false, bounce: false };
+    const asked = this.pictureCopiesFor;
+    const waits: Promise<void>[] = [];
+    if (this.state.pictureLoop === 1 && !asked.partner) {
+      asked.partner = true;
+      waits.push(copyVideo(video).then((copy) => {
+        if (this.disposed || this.pictureSource !== video) return releaseVideo(copy);
+        this.picturePartner = copy;
+      }).catch(() => { /* Without a partner, the video loops with a jump. */ }));
+    }
+    if (this.state.pictureLoop === 2 && !asked.bounce && bounceMaker) {
+      asked.bounce = true;
+      waits.push(bounceMaker(video).then((copy) => {
+        if (this.disposed || this.pictureSource !== video) return releaseVideo(copy);
+        this.pictureBounce = copy;
+      }).catch(() => { /* The video plays as with Loop off. */ }));
+    }
+    if (waits.length) this.pictureReady = Promise.all([this.pictureReady, ...waits]).then(() => undefined);
+  }
+
+  /**
+   * Places the overlay video's copies for the scene's clock (see the Loop
+   * menu) and tells the renderer which shows. "place" moves one copy, as
+   * in placeVideo. Nothing plays while the effect is off.
+   */
+  private placePicture(place: (video: HTMLVideoElement, target: number, waiting: boolean) => Promise<void> | void) {
+    const video = this.pictureSource;
+    if (!(video instanceof HTMLVideoElement)) return [];
+    const copies = [video, this.picturePartner, this.pictureBounce].filter((copy): copy is HTMLVideoElement => copy !== null);
+    const target = this.pictureVideoTarget();
+    if (target === null) {
+      for (const copy of copies) if (!copy.paused) copy.pause();
+      return [];
+    }
+    this.requestPictureCopies();
+    const clock = this.state.clock;
+    const bounce = this.pictureBounce;
+    const partner = this.picturePartner;
+    let main = video;
+    let other: HTMLVideoElement | null = null;
+    let mix = 0;
+    const waits: (Promise<void> | void)[] = [];
+    if (this.state.pictureLoop === 2 && bounce && bounce.duration > 0) {
+      main = bounce;
+      waits.push(place(bounce, clock % bounce.duration, false));
+    } else if (this.state.pictureLoop === 1 && partner) {
+      const plan = videoFadePlan(clock, video.duration, this.params.pictureFade.value);
+      main = plan.round % 2 === 0 ? video : partner;
+      other = main === video ? partner : video;
+      mix = plan.mix;
+      waits.push(place(main, plan.main, false), place(other, plan.fadeIn ?? 0, plan.fadeIn === null));
+    } else {
+      waits.push(place(video, target, false));
+    }
+    for (const copy of copies) if (copy !== main && copy !== other) waits.push(place(copy, 0, true));
+    this.renderer.showPictureVideo(main, other, mix);
+    return waits;
   }
 
   /**
@@ -638,17 +714,13 @@ export class Engine {
     };
   }
 
-  /** Keeps the overlay's video at its place, and stops it while it is not used. */
+  /** Keeps the overlay's video copies at their places, and stops them while they are not used. */
   private syncPictureVideo(paused: boolean) {
-    const video = this.pictureSource;
-    if (!(video instanceof HTMLVideoElement)) return;
-    const target = this.pictureVideoTarget();
-    if (target === null) {
-      if (!video.paused) video.pause();
-      return;
-    }
-    video.playbackRate = 1;
-    syncVideo(video, target, paused || this.gated);
+    this.placePicture((video, target, waiting) => {
+      if (waiting) return cueVideo(video, target);
+      video.playbackRate = 1;
+      syncVideo(video, target, paused || this.gated);
+    });
   }
 
   /** Keeps the driver video at its place: it plays at Speed, waits while paused or at Speed 0, and stops while it is not used. */
@@ -1311,7 +1383,7 @@ export class Engine {
     this.fade = null;
     this.renderer.dispose();
     this.disposed = true;
-    for (const video of [...this.ownVideos, ...this.partners, ...this.bounces]) if (video) releaseVideo(video);
+    for (const video of [...this.ownVideos, ...this.partners, ...this.bounces, this.picturePartner, this.pictureBounce]) if (video) releaseVideo(video);
   }
 
   /** Video export: GPU steps on the picture after draw (see KaleidoRenderer). */
@@ -1453,8 +1525,7 @@ export class Engine {
     for (const slot of [0, 1] as const) await Promise.all(this.placeVideo(slot, (video, target) => seekVideo(video, target)));
     const driverTarget = this.driverVideoTarget();
     if (this.driverVideo && driverTarget !== null) await seekVideo(this.driverVideo, driverTarget);
-    const pictureTarget = this.pictureVideoTarget();
-    if (this.pictureSource instanceof HTMLVideoElement && pictureTarget !== null) await seekVideo(this.pictureSource, pictureTarget);
+    await Promise.all(this.placePicture((video, target) => seekVideo(video, target)));
     const solidTarget = this.solidMediaTarget();
     if (this.solidMedia instanceof HTMLVideoElement && solidTarget !== null) await seekVideo(this.solidMedia, solidTarget);
     this.renderer.updateVideos(true);

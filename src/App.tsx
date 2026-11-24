@@ -288,6 +288,7 @@ export default function App() {
   /** The Image or Video effect's image or video for the selected scene (the ref at once, the name for the panel). */
   const pictureRef = useRef<SlotImage | null>(null);
   const [pictureName, setPictureName] = useState<string | null>(null);
+  const [pictureIsVideo, setPictureIsVideo] = useState(false);
   /** The 3D Object's own image or video for the selected scene (the ref at once, the name for the panel). */
   const solidMediaRef = useRef<SlotImage | null>(null);
   const [solidMediaName, setSolidMediaName] = useState<string | null>(null);
@@ -648,6 +649,7 @@ export default function App() {
   const setPicture = useCallback((picture: SlotImage | null) => {
     pictureRef.current = picture;
     setPictureName(picture?.label ?? null);
+    setPictureIsVideo(picture?.source instanceof HTMLVideoElement);
     engine?.setPicture(picture?.source ?? null);
   }, [engine]);
 
@@ -3032,6 +3034,7 @@ export default function App() {
                   driverVideoName={driverVideoName}
                   onPickDriverVideo={() => setOpenRequest({ kind: "image", slot: 0, target: "driver" })}
                   pictureName={pictureName}
+                  pictureIsVideo={pictureIsVideo}
                   onPickPicture={() => setOpenRequest({ kind: "image", slot: 0, target: "picture" })}
                   onRemovePicture={() => setPicture(null)}
                   solidMediaName={solidMediaName}

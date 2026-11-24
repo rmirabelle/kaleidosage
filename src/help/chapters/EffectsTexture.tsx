@@ -128,6 +128,11 @@ export function EffectsTexture() {
         do not show. <b>Black key</b> also makes the dark areas transparent, for the Normal blend.
       </p>
       <p>
+        With a video, the <b>Loop</b> menu sets how the video repeats, as it does for a video in a
+        source slot: <b>Off</b> jumps back to the start, <b>Crossfade</b> fades the end into the start
+        over <b>Fade</b> seconds, and <b>Forward and back</b> plays the video forward, then in reverse.
+      </p>
+      <p>
         The <b>Mask</b> menu shows the file only inside a shape: <b>Circle</b>, <b>Triangle</b>,
         <b>Square</b> or <b>Hexagon</b>. <b>Mask size</b> sets the size of the shape, <b>Mask softness</b> sets
         the width of its soft edge, and <b>Mask X</b> and <b>Mask Y</b> move it on the file. The mask moves

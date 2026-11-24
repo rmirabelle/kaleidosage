@@ -3976,12 +3976,32 @@ export class KaleidoRenderer {
   /** The video time of the frame in the texture (-1: none yet), so a frame is uploaded once. */
   private pictureVideoTime = -1;
   private pictureSize: [number, number] = [1, 1];
+  /**
+   * Which copy of the overlay's video shows (Loop: the video, its crossfade
+   * partner or its forward-and-back copy), the copy that fades in over it,
+   * and how much of that shows (see showPictureVideo). The two mix in
+   * pictureMixed during a fade.
+   */
+  private pictureMain: HTMLVideoElement | null = null;
+  private pictureOther: HTMLVideoElement | null = null;
+  private pictureMix = 0;
+  private pictureMixed: HTMLCanvasElement | null = null;
+
+  /** Sets which copy of the overlay's video shows, and the copy that fades in over it by "mix" (see the Loop menu). */
+  showPictureVideo(main: HTMLVideoElement, other: HTMLVideoElement | null, mix: number) {
+    this.pictureMain = main;
+    this.pictureOther = other;
+    this.pictureMix = other ? mix : 0;
+  }
 
   /** Sets the Image or Video effect's image or video, or none. A still image goes to its texture at once; a video, frame by frame (see uploadPicture). */
   setPicture(source: ImageSource | null) {
     const gl = this.gl;
     this.pictureSource = source;
     this.pictureVideoTime = -1;
+    this.pictureMain = null;
+    this.pictureOther = null;
+    this.pictureMix = 0;
     if (!source) {
       if (this.pictureTexture) gl.deleteTexture(this.pictureTexture);
       this.pictureTexture = null;
@@ -4052,9 +4072,28 @@ export class KaleidoRenderer {
   /** Image or Video: the file over the picture made so far, in one pass (PICTURE_SHADER). A video's new frame is uploaded first. */
   private drawPicture(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
     const gl = this.gl;
-    const video = this.pictureSource instanceof HTMLVideoElement ? this.pictureSource : null;
-    if (video && video.readyState >= 2 && video.videoWidth > 0 && video.currentTime !== this.pictureVideoTime) {
-      this.uploadPicture(this.pictureTexture, video, false);
+    const video = this.pictureSource instanceof HTMLVideoElement ? (this.pictureMain ?? this.pictureSource) : null;
+    const other = this.pictureOther;
+    const fading = Boolean(video && other && this.pictureMix > 0 && other.readyState >= 2);
+    if (video && video.readyState >= 2 && video.videoWidth > 0 && (fading || video.currentTime !== this.pictureVideoTime)) {
+      if (fading && other) {
+        /* During a fade both copies change, so they mix in a canvas each frame. */
+        const canvas = this.pictureMixed ??= document.createElement("canvas");
+        if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+        }
+        const context = canvas.getContext("2d")!;
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.globalAlpha = 1;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        context.globalAlpha = this.pictureMix;
+        context.drawImage(other, 0, 0, canvas.width, canvas.height);
+        context.globalAlpha = 1;
+        this.uploadPicture(this.pictureTexture, canvas, false);
+      } else {
+        this.uploadPicture(this.pictureTexture, video, false);
+      }
       this.pictureVideoTime = video.currentTime;
       this.pictureSize = [video.videoWidth, video.videoHeight];
     }

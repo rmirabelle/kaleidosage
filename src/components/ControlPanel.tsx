@@ -12,7 +12,7 @@ import { DEFAULT_LAND_KM, loadTerrain, randomLandPlace } from "../lib/terrain";
 import type { TerrainData } from "../engine/terrain";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
-import { MODEL_MAP_KEYS, MODEL_KEYS, effectName, CONE_SHAPES, CONE_SHAPE_KEYS, CONE_TYPES, CONE_TYPE_KEYS, TEXT_FILL_KEYS, TEXT_MOVES, TEXT_MOVE_KEYS, PATH_SHAPES, BUBBLE_SHAPES, BUBBLE_SHAPE_KEYS, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, PICTURE_MASKS, PICTURE_MASK_KEYS, MASK_KEEPS, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, PENROSE_SHAPES, SPHERE_SHAPES, PINWHEEL_SHAPES, TUNNEL_SHAPES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_PAINTS, SOLID_WRAPS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote, uniqueTo } from "../engine/submodes";
+import { MODEL_MAP_KEYS, MODEL_KEYS, effectName, CONE_SHAPES, CONE_SHAPE_KEYS, CONE_TYPES, CONE_TYPE_KEYS, TEXT_FILL_KEYS, TEXT_MOVES, TEXT_MOVE_KEYS, PATH_SHAPES, BUBBLE_SHAPES, BUBBLE_SHAPE_KEYS, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, VIDEO_LOOPS, PICTURE_MASKS, PICTURE_MASK_KEYS, MASK_KEEPS, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, PENROSE_SHAPES, SPHERE_SHAPES, PINWHEEL_SHAPES, TUNNEL_SHAPES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_PAINTS, SOLID_WRAPS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote, uniqueTo } from "../engine/submodes";
 import { canPaintSolid } from "../engine/renderer";
 import type { BlurMask, BubbleShape, ColorFill, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, MaskMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidPaint, SolidShape, WarpType } from "../engine/renderer";
 import { AddEffectMenu } from "./AddEffectMenu";
@@ -53,6 +53,8 @@ interface Props {
   onPickDriverVideo: () => void;
   /** The file name of the Image or Video effect's image or video, or null, and the buttons that pick one and take it away. */
   pictureName: string | null;
+  /** True when Image or Video holds a video: its Loop menu shows. */
+  pictureIsVideo: boolean;
   onPickPicture: () => void;
   onRemovePicture: () => void;
   /** The file name of the 3D Object's own image or video (Paint: Image or Video), or null, and the buttons that pick one and take it away. */
@@ -122,7 +124,7 @@ const CAMERA_REPEATS = [[0, "Mirror"], [1, "Tile"], [2, "None"]] as const;
 /** The controls of the left panel whose press is work on the scene (see onWork): buttons, fields, the sliders' parts, the gradient and the effect grips. */
 const WORK_CONTROLS = "button, input, select, textarea, a, label, [role=slider], [role=button], [role=option], [role=menuitem], [contenteditable=true], .range-grab, .range-low, .range-high, .gradient-bar, .gradient-stop, .panel-group-grip";
 
-export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, transport, onWork, driverVideoName, onPickDriverVideo, pictureName, onPickPicture, onRemovePicture, solidMediaName, onPickSolidMedia, onRemoveSolidMedia, onPickModel, onBrowseModels, onNeedAudioInput, linksTip, onLinksTipDone, nextTip, onNextTipDone, onFirstEffect }: Props) {
+export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, transport, onWork, driverVideoName, onPickDriverVideo, pictureName, pictureIsVideo, onPickPicture, onRemovePicture, solidMediaName, onPickSolidMedia, onRemoveSolidMedia, onPickModel, onBrowseModels, onNeedAudioInput, linksTip, onLinksTipDone, nextTip, onNextTipDone, onFirstEffect }: Props) {
   const holdOnly = useSceneHoldOnly();
   const row = useParamRows(engine);
   /** True while MIDI holds any range: the Effects header then shows a play button that plays them all again. */
@@ -473,6 +475,7 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
         </div>
         <ModeSelect engine={engine} stateKey="pictureBlend" options={PICTURE_BLENDS} name="Blend" />
         {PICTURE_KEYS.map(row)}
+        {pictureIsVideo && <PictureLoopRows engine={engine} row={row} />}
         <PictureMaskRows engine={engine} row={row} />
       </Group>
     ),
@@ -963,7 +966,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "penroseShape" | "sphereShape" | "pinwheelShape" | "tunnelShape" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "bubbleShape" | "bubbleBlend" | "bubbleShadow" | "outlineShape" | "outlineDraw" | "maskMode" | "maskKeep" | "pictureMask" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "pathShape" | "pathBlend" | "spiroBlend" | "textMove" | "textBlend" | "coneType" | "coneShape" | "coneBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidWrap" | "solidPaint" | "modelBlend" | "modelMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "penroseShape" | "sphereShape" | "pinwheelShape" | "tunnelShape" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "bubbleShape" | "bubbleBlend" | "bubbleShadow" | "outlineShape" | "outlineDraw" | "maskMode" | "maskKeep" | "pictureMask" | "pictureLoop" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "pathShape" | "pathBlend" | "spiroBlend" | "textMove" | "textBlend" | "coneType" | "coneShape" | "coneBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidWrap" | "solidPaint" | "modelBlend" | "modelMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange, child }: {
@@ -1161,6 +1164,17 @@ function BubbleSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =
         )}
         blend={<ModeSelect engine={engine} stateKey="bubbleBlend" options={LAYER_BLENDS} name="Blend" />}
       />
+    </>
+  );
+}
+
+/** Image or Video's Loop menu for its video, with the Fade slider under it for Crossfade (as the scene card's Loop). */
+function PictureLoopRows({ engine, row }: { engine: Engine; row: (key: ParamKey) => ReactNode }) {
+  const [loop, setLoop] = useState<number>(engine.state.pictureLoop);
+  return (
+    <>
+      <ModeSelect engine={engine} stateKey="pictureLoop" options={VIDEO_LOOPS} name="Loop" onChange={setLoop} />
+      {loop === 1 && childRows(["pictureFade"], row)}
     </>
   );
 }

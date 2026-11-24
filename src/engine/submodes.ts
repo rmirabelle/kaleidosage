@@ -202,6 +202,8 @@ export const MASK_KEYS: Record<MaskMode, ParamKey[]> = {
   2: MASK_SHAPE_KEYS, 3: MASK_SHAPE_KEYS, 4: MASK_SHAPE_KEYS, 5: MASK_SHAPE_KEYS,
   6: ["maskSides", ...MASK_SHAPE_KEYS]
 };
+/** The Loop menu of a source video and of Image or Video's video (see PlayState.videoLoop). */
+export const VIDEO_LOOPS = [[0, "Off"], [1, "Crossfade"], [2, "Forward and back"]] as const;
 /** Image or Video's Mask menu (see PictureMask), and the sliders each shows. */
 export const PICTURE_MASKS = [[0, "None"], [1, "Circle"], [2, "Triangle"], [3, "Square"], [4, "Hexagon"]] as const;
 const PICTURE_MASK_SLIDERS: ParamKey[] = ["pictureMaskSize", "pictureMaskSoft", "pictureMaskX", "pictureMaskY"];

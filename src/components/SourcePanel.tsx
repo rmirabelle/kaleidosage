@@ -4,6 +4,7 @@ import { CircleHalfTilt, FlipHorizontal, GridFour, MagicWand, Sun } from "@phosp
 import type { Engine } from "../engine/engine";
 import type { BlendMode, Tiling, VideoLoop } from "../engine/renderer";
 import { Dropdown } from "./Dropdown";
+import { VIDEO_LOOPS } from "../engine/submodes";
 import { ContextMenu } from "./ContextMenu";
 import { TilingIcon } from "./TilingIcon";
 import { useParamRows } from "./useParamRows";
@@ -22,8 +23,6 @@ const BLEND_MODES: readonly (readonly [BlendMode, string, ReactNode])[] = [
   [1, "Dissolve by brightness", <Sun size={14} />]
 ];
 
-/** How a source video loops (see PlayState.videoLoop). */
-const VIDEO_LOOPS: readonly (readonly [VideoLoop, string])[] = [[0, "Off"], [1, "Crossfade"], [2, "Forward and back"]];
 
 /** How the images go on past their edges; auto repeats a repeating test pattern and mirrors anything else. */
 const TILINGS: readonly (readonly [Tiling, string, ReactNode])[] = [
