@@ -9,8 +9,6 @@ import { REFERENCE_CYCLE } from "./params";
  * while it shows.
  */
 
-/** Seconds each repeat's end takes to fade into its start; a short video gets a shorter fade. */
-const VIDEO_FADE = 1;
 /** How far, in seconds, a playing video may be from its place before it jumps there. */
 const MAX_DRIFT = 0.25;
 
@@ -32,14 +30,16 @@ const smoothstep = (value: number) => {
 
 /**
  * Where the video copies are at animation time "time", for a loop of
- * "loopSeconds" real seconds and a video "duration" seconds long. A repeat
+ * "loopSeconds" real seconds and a video "duration" seconds long, with a
+ * crossfade of "fadeSeconds" (the Fade slider). A repeat
  * is the loop, or the loop split into equal parts that each fit in the
  * video with the fade. Each repeat shows the video from "fade" to
  * "fade + repeat"; over its last "fade" seconds the video's start, 0 to
  * "fade", fades in, and the next repeat goes on from there.
  */
-export function videoLoopPlan(time: number, loopSeconds: number, duration: number): VideoPlan {
-  const fade = Math.min(VIDEO_FADE, duration / 4);
+export function videoLoopPlan(time: number, loopSeconds: number, duration: number, fadeSeconds = 1): VideoPlan {
+  /* A short video gets a shorter fade: at most half its length, so each repeat still shows some of it alone. */
+  const fade = Math.max(0.05, Math.min(fadeSeconds, duration / 2));
   const parts = Math.max(1, Math.ceil(loopSeconds / (duration - fade) - 1e-9));
   const repeat = loopSeconds / parts;
   const cycle = Math.floor(time / REFERENCE_CYCLE);

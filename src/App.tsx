@@ -35,7 +35,7 @@ import type { ModelData } from "./engine/model";
 import { DocumentTabs, type DocumentTabInfo } from "./components/DocumentTabs";
 import { StageControls } from "./components/StageControls";
 import { VrScreenCard } from "./components/VrScreenCard";
-import { Engine, type SceneSource } from "./engine/engine";
+import { Engine, setBounceMaker, type SceneSource } from "./engine/engine";
 import { vrAvailable, vrSupported } from "./engine/vr";
 
 /** Set once VR has worked on this PC (see toggleVr). */
@@ -72,7 +72,7 @@ import { helpSettings } from "./lib/helpSettings";
 import { RANGE_ON_EVENT } from "./lib/pointerEvents";
 import { FILE_EXTENSION, fileFingerprint, isFileCopy, matchingScenes, newSceneId, openKaleidoFile, readManifest, saveKaleidoFile, type FileAudio } from "./lib/kaleidoFile";
 import { revealMainWindow } from "./lib/splash";
-import { isVideoPath, isVideoType, loadVideoBlob, loadVideoFile, stageVideoBlob, type VideoFile } from "./lib/videos";
+import { isVideoPath, isVideoType, loadVideoBlob, loadVideoFile, makeBounceVideo, stageVideoBlob, type VideoFile } from "./lib/videos";
 import { checkForUpdate, getAppVersion, type UpdateInfo } from "./lib/updater";
 import { CROSSFADE_SECONDS, encodeVideo, videoDimensions, videoSize, type SongJob, type VideoOptions } from "./lib/videoExport";
 import { attachCameraDrag } from "./lib/cameraDrag";
@@ -608,6 +608,21 @@ export default function App() {
   const showError = useCallback((message: string, action?: Status["action"]) => {
     setStatus({ message, duration: 0, error: true, action });
   }, []);
+
+  /* Loop: Forward and back. Making the copy can take a while, so the status line says so. */
+  useEffect(() => {
+    setBounceMaker(async (video) => {
+      showStatus("Making the forward-and-back video…", 0, undefined, true);
+      try {
+        const bounce = await makeBounceVideo(video);
+        showStatus("The forward-and-back video is ready");
+        return bounce;
+      } catch (error) {
+        showError(`Could not make the forward-and-back video: ${error instanceof Error ? error.message : String(error)}`);
+        throw error;
+      }
+    });
+  }, [showError, showStatus]);
 
   useEffect(() => {
     if (!status?.duration) return;

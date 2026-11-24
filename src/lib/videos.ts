@@ -53,6 +53,25 @@ export async function loadVideoId(videoFile: VideoFile): Promise<{ video: HTMLVi
   }
 }
 
+/**
+ * The forward-and-back copy of a video (Loop: Forward and back): FFmpeg
+ * makes it from the video's registered stream (see video_bounce.rs). A
+ * video from a blob goes to the app's video store first.
+ */
+export async function makeBounceVideo(video: HTMLVideoElement): Promise<HTMLVideoElement> {
+  const src = video.currentSrc || video.src;
+  let id: string;
+  if (src.startsWith("blob:")) {
+    id = (await stageVideoBlob(await (await fetch(src)).blob())).id;
+  } else {
+    id = decodeURIComponent(new URL(src).pathname.split("/").pop() ?? "");
+  }
+  const bounce = await invoke<VideoFile>("bounce_video", { id });
+  const copy = await loadVideoUrl(convertFileSrc(bounce.id, "video"));
+  copy.pause();
+  return copy;
+}
+
 export async function loadVideoFile(path: string) {
   return loadVideoId(await invoke<VideoFile>("open_video_file", { path }));
 }

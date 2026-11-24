@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } fro
 import { createPortal } from "react-dom";
 import { CircleHalfTilt, FlipHorizontal, GridFour, MagicWand, Sun } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
-import type { BlendMode, Tiling } from "../engine/renderer";
+import type { BlendMode, Tiling, VideoLoop } from "../engine/renderer";
+import { Dropdown } from "./Dropdown";
 import { ContextMenu } from "./ContextMenu";
 import { TilingIcon } from "./TilingIcon";
 import { useParamRows } from "./useParamRows";
@@ -21,6 +22,9 @@ const BLEND_MODES: readonly (readonly [BlendMode, string, ReactNode])[] = [
   [1, "Dissolve by brightness", <Sun size={14} />]
 ];
 
+/** How a source video loops (see PlayState.videoLoop). */
+const VIDEO_LOOPS: readonly (readonly [VideoLoop, string])[] = [[0, "Off"], [1, "Crossfade"], [2, "Forward and back"]];
+
 /** How the images go on past their edges; auto repeats a repeating test pattern and mirrors anything else. */
 const TILINGS: readonly (readonly [Tiling, string, ReactNode])[] = [
   [0, "Auto", <MagicWand size={14} />],
@@ -35,12 +39,12 @@ const TILINGS: readonly (readonly [Tiling, string, ReactNode])[] = [
  * Crossfade slider between them. The
  * blend only has an effect with a second image, so it shows only then. How
  * it fades (evenly, or by brightness) is in the slider's right-click menu,
- * to save the room a menu row took. A video slot has a Loop check box
- * under it. The Tiling button between A and B, under the swap button, sets
+ * to save the room a menu row took. With a video in a slot, the Loop menu
+ * shows under the images, with the Fade slider for Crossfade. The Tiling button between A and B, under the swap button, sets
  * how the images go on past their edges. It is always open. The scene's play toolbar is at the
  * bottom of the column, under the FX card (see SceneTransport).
  */
-export function SourcePanel({ engine, sceneName, dirty, ...sources }: Omit<SourceImagesProps, "videoLoop" | "onVideoLoop"> & {
+export function SourcePanel({ engine, sceneName, dirty, ...sources }: SourceImagesProps & {
   engine: Engine;
   /** The scene's file name (without .ksage), or "Untitled Scene": the card's title. */
   sceneName: string;
@@ -50,7 +54,8 @@ export function SourcePanel({ engine, sceneName, dirty, ...sources }: Omit<Sourc
   const row = useParamRows(engine);
   const [blendMode, setBlendMode] = useState<BlendMode>(engine.state.blendMode);
   const [tiling, setTiling] = useState<Tiling>(engine.state.tiling);
-  const [videoLoop, setVideoLoop] = useState(engine.state.videoCrossfade);
+  const [videoLoop, setVideoLoop] = useState<VideoLoop>(engine.state.videoLoop);
+  const hasVideo = sources.images.some((image) => image?.source instanceof HTMLVideoElement);
   const [tilingMenu, setTilingMenu] = useState<{ left: number; top: number } | null>(null);
   const tilingName = TILINGS.find(([mode]) => mode === tiling)?.[1] ?? "Auto";
   return (
@@ -96,12 +101,24 @@ export function SourcePanel({ engine, sceneName, dirty, ...sources }: Omit<Sourc
               )}
             </>
           )}
-          videoLoop={videoLoop}
-          onVideoLoop={(on) => {
-            engine.state.videoCrossfade = on;
-            setVideoLoop(on);
-          }}
         />
+        {hasVideo && (
+          <div
+            className="panel-select-row panel-select-named"
+            data-tip="How a source video loops. Off: it starts again at the start of each loop, with a jump. Crossfade: its end fades into its start over Fade seconds. Forward and back: it plays forward, then in reverse (the app makes this copy of the video once). A seamless video export changes Off to Crossfade."
+          >
+            <span className="panel-row-name">Loop</span>
+            <Dropdown
+              value={videoLoop}
+              options={VIDEO_LOOPS}
+              onChange={(next) => {
+                engine.state.videoLoop = next;
+                setVideoLoop(next);
+              }}
+            />
+          </div>
+        )}
+        {hasVideo && videoLoop === 1 && row("videoFade")}
         {sources.images[1] && row.with("imageBlend", {
           menu: BLEND_MODES.map(([mode, label, icon]) => ({
             label,

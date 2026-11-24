@@ -332,6 +332,8 @@ export type OutlineDraw = 0 | 1 | 2;
 export type MaskMode = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 /** The Opacity mask's shapes keep the picture inside (0) or outside (1) the shape. */
 export type MaskKeep = 0 | 1;
+/** How a source video loops: 0 Off, 1 Crossfade, 2 Forward and back (see PlayState.videoLoop). */
+export type VideoLoop = 0 | 1 | 2;
 /** The Light cone's look: 0 Spotlight (a filled beam), 1 Laser shell (only its surface). */
 export type ConeType = 0 | 1;
 /** The Light cone's shape: 0 a round cone, 1 a pyramid with Sides sides. */
@@ -1132,6 +1134,8 @@ export function sourceSize(source: ImageSource): [number, number] {
 interface VideoSlot {
   video: HTMLVideoElement;
   partner: HTMLVideoElement | null;
+  /** The forward-and-back copy (Loop: Forward and back), once it is made. */
+  bounce: HTMLVideoElement | null;
   /** The copy that shows (the video or its partner), and how much of the other one shows over it. */
   main: HTMLVideoElement;
   mix: number;
@@ -1523,7 +1527,15 @@ export class KaleidoRenderer {
     entry.unwatch.push(this.watch(entry, partner));
   }
 
-  /** Which copy of the slot's video shows ("main", the video or its partner), and how much of the other copy shows over it. */
+  /** Gives the slot's video its forward-and-back copy (Loop: Forward and back), which shows in its place (see showVideo). */
+  setVideoBounce(slot: 0 | 1, bounce: HTMLVideoElement) {
+    const entry = this.videos[slot];
+    if (!entry || entry.bounce) return;
+    entry.bounce = bounce;
+    entry.unwatch.push(this.watch(entry, bounce));
+  }
+
+  /** Which copy of the slot's video shows ("main", the video, its partner or its forward-and-back copy), and how much of the other copy shows over it. */
   showVideo(slot: 0 | 1, main: HTMLVideoElement, mix: number) {
     const entry = this.videos[slot];
     if (!entry) return;
@@ -1578,7 +1590,7 @@ export class KaleidoRenderer {
 
   private watchVideo(slot: 0 | 1, video: HTMLVideoElement, scaled: HTMLCanvasElement | null) {
     const entry: VideoSlot = {
-      video, partner: null, main: video, mix: 0, scaled, mixed: null, fresh: false,
+      video, partner: null, bounce: null, main: video, mix: 0, scaled, mixed: null, fresh: false,
       lastCallbackAt: performance.now(), uploadedTime: video.currentTime, uploadedFrom: null, unwatch: []
     };
     entry.unwatch.push(this.watch(entry, video));

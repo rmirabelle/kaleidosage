@@ -153,6 +153,14 @@ export interface SceneSource {
   model: ModelData | null;
 }
 
+/** Makes a video's forward-and-back copy (Loop: Forward and back). The app sets it, as the engine knows no files. */
+let bounceMaker: ((video: HTMLVideoElement) => Promise<HTMLVideoElement>) | null = null;
+
+/** Sets how every engine makes a video's forward-and-back copy (see bounceMaker). */
+export function setBounceMaker(make: (video: HTMLVideoElement) => Promise<HTMLVideoElement>) {
+  bounceMaker = make;
+}
+
 export class Engine {
   readonly params = createParams();
   readonly state = createPlayState();
@@ -230,6 +238,7 @@ export class Engine {
           copy.ownVideos.push(video);
           copy.setImage(video, slot);
           await copy.partnerReady[slot];
+          await copy.bounceReady[slot];
         } else {
           copy.setImage(source, slot);
         }
@@ -469,7 +478,7 @@ export class Engine {
     /* No frame comes to start a crossfade from; the callers go on with no crossfade. */
     for (const { resolve } of this.fadeWaiters) resolve();
     this.fadeWaiters = [];
-    for (const video of [...this.videos, ...this.partners]) video?.pause();
+    for (const video of [...this.videos, ...this.partners, ...this.bounces]) video?.pause();
   }
 
   /** True when a second image is loaded; only then does the image blend have an effect. */
@@ -484,6 +493,10 @@ export class Engine {
   private readonly partners: [HTMLVideoElement | null, HTMLVideoElement | null] = [null, null];
   /** Settles when the slot's partner is ready, or when making it failed (the video then loops with a jump). */
   private readonly partnerReady: [Promise<void>, Promise<void>] = [Promise.resolve(), Promise.resolve()];
+  /** Each slot's forward-and-back copy (Loop: Forward and back), the video it was asked for, and when it settles. */
+  private readonly bounces: [HTMLVideoElement | null, HTMLVideoElement | null] = [null, null];
+  private readonly bounceFor: [HTMLVideoElement | null, HTMLVideoElement | null] = [null, null];
+  private readonly bounceReady: [Promise<void>, Promise<void>] = [Promise.resolve(), Promise.resolve()];
   private disposed = false;
 
   /** True when an image slot holds a video. */
@@ -681,7 +694,12 @@ export class Engine {
     const partner = this.partners[slot];
     this.partners[slot] = null;
     if (partner) releaseVideo(partner);
+    const bounce = this.bounces[slot];
+    this.bounces[slot] = null;
+    this.bounceFor[slot] = null;
+    if (bounce) releaseVideo(bounce);
     if (!video) return;
+    if (this.state.videoLoop === 2) this.requestBounce(slot);
     this.partnerReady[slot] = copyVideo(video).then((copy) => {
       if (this.disposed || this.videos[slot] !== video) {
         releaseVideo(copy);
@@ -693,6 +711,25 @@ export class Engine {
   }
 
   /**
+   * Asks for the slot's forward-and-back copy (see setBounceMaker), once
+   * for each video. Until it is ready, and if making it fails, the video
+   * plays as with Loop off.
+   */
+  private requestBounce(slot: 0 | 1) {
+    const video = this.videos[slot];
+    if (!video || !bounceMaker || this.bounceFor[slot] === video) return;
+    this.bounceFor[slot] = video;
+    this.bounceReady[slot] = bounceMaker(video).then((bounce) => {
+      if (this.disposed || this.videos[slot] !== video || this.bounceFor[slot] !== video) {
+        releaseVideo(bounce);
+        return;
+      }
+      this.bounces[slot] = bounce;
+      this.renderer.setVideoBounce(slot, bounce);
+    }).catch(() => { /* The video plays as with Loop off. */ });
+  }
+
+  /**
    * Places the slot's video copies for the current time: the copy that shows
    * and, near the video's loop point, the copy that fades in (see
    * videoLoopPlan). "place" moves one copy; it returns a promise when it waits.
@@ -701,14 +738,25 @@ export class Engine {
     const video = this.videos[slot];
     if (!video || !Number.isFinite(video.duration) || video.duration <= 0) return [];
     const partner = this.partners[slot];
-    if (!this.state.videoCrossfade) {
+    if (this.state.videoLoop === 2) this.requestBounce(slot);
+    const bounce = this.bounces[slot];
+    if (this.state.videoLoop === 2 && bounce && Number.isFinite(bounce.duration) && bounce.duration > 0) {
+      /* The copy ends where it starts, so it plays on with no regard to the loop, at its own speed. */
+      const seconds = (this.state.time * this.params.cycle.value) / REFERENCE_CYCLE;
+      const waits = [place(bounce, ((seconds % bounce.duration) + bounce.duration) % bounce.duration, false), place(video, 0, true)];
+      if (partner) waits.push(place(partner, 0, true));
+      this.renderer.showVideo(slot, bounce, 0);
+      return waits;
+    }
+    if (bounce) bounce.pause();
+    if (this.state.videoLoop !== 1) {
       /* The old way: the video starts again at the start of each loop, and repeats inside a loop that is longer than it. */
       const waits = [place(video, videoLoopTime(this.state.time, this.params.cycle.value) % video.duration, false)];
       if (partner) waits.push(place(partner, 0, true));
       this.renderer.showVideo(slot, video, 0);
       return waits;
     }
-    const plan = videoLoopPlan(this.state.time, this.params.cycle.value, video.duration);
+    const plan = videoLoopPlan(this.state.time, this.params.cycle.value, video.duration, this.params.videoFade.value);
     const copies = partner ? [video, partner] : [video];
     const main = copies[((plan.round % copies.length) + copies.length) % copies.length];
     const other = copies.find((copy) => copy !== main) ?? null;
@@ -1263,7 +1311,7 @@ export class Engine {
     this.fade = null;
     this.renderer.dispose();
     this.disposed = true;
-    for (const video of [...this.ownVideos, ...this.partners]) if (video) releaseVideo(video);
+    for (const video of [...this.ownVideos, ...this.partners, ...this.bounces]) if (video) releaseVideo(video);
   }
 
   /** Video export: GPU steps on the picture after draw (see KaleidoRenderer). */

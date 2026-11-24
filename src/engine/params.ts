@@ -1,4 +1,4 @@
-import type { ConeShape, ConeType, PenroseShape, PinwheelShape, TunnelShape, SphereShape, BlendMode, BlurMask, BubbleShadow, BubbleShape, CameraColors, MaskKeep, CameraHeightSource, CameraRepeat, ColorFill, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidPaint, SolidShape, SolidWrap, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, MaskMode, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
+import type { ConeShape, ConeType, PenroseShape, PinwheelShape, TunnelShape, SphereShape, BlendMode, BlurMask, BubbleShadow, BubbleShape, CameraColors, MaskKeep, VideoLoop, CameraHeightSource, CameraRepeat, ColorFill, CycleMove, CyclePaint, DriverMode, MandelPlace, SolidMap, SolidPaint, SolidShape, SolidWrap, DriverSource, Tiling, FoldMode, FxStep, LayerBlend, MapMode, OutlineDraw, MaskMode, OutlineShape, ParticleBlend, ParticleShape, PictureBlend, PictureStep, ShapeStep, SmearShape, SortOrder, TrailMode, WarpMode, WarpType } from "./renderer";
 
 import type { PathShape } from "./paths";
 import { MAX_SPIRO_WHEELS, defaultSpiroWheels, randomSpiroWheels, type SpiroWheelSpec } from "./spiro";
@@ -45,7 +45,8 @@ export const PARAM_KEYS = [
   "spiroHoleX1", "spiroHoleX2", "spiroHoleX3", "spiroHoleX4", "spiroHoleX5", "spiroHoleX6", "spiroHoleY1", "spiroHoleY2", "spiroHoleY3", "spiroHoleY4", "spiroHoleY5", "spiroHoleY6",
   "textAmount", "textSize", "textX", "textY", "textAngle", "textLetterSpacing", "textLineSpacing", "textGradientAngle", "textOutline", "textGlow", "textGlowSize", "textShadow", "textShadowSoftness", "textShadowDistance", "textSpeed", "textHold",
   "coneAmount", "coneOpacity", "coneSpread", "coneSides", "coneTurn", "coneSwing", "coneTilt", "coneX", "coneHeight", "coneDepth", "coneSoftness", "coneEdge", "coneEdgeLines", "coneFog", "coneFogSize", "coneFogSpeed", "coneFade", "coneFloor", "coneEmitter",
-  "maskSoft", "maskSides"
+  "maskSoft", "maskSides",
+  "videoFade"
 ] as const;
 export type ParamKey = typeof PARAM_KEYS[number];
 
@@ -508,10 +509,12 @@ export interface PlayState {
   /** How far the driver's motion has run; it grows with time × driver speed. */
   driverTime: number;
   /**
-   * A source video crossfades its end into its start (see video.ts). Off,
-   * the video starts again at the start of each loop, with a jump.
+   * How a source video loops (see video.ts): 0 Off, it starts again at the
+   * start of each loop, with a jump; 1 Crossfade, its end fades into its
+   * start over Fade seconds (videoFade); 2 Forward and back, it plays a
+   * copy that plays forward and then in reverse (see video_bounce.rs).
    */
-  videoCrossfade: boolean;
+  videoLoop: VideoLoop;
   paused: boolean;
   /** Animation time in seconds. It runs at the speed the shared cycle sets (see REFERENCE_CYCLE). */
   time: number;
@@ -543,6 +546,8 @@ const SPECS: Record<ParamKey, ParamSpec> = {
    * handles. It also sets the speed of everything that moves (see
    * REFERENCE_CYCLE).
    */
+  /** The source video's crossfade, in seconds (Loop: Crossfade only). A short video gets at most half its length. */
+  videoFade: { label: "Fade", min: 0.25, max: 10, step: 0.05, value: 1, unit: " s" },
   cycle: { label: "Length", min: 5, max: 90, step: 1, value: REFERENCE_CYCLE, unit: " s" },
   warpOpacity: opacitySpec,
   mapOpacity: opacitySpec,
@@ -1517,7 +1522,7 @@ export function createPlayState(): PlayState {
     /* No effect is in the list at start-up, so every effect group is off. */
     groups: { animation: true, source: true, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, model: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false, cone: false, panorama: false },
     locks: { animation: false, source: false, warp: false, map: false, kaleidoscope: false, blur: false, trails: false, smear: false, contours: false, relief: false, driver: false, terrain: false, camera: false, solid: false, model: false, sort: false, particles: false, cycles: false, rays: false, lasers: false, paths: false, spiro: false, bloom: false, sharpen: false, color: false, levels: false, picture: false, outlines: false, mask: false, bubble: false, text: false, cone: false, panorama: false },
-    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, tunnelTravel: 0, packTravel: 0, frameTravel: 0, panoramaTravelX: 0, panoramaTravelY: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, penroseShape: 0, sphereShape: 2, pinwheelShape: 1, tunnelShape: 0, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, pathShape: 2, pathBlend: 7, spiroWheels: defaultSpiroWheels(), spiroBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskKeep: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, coneType: 0, coneShape: 0, coneColor: "#8fe6ff", coneBlend: 7, coneFogTime: 0, textContent: DEFAULT_TEXT, textFont: "Segoe UI", textBold: true, textItalic: false, textAlign: 1, textFill: 0, textColor: "#ffffff", textStops: defaultTextStops(), textOutlineColor: "#000000", textGlowColor: "#18e0ff", textShadowColor: "#000000", textMove: 0, textBlend: 0, textTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidFx: [], modelBlend: 0, modelMap: 2, modelFx: [], modelTurnsX: 0, modelTurnsY: 0, modelTurnsZ: 0, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoCrossfade: false, paused: false, time: 0, clock: 0 };
+    blendMode: 0, tiling: 0, warpMode: 1, warpType: 0, warpTime: 0, mandelFlowTime: 0, mapTravel: 0, tunnelTravel: 0, packTravel: 0, frameTravel: 0, panoramaTravelX: 0, panoramaTravelY: 0, cameraX: 0, cameraY: 0, mapMode: 8, mandelPlace: 0, foldMode: 2, penroseShape: 0, sphereShape: 2, pinwheelShape: 1, tunnelShape: 0, fxOrder: [], layerBlend: { warp: 0, map: 0, kaleidoscope: 0 }, sound: {}, blurMask: 0, trailMode: 1, overlayColor: "#ff7a1a", colorBlend: 0, colorFill: 0, colorStops: defaultColorStops(), trailColor: "#2a6cff", smearShape: 0, contourTone: "hue", contourBlend: 0, cameraBlend: 0, viewBlend: 0, skyColor: "#7fa6e6", cameraRepeat: 0, cameraHeightSource: 2, cameraColors: 2, cameraStops: defaultTerrainStops(), sortOrder: 0, particleBlend: 0, particleShape: 0, pictureBlend: 1, particleStops: defaultGradientStops(), cyclesMove: 0, cyclesBlend: 7, laserBlend: 7, pathShape: 2, pathBlend: 7, spiroWheels: defaultSpiroWheels(), spiroBlend: 7, cyclesPaint: 0, cyclesStops: defaultCycleStops(), bubbleShape: 0, bubbleBlend: 0, bubbleShadow: 0, outlineShape: 0, outlineDraw: 0, outlineStops: defaultOutlineStops(), maskMode: 0, maskKeep: 0, maskStops: defaultMaskStops(), outlineTime: 0, outlineFlowTime: 0, outlineSnakeTime: 0, coneType: 0, coneShape: 0, coneColor: "#8fe6ff", coneBlend: 7, coneFogTime: 0, textContent: DEFAULT_TEXT, textFont: "Segoe UI", textBold: true, textItalic: false, textAlign: 1, textFill: 0, textColor: "#ffffff", textStops: defaultTextStops(), textOutlineColor: "#000000", textGlowColor: "#18e0ff", textShadowColor: "#000000", textMove: 0, textBlend: 0, textTime: 0, solidShape: 1, solidMap: 0, solidWrap: 0, solidPaint: 0, solidBlend: 0, solidFx: [], modelBlend: 0, modelMap: 2, modelFx: [], modelTurnsX: 0, modelTurnsY: 0, modelTurnsZ: 0, solidSpinTurns: 0, solidTumbleTurns: 0, outlineSpinTurns: 0, outlineTumbleTurns: 0, driverSource: 0, driverMode: 0, driverTime: 0, videoLoop: 0, paused: false, time: 0, clock: 0 };
 }
 
 /** The longest custom time a range can have, in seconds. */
@@ -2060,7 +2065,7 @@ export const GROUP_PARAMS: Record<GroupKey, ParamKey[]> = {
   /** The shared cycle is how the user plays the animation; Randomize and Reset leave it alone. */
   animation: ["cycle"],
   /** The images are the user's choice; Randomize does not change the blend. */
-  source: ["imageBlend"],
+  source: ["imageBlend", "videoFade"],
   warp: ["warpOpacity", "warpAmount", "warpScale", "warpCellSize", "warpCellX", "warpCellY", "warpCellAngle", "warpCellTurn", "warpCellSpin", "warpCellSides", "warpCellRandom", "warpMarble", "warpDetail", "warpFlow", "warpCenterX", "warpCenterY", "warpAngle"],
   map: ["mapOpacity", "mapMix", "mapScale", "juliaZoom", "mapPower", "juliaShape", "juliaEdge", "juliaFog", "juliaFogSoftness", "mapSteps", "mapArms", "mapTwist", "mapAngle", "mapSpeed", "mapFog", "mapFogSoftness", "tunnelTwist", "mapPanX", "mapPanY", "mapRoll", "mapCurl", "mandelDepth", "mandelEnd", "mandelSpeed", "mandelFade", "mandelSpread", "mandelInvert", "mandelEdge", "mandelEdgeWidth", "mandelBands", "mandelFlow", "mandelTerraces", "mandelSoftness", "mandelLight", "mandelLightAngle", "drosteSize", "drosteSpirals", "drosteSoftness", "drosteRound", "drosteRotation", "drostePictureTurn",
     "mobiusPoint", "mobiusTurn", "mobiusRotation", "mobiusTwist", "mobiusZoom", "mobiusPanX", "mobiusPanY", "mobiusFog", "mobiusFogSoftness"],

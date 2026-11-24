@@ -560,8 +560,8 @@ async function openClip(source: Engine, scene: SceneSource, shape: ExportShape, 
   state.cameraX = 0;
   state.cameraY = 0;
   if (seamless) {
-    /* A source video crossfades its end into its start, so it never jumps. */
-    state.videoCrossfade = true;
+    /* A source video crossfades its end into its start, so it never jumps; Forward and back has no jump either. */
+    if (state.videoLoop === 0) state.videoLoop = 1;
     for (const [key, fitted] of Object.entries(fittedCustomSeconds(params, seconds))) params[key as ParamKey].seconds = fitted;
     /* Time smear restarts follow the play clock; they get the nearest time that repeats a whole number of times in the video. */
     const restart = params.smearRestart;

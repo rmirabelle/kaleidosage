@@ -23,9 +23,6 @@ export interface SourceImagesProps {
   onSwapImages: () => void;
   /** Takes a pattern off a slot and shows the image under it again. */
   onRestoreImage: (slot: ImageSlot) => void;
-  /** Whether a source video loops seamlessly (PlayState.videoCrossfade): the Loop check box under each video slot. */
-  videoLoop: boolean;
-  onVideoLoop: (on: boolean) => void;
   /** A control under the swap button, between the two cards (the Tiling button). */
   between?: ReactNode;
 }
@@ -35,11 +32,9 @@ export interface SourceImagesProps {
  * B, which the picture can fade to. Each card can load a file, a random
  * photo, a searched photo or a test pattern, and takes a dropped file. B can be removed, and A
  * too when B is there to take its place. With both images, a swap button
- * between them trades their places; "between" goes under it. A slot with a video has a Loop check
- * box under it, in a row of its own, so the cards and the swap button stay
- * in line.
+ * between them trades their places; "between" goes under it.
  */
-export function SourceImages({ images, randomLoading, onOpenImage, onRandomImage, onSearchImage, onPatternImage, onRemoveImage, onSwapImages, onRestoreImage, videoLoop, onVideoLoop, between }: SourceImagesProps) {
+export function SourceImages({ images, randomLoading, onOpenImage, onRandomImage, onSearchImage, onPatternImage, onRemoveImage, onSwapImages, onRestoreImage, between }: SourceImagesProps) {
   const removable = (slot: ImageSlot) => slot === 1 || Boolean(images[1]);
   const card = (slot: ImageSlot) => (
     <ImageCard
@@ -71,17 +66,6 @@ export function SourceImages({ images, randomLoading, onOpenImage, onRandomImage
         {between}
       </div>
       {card(1)}
-      {([0, 1] as const).map((slot) => images[slot]?.source instanceof HTMLVideoElement && (
-        <label
-          key={slot}
-          className="source-loop panel-check-inline"
-          style={{ gridColumn: slot === 0 ? 1 : 3 }}
-          data-tip="The video fades its end into its start, so it loops with no jump. Off, it starts again at the start of each loop. A seamless video export always fades."
-        >
-          <input type="checkbox" checked={videoLoop} onChange={(event) => onVideoLoop(event.target.checked)} />
-          Loop
-        </label>
-      ))}
     </div>
   );
 }

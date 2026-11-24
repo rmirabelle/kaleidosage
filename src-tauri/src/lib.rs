@@ -14,6 +14,7 @@ pub mod song_analysis;
 mod song_models;
 pub mod song_sections;
 mod updater;
+mod video_bounce;
 mod video_import;
 mod video_stream;
 mod scene_archive;
@@ -157,6 +158,7 @@ pub fn run() {
             video_stream::append_video_upload,
             video_stream::finish_video_upload,
             video_import::compatible_video,
+            video_bounce::bounce_video,
             files::save_export,
             export_stream::begin_export,
             export_stream::write_export,

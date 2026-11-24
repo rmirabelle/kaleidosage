@@ -410,6 +410,20 @@ describe("scene files", () => {
     expect(applyScene(broken, createParams(), createPlayState())).toEqual({ image: IMAGE });
   });
 
+  it("keep the video Loop, and read the old Loop check box as Crossfade", () => {
+    const state = createPlayState();
+    state.videoLoop = 2;
+    const loaded = createPlayState();
+    applyScene(serializeScene(createParams(), state, { image: IMAGE }), createParams(), loaded);
+    expect(loaded.videoLoop).toBe(2);
+    const old = JSON.parse(serializeScene(createParams(), createPlayState(), { image: IMAGE }));
+    delete old.state.videoLoop;
+    old.state.videoCrossfade = true;
+    const migrated = createPlayState();
+    applyScene(JSON.stringify(old), createParams(), migrated);
+    expect(migrated.videoLoop).toBe(1);
+  });
+
   it("keep a video as the first or the second image", () => {
     const video = { type: "video/mp4", data: "AAAAIGZ0eXBpc29t" };
     const text = serializeScene(createParams(), createPlayState(), { image: video, image2: IMAGE });

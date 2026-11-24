@@ -104,10 +104,21 @@ export function SceneCard() {
         plays.
       </p>
       <p>
-        A <b>Loop</b> check box shows below a slot that holds a video. With <b>Loop</b> selected, the end of
-        the video fades into its start, so the video repeats with no jump. With <b>Loop</b> clear, the video
-        starts again at the start of each loop.
+        When a slot holds a video, the <b>Loop</b> menu shows below the slots. It sets how the video
+        repeats:
       </p>
+      <ul>
+        <li><b>Off</b>: the video starts again at the start of each loop, with a jump.</li>
+        <li>
+          <b>Crossfade</b>: the end of the video fades into its start, so the video repeats with no jump.
+          The <b>Fade</b> slider sets how many seconds the fade takes. A longer fade is smoother.
+        </li>
+        <li>
+          <b>Forward and back</b>: the video plays forward, then in reverse, then forward again, with no
+          jump. The first time you use it on a video, the app makes a copy of the video for this, which
+          can take some time. The status line tells you when the copy is ready.
+        </li>
+      </ul>
 
       <h2>Two sources and Crossfade</h2>
       <Shot name="scene-crossfade" alt="Both slots in use, with the Crossfade slider between them at 0.50" side="block" />
