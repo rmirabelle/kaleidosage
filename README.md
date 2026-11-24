@@ -61,7 +61,7 @@ Use Kaleido Sage for:
 
 ### 1. Stack effects
 
-There are 31 effects, from Kaleidoscope and Mandelbrot to Lasers, Light cone, Particles, Spirograph, Text and real Terrain. Add them in any order. The picture goes through the list from top to bottom, so the order changes the result. Press `X` for new random settings, and lock the effects that you want to keep.
+There are 32 effects, from Kaleidoscope and Mandelbrot to Lasers, Light cone, Particles, Spirograph, Text and real Terrain. Add them in any order. The picture goes through the list from top to bottom, so the order changes the result. Press `X` for new random settings, and lock the effects that you want to keep.
 
 <p align="center">
   <img src="docs/readme/first-fx-menu.png" alt="The Add an effect menu with a preview of the Kaleidoscope effect" width="620">
@@ -178,7 +178,7 @@ Add effects in any order. The picture goes through the list from top to bottom.
 | **3D** | 3D object (sphere, cube, morph, blobs, star, Menger sponge and more), 3D model (from a file, Poly Haven or Sketchfab), Terrain, Camera |
 | **Light** | Bloom, Light rays, Lasers, Light cone (spotlight, laser shell; cone or pyramid), Light paths, Spirograph, Light shapes, Light cycles, Particles |
 | **Line and surface** | Contours, Relief, Sharpen, Blur |
-| **Color, text and layers** | Color, Levels, Opacity mask (brightness, radial, or a circle, triangle, square, hexagon or polygon shape), Image or Video (with a shape mask), Text (any installed font, glow, outline, shadow, scroll, type on) |
+| **Color, text and layers** | Color, Levels, Opacity mask (brightness, radial, or a circle, triangle, square, hexagon or polygon shape), Image or Video (with a shape mask), Video wall (up to 16 videos or images in a grid), Text (any installed font, glow, outline, shadow, scroll, type on) |
 
 ### Control every setting
 

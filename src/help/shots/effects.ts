@@ -105,6 +105,10 @@ const look = (item: Look): Shot => ({
 
 /** Where the model browser keeps its choices (STORE_KEY in ModelBrowserDialog.tsx), and the user's own choices while the model shots run. */
 const MODEL_BROWSER_KEY = "kaleidosage.model-browser";
+/** The folder the Open dialog shows first for images and videos (see OpenDialog), the user's own while the Video Wall shot runs, and the shot's sample videos. */
+const IMAGE_FOLDER_KEY = "kaleidosage.open-directory.image";
+let keptImageFolder: string | null = null;
+const HELP_WALL_FOLDER = "D:\\Code\\KaleidoSage\\tools\\help-wall";
 let keptBrowser: string | null = null;
 
 /** The model that the model shots pick in the browser: one that fills the picture well, or the first one if Poly Haven no longer has it. */
@@ -341,6 +345,33 @@ export const EFFECTS: Shot[] = [
       await page.settle(600);
       if (page.findAll(".open-dialog").length) page.press(".open-dialog-close");
       await page.settle(600);
+    }
+  },
+  {
+    /**
+     * The Video Wall with the four sample videos of tools/help-wall in 2 rows.
+     * A new Video Wall opens the Open dialog at once: the shot sends it to
+     * that folder, picks every file (Ctrl + A) and opens them. The user's
+     * own folder for images goes back after the shot.
+     */
+    ...look({ effect: "Video wall", name: "wall", wide: true }),
+    setup: async (page) => {
+      keptImageFolder = localStorage.getItem(IMAGE_FOLDER_KEY);
+      localStorage.setItem(IMAGE_FOLDER_KEY, HELP_WALL_FOLDER);
+      await addEffect(page, "Video wall");
+      await page.waitFor(".open-entry");
+      await page.settle(600);
+      page.find(".open-dialog [aria-multiselectable]").dispatchEvent(new KeyboardEvent("keydown", { key: "a", ctrlKey: true, bubbles: true, cancelable: true }));
+      await page.settle(300);
+      page.press(".open-dialog-actions .button.primary");
+      await page.waitFor(".wall-file");
+      setSlider(page, "Rows", 1 / 15);
+      setSlider(page, "Gap", 0.1);
+      await page.settle(2500);
+    },
+    cleanup: () => {
+      if (keptImageFolder === null) localStorage.removeItem(IMAGE_FOLDER_KEY);
+      else localStorage.setItem(IMAGE_FOLDER_KEY, keptImageFolder);
     }
   },
   look({ effect: "Text", name: "text", pattern: "Contour lines", adjust: (page) => setSlider(page, "Glow", 0.5), wide: true }),

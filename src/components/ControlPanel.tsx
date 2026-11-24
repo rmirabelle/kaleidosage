@@ -1201,13 +1201,13 @@ function WallFiles({ files, onAdd, onRemove, onMove }: { files: readonly { name:
         <div key={`${index}-${file.name}`} className="panel-select-row driver-video-row wall-file">
           <span className="wall-file-number">{index + 1}</span>
           <span className="driver-video-name" data-tip={file.isVideo ? `Video: ${file.name}` : `Image: ${file.name}`}>{file.name}</span>
-          <button className="button secondary small" disabled={index === 0} onClick={() => onMove(index, -1)} data-tip="Move this file one place earlier on the wall" aria-label={`Move ${file.name} earlier`}>
+          <button className="button secondary small icon-only wall-file-button" disabled={index === 0} onClick={() => onMove(index, -1)} data-tip="Move this file one place earlier on the wall" aria-label={`Move ${file.name} earlier`}>
             <CaretUp size={12} weight="bold" />
           </button>
-          <button className="button secondary small" disabled={index === files.length - 1} onClick={() => onMove(index, 1)} data-tip="Move this file one place later on the wall" aria-label={`Move ${file.name} later`}>
+          <button className="button secondary small icon-only wall-file-button" disabled={index === files.length - 1} onClick={() => onMove(index, 1)} data-tip="Move this file one place later on the wall" aria-label={`Move ${file.name} later`}>
             <CaretDown size={12} weight="bold" />
           </button>
-          <button className="button secondary small" onClick={() => onRemove(index)} data-tip="Take this file off the wall" aria-label={`Remove ${file.name} from the wall`}>
+          <button className="button secondary small icon-only wall-file-button" onClick={() => onRemove(index)} data-tip="Take this file off the wall" aria-label={`Remove ${file.name} from the wall`}>
             <X size={12} weight="bold" />
           </button>
         </div>

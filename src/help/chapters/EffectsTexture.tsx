@@ -5,7 +5,7 @@ export function EffectsTexture() {
     <>
       <h1>Effects for time, texture and color</h1>
       <p className="help-lead">
-        These twelve effects do not move the picture to a new place. They mix it with its own past, change
+        These fourteen effects do not move the picture to a new place. They mix it with its own past, change
         its surface, lay a second picture over it, or change its colors.
       </p>
       <p>
@@ -141,6 +141,30 @@ export function EffectsTexture() {
       <Tip>
         The effects below Image or Video in the list also change the file. To keep a logo
         unchanged, make this effect the last one in the list.
+      </Tip>
+
+      <h2>Video wall</h2>
+      <Shot name="fx-wall" alt="The Video wall effect with four videos in two rows" side="block" />
+      <p>
+        Video wall plays several videos or images side by side, in a grid. When you add the effect,
+        the Open dialog appears. Ctrl + click or Shift + click selects several files. <b>Add…</b> adds
+        more files, up to 16. Each file has a row: the arrow buttons move it one place earlier or later,
+        and the X button takes it off the wall.
+      </p>
+      <p>
+        The files fill the grid row by row, from the top left. <b>Rows</b> sets the number of rows, and
+        the columns follow: with 4 files, 1 row gives 4 columns, 2 rows give 2 columns, and 4 rows give
+        1 column. When the last row is not full, its files are in the center. <b>Gap</b> sets the space
+        between the cells; the picture under the wall shows there.
+      </p>
+      <p>
+        The <b>Fit</b> menu sets how each file fills its cell. <b>Fill</b> covers the cell and cuts off
+        the parts of the file that do not fit. <b>Fit</b> shows all of the file, with the picture under
+        the wall around it. Each video repeats from its start when it ends.
+      </p>
+      <Tip>
+        Each video uses the graphics card on its own. Four HD videos play well on most PCs; with many
+        large videos, use smaller files, because a cell is only a part of the screen.
       </Tip>
 
       <h2>Text</h2>
