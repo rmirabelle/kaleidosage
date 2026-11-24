@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { FolderOpen, MagnifyingGlass, CaretRight, DiceFive, DotsSixVertical, Eye, EyeSlash, LockSimple, LockSimpleOpen, Play, SpeakerSimpleHigh, Trash, Wind, X } from "@phosphor-icons/react";
+import { FolderOpen, MagnifyingGlass, CaretDown, CaretRight, CaretUp, DiceFive, DotsSixVertical, Eye, EyeSlash, LockSimple, LockSimpleOpen, Play, SpeakerSimpleHigh, Trash, Wind, X } from "@phosphor-icons/react";
 import type { Engine } from "../engine/engine";
 import { GROUP_PARAMS, addEffect, applyRadialStart, createParams, freshEffect, removeEffect, type GroupKey, type ParamKey, type PlayState } from "../engine/params";
 import { midi } from "../lib/midi";
@@ -12,6 +12,7 @@ import { DEFAULT_LAND_KM, loadTerrain, randomLandPlace } from "../lib/terrain";
 import type { TerrainData } from "../engine/terrain";
 import { EmptyState } from "./EmptyState";
 import { commonRole, splitCommon } from "../engine/common";
+import { WALL_MAX } from "../engine/wall";
 import { MODEL_MAP_KEYS, MODEL_KEYS, effectName, CONE_SHAPES, CONE_SHAPE_KEYS, CONE_TYPES, CONE_TYPE_KEYS, TEXT_FILL_KEYS, TEXT_MOVES, TEXT_MOVE_KEYS, PATH_SHAPES, BUBBLE_SHAPES, BUBBLE_SHAPE_KEYS, COLOR_FILL_KEYS, BLUR_KEYS, BLUR_MASKS, DRIVER_SOURCES, OUTLINE_SHAPES, TRAIL_MODES, VIDEO_LOOPS, PICTURE_MASKS, PICTURE_MASK_KEYS, MASK_KEEPS, MASK_KEYS, MASK_MODES, CYCLE_KEYS, CYCLE_MOVES, CYCLE_PAINT_KEYS, FOLD_MODES, PENROSE_SHAPES, SPHERE_SHAPES, PINWHEEL_SHAPES, TUNNEL_SHAPES, SOLID_KEYS, SOLID_MAPS, SOLID_MAP_KEYS, SOLID_PAINTS, SOLID_WRAPS, SOLID_SHAPES, SOLID_SHAPE_KEYS, SOLID_SHAPE_ONLY, KALEIDOSCOPE_KEYS, MANDEL_PLACES, MAP_KEYS, MAP_MODES, NEEDS_ABOVE_ZERO, SMEAR_KEYS, SMEAR_SHAPES, SUBMODES, WARP_KEYS, WARP_TYPES, isShown, submodeNote, uniqueTo } from "../engine/submodes";
 import { canPaintSolid } from "../engine/renderer";
 import type { BlurMask, BubbleShape, ColorFill, CycleMove, CyclePaint, FoldMode, FxStep, MapMode, MaskMode, OutlineDraw, OutlineShape, ParticleShape, ShapeStep, SmearShape, SolidMap, SolidPaint, SolidShape, WarpType } from "../engine/renderer";
@@ -57,6 +58,11 @@ interface Props {
   pictureIsVideo: boolean;
   onPickPicture: () => void;
   onRemovePicture: () => void;
+  /** The Video Wall's files in wall order (name, and true for a video), and the buttons that add files, take one out, and move one by "step" places. */
+  wallFiles: readonly { name: string; isVideo: boolean }[];
+  onAddWall: () => void;
+  onRemoveWall: (index: number) => void;
+  onMoveWall: (index: number, step: number) => void;
   /** The file name of the 3D Object's own image or video (Paint: Image or Video), or null, and the buttons that pick one and take it away. */
   solidMediaName: string | null;
   onPickSolidMedia: () => void;
@@ -114,6 +120,9 @@ const PARTICLE_BLENDS = [[0, "Glow (add)"], [1, "Normal"]] as const;
 const PARTICLE_SHAPES = [[0, "Dot"], [1, "Line"], [2, "Ring"]] as const;
 /* Screen and Add: the overlay's black adds nothing, so a video on black needs no clear parts. */
 const PICTURE_BLENDS = [[0, "Normal"], [1, "Screen"], [2, "Add"]] as const;
+/** How each Video Wall file fills its cell: Fill covers it and cuts the sides; Fit shows all of the file. */
+const WALL_FITS = [[0, "Fill"], [1, "Fit"]] as const;
+const WALL_KEYS: ParamKey[] = ["wallRows", "wallGap", "wallAmount"];
 const SORT_ORDERS = [[0, "Dark to bright"], [1, "Bright to dark"]] as const;
 const DRIVER_MODES = [[0, "Bend"], [1, "Reveal"], [2, "Light"]] as const;
 /** How the camera's land goes on past the picture. Mirror is seamless for every picture; Tile is seamless only for a picture that tiles. */
@@ -124,7 +133,7 @@ const CAMERA_REPEATS = [[0, "Mirror"], [1, "Tile"], [2, "None"]] as const;
 /** The controls of the left panel whose press is work on the scene (see onWork): buttons, fields, the sliders' parts, the gradient and the effect grips. */
 const WORK_CONTROLS = "button, input, select, textarea, a, label, [role=slider], [role=button], [role=option], [role=menuitem], [contenteditable=true], .range-grab, .range-low, .range-high, .gradient-bar, .gradient-stop, .panel-group-grip";
 
-export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, transport, onWork, driverVideoName, onPickDriverVideo, pictureName, pictureIsVideo, onPickPicture, onRemovePicture, solidMediaName, onPickSolidMedia, onRemoveSolidMedia, onPickModel, onBrowseModels, onNeedAudioInput, linksTip, onLinksTipDone, nextTip, onNextTipDone, onFirstEffect }: Props) {
+export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNudge, onReset, onRandomizeGroup, source, transport, onWork, driverVideoName, onPickDriverVideo, pictureName, pictureIsVideo, onPickPicture, onRemovePicture, wallFiles, onAddWall, onRemoveWall, onMoveWall, solidMediaName, onPickSolidMedia, onRemoveSolidMedia, onPickModel, onBrowseModels, onNeedAudioInput, linksTip, onLinksTipDone, nextTip, onNextTipDone, onFirstEffect }: Props) {
   const holdOnly = useSceneHoldOnly();
   const row = useParamRows(engine);
   /** True while MIDI holds any range: the Effects header then shows a play button that plays them all again. */
@@ -348,6 +357,11 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
         start("pictureAmount", 1);
         /* An overlay shows nothing until it has an image or a video. */
         if (!pictureName) onPickPicture();
+      },
+      wall: () => {
+        start("wallAmount", 1);
+        /* A wall shows nothing until it has files. */
+        if (wallFiles.length === 0) onAddWall();
       }
     };
     enable[step]?.();
@@ -477,6 +491,13 @@ export function ControlPanel({ engine, openGroup, onOpenGroup, onRandomize, onNu
         {PICTURE_KEYS.map(row)}
         {pictureIsVideo && <PictureLoopRows engine={engine} row={row} />}
         <PictureMaskRows engine={engine} row={row} />
+      </Group>
+    ),
+    wall: (grip) => (
+      <Group engine={engine} group="wall" title="Video wall" grip={grip} {...accordion("wall")}>
+        <WallFiles files={wallFiles} onAdd={onAddWall} onRemove={onRemoveWall} onMove={onMoveWall} />
+        <ModeSelect engine={engine} stateKey="wallFit" options={WALL_FITS} name="Fit" />
+        {WALL_KEYS.map(row)}
       </Group>
     ),
     lasers: (grip) => (
@@ -966,7 +987,7 @@ function Group({ engine, group, title, grip, open, onToggle, onEnable, onRandomi
   );
 }
 
-type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "penroseShape" | "sphereShape" | "pinwheelShape" | "tunnelShape" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "bubbleShape" | "bubbleBlend" | "bubbleShadow" | "outlineShape" | "outlineDraw" | "maskMode" | "maskKeep" | "pictureMask" | "pictureLoop" | "pictureBlend" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "pathShape" | "pathBlend" | "spiroBlend" | "textMove" | "textBlend" | "coneType" | "coneShape" | "coneBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidWrap" | "solidPaint" | "modelBlend" | "modelMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
+type ModeKey = "blendMode" | "warpType" | "mapMode" | "foldMode" | "penroseShape" | "sphereShape" | "pinwheelShape" | "tunnelShape" | "blurMask" | "trailMode" | "smearShape" | "cameraRepeat" | "sortOrder" | "particleBlend" | "particleShape" | "bubbleShape" | "bubbleBlend" | "bubbleShadow" | "outlineShape" | "outlineDraw" | "maskMode" | "maskKeep" | "pictureMask" | "pictureLoop" | "pictureBlend" | "wallFit" | "cyclesMove" | "cyclesBlend" | "laserBlend" | "pathShape" | "pathBlend" | "spiroBlend" | "textMove" | "textBlend" | "coneType" | "coneShape" | "coneBlend" | "cyclesPaint" | "solidShape" | "solidMap" | "solidWrap" | "solidPaint" | "modelBlend" | "modelMap" | "solidBlend" | "driverSource" | "driverMode" | "mandelPlace";
 
 /** A menu that sets one of the engine's mode values. */
 export function ModeSelect<K extends ModeKey>({ engine, stateKey, options, name, onChange, child }: {
@@ -1165,6 +1186,38 @@ function BubbleSection({ engine, row }: { engine: Engine; row: (key: ParamKey) =
         blend={<ModeSelect engine={engine} stateKey="bubbleBlend" options={LAYER_BLENDS} name="Blend" />}
       />
     </>
+  );
+}
+
+/**
+ * The Video Wall's files, one row each in wall order (the wall fills its
+ * rows from the top left): the name, buttons that move the file one place
+ * up or down, and one that takes it out. Add… picks more files.
+ */
+function WallFiles({ files, onAdd, onRemove, onMove }: { files: readonly { name: string; isVideo: boolean }[]; onAdd: () => void; onRemove: (index: number) => void; onMove: (index: number, step: number) => void }) {
+  return (
+    <div className="wall-files">
+      {files.map((file, index) => (
+        <div key={`${index}-${file.name}`} className="panel-select-row driver-video-row wall-file">
+          <span className="wall-file-number">{index + 1}</span>
+          <span className="driver-video-name" data-tip={file.isVideo ? `Video: ${file.name}` : `Image: ${file.name}`}>{file.name}</span>
+          <button className="button secondary small" disabled={index === 0} onClick={() => onMove(index, -1)} data-tip="Move this file one place earlier on the wall" aria-label={`Move ${file.name} earlier`}>
+            <CaretUp size={12} weight="bold" />
+          </button>
+          <button className="button secondary small" disabled={index === files.length - 1} onClick={() => onMove(index, 1)} data-tip="Move this file one place later on the wall" aria-label={`Move ${file.name} later`}>
+            <CaretDown size={12} weight="bold" />
+          </button>
+          <button className="button secondary small" onClick={() => onRemove(index)} data-tip="Take this file off the wall" aria-label={`Remove ${file.name} from the wall`}>
+            <X size={12} weight="bold" />
+          </button>
+        </div>
+      ))}
+      <div className="panel-select-row panel-select-named driver-video-row">
+        <span className="panel-row-name">Files</span>
+        <span className="driver-video-name">{files.length === 0 ? "None" : `${files.length} of ${WALL_MAX}`}</span>
+        <button className="button secondary small" disabled={files.length >= WALL_MAX} onClick={onAdd} data-tip={`Add videos or images to the wall (at most ${WALL_MAX}). Ctrl + click or Shift + click picks several. The scene file keeps a copy of each.`}>Add…</button>
+      </div>
+    </div>
   );
 }
 

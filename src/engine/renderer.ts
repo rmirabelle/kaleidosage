@@ -4,11 +4,12 @@ import { pathSegments, writePathInstances, type PathShape } from "./paths";
 import { spiroSegments, writeSpiroInstances, type SpiroWheel } from "./spiro";
 import { SCROLL_RATE, TextPicture, letterCount, type TextLook, type TextMove } from "./textLayer";
 import { trackTextureMemory, type TextureMemory } from "./textureMemory";
-import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, CONE_SHADER, BUBBLE_SHADER, MASK_SHADER, OUTLINE_SHADER, OUTLINE_GLOW_SHADER, OUTLINE_LINE_SHADER, PICTURE_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, SOLID_MESH_VERTEX, SOLID_MESH_SHADER, SOLID_MODEL_VERTEX, SOLID_MODEL_SHADER, SOLID_BACK_SHADER, SOLID_SHADE_BLUR_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, PANORAMA_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
+import { BLUR_SHADER, TERRAIN_FIELD_SHADER, TERRAIN_SHADER, DRIVER_SHADER, CAMERA_SHADER, CONTOUR_FIELD_SHADER, CONTOUR_SHADER, COPY_SHADER, FINISH_SHADER, KALEIDO_SHADER, MANDEL_STRIP_SHADER, MAX_SHADER, OVERLAY_SHADER, SPHERE_SHADER, VR_SHADER, BLOOM_BRIGHT_SHADER, BLOOM_DOWN_SHADER, BLOOM_SHADER, BLOOM_UP_SHADER, LASER_SHADER, CONE_SHADER, BUBBLE_SHADER, MASK_SHADER, OUTLINE_SHADER, OUTLINE_GLOW_SHADER, OUTLINE_LINE_SHADER, PICTURE_SHADER, WALL_SHADER, RAYS_MIX_SHADER, RAYS_SHADER, SORT_JUMP_SHADER, SORT_PACK_SHADER, SORT_SHADER, SORT_START_SHADER, SORT_STEP_SHADER, SORT_TURN_SHADER, PARTICLE_QUAD_SHADER, PARTICLE_SHADER, PARTICLE_SHAPE_SHADER, PARTICLE_STEP_SHADER, PARTICLE_VERTEX_SHADER, CYCLE_MIX_SHADER, CYCLE_SAMPLE_SHADER, SOLID_SHADER, SOLID_MESH_VERTEX, SOLID_MESH_SHADER, SOLID_MODEL_VERTEX, SOLID_MODEL_SHADER, SOLID_BACK_SHADER, SOLID_SHADE_BLUR_SHADER, CYCLE_SHADER, CYCLE_VERTEX_SHADER, PANORAMA_SHADER, RELIEF_SHADER, SMEAR_SHADER, TRAILS_SHADER, VERTEX_SHADER } from "./shaders";
 import { MESH_SHAPES, flatMesh } from "./flatMesh";
 import { MESH_STRIDE, starKinds, starMesh } from "./starMesh";
 import { MODEL_STRIDE, type ModelData, type ModelMaterial } from "./model";
 import { halveGrid, type TerrainData } from "./terrain";
+import { wallCells } from "./wall";
 import type { VrEye, VrScreen, XrLayer, XrSession } from "./vr";
 
 /** The blur mask: circle with a sharp or a blurred center, gradient, bright areas, dark areas, noise. */
@@ -37,7 +38,7 @@ export type ShapeStep = "warp" | "map" | "kaleidoscope";
 /** The kind of warp: noise, ripple, waves, swirl, bulge and pinch, cells. */
 export type WarpType = 0 | 1 | 2 | 3 | 4 | 5;
 /** The steps that change the drawn picture. The user sets their order. */
-export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "model" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "cone" | "paths" | "spiro" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble" | "text" | "panorama";
+export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | "driver" | "terrain" | "camera" | "solid" | "model" | "sort" | "particles" | "cycles" | "rays" | "lasers" | "cone" | "paths" | "spiro" | "bloom" | "sharpen" | "color" | "levels" | "picture" | "outlines" | "mask" | "bubble" | "text" | "panorama" | "wall";
 /**
  * Any effect step. The user sets one order for all of them. Shape steps
  * that are next to each other run in one pass; a shape step after a
@@ -45,7 +46,7 @@ export type PictureStep = "blur" | "trails" | "smear" | "contours" | "relief" | 
  */
 export type FxStep = ShapeStep | PictureStep;
 export const SHAPE_STEPS: readonly ShapeStep[] = ["warp", "map", "kaleidoscope"];
-export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "model", "sort", "particles", "cycles", "rays", "lasers", "cone", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble", "text", "panorama"];
+export const PICTURE_STEPS: readonly PictureStep[] = ["blur", "trails", "smear", "contours", "relief", "driver", "terrain", "camera", "solid", "model", "sort", "particles", "cycles", "rays", "lasers", "cone", "paths", "spiro", "bloom", "sharpen", "color", "levels", "picture", "outlines", "mask", "bubble", "text", "panorama", "wall"];
 
 /** Sharpen, Color and Levels, in the order FINISH_SHADER applies them (see drawFinish). */
 type FinishPart = "sharpen" | "color" | "levels";
@@ -350,6 +351,8 @@ export type ParticleShape = 0 | 1 | 2;
 export type PictureBlend = 0 | 1 | 2;
 /** Image or Video's mask: 0 none, 1 Circle, 2 Triangle, 3 Square, 4 Hexagon (see PICTURE_SHADER). */
 export type PictureMask = 0 | 1 | 2 | 3 | 4;
+/** How each Video Wall file fills its cell: 0 Fill (covers it, cut at the sides), 1 Fit (all of it shows). */
+export type WallFit = 0 | 1;
 /** How the light cycles move: 0 on grid lanes with right-angle turns, 1 in free curves. */
 export type CycleMove = 0 | 1;
 /**
@@ -1031,6 +1034,11 @@ export interface FrameValues {
   pictureMaskSoft: number;
   pictureMaskX: number;
   pictureMaskY: number;
+  /** Video Wall (see WALL_SHADER): opacity (0 = off), the rows asked for, the gap between the cells in screen heights, and how each file fills its cell. */
+  wall: number;
+  wallRows: number;
+  wallGap: number;
+  wallFit: WallFit;
   /**
    * Light cone (see CONE_SHADER): brightness (0 = off), opacity, blend, type
    * and shape, the sides of a pyramid, then the beam: Spread (its half
@@ -1319,6 +1327,7 @@ export class KaleidoRenderer {
   private readonly mask: Program;
   private readonly bubble: Program;
   private readonly pictureProgram: Program;
+  private readonly wallProgram: Program;
   /**
    * Where the steps draw what would go to the screen: the screen (null), or
    * a picture of Freeze background's (see render).
@@ -1454,6 +1463,7 @@ export class KaleidoRenderer {
     this.mask = this.createProgram(MASK_SHADER);
     this.bubble = this.createProgram(BUBBLE_SHADER);
     this.pictureProgram = this.createProgram(PICTURE_SHADER);
+    this.wallProgram = this.createProgram(WALL_SHADER);
     this.bloomUp = this.createProgram(BLOOM_UP_SHADER);
     this.bloomMix = this.createProgram(BLOOM_SHADER);
 
@@ -1835,6 +1845,7 @@ export class KaleidoRenderer {
       bubble: v.bubble > 0,
       panorama: v.panorama > 0,
       picture: v.picture > 0 && this.pictureSource !== null,
+      wall: v.wall > 0 && this.wallEntries.length > 0,
       text: v.text > 0 && v.textLook.content.trim().length > 0,
       bloom: v.bloom > 0,
       sharpen: v.sharpen > 0,
@@ -1985,6 +1996,7 @@ export class KaleidoRenderer {
         else if (step === "mask") this.drawMask(v, source, target, width, height);
         else if (step === "bubble") this.drawBubble(v, source, target, width, height);
         else if (step === "picture") this.drawPicture(v, source, target, width, height);
+        else if (step === "wall") this.drawWall(v, source, target, width, height);
         else if (step === "text") this.drawText(v, source, target, width, height);
         else if (step === "sort") this.drawSort(v, source, target, width, height);
         else if (step === "bloom") this.drawBloom(v, source, target, width, height);
@@ -4122,6 +4134,73 @@ export class KaleidoRenderer {
     gl.uniform1f(p.uniforms.u_maskSoft, Math.max(0, v.pictureMaskSoft));
     gl.uniform2f(p.uniforms.u_maskOffset, v.pictureMaskX, v.pictureMaskY);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /** The Video Wall's files in wall order: each one's texture, its size, and the video time of the frame in it (-1: none yet). */
+  private wallEntries: { source: ImageSource; texture: WebGLTexture; size: [number, number]; time: number }[] = [];
+
+  /** Sets the Video Wall's files. A file that stays keeps its texture; a still image goes to its texture at once, a video frame by frame (see drawWall). */
+  setWall(sources: readonly ImageSource[]) {
+    const gl = this.gl;
+    const before = this.wallEntries;
+    this.wallEntries = sources.map((source) => {
+      const kept = before.find((entry) => entry.source === source);
+      if (kept) return kept;
+      const texture = gl.createTexture()!;
+      const entry = { source, texture, size: sourceSize(source), time: -1 };
+      if (!(source instanceof HTMLVideoElement)) {
+        this.uploadPicture(texture, source, true);
+        entry.time = 0;
+      }
+      return entry;
+    });
+    for (const entry of before) if (!this.wallEntries.includes(entry)) gl.deleteTexture(entry.texture);
+  }
+
+  /**
+   * Video Wall: each file in its cell over the picture made so far
+   * (WALL_SHADER). The whole picture is drawn once, then each cell inside
+   * a scissor rect. A video's new frame is uploaded first; a video with
+   * no frame yet leaves its cell showing the picture.
+   */
+  private drawWall(v: FrameValues, source: WebGLTexture, target: Target | null, width: number, height: number) {
+    const gl = this.gl;
+    for (const entry of this.wallEntries) {
+      const media = entry.source;
+      if (media instanceof HTMLVideoElement && media.readyState >= 2 && media.videoWidth > 0 && media.currentTime !== entry.time) {
+        /* With smaller copies (mip levels): a cell is often much smaller than the video, which would shimmer without them. */
+        this.uploadPicture(entry.texture, media, true);
+        entry.time = media.currentTime;
+        entry.size = [media.videoWidth, media.videoHeight];
+      }
+    }
+    const p = this.wallProgram;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : this.output);
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(p.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.uniform1i(p.uniforms.u_tex, 0);
+    gl.uniform1i(p.uniforms.u_layer, 1);
+    gl.uniform2f(p.uniforms.u_res, width, height);
+    gl.uniform1f(p.uniforms.u_opacity, Math.min(1, Math.max(0, v.wall)));
+    gl.uniform1i(p.uniforms.u_fit, v.wallFit);
+    gl.uniform4f(p.uniforms.u_cell, 0, 0, 0, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    const cells = wallCells(this.wallEntries.length, v.wallRows, v.wallGap, width, height);
+    gl.enable(gl.SCISSOR_TEST);
+    cells.forEach((cell, index) => {
+      const entry = this.wallEntries[index];
+      if (entry.time < 0 || cell.width <= 0 || cell.height <= 0) return;
+      gl.scissor(cell.x, cell.y, cell.width, cell.height);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, entry.texture);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.uniform4f(p.uniforms.u_cell, cell.x / width, cell.y / height, (cell.x + cell.width) / width, (cell.y + cell.height) / height);
+      gl.uniform1f(p.uniforms.u_layerAspect, entry.size[1] > 0 ? entry.size[0] / entry.size[1] : 1);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    });
+    gl.disable(gl.SCISSOR_TEST);
   }
 
   /** The Text effect's picture (see TextPicture) and its texture. */

@@ -149,6 +149,8 @@ export interface SceneSource {
   driver: HTMLVideoElement | null;
   picture: ImageSource | null;
   solidMedia: ImageSource | null;
+  /** The Video Wall's files, in wall order (empty for none). */
+  wall: readonly ImageSource[];
   terrain: TerrainData | null;
   model: ModelData | null;
 }
@@ -208,6 +210,7 @@ export class Engine {
       driver: this.driverVideo,
       picture: this.pictureSource,
       solidMedia: this.solidMedia,
+      wall: [...this.wallSources],
       terrain: this.terrain,
       model: this.model
     };
@@ -263,6 +266,17 @@ export class Engine {
       } else if (scene.solidMedia) {
         copy.setSolidMedia(scene.solidMedia);
       }
+      const wall: ImageSource[] = [];
+      for (const source of scene.wall) {
+        if (source instanceof HTMLVideoElement) {
+          const video = await copyVideo(source);
+          copy.ownVideos.push(video);
+          wall.push(video);
+        } else {
+          wall.push(source);
+        }
+      }
+      if (wall.length) copy.setWall(wall);
       if (scene.terrain) copy.setTerrain(scene.terrain);
       if (scene.model) copy.setModel(scene.model);
     } catch (error) {
@@ -480,6 +494,7 @@ export class Engine {
     for (const { resolve } of this.fadeWaiters) resolve();
     this.fadeWaiters = [];
     for (const video of [...this.videos, ...this.partners, ...this.bounces, this.picturePartner, this.pictureBounce]) video?.pause();
+    for (const source of this.wallSources) if (source instanceof HTMLVideoElement) source.pause();
   }
 
   /** True when a second image is loaded; only then does the image blend have an effect. */
@@ -664,6 +679,35 @@ export class Engine {
     const solid = order.filter((step) => this.state.solidFx.includes(step) && canPaintSolid(step));
     const model = order.filter((step) => this.state.modelFx.includes(step) && canPaintSolid(step) && !solid.includes(step));
     return { solid, model };
+  }
+
+  /** The Video Wall's files, in wall order. Their owner (the scene) keeps them; the engine plays the videos while the effect is on. */
+  private wallSources: readonly ImageSource[] = [];
+
+  setWall(sources: readonly ImageSource[]) {
+    this.wake();
+    for (const source of this.wallSources) if (source instanceof HTMLVideoElement && !sources.includes(source)) source.pause();
+    this.wallSources = [...sources];
+    this.renderer.setWall(this.wallSources);
+  }
+
+  /** True while the Video Wall is on and in the FX list: only then do its videos play. */
+  private wallInUse() {
+    return this.state.groups.wall && this.state.fxOrder.includes("wall");
+  }
+
+  /** Keeps each wall video at the scene's clock around its length (as the overlay's, see pictureVideoTarget), and stops them while the wall is not in use. */
+  private syncWall(paused: boolean) {
+    const used = this.wallInUse();
+    for (const source of this.wallSources) {
+      if (!(source instanceof HTMLVideoElement)) continue;
+      if (!used || !(source.duration > 0)) {
+        if (!source.paused) source.pause();
+        continue;
+      }
+      source.playbackRate = 1;
+      syncVideo(source, this.state.clock % source.duration, paused || this.gated);
+    }
   }
 
   /** The camera's real terrain (see docs/TERRAIN.md), or null. The scene owns it; the engine draws with it. */
@@ -1528,6 +1572,9 @@ export class Engine {
     await Promise.all(this.placePicture((video, target) => seekVideo(video, target)));
     const solidTarget = this.solidMediaTarget();
     if (this.solidMedia instanceof HTMLVideoElement && solidTarget !== null) await seekVideo(this.solidMedia, solidTarget);
+    if (this.wallInUse()) {
+      await Promise.all(this.wallSources.map((source) => source instanceof HTMLVideoElement && source.duration > 0 ? seekVideo(source, this.state.clock % source.duration) : undefined));
+    }
     this.renderer.updateVideos(true);
   }
 
@@ -1547,6 +1594,7 @@ export class Engine {
     this.syncDriverVideo(paused);
     this.syncPictureVideo(paused);
     this.syncSolidMedia(paused);
+    this.syncWall(paused);
     if (this.renderer.updateVideos()) this.wake();
 
     /* In VR the controllers move the screen (see moveVrScreen), before this frame draws at its shape. */
@@ -2144,6 +2192,10 @@ export class Engine {
       pictureMaskSoft: this.live("pictureMaskSoft"),
       pictureMaskX: this.live("pictureMaskX"),
       pictureMaskY: this.live("pictureMaskY"),
+      wall: on.wall ? this.live("wallAmount") : 0,
+      wallRows: this.live("wallRows"),
+      wallGap: this.live("wallGap"),
+      wallFit: this.state.wallFit,
       cone: on.cone ? this.live("coneAmount") : 0,
       coneOpacity: this.live("coneOpacity"),
       coneBlend: this.state.coneBlend,

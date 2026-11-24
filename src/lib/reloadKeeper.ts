@@ -43,6 +43,8 @@ export interface KeptDoc {
   picture?: KeptImage | null;
   /** The 3D Object's own image or video; missing in a snapshot from before it. */
   solidMedia?: KeptImage | null;
+  /** The Video Wall's files in wall order; missing in a snapshot from before the Video Wall. */
+  wall?: KeptImage[];
   /** Terrain's real land: its key in IndexedDB (see keepTerrain); missing when there is none. */
   terrain?: string | null;
   /** The 3D Object's model: its key in IndexedDB (see keepModel); missing when there is none. */
@@ -350,7 +352,7 @@ if (import.meta.hot) {
 /** Removes the stored bytes that neither the latest snapshot nor this page uses (those of a page before this one). */
 async function pruneImages() {
   const kept = readKept();
-  const used = new Set([...keysHere, ...[...(kept?.docs ?? []), ...readUnopened()].flatMap((doc) => [...doc.images.map((image) => image?.key), doc.picture?.key, doc.solidMedia?.key, doc.terrain, doc.model]), ...Object.values(kept?.file?.analyses ?? {})].filter(Boolean));
+  const used = new Set([...keysHere, ...[...(kept?.docs ?? []), ...readUnopened()].flatMap((doc) => [...doc.images.map((image) => image?.key), doc.picture?.key, doc.solidMedia?.key, ...(doc.wall ?? []).map((image) => image.key), doc.terrain, doc.model]), ...Object.values(kept?.file?.analyses ?? {})].filter(Boolean));
   try {
     const keys = await blobStore<IDBValidKey[]>("readonly", (store) => store.getAllKeys());
     for (const key of keys) if (typeof key === "string" && !used.has(key)) await blobStore("readwrite", (store) => store.delete(key));

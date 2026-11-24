@@ -3921,6 +3921,44 @@ void main() {
   o = addLight(base, light);
 }`;
 
+/**
+ * Video Wall: one cell's file over the picture made so far. The renderer
+ * draws the whole picture once with no cell (u_cell all 0), then each
+ * cell with the scissor test on its rect, so only that cell changes.
+ * u_cell is the cell's rect in picture coordinates (left, bottom, right,
+ * top). Fill (u_fit 0) covers the cell and cuts the file at its sides;
+ * Fit (1) shows all of it, with the picture under it around it.
+ */
+export const WALL_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_tex;
+uniform sampler2D u_layer;
+uniform vec2 u_res;
+uniform vec4 u_cell;
+uniform float u_layerAspect;
+uniform int u_fit;
+uniform float u_opacity;
+void main() {
+  vec4 base = texture(u_tex, v_uv);
+  vec2 size = u_cell.zw - u_cell.xy;
+  if (size.x <= 0.0 || size.y <= 0.0) {
+    o = base;
+    return;
+  }
+  vec2 local = (v_uv - u_cell.xy) / size;
+  /* The cell's shape over the file's: above 1, the cell is wider. */
+  float ratio = (size.x * u_res.x) / (size.y * u_res.y) / max(u_layerAspect, 1e-4);
+  vec2 scale = u_fit == 0
+    ? (ratio > 1.0 ? vec2(1.0, 1.0 / ratio) : vec2(ratio, 1.0))
+    : (ratio > 1.0 ? vec2(ratio, 1.0) : vec2(1.0, 1.0 / ratio));
+  vec2 uv = (local - 0.5) * scale + 0.5;
+  bool inside = all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)));
+  vec4 layer = inside ? texture(u_layer, uv) * u_opacity : vec4(0.0);
+  o = layer + base * (1.0 - layer.a);
+}`;
+
 export const LASER_SHADER = `#version 300 es
 precision highp float;
 in vec2 v_uv;

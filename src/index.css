@@ -2529,3 +2529,8 @@ body.eyedropper, body.eyedropper :not(.color-popup, .color-popup *) {
 .help-shot-mark { outline: 2px solid #ffb84d !important; outline-offset: 2px; border-radius: 6px; }
 .help-article ul, .help-article ol { margin: 0 0 18px; padding-left: 24px; }
 .help-article li { margin-bottom: 4px; padding-left: 4px; }
+
+/* Video Wall: one row per file, with its place on the wall at the left. */
+.wall-files { display: flex; flex-direction: column; gap: 4px; }
+.wall-file { gap: 6px; }
+.wall-file-number { width: 16px; flex: none; color: #8a8f99; font-size: 11px; text-align: right; }

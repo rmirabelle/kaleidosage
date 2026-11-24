@@ -152,6 +152,7 @@ const EFFECT_GROUPS: [GroupKey, string][] = [
   ["panorama", "Panorama"],
   ["outlines", "Light shapes"],
   ["picture", "Image or Video"],
+  ["wall", "Video wall"],
   ["bloom", "Bloom"],
   ["sharpen", "Sharpen"],
   ["color", "Color"],

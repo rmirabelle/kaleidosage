@@ -29,6 +29,7 @@ const EFFECT_NOTES: Record<FxStep, string> = {
   spiro: "Wheels roll inside a ring, and a pen in each wheel draws a line, as the Spirograph toy does.",
   outlines: "Glowing rings, squares, triangles or stars draw themselves, or a snake crawls.",
   picture: "Lays an image or a video over the picture.",
+  wall: "Plays several videos or images side by side in a grid of rows and columns.",
   bloom: "Bright areas glow.",
   sharpen: "Makes edges and fine detail crisper.",
   color: "Tints the whole picture with one color, or with a linear or radial gradient of colors.",

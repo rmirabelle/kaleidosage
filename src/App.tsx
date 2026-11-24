@@ -36,6 +36,7 @@ import { DocumentTabs, type DocumentTabInfo } from "./components/DocumentTabs";
 import { StageControls } from "./components/StageControls";
 import { VrScreenCard } from "./components/VrScreenCard";
 import { Engine, setBounceMaker, type SceneSource } from "./engine/engine";
+import { WALL_MAX } from "./engine/wall";
 import { vrAvailable, vrSupported } from "./engine/vr";
 
 /** Set once VR has worked on this PC (see toggleVr). */
@@ -159,6 +160,8 @@ interface StoredScene {
   terrain?: TerrainData | null;
   /** The 3D Object's own image or video (Paint: Image or Video; its label is the file name), or null. */
   solidMedia?: SlotImage | null;
+  /** The Video Wall's files in wall order (each label is the file name); missing or empty for none. */
+  wall?: SlotImage[];
   /** The 3D Object's model (the Model shape, see engine/model.ts), or null. */
   model?: ModelData | null;
   savedFingerprint: string;
@@ -229,7 +232,7 @@ async function sceneMedia(image: Pick<SlotImage, "source" | "blob" | "videoFile"
  * copy). The settings are taken before the media is copied, so a change
  * made while it writes still counts as unsaved.
  */
-async function writeSceneFile(path: string, params: Params, state: PlayState, [first, second]: [SlotImage | null, SlotImage | null], driver: DriverVideo | null, picture: SlotImage | null, terrain: TerrainData | null, solidMedia: SlotImage | null, model: ModelData | null) {
+async function writeSceneFile(path: string, params: Params, state: PlayState, [first, second]: [SlotImage | null, SlotImage | null], driver: DriverVideo | null, picture: SlotImage | null, terrain: TerrainData | null, solidMedia: SlotImage | null, model: ModelData | null, wall: readonly SlotImage[]) {
   if (!first) throw new Error("There is no source image or video to save in the scene.");
   const scene = JSON.parse(serializeScene(params, state, { image: { type: "image/png", data: "pending" } }));
   scene.image = await sceneMedia(first);
@@ -246,6 +249,11 @@ async function writeSceneFile(path: string, params: Params, state: PlayState, [f
   if (picture && state.fxOrder.includes("picture")) scene.picture = { ...(await sceneMedia(picture)), name: picture.label };
   /* The 3D Object's own image or video goes in the same way: only while the 3D Object is in the list and paints with it. */
   if (solidMedia && state.fxOrder.includes("solid") && state.solidPaint === 1) scene.solidMedia = { ...(await sceneMedia(solidMedia)), name: solidMedia.label };
+  /* The Video Wall's files go in the same way, in wall order: only while the Video Wall is in the list. */
+  if (wall.length && state.fxOrder.includes("wall")) {
+    scene.wall = [];
+    for (const file of wall) scene.wall.push({ ...(await sceneMedia(file)), name: file.label });
+  }
   /* Real terrain's land and picture go in while Terrain is in the list and uses them (Real terrain heights or Terrain picture colors). */
   if (terrain && state.fxOrder.includes("terrain") && (state.cameraHeightSource === 2 || state.cameraColors === 2)) scene.terrain = await terrainToScene(terrain);
   /* The 3D Object's model goes in while the 3D Object is in the list with the Model shape. */
@@ -258,7 +266,7 @@ interface OpenRequest {
   kind: OpenKind;
   slot: ImageSlot;
   /** "driver": the picked video becomes the Driver effect's own video. "picture": the picked image or video becomes the Image or Video effect's. "import": the picked projects' scenes go into the open project. */
-  target?: "driver" | "picture" | "solid" | "import";
+  target?: "driver" | "picture" | "solid" | "wall" | "import";
 }
 
 export type ImageSlot = 0 | 1;
@@ -292,6 +300,9 @@ export default function App() {
   /** The 3D Object's own image or video for the selected scene (the ref at once, the name for the panel). */
   const solidMediaRef = useRef<SlotImage | null>(null);
   const [solidMediaName, setSolidMediaName] = useState<string | null>(null);
+  /** The Video Wall's files for the selected scene, in wall order (the ref at once, the names for the panel). */
+  const wallRef = useRef<SlotImage[]>([]);
+  const [wallFiles, setWallFiles] = useState<{ name: string; isVideo: boolean }[]>([]);
   const [engine, setEngine] = useState<Engine | null>(null);
   /** Loads started by a closed scene must not reopen it when they finish. */
   const sceneGenerationRef = useRef(0);
@@ -653,6 +664,13 @@ export default function App() {
     engine?.setPicture(picture?.source ?? null);
   }, [engine]);
 
+  /** Sets the selected scene's Video Wall files (in wall order) in the engine and in the panel. */
+  const setWall = useCallback((files: readonly SlotImage[]) => {
+    wallRef.current = [...files];
+    setWallFiles(files.map((file) => ({ name: file.label, isVideo: file.source instanceof HTMLVideoElement })));
+    engine?.setWall(files.map((file) => file.source));
+  }, [engine]);
+
   /** Sets the selected scene's 3D Object image or video (or none) in the engine and in the panel. */
   const setSolidMedia = useCallback((media: SlotImage | null) => {
     solidMediaRef.current = media;
@@ -890,6 +908,7 @@ export default function App() {
           driver: stored.driver?.video ?? null,
           picture: stored.picture?.source ?? null,
           solidMedia: stored.solidMedia?.source ?? null,
+          wall: (stored.wall ?? []).map((file) => file.source),
           terrain: stored.terrain ?? null,
           model: stored.model ?? null
         }
@@ -1012,7 +1031,7 @@ export default function App() {
   const fingerprint = useCallback(() => {
     if (!engine) return "";
     const [first, second] = imagesRef.current;
-    return sceneFingerprint(engine.params, engine.state, [first?.id ?? null, second?.id ?? null, driverRef.current?.id ?? null, pictureRef.current?.id ?? null, engine.terrain?.id ?? null, solidMediaRef.current?.id ?? null, engine.model?.id ?? null]);
+    return sceneFingerprint(engine.params, engine.state, [first?.id ?? null, second?.id ?? null, driverRef.current?.id ?? null, pictureRef.current?.id ?? null, engine.terrain?.id ?? null, solidMediaRef.current?.id ?? null, engine.model?.id ?? null, ...wallRef.current.map((file) => file.id)]);
   }, [engine]);
 
   /**
@@ -1077,6 +1096,7 @@ export default function App() {
       picture: pictureRef.current,
       terrain: engine.terrain,
       solidMedia: solidMediaRef.current,
+      wall: wallRef.current,
       model: engine.model,
       savedFingerprint: savedFingerprintRef.current,
       history,
@@ -1108,6 +1128,7 @@ export default function App() {
     setDriver(stored.driver);
     setPicture(stored.picture);
     setSolidMedia(stored.solidMedia ?? null);
+    setWall(stored.wall ?? []);
     engine?.setTerrain(stored.terrain ?? null);
     engine.setModel(stored.model ?? null);
     engine.settle();
@@ -1126,7 +1147,7 @@ export default function App() {
     setPaused(engine.state.paused);
     setRandomLoading(null);
     setRevision((value) => value + 1);
-  }, [engine, selectDocId, setDriver, setPicture, setSlotImage, setSolidMedia]);
+  }, [engine, selectDocId, setDriver, setPicture, setSlotImage, setSolidMedia, setWall]);
 
   /** Selects another tab. A photo still loading for the scene that was shown is dropped. */
   const switchToDoc = useCallback((id: number) => {
@@ -1252,7 +1273,7 @@ export default function App() {
     try {
       showStatus("Exporting the scene and embedding media…", 0, undefined, true);
       const copy = await invoke<string>("scene_copy_path", { name: fileNameOf(path) });
-      await writeSceneFile(copy, engine.params, engine.state, imagesRef.current, driverRef.current, pictureRef.current, engine.terrain, solidMediaRef.current, engine.model);
+      await writeSceneFile(copy, engine.params, engine.state, imagesRef.current, driverRef.current, pictureRef.current, engine.terrain, solidMediaRef.current, engine.model, wallRef.current);
       /* A scene alone has no tracks, so Files as the input would open with an empty list: it keeps no input then. */
       const audio = fileAudio();
       await saveKaleidoFile(path, { audio: audio.kind === "tracks" ? { ...audio, kind: "none" } : audio, activeScene: 0 }, [copy], []);
@@ -1304,6 +1325,11 @@ export default function App() {
       const driverMedia = images.driverVideo ? await loadSceneMedia(images.driverVideo.media) : null;
       const pictureMedia = images.picture ? await loadSceneMedia(images.picture.media) : null;
       const solidMedia = images.solidMedia ? await loadSceneMedia(images.solidMedia.media) : null;
+      const wallMedia: SlotImage[] = [];
+      for (const file of images.wall ?? []) {
+        const media = await loadSceneMedia(file.media);
+        wallMedia.push({ ...media, label: file.name, thumbnail: makeThumbnail(media.source), id: nextImageId++ });
+      }
       /* Broken terrain data leaves the scene with no land loaded; the rest still opens. */
       const terrain = images.terrain ? await terrainFromScene(images.terrain).catch(() => null) : null;
       /* A broken model leaves the 3D Object with none; the rest still opens. */
@@ -1333,6 +1359,7 @@ export default function App() {
       engine.setModel(model);
       setPicture(pictureMedia && images.picture ? { ...pictureMedia, label: images.picture.name, thumbnail: makeThumbnail(pictureMedia.source), id: nextImageId++ } : null);
       setSolidMedia(solidMedia && images.solidMedia ? { ...solidMedia, label: images.solidMedia.name, thumbnail: makeThumbnail(solidMedia.source), id: nextImageId++ } : null);
+      setWall(wallMedia);
       setRevision((value) => value + 1);
       setActivePath(path);
       markClean();
@@ -1340,7 +1367,7 @@ export default function App() {
     } catch (error) {
       showError(`Could not open the scene. ${error instanceof Error ? error.message : String(error)}`);
     }
-  }, [addDoc, engine, fingerprint, markClean, removeSecondImage, setActivePath, setDriver, setImage, setPicture, setSolidMedia, showError, showStatus, stashActive, switchToDoc]);
+  }, [addDoc, engine, fingerprint, markClean, removeSecondImage, setActivePath, setDriver, setImage, setPicture, setSolidMedia, setWall, showError, showStatus, stashActive, switchToDoc]);
 
   /** Makes a picked image or video the Image or Video effect's own (see setPicture). */
   const openPicturePath = useCallback(async (path: string) => {
@@ -1357,6 +1384,44 @@ export default function App() {
       showError(`Could not open the image or video. ${error instanceof Error ? error.message : String(error)}`);
     }
   }, [setPicture, showError, showStatus]);
+
+  /** Adds picked images and videos to the end of the Video Wall, up to WALL_MAX files (see setWall). */
+  const addWallPaths = useCallback(async (paths: readonly string[]) => {
+    const generation = sceneGenerationRef.current;
+    const room = Math.max(0, WALL_MAX - wallRef.current.length);
+    const added: SlotImage[] = [];
+    const failed: string[] = [];
+    for (const path of paths.slice(0, room)) {
+      const name = path.split(/[\\/]/).pop() ?? "Image or Video";
+      try {
+        const loaded = isVideoPath(path)
+          ? await loadVideoFile(path).then(({ video, videoFile }) => ({ source: video as ImageSource, videoFile }))
+          : await loadImageFile(path).then(({ image, blob }) => ({ source: image as ImageSource, blob }));
+        added.push({ ...loaded, label: name, thumbnail: makeThumbnail(loaded.source), id: nextImageId++ });
+      } catch {
+        failed.push(name);
+      }
+    }
+    if (generation !== sceneGenerationRef.current) return;
+    if (added.length) setWall([...wallRef.current, ...added]);
+    if (failed.length) showError(`Could not open ${failed.join(", ")}.`);
+    else if (paths.length > room) showStatus(`The Video Wall holds at most ${WALL_MAX} files: ${paths.length - room} were left out.`, 5000);
+    else if (added.length) showStatus(added.length === 1 ? `Video Wall: ${added[0].label}` : `Video Wall: ${added.length} files added`);
+  }, [setWall, showError, showStatus]);
+
+  /** Takes the wall file at "index" out of the Video Wall. */
+  const removeWallFile = useCallback((index: number) => {
+    setWall(wallRef.current.filter((_, other) => other !== index));
+  }, [setWall]);
+
+  /** Moves the wall file at "index" by "step" places (the wall fills its rows from the top left in this order). */
+  const moveWallFile = useCallback((index: number, step: number) => {
+    const files = [...wallRef.current];
+    const to = index + step;
+    if (to < 0 || to >= files.length) return;
+    [files[index], files[to]] = [files[to], files[index]];
+    setWall(files);
+  }, [setWall]);
 
   /** Makes a picked image or video the 3D Object's own (see setSolidMedia). */
   const openSolidMediaPath = useCallback(async (path: string) => {
@@ -1920,6 +1985,7 @@ export default function App() {
     setDriver(null);
     setPicture(null);
     setSolidMedia(null);
+    setWall([]);
     engine?.setTerrain(null);
     engine.setModel(null);
     engine.settle();
@@ -1933,7 +1999,7 @@ export default function App() {
     setRandomLoading(null);
     setRevision(value => value + 1);
     markClean();
-  }, [engine, markClean, setDriver, setPicture, setSlotImage, setSolidMedia]);
+  }, [engine, markClean, setDriver, setPicture, setSlotImage, setSolidMedia, setWall]);
 
   /**
    * A new file, or a closed one, starts quiet: the app stops listening
@@ -2073,13 +2139,13 @@ export default function App() {
         const target = isFileCopy(scenePath) ? scenePath! : await invoke<string>("scene_copy_path", { name });
         if (active) {
           const saved = fingerprint();
-          await writeSceneFile(target, engine.params, engine.state, imagesRef.current, driverRef.current, pictureRef.current, engine.terrain, solidMediaRef.current, engine.model);
+          await writeSceneFile(target, engine.params, engine.state, imagesRef.current, driverRef.current, pictureRef.current, engine.terrain, solidMediaRef.current, engine.model, wallRef.current);
           savedFingerprintRef.current = saved;
           setDirty(fingerprint() !== saved);
           setActivePath(target);
         } else if (stored) {
-          await writeSceneFile(target, stored.params, stored.state, stored.images, stored.driver, stored.picture, stored.terrain ?? null, stored.solidMedia ?? null, stored.model ?? null);
-          stored.savedFingerprint = sceneFingerprint(stored.params, stored.state, [stored.images[0]?.id ?? null, stored.images[1]?.id ?? null, stored.driver?.id ?? null, stored.picture?.id ?? null, stored.terrain?.id ?? null, stored.solidMedia?.id ?? null, stored.model?.id ?? null]);
+          await writeSceneFile(target, stored.params, stored.state, stored.images, stored.driver, stored.picture, stored.terrain ?? null, stored.solidMedia ?? null, stored.model ?? null, stored.wall ?? []);
+          stored.savedFingerprint = sceneFingerprint(stored.params, stored.state, [stored.images[0]?.id ?? null, stored.images[1]?.id ?? null, stored.driver?.id ?? null, stored.picture?.id ?? null, stored.terrain?.id ?? null, stored.solidMedia?.id ?? null, stored.model?.id ?? null, ...(stored.wall ?? []).map((file) => file.id)]);
           writeDocs(docsRef.current.map((candidate) => candidate.id === doc.id ? { ...candidate, path: target, dirty: false } : candidate));
         }
         scenes.push(target);
@@ -2449,6 +2515,7 @@ export default function App() {
             driver: driver ? { video: driver.videoFile, name: driver.name } : null,
             picture: keepImage(pictureRef.current),
             solidMedia: keepImage(solidMediaRef.current),
+            wall: wallRef.current.flatMap((file) => keepImage(file) ?? []),
             terrain: keepTerrain(engine.terrain),
             model: keepModel(engine.model),
             openGroup: openGroupRef.current
@@ -2467,6 +2534,7 @@ export default function App() {
           driver: stored.driver ? { video: stored.driver.videoFile, name: stored.driver.name } : null,
           picture: keepImage(stored.picture),
           solidMedia: keepImage(stored.solidMedia ?? null),
+          wall: (stored.wall ?? []).flatMap((file) => keepImage(file) ?? []),
           terrain: keepTerrain(stored.terrain),
           model: keepModel(stored.model),
           openGroup: stored.openGroup
@@ -2542,7 +2610,7 @@ export default function App() {
     const restore = async () => {
       /* Each kept tab's scene ID; a snapshot from before the IDs gets new ones, and its song map picks (tab indexes) go to them (see songFollow.preload). */
       const keptIds = kept.docs.map((keptDoc) => keptDoc.sceneId ?? newSceneId());
-      const loaded: { doc: SceneDoc; params: Params; state: PlayState; images: [SlotImage, SlotImage | null]; driver: DriverVideo | null; picture: SlotImage | null; terrain: TerrainData | null; solidMedia: SlotImage | null; model: ModelData | null; openGroup: string | null }[] = [];
+      const loaded: { doc: SceneDoc; params: Params; state: PlayState; images: [SlotImage, SlotImage | null]; driver: DriverVideo | null; picture: SlotImage | null; terrain: TerrainData | null; solidMedia: SlotImage | null; wall: SlotImage[]; model: ModelData | null; openGroup: string | null }[] = [];
       for (const keptDoc of kept.docs) {
         const params = createParams();
         const state = createPlayState();
@@ -2569,9 +2637,14 @@ export default function App() {
         }
         const picture = keptDoc.picture ? await loadKeptImage(keptDoc.picture) : null;
         const solidMedia = keptDoc.solidMedia ? await loadKeptImage(keptDoc.solidMedia) : null;
+        const wall: SlotImage[] = [];
+        for (const file of keptDoc.wall ?? []) {
+          const loadedFile = await loadKeptImage(file);
+          if (loadedFile) wall.push(loadedFile);
+        }
         const terrain = keptDoc.terrain ? await keptTerrain(keptDoc.terrain) : null;
         const model = keptDoc.model ? await keptModel(keptDoc.model) : null;
-        loaded.push({ doc: { id: keptDoc.id, sceneId: keptIds[kept.docs.indexOf(keptDoc)], path: keptDoc.path, untitled: keptDoc.untitled, dirty: keptDoc.dirty || lostFirst, modified: keptDoc.modified ?? null }, params, state, images: [first, second], driver, picture, terrain, solidMedia, model, openGroup: keptDoc.openGroup });
+        loaded.push({ doc: { id: keptDoc.id, sceneId: keptIds[kept.docs.indexOf(keptDoc)], path: keptDoc.path, untitled: keptDoc.untitled, dirty: keptDoc.dirty || lostFirst, modified: keptDoc.modified ?? null }, params, state, images: [first, second], driver, picture, terrain, solidMedia, wall, model, openGroup: keptDoc.openGroup });
       }
       if (loaded.length === 0 || activeIdRef.current !== null) {
         /* Nothing opened, or a scene opened first: the kept tabs wait for the next reload. */
@@ -2581,12 +2654,12 @@ export default function App() {
       }
       keepUnopened(unopened);
       /* Each tab's Undo history is made on the engine's settings, as addDoc makes it, starting from that scene. */
-      for (const { doc, params, state, images, driver, picture, terrain, solidMedia, model, openGroup } of loaded) {
+      for (const { doc, params, state, images, driver, picture, terrain, solidMedia, wall, model, openGroup } of loaded) {
         Object.assign(engine.params, structuredClone(params));
         Object.assign(engine.state, structuredClone(state));
         const history = new SettingsHistory(engine.params, engine.state);
-        const savedFingerprint = doc.dirty ? "" : sceneFingerprint(params, state, [images[0].id, images[1]?.id ?? null, driver?.id ?? null, picture?.id ?? null, terrain?.id ?? null, solidMedia?.id ?? null, model?.id ?? null]);
-        storedRef.current.set(doc.id, { params, state, images, driver, picture, terrain, solidMedia, model, savedFingerprint, history, openGroup });
+        const savedFingerprint = doc.dirty ? "" : sceneFingerprint(params, state, [images[0].id, images[1]?.id ?? null, driver?.id ?? null, picture?.id ?? null, terrain?.id ?? null, solidMedia?.id ?? null, model?.id ?? null, ...wall.map((file) => file.id)]);
+        storedRef.current.set(doc.id, { params, state, images, driver, picture, terrain, solidMedia, wall, model, savedFingerprint, history, openGroup });
       }
       writeDocs(loaded.map((entry) => entry.doc));
       nextDocId = Math.max(nextDocId, ...loaded.map((entry) => entry.doc.id + 1));
@@ -3037,6 +3110,10 @@ export default function App() {
                   pictureIsVideo={pictureIsVideo}
                   onPickPicture={() => setOpenRequest({ kind: "image", slot: 0, target: "picture" })}
                   onRemovePicture={() => setPicture(null)}
+                  wallFiles={wallFiles}
+                  onAddWall={() => setOpenRequest({ kind: "image", slot: 0, target: "wall" })}
+                  onRemoveWall={removeWallFile}
+                  onMoveWall={moveWallFile}
                   solidMediaName={solidMediaName}
                   onPickSolidMedia={() => setOpenRequest({ kind: "image", slot: 0, target: "solid" })}
                   onRemoveSolidMedia={() => setSolidMedia(null)}
@@ -3207,13 +3284,14 @@ export default function App() {
       {openRequest && (
         <OpenDialog
           kind={openRequest.kind}
-          title={openRequest.target === "driver" ? "Open Video for the Driver" : openRequest.target === "picture" ? "Open File for Image or Video" : openRequest.target === "solid" ? "Open Image or Video for the 3D Object" : openRequest.target === "import" ? "Import Scene(s)" : openRequest.kind === "scene" ? "Open Project" : openRequest.kind === "audio" ? "Add Audio Files" : openRequest.slot === 1 ? "Open Image or Video for Source B" : "Open Image or Video"}
+          title={openRequest.target === "driver" ? "Open Video for the Driver" : openRequest.target === "picture" ? "Open File for Image or Video" : openRequest.target === "wall" ? "Add Files to the Video Wall" : openRequest.target === "solid" ? "Open Image or Video for the 3D Object" : openRequest.target === "import" ? "Import Scene(s)" : openRequest.kind === "scene" ? "Open Project" : openRequest.kind === "audio" ? "Add Audio Files" : openRequest.slot === 1 ? "Open Image or Video for Source B" : "Open Image or Video"}
           hint={openRequest.target === "import" ? "Choose one or more Kaleido Sage projects (.ksage). All of their scenes go into the open project, without their audio files." : undefined}
           onCancel={() => setOpenRequest(null)}
           onOpen={(path) => {
             setOpenRequest(null);
             if (openRequest.target === "driver") void openDriverVideo(path);
             else if (openRequest.target === "picture") void openPicturePath(path);
+            else if (openRequest.target === "wall") void addWallPaths([path]);
             else if (openRequest.target === "solid") void openSolidMediaPath(path);
             else if (openRequest.target === "import") void importScenes([path]);
             else if (openRequest.kind === "scene") void openProject(path);
@@ -3224,6 +3302,9 @@ export default function App() {
           onOpenMany={openRequest.target === "import" ? (paths) => {
             setOpenRequest(null);
             void importScenes(paths);
+          } : openRequest.target === "wall" ? (paths) => {
+            setOpenRequest(null);
+            void addWallPaths(paths);
           } : openRequest.kind === "audio" ? (paths) => {
             setOpenRequest(null);
             addTracks(paths);

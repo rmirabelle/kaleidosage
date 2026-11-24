@@ -13,6 +13,17 @@ use tauri::{
 };
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
 
+/** The places in a scene's JSON that can hold a video: the fixed media slots, then each Video Wall file. */
+fn media_slots(scene: &serde_json::Value) -> Vec<String> {
+    let mut slots: Vec<String> = ["image", "image2", "driverVideo", "picture", "solidMedia"]
+        .iter()
+        .map(|slot| format!("/{slot}"))
+        .collect();
+    let wall = scene["wall"].as_array().map_or(0, |files| files.len());
+    slots.extend((0..wall).map(|index| format!("/wall/{index}")));
+    slots
+}
+
 fn save(path: &Path, contents: &[u8], videos: &Videos) -> Result<(), String> {
     if !crate::files::is_scene_path(path) {
         return Err("The destination must be a .ksage file.".into());
@@ -20,11 +31,12 @@ fn save(path: &Path, contents: &[u8], videos: &Videos) -> Result<(), String> {
     let mut scene: serde_json::Value =
         serde_json::from_slice(contents).map_err(|e| e.to_string())?;
     let mut media = Vec::new();
-    for slot in ["image", "image2", "driverVideo", "picture", "solidMedia"] {
-        if let Some(id) = scene[slot]["video"].as_str() {
+    for slot in media_slots(&scene) {
+        let Some(entry) = scene.pointer_mut(&slot) else { continue };
+        if let Some(id) = entry["video"].as_str() {
             let source = videos.get(id)?;
             let name = format!("media/{}.video", media.len());
-            scene[slot]["video"] = name.clone().into();
+            entry["video"] = name.clone().into();
             media.push((name, source));
         }
     }
@@ -177,9 +189,10 @@ fn read_window(mut file: Window, videos: &Videos) -> Result<Vec<u8>, String> {
         serde_json::from_reader(entry).map_err(|e| e.to_string())?
     };
     let mut media = Vec::new();
-    for slot in ["image", "image2", "driverVideo", "picture", "solidMedia"] {
-        if let Some(name) = scene[slot]["video"].as_str() {
-            if !scene[slot]["type"]
+    for slot in media_slots(&scene) {
+        let Some(entry) = scene.pointer(&slot) else { continue };
+        if let Some(name) = entry["video"].as_str() {
+            if !entry["type"]
                 .as_str()
                 .is_some_and(|s| s.starts_with("video/"))
             {
@@ -208,13 +221,14 @@ fn read_window(mut file: Window, videos: &Videos) -> Result<Vec<u8>, String> {
     let start = window.start;
     let file = Arc::new(window.file);
     for (slot, offset, len) in media {
+        let entry = scene.pointer_mut(&slot).ok_or("The scene media slot is missing.")?;
         let info = videos.add(VideoSource {
             file: file.clone(),
             offset: start + offset,
             len,
-            mime: scene[slot]["type"].as_str().unwrap().into(),
+            mime: entry["type"].as_str().unwrap_or_default().into(),
         })?;
-        scene[slot]["video"] = info.id.into();
+        entry["video"] = info.id.into();
     }
     serde_json::to_vec(&scene).map_err(|e| e.to_string())
 }
@@ -322,6 +336,40 @@ mod tests {
         let mut bytes = Vec::new();
         source.reader().read_to_end(&mut bytes).unwrap();
         assert_eq!(bytes, b"driver-bytes");
+    }
+
+    #[test]
+    fn video_wall_videos_are_embedded_and_read_back_in_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let videos = Videos::default();
+        let mut ids = Vec::new();
+        for (name, bytes) in [("one.mp4", b"first-bytes".as_slice()), ("two.mp4", b"second-bytes".as_slice())] {
+            let original = dir.path().join(name);
+            std::fs::write(&original, bytes).unwrap();
+            ids.push(videos.add(VideoSource::open(&original).unwrap()).unwrap().id);
+        }
+        let contents = serde_json::to_vec(&serde_json::json!({
+            "app": "KaleidoSage", "version": 2,
+            "image": {"type": "image/png", "data": "AA=="},
+            "wall": [
+                {"type": "video/mp4", "video": ids[0], "name": "one.mp4"},
+                {"type": "image/png", "data": "AA==", "name": "still.png"},
+                {"type": "video/mp4", "video": ids[1], "name": "two.mp4"}
+            ]
+        }))
+        .unwrap();
+        let path = dir.path().join("scene.ksage");
+        save(&path, &contents, &videos).unwrap();
+        let videos = Videos::default();
+        let loaded = read(&path, &videos).unwrap();
+        let scene: serde_json::Value = serde_json::from_slice(&loaded).unwrap();
+        assert_eq!(scene["wall"][1]["name"], "still.png");
+        for (index, expected) in [(0, b"first-bytes".as_slice()), (2, b"second-bytes".as_slice())] {
+            let source = videos.get(scene["wall"][index]["video"].as_str().unwrap()).unwrap();
+            let mut bytes = Vec::new();
+            source.reader().read_to_end(&mut bytes).unwrap();
+            assert_eq!(bytes, expected);
+        }
     }
 
     #[test]
