@@ -157,7 +157,7 @@ Press `X` at any time for new random settings on every unlocked effect. Press `?
 ### Sources
 
 - **Images:** PNG, JPEG, WebP, GIF, BMP and AVIF
-- **Videos:** MP4, M4V, WebM, MOV and AVI. The video codec must be one that WebView2 can play.
+- **Videos:** MP4, M4V, WebM, MOV and AVI. The video codec must be one that WebView2 can play. A video loops with a jump, with a crossfade of the length you set, or forward and then in reverse.
 - **Random 4K photos** from Wikimedia Commons and NASA map imagery, with no account or key
 - **Photo search** on Wikimedia Commons
 - **Test patterns** that show what an effect does
@@ -178,7 +178,7 @@ Add effects in any order. The picture goes through the list from top to bottom.
 | **3D** | 3D object (sphere, cube, morph, blobs, star, Menger sponge and more), 3D model (from a file, Poly Haven or Sketchfab), Terrain, Camera |
 | **Light** | Bloom, Light rays, Lasers, Light cone (spotlight, laser shell; cone or pyramid), Light paths, Spirograph, Light shapes, Light cycles, Particles |
 | **Line and surface** | Contours, Relief, Sharpen, Blur |
-| **Color, text and layers** | Color, Levels, Opacity mask, Image or Video, Text (any installed font, glow, outline, shadow, scroll, type on) |
+| **Color, text and layers** | Color, Levels, Opacity mask (brightness, radial, or a circle, triangle, square, hexagon or polygon shape), Image or Video (with a shape mask), Text (any installed font, glow, outline, shadow, scroll, type on) |
 
 ### Control every setting
 

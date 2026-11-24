@@ -219,6 +219,7 @@ export function EffectsTexture() {
         <b>Strength</b> sets how much the mask hides. The gradient below it has gray stops in place
         of colors: select a stop to set its gray level.
       </p>
+      <Shot name="fx-mask-shape" alt="The Opacity mask effect with a Triangle shape that keeps the picture inside it" side="block" />
       <p>
         The shape types (<b>Circle</b>, <b>Triangle</b>, <b>Square</b>, <b>Hexagon</b>
         and <b>Polygon</b>) have no gradient. The picture stays inside the shape and goes away outside

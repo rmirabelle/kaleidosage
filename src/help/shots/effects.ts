@@ -392,5 +392,6 @@ export const EFFECTS: Shot[] = [
     cleanup: () => document.querySelector<HTMLElement>(".color-popup .color-ok")?.click()
   },
   look({ effect: "Levels", name: "levels", pattern: "Color clouds", adjust: (page) => setSlider(page, "Black level", 0.45) }),
-  look({ effect: "Opacity mask", name: "mask", adjust: (page) => pickMenu(page, "Opacity mask", "Type", "Radial"), wide: true })
+  look({ effect: "Opacity mask", name: "mask", adjust: (page) => pickMenu(page, "Opacity mask", "Type", "Radial"), wide: true }),
+  look({ effect: "Opacity mask", name: "mask-shape", adjust: (page) => pickMenu(page, "Opacity mask", "Type", "Triangle"), wide: true })
 ];
